@@ -1,12 +1,15 @@
-import { collection, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, limit, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { db } from '../../../firebaseConfig';
 
 const CallAnalytics = () => {
     const [liveCount, setLiveCount] = useState(0);
     const [successRate, setSuccessRate] = useState(0);
     const [loading, setLoading] = useState(true);
+    
+    // Call Logs state - Idhu mattum dhaan extra
+    const [callLogs, setCallLogs] = useState<any[]>([]);
 
     useEffect(() => {
         // 1. Live Calls Monitor (Only ongoing status)
@@ -17,8 +20,6 @@ const CallAnalytics = () => {
         });
 
         // 2. Success Rate Calculation (Optimized logic)
-        // Note: Real apps-la 'total_calls' matrum 'completed_calls' nu oru single doc-la 
-        // counter vechirupom. Ippo unga current logic-padi optimized snapshot:
         const unsubAll = onSnapshot(collection(db, "calls"), (snap) => {
             if (!snap.empty) {
                 const total = snap.size;
@@ -27,9 +28,21 @@ const CallAnalytics = () => {
             }
         });
 
+        // 3. Call Logs logic - Ippo add panniyadhu
+        const qLogs = query(
+            collection(db, "transactions"), 
+            orderBy("timestamp", "desc"), 
+            limit(10) // Kadaisi 10 calls mattum
+        );
+        const unsubLogs = onSnapshot(qLogs, (snap) => {
+            const logs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setCallLogs(logs);
+        });
+
         return () => { 
             unsubLive(); 
             unsubAll(); 
+            unsubLogs();
         };
     }, []);
 
@@ -42,7 +55,8 @@ const CallAnalytics = () => {
     }
 
     return (
-        <View style={styles.container}>
+        <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            {/* --- Original Live Calls Section --- */}
             <View style={styles.card}>
                 <Text style={styles.label}>LIVE CALLS NOW</Text>
                 <View style={styles.row}>
@@ -53,17 +67,43 @@ const CallAnalytics = () => {
             
             <View style={styles.divider} />
             
+            {/* --- Original Success Rate Section --- */}
             <View style={styles.card}>
                 <Text style={styles.label}>PLATFORM SUCCESS RATE</Text>
                 <Text style={[styles.value, { color: '#10B981' }]}>{successRate}%</Text>
             </View>
-        </View>
+
+            <View style={styles.divider} />
+
+            {/* --- New Call Logs Section --- */}
+            <View style={styles.card}>
+                <Text style={styles.label}>RECENT CALL LOGS</Text>
+                {callLogs.length === 0 ? (
+                    <Text style={{color: '#475569', marginTop: 10}}>No recent calls found</Text>
+                ) : (
+                    callLogs.map((log) => (
+                        <View key={log.id} style={styles.logItem}>
+                            <View style={styles.logHeader}>
+                                <Text style={styles.logText}>Expert: {log.expertName || 'N/A'}</Text>
+                                <Text style={styles.logStatus}>COMPLETED</Text>
+                            </View>
+                            <Text style={styles.logSubText}>
+                                {Math.floor((log.duration || 0) / 60)} mins | {log.diamonds || 0} Diamonds
+                            </Text>
+                        </View>
+                    ))
+                )}
+            </View>
+            
+            {/* Scroll panna gap-kaga */}
+            <View style={{height: 40}} />
+        </ScrollView>
     );
 };
 
 const styles = StyleSheet.create({
-    container: { flex: 1, backgroundColor: '#020617', padding: 30, justifyContent: 'center' },
-    center: { alignItems: 'center' },
+    container: { flex: 1, backgroundColor: '#020617', padding: 30 },
+    center: { alignItems: 'center', justifyContent: 'center' },
     card: { marginVertical: 10 },
     row: { flexDirection: 'row', alignItems: 'center' },
     pulseIndicator: { 
@@ -83,7 +123,19 @@ const styles = StyleSheet.create({
         backgroundColor: '#1E293B', 
         marginVertical: 40,
         opacity: 0.5
-    }
+    },
+    logItem: {
+        backgroundColor: '#0F172A',
+        padding: 15,
+        borderRadius: 16,
+        marginTop: 12,
+        borderWidth: 1,
+        borderColor: '#1E293B'
+    },
+    logHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    logText: { color: '#fff', fontSize: 15, fontWeight: '700' },
+    logStatus: { color: '#10B981', fontSize: 10, fontWeight: '900' },
+    logSubText: { color: '#64748B', fontSize: 13, marginTop: 6 }
 });
 
 export default CallAnalytics;

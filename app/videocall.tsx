@@ -25,7 +25,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
-    View
+    View,
 } from 'react-native';
 import createAgoraRtcEngine, {
     ChannelProfileType,
@@ -68,7 +68,7 @@ export default function VideoCallScreen() {
     
     // 🔥 DOUBLE CALCULATION PROTECTION STATE
     const [isFinishing, setIsFinishing] = useState(false);
-    const databaseUpdated = useRef(false); // Flag to prevent multiple DB writes
+    const databaseUpdated = useRef(false); 
 
     // ⏲️ AUTO-CUT & TIMER BAR ANIMATION
     const ringTimerAnim = useRef(new Animated.Value(1)).current; 
@@ -79,12 +79,21 @@ export default function VideoCallScreen() {
     // 💰 BILLING & TIMER STATES
     const [secondsElapsed, setSecondsElapsed] = useState(0);
     const [showLowBalanceWarning, setShowLowBalanceWarning] = useState(false);
+    const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null); 
     const [currentBalance, setCurrentBalance] = useState<number | null>(null); 
     const [showSummary, setShowSummary] = useState(false);
     const [finalAmount, setFinalAmount] = useState(0);
     const [finalDuration, setFinalDuration] = useState(0);
     const startTimeRef = useRef<number | null>(null);
     const user = auth.currentUser;
+
+    // 🔥 LOCAL DIAMOND TRACKER STATE
+    const [localBalance, setLocalBalance] = useState<number>(0);
+    const diamondRatePerMin = 2000;
+    const ratePerSecond = diamondRatePerMin / 60;
+
+    // 🔥 RED PULSE ANIMATION STATE
+    const pulseAnim = useRef(new Animated.Value(0)).current;
     
     // 💬 CHAT STATES
     const [messages, setMessages] = useState<any[]>([]);
@@ -109,6 +118,21 @@ export default function VideoCallScreen() {
             onPanResponderRelease: () => { pan.flattenOffset(); },
         })
     ).current;
+
+    // 🔥 Pulse Animation logic for Red Alert (ONLY FOR USER)
+    useEffect(() => {
+        if (role !== 'expert' && remainingSeconds !== null && remainingSeconds <= 15 && joined && remoteUid && !showSummary) {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: false, easing: Easing.inOut(Easing.ease) }),
+                    Animated.timing(pulseAnim, { toValue: 0, duration: 500, useNativeDriver: false, easing: Easing.inOut(Easing.ease) })
+                ])
+            ).start();
+        } else {
+            pulseAnim.stopAnimation();
+            pulseAnim.setValue(0);
+        }
+    }, [remainingSeconds, joined, remoteUid, role]);
 
     // 🔥 AUTOMATIC DAILY RESET LOGIC
     useEffect(() => {
@@ -212,6 +236,8 @@ export default function VideoCallScreen() {
                     setIsRinging(false);
                     setIsCallAccepted(true);
                 }
+                if (data.lowBalanceAlert !== undefined) setShowLowBalanceWarning(data.lowBalanceAlert);
+
                 if ((data.status === 'rejected' || data.status === 'ended' || data.status === 'cancelled') && !showSummary) {
                     handleCallEnd(data.status === 'ended');
                 }
@@ -225,6 +251,7 @@ export default function VideoCallScreen() {
         };
     }, [callId, remoteUid, showSummary, role]);
 
+    // Game Sync
     useEffect(() => {
         if (!callId) return;
         const unsubGame = onSnapshot(doc(db, "calls", callId, "game", "state"), (snap) => {
@@ -238,39 +265,59 @@ export default function VideoCallScreen() {
         return () => unsubGame();
     }, [callId]);
 
+    // User Balance Monitor
     useEffect(() => {
-        if (role !== 'expert' && user?.uid) {
-            const unsubscribe = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+        const targetUserId = role === 'expert' ? params.callerId : user?.uid;
+        if (targetUserId && typeof targetUserId === 'string' && targetUserId.trim() !== "") {
+            const unsubscribe = onSnapshot(doc(db, 'users', targetUserId), (docSnap) => {
                 if (docSnap.exists()) {
-                    const bal = docSnap.data().balance;
-                    setCurrentBalance(bal !== undefined ? bal : 0);
+                    const bal = docSnap.data().balance || 0;
+                    setCurrentBalance(bal);
+                    if (localBalance === 0) setLocalBalance(bal);
                 }
+            }, (error) => {
+                console.log("Balance Listener Error:", error);
             });
             return () => unsubscribe();
         }
-    }, [user?.uid, role]);
+    }, [user?.uid, role, params.callerId]);
 
+    // 🔥 TRACKER & AUTO-CUT (Exact 1s Cut Logic)
     useEffect(() => {
         let interval: any; 
         if (joined && remoteUid && !showSummary) {
             interval = setInterval(() => {
-                setSecondsElapsed(prev => {
-                    const nextSec = prev + 1;
-                    if (role !== 'expert' && currentBalance !== null) {
-                        const ratePerSec = 2000 / 60;
-                        const remainingTimeInSec = currentBalance / ratePerSec;
-                        if (remainingTimeInSec <= 60 && remainingTimeInSec > 0) {
-                            setShowLowBalanceWarning(true);
-                        } else if (remainingTimeInSec <= 0 && currentBalance <= 0) {
-                            handleCallEnd(true);
+                setSecondsElapsed(prev => prev + 1);
+
+                if (role !== 'expert') {
+                    setLocalBalance(prevBal => {
+                        const nextBal = prevBal - ratePerSecond;
+                        const totalRemainingSecs = Math.floor(nextBal / ratePerSecond);
+                        setRemainingSeconds(totalRemainingSecs);
+
+                        if (nextBal <= 1000 && !showLowBalanceWarning) {
+                            updateDoc(doc(db, "calls", callId), { lowBalanceAlert: true }).catch(()=>{});
                         }
+
+                        // 🔥 SECURITY CUT: Stop 1 second before reaching 0 to prevent loss
+                        if (nextBal <= ratePerSecond) {
+                            clearInterval(interval);
+                            handleCallEnd(true);
+                            return 0;
+                        }
+                        return nextBal;
+                    });
+                } else {
+                    if (currentBalance !== null) {
+                        const currentRemoteSecs = Math.floor(currentBalance / ratePerSecond);
+                        setRemainingSeconds(currentRemoteSecs);
+                        setLocalBalance(currentBalance);
                     }
-                    return nextSec;
-                });
+                }
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [joined, remoteUid, currentBalance, showSummary, role]);
+    }, [joined, remoteUid, showSummary, role, currentBalance, showLowBalanceWarning]);
 
     useEffect(() => {
         const init = async () => {
@@ -349,23 +396,32 @@ export default function VideoCallScreen() {
         let duration = 0;
         let calculatedDiamonds = 0;
         if (startTimeRef.current) {
-            duration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-            calculatedDiamonds = Math.round(duration * (2000 / 60)); 
+            // 🔥 PRECISE BILLING CALCULATION
+            const rawDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
+            duration = Math.max(0, rawDuration);
+            
+            // Capping logic for stability
+            const billingSeconds = (duration > 60 && duration <= 65) ? 60 : duration;
+            
+            const possibleDiamonds = Math.floor(billingSeconds * (2000 / 60)); 
+            calculatedDiamonds = (currentBalance !== null && possibleDiamonds > currentBalance) ? Math.floor(currentBalance) : possibleDiamonds;
         }
         
-        const amountToShow = role === 'expert' ? Math.round(calculatedDiamonds / 2) : calculatedDiamonds;
+        // 🔥 STRICT 50% PAYOUT: Ensuring 2000 Diamonds = Exactly 1000 Beans
+        const amountToShow = role === 'expert' ? Math.floor(Math.floor(calculatedDiamonds) / 2) : calculatedDiamonds;
         setFinalAmount(amountToShow);
         setFinalDuration(duration);
         setShowSummary(true);
 
-        // 🔥 FIX: Prevent Multiple Updates by restricting logic based on Role
         if (shouldDeduct && duration > 5 && !databaseUpdated.current) {
-            databaseUpdated.current = true; // Block further execution in this instance
+            databaseUpdated.current = true; 
             
             try {
+                const callMins = Math.max(1, Math.floor(duration / 60));
+
                 if (role === 'expert') {
-                    // EXPERT UPDATES: Minutes, Total Calls, Earnings
-                    const expertEarnings = Math.round(calculatedDiamonds / 2);
+                    // 🔥 Fixed Integer Payout Logic
+                    const expertEarnings = Math.floor(Math.floor(calculatedDiamonds) / 2);
                     const expertSnap = await getDoc(doc(db, "users", expertId));
                     
                     if (expertSnap.exists()) {
@@ -382,9 +438,6 @@ export default function VideoCallScreen() {
                             bonusToCredit = 5000; milestoneUpdates = { milestone_100k: true };
                         }
 
-                        // Use Math.max(1, ...) to ensure at least 1 minute is recorded if duration > 5s
-                        const callMins = Math.max(1, Math.floor(duration / 60));
-
                         await updateDoc(doc(db, "users", expertId), { 
                             walletBalance: increment(expertEarnings + bonusToCredit),
                             beans: increment(expertEarnings + bonusToCredit),
@@ -399,17 +452,15 @@ export default function VideoCallScreen() {
                             ...milestoneUpdates
                         });
 
-                        // Log transaction once from Expert side
                         await addDoc(collection(db, "transactions"), {
                             userId: params.callerId || 'user', expertId: expertId, expertName: expertName || 'Expert',
-                            diamonds: calculatedDiamonds, beans: expertEarnings,
-                            duration: duration, type: 'video_call', timestamp: serverTimestamp()
+                            diamonds: Math.floor(calculatedDiamonds), beans: expertEarnings,
+                            duration: duration, type: 'video_call', status: 'completed', timestamp: serverTimestamp()
                         });
                     }
                 } else {
-                    // USER UPDATES: Only deduct balance
                     await updateDoc(doc(db, "users", user!.uid), { 
-                        balance: increment(-calculatedDiamonds) 
+                        balance: increment(-Math.floor(calculatedDiamonds)) 
                     });
                 }
             } catch (error) {
@@ -476,6 +527,12 @@ export default function VideoCallScreen() {
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#000" />
+            
+            <Animated.View 
+                style={[styles.redAlertOverlay, { opacity: pulseAnim.interpolate({inputRange: [0, 1], outputRange: [0, 0.45]}) }]} 
+                pointerEvents="none" 
+            />
+
             <View style={StyleSheet.absoluteFill}>
                 {remoteUid ? (
                     <RtcSurfaceView canvas={{ uid: remoteUid }} style={styles.fullVideo} />
@@ -502,9 +559,16 @@ export default function VideoCallScreen() {
 
             {isCallAccepted && !showSummary && (
                 <View style={styles.topHeader}>
-                    <View style={styles.statusBadge}>
+                    <View style={[styles.statusBadge, showLowBalanceWarning && {backgroundColor: '#EF4444'}]}>
                         <View style={styles.liveDot} />
                         <Text style={styles.liveText}>{formatTime(secondsElapsed)}</Text>
+                        
+                        {role !== 'expert' && remainingSeconds !== null && remainingSeconds <= 10 && (
+                            <View style={styles.balanceTag}>
+                                <MaterialCommunityIcons name="diamond-stone" size={14} color="#FFF" />
+                                <Text style={styles.balanceText}>{Math.floor(localBalance)}</Text>
+                            </View>
+                        )}
                     </View>
                     <Text style={styles.callerNameText}>{role === 'expert' ? callerDisplayName : expertName}</Text>
                 </View>
@@ -582,8 +646,13 @@ export default function VideoCallScreen() {
                     {isCallAccepted && !showSummary && (
                         <View style={styles.bottomControlsArea}>
                             {showLowBalanceWarning && (
-                                <View style={styles.warningFloating}>
-                                    <Ionicons name="alert-circle" size={16} color="#FFF" /><Text style={styles.warningText}>Low Balance!</Text>
+                                <View style={[styles.warningFloating, (remainingSeconds && remainingSeconds <= 30) ? {backgroundColor: '#B91C1C'} : {}]}>
+                                    <Ionicons name="alert-circle" size={18} color="#FFF" />
+                                    <Text style={styles.warningText}>
+                                        {remainingSeconds && remainingSeconds <= 30 
+                                            ? `Call will cut in ${remainingSeconds}s` 
+                                            : "User Low Balance! Call may end soon."}
+                                    </Text>
                                 </View>
                             )}
                             <View style={styles.buttonsRow}>
@@ -613,6 +682,7 @@ export default function VideoCallScreen() {
 
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#000' },
+    redAlertOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'red', zIndex: 10 },
     fullVideo: { flex: 1 },
     uiWrapper: { flex: 1, justifyContent: 'flex-end' },
     localVideoFloating: { width: 110, height: 160, position: 'absolute', borderRadius: 20, borderWidth: 2, borderColor: '#3B82F6', zIndex: 100, backgroundColor: '#000', overflow: 'hidden', elevation: 10 },
@@ -621,6 +691,8 @@ const styles = StyleSheet.create({
     statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25 },
     liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 10 },
     liveText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
+    balanceTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(59, 130, 246, 0.4)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginLeft: 10 },
+    balanceText: { color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 4 },
     callerNameText: { color: '#FFF', fontSize: 24, fontWeight: '900', marginTop: 12, textShadowColor: '#000', textShadowRadius: 15 },
     floatingChatContainer: { position: 'absolute', bottom: 130, left: 15, right: 15, maxHeight: 220, zIndex: 30 },
     chatBlurBox: { borderRadius: 25, padding: 15, overflow: 'hidden', backgroundColor: 'rgba(15, 23, 42, 0.7)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
@@ -657,8 +729,8 @@ const styles = StyleSheet.create({
     summaryLabel: { color: '#94A3B8', fontSize: 16, fontWeight: '600' },
     summaryValue: { color: '#FFF', fontSize: 18, fontWeight: '800' },
     totalRow: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 20 },
-    warningFloating: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF4444', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 12, marginBottom: 20 },
-    warningText: { color: '#FFF', fontSize: 13, fontWeight: '800', marginLeft: 8 },
+    warningFloating: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF4444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 15, marginBottom: 20, elevation: 5 },
+    warningText: { color: '#FFF', fontSize: 14, fontWeight: '900', marginLeft: 8 },
     waitingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     waitingText: { color: '#FFF', fontSize: 14, fontWeight: '600', marginTop: 15, opacity: 0.8 },
 });

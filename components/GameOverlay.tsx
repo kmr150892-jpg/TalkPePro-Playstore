@@ -3,14 +3,15 @@ import { BlurView } from 'expo-blur';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// ✅ Added gameType and expertName to interface to match VideoCallScreen
+// ✅ Added lowBalanceAlert to interface for real-time expert warning
 interface GameOverlayProps {
   isVisible: boolean;
-  gameType?: string; // Mela neenga update panna sonnathu
+  gameType?: string; 
   board: any[];
   isXNext: boolean;
   winner: string | null;
-  expertName?: string; // Expert name display panna useful ah irukum
+  expertName?: string; 
+  lowBalanceAlert?: boolean; // New prop for balance sync
   onClose: () => void;
   onSquareClick: (index: number) => void;
   onReset: () => void;
@@ -23,6 +24,7 @@ export default function GameOverlay({
   isXNext,
   winner,
   expertName,
+  lowBalanceAlert, // Destructured here
   onClose,
   onSquareClick,
   onReset
@@ -32,6 +34,15 @@ export default function GameOverlay({
   return (
     <View style={styles.gameOverlay}>
       <BlurView intensity={95} tint="dark" style={styles.gameContainer}>
+        
+        {/* 🔥 NEW: EXPERT ALERT SECTION (Only shows when balance is low) */}
+        {lowBalanceAlert && (
+          <View style={styles.alertBar}>
+            <Ionicons name="warning" size={16} color="#FFF" style={{marginRight: 8}} />
+            <Text style={styles.alertText}>USER BALANCE LOW - CALL ENDING SOON</Text>
+          </View>
+        )}
+
         {/* Header Section */}
         <View style={styles.gameHeader}>
           <View>
@@ -107,6 +118,23 @@ const styles = StyleSheet.create({
     borderWidth: 1.5, 
     borderColor: 'rgba(59, 130, 246, 0.3)',
     backgroundColor: 'rgba(15, 23, 42, 0.8)'
+  },
+  // 🔥 STYLE FOR ALERT BAR
+  alertBar: {
+    backgroundColor: '#EF4444',
+    width: '115%', // To cover the container padding
+    marginTop: -25, // Align to top
+    marginBottom: 20,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  alertText: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '900',
+    letterSpacing: 0.5
   },
   gameHeader: { 
     flexDirection: 'row', 
