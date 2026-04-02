@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "2462622395",
+    "firebase_url": "https://talkpe-67db0-default-rtdb.asia-southeast1.firebasedatabase.app",
+    "project_id": "talkpe-67db0",
+    "storage_bucket": "talkpe-67db0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:2462622395:android:300e86e1028fb134a87f9e",
+        "android_client_info": {
+          "package_name": "com.talkpe.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "2462622395-1d60vtbem9s8s7qj626kkd5q7qe9enb2.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.talkpe.app",
+            "certificate_hash": "dc83073e68b3ae93b483de853878cf656c9b4460"
+          }
+        },
+        {
+          "client_id": "2462622395-lu12nsjfs82pakt79mptl66p96qmeds4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyC3GVk8LQq8iWvPEzn-1xpTv3Bx3LECz8M"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "2462622395-lu12nsjfs82pakt79mptl66p96qmeds4.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
