@@ -67,13 +67,14 @@ export default function ProfileScreen() {
     ]);
   };
 
-  // ✅ Menu items array - Route matching file names
+  // ✅ Menu items array - Added "My Friends" to the list
   const menuItems = [
     { id: '1', title: 'Edit Profile', icon: 'person-outline', color: '#3B82F6', route: '/edit-profile' },
+    { id: 'friends', title: 'My Friends', icon: 'people-outline', color: '#A855F7', route: '/friends' }, // ✅ NEW FRIENDS TAB
     { id: '2', title: 'My Consultations', icon: 'videocam-outline', color: '#10B981', route: '/history' },
     { id: '3', title: 'Wallet Balance', icon: 'wallet-outline', color: '#F59E0B', route: '/recharge' },
     { id: '4', title: 'Help & Support', icon: 'headset-outline', color: '#EC4899', route: '/support' },
-    { id: '5', title: 'Terms & Privacy', icon: 'shield-checkmark-outline', color: '#94A3B8', route: '/legal' }, // ✅ FIXED: Route matches legal.tsx
+    { id: '5', title: 'Terms & Privacy', icon: 'shield-checkmark-outline', color: '#94A3B8', route: '/legal' },
   ];
 
   return (

@@ -10,6 +10,7 @@ import {
   Dimensions,
   Image,
   Modal,
+  Platform,
   StatusBar,
   StyleSheet,
   Text,
@@ -24,6 +25,8 @@ import ConsoleHome from './components/ConsoleHome';
 import ExpertStats from './components/ExpertStats';
 import LevelInsights from './components/LevelInsights';
 import WalletSystem from './components/WalletSystem';
+// ✅ NEW COMPONENT IMPORT
+import ExpertMessages from './ExpertMessages';
 
 const { width } = Dimensions.get('window');
 
@@ -170,6 +173,7 @@ export default function ExpertDashboard() {
     switch (activeTab) {
       case 'DASH': return <ConsoleHome expertData={expertData} isOnline={isOnline} setIsOnline={toggleOnlineStatus} />;
       case 'WALLET': return <WalletSystem expertData={expertData} />;
+      case 'MESSAGES': return <ExpertMessages />; // ✅ Fixed: Component handling its own navigation
       case 'LEVELS': return <LevelInsights expertData={expertData} />;
       case 'STATS': return <ExpertStats expertData={expertData} />;
       default: return <ConsoleHome expertData={expertData} isOnline={isOnline} setIsOnline={toggleOnlineStatus} />;
@@ -189,6 +193,8 @@ export default function ExpertDashboard() {
         <View style={styles.bottomNav}>
           <NavButton id="DASH" icon="cpu" label="CONSOLE" active={activeTab} onPress={setActiveTab} />
           <NavButton id="WALLET" icon="database" label="WALLET" active={activeTab} onPress={setActiveTab} />
+          {/* ✅ MESSAGES BUTTON */}
+          <NavButton id="MESSAGES" icon="message-square" label="MESSAGES" active={activeTab} onPress={setActiveTab} />
           <NavButton id="LEVELS" icon="award" label="LEVELS" active={activeTab} onPress={setActiveTab} />
           <NavButton id="STATS" icon="activity" label="STATS" active={activeTab} onPress={setActiveTab} />
         </View>
@@ -230,13 +236,14 @@ export default function ExpertDashboard() {
 
 const NavButton = ({ id, icon, label, active, onPress }: any) => {
   const isActive = active === id;
+  // Dynamic icon library selection
   const IconComponent = id === 'WALLET' ? FontAwesome5 : Feather;
   const iconName = id === 'WALLET' ? 'seedling' : icon;
 
   return (
     <TouchableOpacity onPress={() => onPress(id)} style={styles.navBtn}>
       <View style={[styles.navIconBg, isActive && styles.activeIconBg]}>
-        <IconComponent name={iconName as any} size={20} color={isActive ? '#FFF' : '#64748B'} />
+        <IconComponent name={iconName as any} size={18} color={isActive ? '#FFF' : '#64748B'} />
       </View>
       <Text style={[styles.navLabel, { color: isActive ? '#FFF' : '#64748B' }]}>{label}</Text>
     </TouchableOpacity>
@@ -251,18 +258,24 @@ const styles = StyleSheet.create({
   bottomNav: {
     flexDirection: 'row',
     backgroundColor: '#0F172A',
-    height: 85,
+    // ✅ ULTRA HEIGHT UPDATE
+    height: Platform.OS === 'ios' ? 110 : 100, 
     borderTopWidth: 1,
     borderTopColor: '#1E293B',
-    paddingBottom: 12,
-    paddingTop: 12,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30
+    paddingBottom: Platform.OS === 'ios' ? 45 : 35, // Icons-ah nalla mela thukki vachutaen
+    paddingTop: 15,
+    borderTopLeftRadius: 35,
+    borderTopRightRadius: 35,
+    elevation: 25,
+    shadowColor: '#000',
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -8 }
   },
   navBtn: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  navIconBg: { padding: 8, borderRadius: 14 },
+  navIconBg: { padding: 6, borderRadius: 12 },
   activeIconBg: { backgroundColor: '#6366F1' },
-  navLabel: { fontSize: 8, fontWeight: '900', marginTop: 4, letterSpacing: 1 },
+  navLabel: { fontSize: 7, fontWeight: '900', marginTop: 4, letterSpacing: 0.5 },
 
   modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   callContent: { alignItems: 'center', width: '100%' },

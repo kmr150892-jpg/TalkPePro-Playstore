@@ -61,6 +61,28 @@ export default function TabLayout() {
         }}
       />
 
+      {/* ✅ NEW TAB: FRIENDS */}
+      <Tabs.Screen
+        name="friends"
+        options={{
+          title: 'Friends',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "people" : "people-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+
+      {/* ✅ NEW TAB: MESSAGES */}
+      <Tabs.Screen
+        name="MessageList"
+        options={{
+          title: 'Messages',
+          tabBarIcon: ({ focused, color }) => (
+            <Ionicons name={focused ? "chatbubbles" : "chatbubbles-outline"} size={22} color={color} />
+          ),
+        }}
+      />
+
       <Tabs.Screen
         name="two" 
         options={{

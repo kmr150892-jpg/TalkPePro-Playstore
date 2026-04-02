@@ -129,7 +129,8 @@ export default function RootLayout() {
     const inAdminGroup = firstSegment === '(admin)';
     const inExpertPath = segments.includes('expert');
     const inVideoCall = segments.includes('videocall');
-    const inTabs = segments.includes('(tabs)'); // Check if user is already in tabs
+    const inTabs = segments.includes('(tabs)'); 
+    const inChatPath = segments.includes('chat'); // ✅ NEW CHECK FOR CHAT PATH
 
     // 🛑 CRITICAL: Stop all redirects if the user is in a call
     if (inVideoCall) return;
@@ -158,15 +159,14 @@ export default function RootLayout() {
 
     // Expert Dashboard Redirect
     if (userRole === 'expert') {
-      if (!inExpertPath && !inVideoCall && firstSegment !== 'expert-register') {
+      // ✅ MODIFIED: Added !inChatPath so it doesn't redirect when in chat
+      if (!inExpertPath && !inVideoCall && !inChatPath && firstSegment !== 'expert-register') {
         router.replace('/expert/dashboard');
       }
       return;
     }
 
     // ✅ MASS UPDATE: User Redirect Fix
-    // Index page-la login panni nikira user-ah mattum Tabs-ku anuppum.
-    // Oru vaati Tabs-kulla poita, adhu Profile-o Chat-o, angaye irukka vidum!
     if (userRole === 'user' && userStatus !== 'Pending') {
       if (!inTabs && (firstSegment === '' || firstSegment === 'index')) {
         router.replace('/(tabs)');
@@ -198,6 +198,8 @@ export default function RootLayout() {
         <Stack.Screen name="expert/notifications" />
         <Stack.Screen name="expert-register" /> 
         <Stack.Screen name="waiting-approval" /> 
+        {/* ✅ ADDED CHATSCREEN TO STACK SO ROUTER RECOGNIZES THE PATH */}
+        <Stack.Screen name="chat/ChatScreen" /> 
         <Stack.Screen name="videocall" options={{ gestureEnabled: false }} />
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         <Stack.Screen name="+not-found" />

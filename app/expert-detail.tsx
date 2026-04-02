@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, doc, onSnapshot, updateDoc } from 'firebase/firestore';
+import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -46,22 +46,18 @@ export default function ExpertDetail() {
   const [loading, setLoading] = useState(true);
   const [activeCallId, setActiveCallId] = useState<string | null>(null);
   const [userData, setUserData] = useState<any>(null);
+  
+  // ✅ FOLLOW SYSTEM STATES
+  const [connectionStatus, setConnectionStatus] = useState<string | null>(null); 
+  const [followLoading, setFollowLoading] = useState(false);
 
-  // ✅ 1. DYNAMIC MEMBER DURATION CALCULATION (Database-la irukura createdAt vachu)
   const getJoinedDuration = (createdAt: any) => {
     if (!createdAt) return '1 Day';
-    
-    // Firestore Timestamp conversion
     const joinedDate = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
     const now = new Date();
-    
-    // Total milliseconds gap
     const diffTime = Math.abs(now.getTime() - joinedDate.getTime());
-    
-    // Convert to Days
     const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    
-    if (diffDays === 0) return '1 Day'; // Joined today
+    if (diffDays === 0) return '1 Day';
     if (diffDays < 30) return `${diffDays} Days`;
     if (diffDays < 365) return `${Math.floor(diffDays / 30)} Mo`;
     return `${Math.floor(diffDays / 365)} Yr`;
@@ -86,6 +82,8 @@ export default function ExpertDetail() {
     });
 
     let unsubUser: () => void;
+    let unsubFollow: () => void;
+
     if (user?.uid) {
       unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
         if (docSnap.exists()) {
@@ -94,9 +92,59 @@ export default function ExpertDetail() {
           setUserBalance(data.balance || 0);
         }
       });
+
+      // ✅ REAL-TIME CONNECTION CHECK
+      const connectionId = `${user.uid}_${id}`;
+      unsubFollow = onSnapshot(doc(db, "connections", connectionId), (docSnap) => {
+        if (docSnap.exists()) {
+          setConnectionStatus(docSnap.data().status); 
+        } else {
+          setConnectionStatus(null);
+        }
+      });
     }
-    return () => { unsubExpert(); if (unsubUser) unsubUser(); };
+    
+    return () => { 
+      unsubExpert(); 
+      if (unsubUser) unsubUser(); 
+      if (unsubFollow) unsubFollow();
+    };
   }, [id, user]);
+
+  const handleFollowAction = async () => {
+    if (!user) return Alert.alert("Login Required", "Please login to follow experts.");
+    
+    // ✅ NEW: Redirection Logic for Friends
+    if (connectionStatus === 'friend') {
+      return router.push('/friends' as any);
+    }
+
+    if (!userData) return Alert.alert("Wait", "User data is loading...");
+
+    setFollowLoading(true);
+    const connectionId = `${user.uid}_${id}`;
+
+    try {
+      if (connectionStatus === null) {
+        await setDoc(doc(db, "connections", connectionId), {
+          senderId: user.uid,
+          senderName: userData.name || "User",
+          senderImage: userData.profilePic || userData.profileImage || "",
+          receiverId: id,
+          status: "pending",
+          timestamp: serverTimestamp(),
+        });
+        Alert.alert("Sent", "Follow request sent to expert!");
+      } else {
+        // This handles unfollowing if it's 'pending'
+        await deleteDoc(doc(db, "connections", connectionId));
+      }
+    } catch (error) {
+      console.error("Follow error:", error);
+    } finally {
+      setFollowLoading(false);
+    }
+  };
 
   const handleCancelCall = async () => {
     if (activeCallId) {
@@ -113,16 +161,15 @@ export default function ExpertDetail() {
 
   const handleStartCall = async () => {
     if (!expert?.isOnline) {
-      Alert.alert("Expert Offline 💤", "This expert is currently offline. Please wait until they are active.");
+      Alert.alert("Expert Offline 💤", "This expert is currently offline.");
       return;
     }
 
     if (!userData || !userData.name) {
-      Alert.alert("Syncing Profile...", "Getting your details ready. Please click call again in 2 seconds.");
+      Alert.alert("Syncing Profile...", "Please wait a moment.");
       return;
     }
     
-    // ✅ 2. DIAMOND RATE CALCULATION (Expert userPrice preference priority)
     const priceToCharge = Number(expert.userPrice || (expert.beansPerMin * 2) || (expert.pricePerMin * 2) || 2400);
     
     if (userBalance < priceToCharge) {
@@ -136,13 +183,10 @@ export default function ExpertDetail() {
     activateKeepAwake();
 
     try {
-      const finalUserName = userData.name;
-      const finalUserImage = userData.profilePic || userData.profileImage || auth.currentUser?.photoURL || "";
-
       const callRef = await addDoc(collection(db, "calls"), {
         userId: user?.uid,
-        userName: finalUserName,
-        userImage: finalUserImage,
+        userName: userData.name,
+        userImage: userData.profilePic || userData.profileImage || "",
         expertId: expert.id,
         expertName: expert.name,
         expertImage: expert.profilePic || expert.profileImage || "",
@@ -171,7 +215,7 @@ export default function ExpertDetail() {
             setIsCalling(false);
             deactivateKeepAwake();
             setActiveCallId(null);
-            Alert.alert("Call Rejected", "The expert is busy right now. No diamonds were deducted.");
+            Alert.alert("Call Rejected", "The expert is busy right now.");
           }
         }
       });
@@ -187,7 +231,7 @@ export default function ExpertDetail() {
 
     } catch (err) {
       setIsCalling(false);
-      Alert.alert("Error", "Could not initiate call. Try again.");
+      Alert.alert("Error", "Could not initiate call.");
     }
   };
 
@@ -206,10 +250,7 @@ export default function ExpertDetail() {
           <ActivityIndicator size="large" color={levelData.color} />
           <Text style={styles.callingText}>Ringing {expert?.name}...</Text>
           <Text style={styles.callingSubtext}>Waiting for expert to join... 💎</Text>
-          <TouchableOpacity 
-            style={styles.cancelCallBtn} 
-            onPress={handleCancelCall}
-          >
+          <TouchableOpacity style={styles.cancelCallBtn} onPress={handleCancelCall}>
             <Text style={styles.cancelText}>CANCEL CALL</Text>
           </TouchableOpacity>
         </View>
@@ -218,7 +259,7 @@ export default function ExpertDetail() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 150 }}>
         <View style={styles.imageWrapper}>
           <Image 
-            source={{ uri: expert?.profilePic || expert?.profileImage || expert?.image || 'https://via.placeholder.com/400' }} 
+            source={{ uri: expert?.profilePic || expert?.profileImage || 'https://via.placeholder.com/400' }} 
             style={styles.profileImg} 
           />
           <LinearGradient colors={['rgba(15, 23, 42, 0.5)', 'transparent', '#020617']} style={StyleSheet.absoluteFill} />
@@ -247,9 +288,37 @@ export default function ExpertDetail() {
                 <Text style={styles.locationText}>{expert?.location || 'India'} • {expert?.age || '24'}y • {expert?.gender}</Text>
               </View>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: expert?.isOnline ? '#05966920' : '#33415520' }]}>
-              <View style={[styles.dot, { backgroundColor: expert?.isOnline ? '#10B981' : '#94A3B8' }]} />
-              <Text style={[styles.statusText, {color: expert?.isOnline ? '#10B981' : '#94A3B8'}]}>{expert?.isOnline ? 'ONLINE' : 'OFFLINE'}</Text>
+            <View style={{ alignItems: 'flex-end', gap: 8 }}>
+              <View style={[styles.statusBadge, { backgroundColor: expert?.isOnline ? '#05966920' : '#33415520' }]}>
+                <View style={[styles.dot, { backgroundColor: expert?.isOnline ? '#10B981' : '#94A3B8' }]} />
+                <Text style={[styles.statusText, {color: expert?.isOnline ? '#10B981' : '#94A3B8'}]}>{expert?.isOnline ? 'ONLINE' : 'OFFLINE'}</Text>
+              </View>
+
+              {/* ✅ FOLLOW BUTTON WITH REDIRECT LOGIC */}
+              <TouchableOpacity 
+                style={[
+                  styles.followBtn, 
+                  connectionStatus !== null && styles.followingBtn,
+                  connectionStatus === 'pending' && { backgroundColor: '#F59E0B' } 
+                ]} 
+                onPress={handleFollowAction}
+                disabled={followLoading}
+              >
+                {followLoading ? (
+                  <ActivityIndicator size="small" color="#FFF" />
+                ) : (
+                  <>
+                    <MaterialCommunityIcons 
+                      name={connectionStatus === 'friend' ? "account-check" : connectionStatus === 'pending' ? "account-clock" : "account-plus"} 
+                      size={16} 
+                      color="#FFF" 
+                    />
+                    <Text style={styles.followBtnText}>
+  {connectionStatus === 'friend' ? "Following" : connectionStatus === 'pending' ? "Requested" : "Follow"}
+</Text>
+                  </>
+                )}
+              </TouchableOpacity>
             </View>
           </View>
 
@@ -260,7 +329,7 @@ export default function ExpertDetail() {
             </View>
             <View style={styles.vDivider} />
             <View style={styles.statBox}>
-              <Text style={[styles.statVal, { color: '#3B82F6' }]}>💎 {Number(expert?.userPrice || (expert?.beansPerMin * 2) || (expert?.pricePerMin * 2) || 0).toLocaleString()}</Text>
+              <Text style={[styles.statVal, { color: '#3B82F6' }]}>💎 {Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}</Text>
               <Text style={styles.statLabel}>Diamonds/min</Text>
             </View>
             <View style={styles.vDivider} />
@@ -282,13 +351,13 @@ export default function ExpertDetail() {
                 </View>
               ))
             ) : (
-              <View style={styles.emptyGallery}><Text style={styles.emptyText}>No portfolio images available</Text></View>
+              <View style={styles.emptyGallery}><Text style={styles.emptyText}>No portfolio images</Text></View>
             )}
           </ScrollView>
 
           <Text style={[styles.sectionTitle, { marginTop: 30 }]}>Bio</Text>
           <View style={styles.bioContainer}>
-              <Text style={styles.bioText}>{expert?.bio || "Verified professional on TalkPe providing secure consultations."}</Text>
+              <Text style={styles.bioText}>{expert?.bio || "Verified professional on TalkPe."}</Text>
           </View>
 
           <View style={styles.trustBanner}>
@@ -304,15 +373,14 @@ export default function ExpertDetail() {
           <View style={styles.priceRow}>
               <Ionicons name="diamond" size={16} color={expert?.isOnline ? "#3B82F6" : "#475569"} />
               <Text style={[styles.totalVal, !expert?.isOnline && { color: '#475569' }]}>
-                  {Number(expert?.userPrice || (expert?.beansPerMin * 2) || (expert?.pricePerMin * 2) || 0).toLocaleString()}
+                  {Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}
                   <Text style={{fontSize: 12, color: '#94A3B8'}}>/min</Text>
               </Text>
           </View>
         </View>
         
         <TouchableOpacity 
-          activeOpacity={expert?.isOnline ? 0.8 : 1}
-          style={[styles.callBtn]} 
+          style={styles.callBtn} 
           onPress={handleStartCall}
           disabled={!expert?.isOnline}
         >
@@ -346,6 +414,9 @@ const styles = StyleSheet.create({
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
   locationText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
   statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 6 },
+  followBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3B82F6', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, gap: 6 },
+  followingBtn: { backgroundColor: '#334155' },
+  followBtnText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
   dot: { width: 8, height: 8, borderRadius: 4 },
   statusText: { fontSize: 10, fontWeight: '900' },
   statsCard: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 25, backgroundColor: '#1E293B30', padding: 22, borderRadius: 25, borderWidth: 1, borderColor: '#1E293B' },

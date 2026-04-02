@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  FlatList,
   Image,
   Modal,
   Platform,
@@ -21,7 +22,7 @@ import {
 } from 'react-native';
 
 // ✅ Firebase Core
-import { arrayUnion, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import { auth, db } from '../../../firebaseConfig';
 
 const { width } = Dimensions.get('window');
@@ -63,6 +64,11 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const [modalVisible, setModalVisible] = useState(false);
   const [rateModalVisible, setRateModalVisible] = useState(false);
   
+  // ✅ FOLLOW LOGIC STATES
+  const [followModalVisible, setFollowModalVisible] = useState(false);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [acceptedFollowers, setAcceptedFollowers] = useState<any[]>([]);
+
   const [editName, setEditName] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editLocation, setEditLocation] = useState('');
@@ -83,7 +89,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const earnedInRange = totalBeans - levelInfo.prev;
   const progressPercent = levelInfo.next > 0 ? Math.max(0, Math.min((earnedInRange / range) * 100, 100)) : 100;
   
-  const pendingBeans = levelInfo.next - totalBeans;
+  const pendingBeansCount = levelInfo.next - totalBeans;
   const statusColor = isOnline ? '#10B981' : '#94A3B8';
 
   useEffect(() => {
@@ -107,27 +113,46 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
       }
     });
 
-    return () => unsub();
+    // ✅ FIXED REAL-TIME LISTENER FOR PENDING VS FRIENDS
+    const q = query(collection(db, "connections"), where("receiverId", "==", user.uid));
+
+const unsubConn = onSnapshot(q, (snap) => {
+  const allConns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+
+  // 🚀 HARD FILTER (NO OVERLAP GUARANTEE)
+  const pending: any[] = [];
+  const friends: any[] = [];
+
+  allConns.forEach((c: any) => {
+    if (c.status === "pending") {
+      pending.push(c);
+    } else if (c.status === "friend") {
+      friends.push(c);
+    }
+  });
+
+  // ✅ CLEAN STATE UPDATE (FORCE NO DUPLICATES)
+  setPendingRequests([...pending]);
+  setAcceptedFollowers([...friends]);
+});
+
+    return () => { unsub(); unsubConn(); };
   }, [user?.uid]);
 
-  // ✅ FIXED SYNC LOGIC: Updates rate if it doesn't match the level's max rate
+  // ✅ LEVEL SYNC
   useEffect(() => {
     const syncLevelDetails = async () => {
       if (user?.uid && expertData) {
         const currentRate = expertData.pricePerMin || 1000;
-        
-        // Conditions: Level change aagi irukanum OR Rate current level logic kulla (1200) illama pazhaya (1000) irukanum
         if (expertData.currentLevel !== levelInfo.lvl || currentRate < levelInfo.rate) {
           try {
             await updateDoc(doc(db, "users", user.uid), {
               currentLevel: levelInfo.lvl,
               levelTitle: levelInfo.label,
-              // Update price to level's rate if it's currently lower
               pricePerMin: levelInfo.rate,
               beansPerMin: levelInfo.rate,
               userPrice: levelInfo.rate * 2
             });
-            console.log(`✅ Level & Rate Synced: ${levelInfo.label} - ${levelInfo.rate} Beans`);
           } catch (e) { console.log("Silent level sync error"); }
         }
       }
@@ -135,25 +160,40 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     syncLevelDetails();
   }, [totalBeans, user?.uid]);
 
+  // ✅ ACCEPT/REJECT LOGIC - UPDATED TO CLEAR LIST IMMEDIATELY
+  const handleAcceptRequest = async (connId: string) => {
+    try {
+      const connRef = doc(db, "connections", connId);
+      // Status update pannunaale onSnapshot automatic-ah "New Requests" la irunthu thookidum
+      await updateDoc(connRef, { 
+        status: "friend",
+        acceptedAt: serverTimestamp()
+      });
+    } catch (e) { Alert.alert("Error", "Could not accept request."); }
+  };
+
+  const handleRejectOrUnfollow = async (connId: string, type: string) => {
+    try {
+      await deleteDoc(doc(db, "connections", connId));
+      if(type === 'unfollow') Alert.alert("Success", "Follower removed.");
+    } catch (e) { Alert.alert("Error", "Action failed."); }
+  };
+
   const handleUpdateRate = async () => {
     const rateNum = parseInt(newRate);
-    
     if (expertData?.lastRateUpdate) {
         const lastUpdate = expertData.lastRateUpdate.toDate().getTime();
         const now = new Date().getTime();
         const diffMins = (now - lastUpdate) / (1000 * 60);
-        
         if (diffMins < 30) {
             Alert.alert("Time Restriction", `Wait ${Math.ceil(30 - diffMins)} more minutes.`);
             return;
         }
     }
-
     if (isNaN(rateNum) || rateNum < levelInfo.minRate || rateNum > levelInfo.maxRate) {
       Alert.alert("Invalid Rate", `As a ${levelInfo.label}, rate must be between ${levelInfo.minRate} and ${levelInfo.maxRate}.`);
       return;
     }
-
     setSaving(true);
     try {
       if (user?.uid) {
@@ -166,11 +206,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         setRateModalVisible(false);
         Alert.alert("Success", "Consultation rate updated!");
       }
-    } catch (e) {
-      Alert.alert("Error", "Update failed.");
-    } finally {
-      setSaving(false);
-    }
+    } catch (e) { Alert.alert("Error", "Update failed."); } finally { setSaving(false); }
   };
 
   const uploadToCloudinary = async (fileUri: string) => {
@@ -223,14 +259,12 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     } catch (error) { Alert.alert("Error", "Save failed"); } finally { setSaving(false); }
   };
 
-  const handleLogout = () => {
-    auth.signOut().then(() => { router.replace('/'); });
-  };
+  const handleLogout = () => { auth.signOut().then(() => { router.replace('/'); }); };
 
   return (
     <ScrollView style={styles.mainContainer} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
       
-      {/* HEADER */}
+      {/* HEADER BAR */}
       <View style={styles.headerBar}>
         <View style={styles.leftHeader}>
             <Text style={styles.logoText}>TALKPE<Text style={{color: '#818CF8'}}>PRO</Text></Text>
@@ -251,7 +285,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         </View>
       </View>
 
-      {/* PROFILE SECTION */}
+      {/* PROFILE INFO SECTION */}
       <View style={styles.profileSection}>
         <View style={styles.avatarWrapper}>
           {uploading ? (
@@ -288,7 +322,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         </LinearGradient>
       </View>
 
-      {/* LIVE STATUS CARD */}
+      {/* ONLINE STATUS TOGGLE */}
       <View style={[styles.statusCard, { backgroundColor: isOnline ? '#05966910' : '#1E293B40' }]}>
         <View style={styles.statusInfo}>
           <View style={[styles.liveIndicator, { backgroundColor: statusColor }]} />
@@ -299,13 +333,13 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         <Switch value={isOnline} onValueChange={setIsOnline} trackColor={{ false: "#334155", true: "#059669" }} thumbColor={"#FFF"} />
       </View>
 
-      {/* QUICK STATS */}
+      {/* ANALYTICS / STATS GRID */}
       <View style={styles.statsGrid}>
-        <View style={styles.statBox}>
-          <MaterialCommunityIcons name="account-group" size={20} color="#818CF8" />
-          <Text style={styles.statValue}>{expertData?.followers?.length || 0}</Text>
-          <Text style={styles.statLabel}>FOLLOWERS</Text>
-        </View>
+        <TouchableOpacity style={styles.statBox} onPress={() => setFollowModalVisible(true)}>
+          <MaterialCommunityIcons name="account-clock" size={20} color="#818CF8" />
+          <Text style={styles.statValue}>{pendingRequests.length}</Text>
+          <Text style={styles.statLabel}>NEW REQUESTS</Text>
+        </TouchableOpacity>
         
         <TouchableOpacity style={[styles.statBox, { borderColor: '#FBBF24', borderWidth: 0.5 }]} onPress={() => setRateModalVisible(true)}>
           <FontAwesome5 name="seedling" size={18} color="#FBBF24" />
@@ -320,7 +354,23 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         </View>
       </View>
 
-      {/* WALLET SECTION */}
+      {/* MY FOLLOWERS BUTTON */}
+      <TouchableOpacity 
+          style={styles.followersButton} 
+          onPress={() => setFollowModalVisible(true)}
+      >
+          <View style={styles.followersBtnContent}>
+              <View style={styles.followersLeft}>
+                  <View style={styles.iconCircleSmall}>
+                      <Ionicons name="people" size={16} color="#818CF8" />
+                  </View>
+                  <Text style={styles.followersBtnText}>MY FOLLOWERS ({acceptedFollowers.length})</Text>
+              </View>
+              <Feather name="chevron-right" size={18} color="#475569" />
+          </View>
+      </TouchableOpacity>
+
+      {/* WALLET BOX */}
       <View style={styles.walletContainer}>
           <View style={styles.balanceMain}>
               <View style={{flexDirection: 'row', alignItems: 'center'}}>
@@ -337,7 +387,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
           </View>
       </View>
 
-      {/* LEVEL PROGRESS */}
+      {/* PROGRESS TRACKER */}
       <View style={styles.progressWrapper}>
           <View style={styles.progressTextRow}>
             <Text style={styles.sectionTitle}>NEXT LEVEL PROGRESS</Text>
@@ -347,7 +397,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
              <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
              <Text style={styles.progressLabel}>
               {levelInfo.next > 0 
-                ? `${pendingBeans.toLocaleString()} beans pending to Level ${levelInfo.lvl + 1}` 
+                ? `${pendingBeansCount.toLocaleString()} beans pending to Level ${levelInfo.lvl + 1}` 
                 : "MAX LEVEL REACHED"}
             </Text>
           </View>
@@ -371,7 +421,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
          </ScrollView>
       </View>
 
-      {/* BIO BOX */}
+      {/* BIO SECTION */}
       <View style={styles.bioWrapper}>
         <Text style={styles.sectionTitle}>BIO & EXPERTISE</Text>
         <View style={styles.bioBox}>
@@ -379,14 +429,76 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         </View>
       </View>
 
-      {/* RATE UPDATE MODAL */}
+      {/* FOLLOWERS & REQUESTS MODAL - LOGIC UPDATED */}
+      <Modal visible={followModalVisible} animationType="slide" transparent={true}>
+        <View style={styles.overlay}>
+          <View style={[styles.modalBox, { maxHeight: '85%' }]}>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
+                <Text style={styles.modalTitle}>Follower Manager</Text>
+                <TouchableOpacity onPress={() => setFollowModalVisible(false)}>
+                    <Ionicons name="close-circle" size={26} color="#F43F5E" />
+                </TouchableOpacity>
+            </View>
+
+            {/* TAB 1: NEW REQUESTS (PENDING ONLY) */}
+            <View style={styles.tabHeader}>
+              <Ionicons name="notifications" size={14} color="#818CF8" />
+              <Text style={styles.tabHeaderText}>NEW REQUESTS ({pendingRequests.length})</Text>
+            </View>
+            <FlatList
+              data={pendingRequests}
+              keyExtractor={(item) => item.id}
+              style={{maxHeight: 250, marginBottom: 15}}
+              renderItem={({ item }) => (
+                <View style={styles.requestItem}>
+                  <Image source={{ uri: item.senderImage || 'https://via.placeholder.com/150' }} style={styles.requestAvatar} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: '#FFF', fontWeight: '800' }}>{item.senderName}</Text>
+                    <Text style={{ color: '#475569', fontSize: 10 }}>Wants to follow you</Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    <TouchableOpacity onPress={() => handleAcceptRequest(item.id)} style={styles.acceptBtn}><Ionicons name="checkmark" size={18} color="#FFF" /></TouchableOpacity>
+                    <TouchableOpacity onPress={() => handleRejectOrUnfollow(item.id, 'reject')} style={styles.rejectBtn}><Ionicons name="close" size={18} color="#FFF" /></TouchableOpacity>
+                  </View>
+                </View>
+              )}
+              ListEmptyComponent={<Text style={styles.emptyListText}>No new requests at this moment.</Text>}
+            />
+
+            {/* TAB 2: MY FOLLOWERS (FRIENDS ONLY) */}
+            <View style={[styles.tabHeader, {marginTop: 10}]}>
+              <Ionicons name="people" size={14} color="#10B981" />
+              <Text style={[styles.tabHeaderText, {color: '#10B981'}]}>MY FOLLOWERS ({acceptedFollowers.length})</Text>
+            </View>
+            <FlatList
+              data={acceptedFollowers}
+              keyExtractor={(item) => item.id}
+              renderItem={({ item }) => (
+                <View style={[styles.requestItem, {backgroundColor: '#1E293B60'}]}>
+                  <Image source={{ uri: item.senderImage || 'https://via.placeholder.com/150' }} style={styles.requestAvatar} />
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={{ color: '#FFF', fontWeight: '800' }}>{item.senderName}</Text>
+                    <Text style={{ color: '#10B981', fontSize: 10 }}>Connected</Text>
+                  </View>
+                  <TouchableOpacity onPress={() => handleRejectOrUnfollow(item.id, 'unfollow')} style={styles.removeBtn}>
+                    <Text style={styles.removeBtnText}>UNFOLLOW</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              ListEmptyComponent={<Text style={styles.emptyListText}>You don't have any followers yet.</Text>}
+            />
+          </View>
+        </View>
+      </Modal>
+
+      {/* RATE SETTINGS MODAL */}
       <Modal visible={rateModalVisible} animationType="fade" transparent={true}>
         <View style={styles.overlay}>
           <View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Set Call Rate</Text>
             <Text style={{color: '#94A3B8', fontSize: 12, marginBottom: 20}}>
-              Your current level is <Text style={{color: '#818CF8'}}>{levelInfo.label}</Text>. 
-              Permitted range: <Text style={{color: '#FFF'}}>{levelInfo.minRate}</Text> - <Text style={{color: '#FFF'}}>{levelInfo.maxRate}</Text> beans/min.
+              Level: <Text style={{color: '#818CF8'}}>{levelInfo.label}</Text>. 
+              Range: <Text style={{color: '#FFF'}}>{levelInfo.minRate}</Text> - <Text style={{color: '#FFF'}}>{levelInfo.maxRate}</Text> beans/min.
             </Text>
             <Text style={styles.inputLabel}>Beans Per Minute</Text>
             <TextInput style={styles.input} value={newRate} onChangeText={setNewRate} keyboardType="numeric" placeholderTextColor="#475569" />
@@ -471,6 +583,11 @@ const styles = StyleSheet.create({
   statBox: { flex: 1, backgroundColor: '#1E293B60', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#1E293B' },
   statValue: { color: '#FFF', fontSize: 16, fontWeight: '900' },
   statLabel: { color: '#475569', fontSize: 7, fontWeight: '800' },
+  followersButton: { backgroundColor: '#1E293B60', padding: 15, borderRadius: 18, marginBottom: 20, borderWidth: 1, borderColor: '#1E293B', borderStyle: 'dashed' },
+  followersBtnContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  followersLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  iconCircleSmall: { width: 32, height: 32, backgroundColor: '#818CF815', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+  followersBtnText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
   walletContainer: { backgroundColor: '#1E293B40', borderRadius: 20, padding: 15, marginBottom: 25, borderWidth: 1, borderColor: '#1E293B' },
   balanceMain: { borderBottomWidth: 1, borderBottomColor: '#1E293B', paddingBottom: 12, marginBottom: 10 },
   walletLabel: { color: '#10B981', fontSize: 10, fontWeight: '900' },
@@ -495,7 +612,7 @@ const styles = StyleSheet.create({
   bioText: { color: '#94A3B8', fontSize: 14, lineHeight: 20 },
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 25 },
   modalBox: { backgroundColor: '#0F172A', borderRadius: 30, padding: 25 },
-  modalTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', marginBottom: 20 },
+  modalTitle: { color: '#FFF', fontSize: 20, fontWeight: '900' },
   inputLabel: { color: '#818CF8', fontSize: 10, fontWeight: '800', marginBottom: 5, marginLeft: 5 },
   input: { backgroundColor: '#1E293B', borderRadius: 15, padding: 15, color: '#FFF', marginBottom: 15 },
   genderRow: { flexDirection: 'row', gap: 10, marginBottom: 15 },
@@ -503,5 +620,14 @@ const styles = StyleSheet.create({
   genderBtnActive: { backgroundColor: '#3B82F6' },
   genderBtnText: { color: '#475569', fontSize: 12, fontWeight: '800' },
   saveBtn: { backgroundColor: '#3B82F6', padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 },
-  saveBtnText: { color: '#FFF', fontWeight: '900' }
+  saveBtnText: { color: '#FFF', fontWeight: '900' },
+  tabHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
+  tabHeaderText: { color: '#818CF8', fontSize: 10, fontWeight: '900' },
+  requestItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', padding: 12, borderRadius: 15, marginBottom: 10 },
+  requestAvatar: { width: 40, height: 40, borderRadius: 20 },
+  acceptBtn: { backgroundColor: '#10B981', padding: 8, borderRadius: 10 },
+  rejectBtn: { backgroundColor: '#F43F5E', padding: 8, borderRadius: 10 },
+  removeBtn: { backgroundColor: '#334155', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
+  removeBtnText: { color: '#F43F5E', fontSize: 9, fontWeight: '900' },
+  emptyListText: { color: '#475569', textAlign: 'center', marginVertical: 15, fontSize: 11, fontStyle: 'italic' }
 });
