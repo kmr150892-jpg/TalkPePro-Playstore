@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, Image, Linking, ScrollView, StyleSheet, Text,
 import { db } from '../../../../firebaseConfig';
 
 export default function VerifyBankDetails() {
-  const { id } = useLocalSearchParams(); // Expert ID inga varum
+  const { id } = useLocalSearchParams(); // Consultant ID securely passed here
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [expert, setExpert] = useState<any>(null);
@@ -22,7 +22,7 @@ export default function VerifyBankDetails() {
       if (docSnap.exists()) {
         setExpert(docSnap.data());
       } else {
-        Alert.alert("Error", "Expert not found");
+        Alert.alert("Error", "Consultant record not found");
       }
     } catch (error) {
       console.error(error);
@@ -33,8 +33,8 @@ export default function VerifyBankDetails() {
 
   const handleAction = async (status: 'Approve' | 'Reject') => {
     Alert.alert(
-      `${status} Bank Details?`,
-      `Are you sure you want to ${status.toLowerCase()} this request?`,
+      `Confirm ${status} Action`,
+      `Are you sure you want to ${status.toLowerCase()} these financial details?`,
       [
         { text: "Cancel", style: "cancel" },
         { 
@@ -42,12 +42,12 @@ export default function VerifyBankDetails() {
           onPress: async () => {
             setLoading(true);
             try {
-              // 1. Update Expert Profile
+              // 1. Update Consultant Profile (Database key kept intact)
               await updateDoc(doc(db, "users", id as string), {
                 isBankVerified: status === 'Approve' ? true : false
               });
 
-              // 2. Remove the notification (Cleaning up)
+              // 2. Remove the notification (Cleaning up operational logs)
               const q = query(collection(db, "adminNotifications"), 
                 where("expertId", "==", id), 
                 where("type", "==", "BANK_VERIFICATION")
@@ -57,10 +57,10 @@ export default function VerifyBankDetails() {
                 await deleteDoc(doc(db, "adminNotifications", document.id));
               });
 
-              Alert.alert("Success ✅", `Bank details ${status.toLowerCase()}ed!`);
+              Alert.alert("Success ✅", `Financial details ${status.toLowerCase()}ed successfully!`);
               router.back();
             } catch (e) {
-              Alert.alert("Error", "Update failed");
+              Alert.alert("Error", "System update failed");
             } finally {
               setLoading(false);
             }
@@ -70,12 +70,12 @@ export default function VerifyBankDetails() {
     );
   };
 
-  // ✅ NEW FUNCTION: To open image in browser for download
+  // ✅ SECURE FUNCTION: To open KYC document in browser for secure download
   const downloadImage = () => {
     if (expert?.idProof) {
       Linking.openURL(expert.idProof);
     } else {
-      Alert.alert("Error", "No image found to download");
+      Alert.alert("Error", "No KYC document found to download");
     }
   };
 
@@ -85,13 +85,13 @@ export default function VerifyBankDetails() {
     <ScrollView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()}><Ionicons name="arrow-back" size={24} color="#FFF" /></TouchableOpacity>
-        <Text style={styles.headerTitle}>Bank Verification</Text>
+        <Text style={styles.headerTitle}>Financial KYC Verification</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <View style={styles.card}>
         <View style={styles.expertInfo}>
-           <Text style={styles.name}>{expert?.name || 'Expert'}</Text>
+           <Text style={styles.name}>{expert?.name || 'Consultant'}</Text>
            <Text style={styles.email}>{expert?.email}</Text>
         </View>
 
@@ -119,7 +119,7 @@ export default function VerifyBankDetails() {
 
         <View style={styles.divider} />
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={styles.label}>GOVERNMENT ID PROOF</Text>
+            <Text style={styles.label}>IDENTITY VERIFICATION (KYC)</Text>
             {expert?.idProof && (
                 <TouchableOpacity onPress={downloadImage}>
                     <Text style={{ color: '#818CF8', fontSize: 12, fontWeight: '900' }}>Download</Text>
@@ -134,19 +134,19 @@ export default function VerifyBankDetails() {
                 style={styles.idImage} 
                 resizeMode="contain"
             />
-            <Text style={{ color: '#64748B', fontSize: 10, textAlign: 'center', marginTop: 10 }}>* Tap image to download/full view</Text>
+            <Text style={{ color: '#64748B', fontSize: 10, textAlign: 'center', marginTop: 10 }}>* Tap document for secure download/full view</Text>
           </TouchableOpacity>
         ) : (
-          <Text style={[styles.value, { color: '#EF4444', fontSize: 12 }]}>No ID Proof Uploaded</Text>
+          <Text style={[styles.value, { color: '#EF4444', fontSize: 12 }]}>No KYC Document Uploaded</Text>
         )}
       </View>
 
       <View style={styles.btnGroup}>
         <TouchableOpacity style={[styles.btn, styles.rejectBtn]} onPress={() => handleAction('Reject')}>
-          <Text style={styles.btnText}>REJECT</Text>
+          <Text style={styles.btnText}>DECLINE</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.btn, styles.approveBtn]} onPress={() => handleAction('Approve')}>
-          <Text style={styles.btnText}>APPROVE & VERIFY</Text>
+          <Text style={styles.btnText}>AUTHORIZE & VERIFY</Text>
         </TouchableOpacity>
       </View>
       <View style={{ height: 50 }} />

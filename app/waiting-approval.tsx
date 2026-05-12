@@ -28,7 +28,7 @@ export default function WaitingApproval() {
                 </View>
                 <Text style={styles.title}>APPLICATION UNDER REVIEW</Text>
                 <Text style={styles.subtitle}>
-                     your profil details are being reviewed by admin. once approved, your account will be activated. Thank  you for your patience!
+                    Your profile details are currently being reviewed by our administration team. You will be notified once your expert account is activated. Thank you for your patience!
                 </Text>
                 
                 <TouchableOpacity style={styles.logoutBtn} onPress={handleLogout} activeOpacity={0.7}>
@@ -48,6 +48,7 @@ const styles = StyleSheet.create({
         borderRadius: 60, 
         backgroundColor: '#1E293B', 
         justifyContent: 'center', 
+        alignSelf: 'center', // 🔥 Added for perfect centering
         alignItems: 'center', 
         marginBottom: 25,
         borderWidth: 1,

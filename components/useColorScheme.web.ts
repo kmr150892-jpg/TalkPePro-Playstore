@@ -1,8 +1,8 @@
-// NOTE: The default React Native styling doesn't support server rendering.
-// Server rendered styles should not change between the first render of the HTML
-// and the first render on the client. Typically, web developers will use CSS media queries
-// to render different styles on the client and server, these aren't directly supported in React Native
-// but can be achieved using a styling library like Nativewind.
+// TalkPe Pro Secure Web Node Protocol:
+// The native rendering engine strictly limits server-side visual state execution to ensure stability.
+// Infrastructure-rendered styles must remain immutable during the initial client-side synchronization.
+// While standard web protocols utilize CSS media queries for state changes, this secure node
+// explicitly enforces a controlled 'light' visual environment to prevent UI injection mismatches.
 export function useColorScheme() {
   return 'light';
 }

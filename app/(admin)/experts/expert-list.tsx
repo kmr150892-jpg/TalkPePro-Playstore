@@ -70,7 +70,7 @@ export default function ExpertControl() {
         const newStatus = !currentStatus;
         Alert.alert(
             newStatus ? "RESTRICT ACCOUNT ACCESS?" : "RESTORE ACCOUNT ACCESS?",
-            `Are you sure you want to ${newStatus ? 'suspend' : 'reinstate'} this expert's credentials?`,
+            `Are you sure you want to ${newStatus ? 'suspend' : 'reinstate'} this consultant's credentials?`,
             [
                 { text: "CANCEL", style: "cancel" },
                 { 
@@ -128,12 +128,12 @@ export default function ExpertControl() {
                 {!isPending && (
                     <View style={styles.statsContainer}>
                         <View style={styles.statBox}>
-                            <Text style={styles.statLabel}>RANK LEVEL</Text>
+                            <Text style={styles.statLabel}>TIER LEVEL</Text>
                             <Text style={styles.statValue}>{item.currentLevel ?? 0}</Text>
                         </View>
                         <View style={styles.vDivider} />
                         <View style={styles.statBox}>
-                            <Text style={styles.statLabel}>EARNING /MIN</Text>
+                            <Text style={styles.statLabel}>REWARD /MIN</Text>
                             <View style={styles.currencyRow}>
                                 <MaterialCommunityIcons name="leaf" size={12} color="#FBBF24" />
                                 <Text style={styles.statValue}> {item.beansPerMin || 0}</Text>
@@ -141,7 +141,7 @@ export default function ExpertControl() {
                         </View>
                         <View style={styles.vDivider} />
                         <View style={styles.statBox}>
-                            <Text style={styles.statLabel}>USER RATE</Text>
+                            <Text style={styles.statLabel}>CLIENT RATE</Text>
                             <View style={styles.currencyRow}>
                                 <FontAwesome5 name="gem" size={10} color="#6366F1" />
                                 <Text style={styles.statValue}> {item.userPrice ?? 0}</Text>
@@ -169,7 +169,7 @@ export default function ExpertControl() {
                     >
                         <MaterialCommunityIcons name={isPending ? "file-find-outline" : "shield-account-outline"} size={18} color="#fff" />
                         <Text style={styles.actionBtnText} numberOfLines={1} adjustsFontSizeToFit>
-                            {isPending ? 'REVIEW REQUEST' : 'MANAGE PROFILE'}
+                            {isPending ? 'REVIEW ONBOARDING' : 'MANAGE CREDENTIALS'}
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -184,7 +184,7 @@ export default function ExpertControl() {
 
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.title}>EXPERT HUB</Text>
+                    <Text style={styles.title}>CONSULTANT HUB</Text>
                     <Text style={styles.subtitle}>Administrative Terminal • TalkPe OS</Text>
                 </View>
                 <View style={styles.countContainer}>

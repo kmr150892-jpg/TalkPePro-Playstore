@@ -1,10 +1,10 @@
 /**
  * @file gameLogic.ts
- * TalkPe Game Logic - Tic Tac Toe Only
+ * TalkPe Interactive Logic - Tic Tac Toe Only
  */
 
 /**
- * Tic Tac Toe Winner Check Logic
+ * Tic Tac Toe Success Verification Logic
  * @param squares Array of 9 strings (X, O, or null)
  * @returns 'X', 'O', or null
  */

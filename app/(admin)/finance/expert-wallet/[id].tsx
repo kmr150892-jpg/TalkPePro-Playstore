@@ -27,7 +27,7 @@ const ExpertWalletDetail = () => {
     useEffect(() => {
         if (!id) return;
         
-        // 🔥 MASS LIVE LISTENER: Wallet, Beans & Analytics
+        // 🔥 SYSTEM LIVE LISTENER: Allocation Metrics & Operational Analytics
         const docRef = doc(db, "users", id as string);
         const unsubExpert = onSnapshot(docRef, (snap) => {
             if (snap.exists()) {
@@ -48,29 +48,29 @@ const ExpertWalletDetail = () => {
         </View>
     );
 
-    // 💡 Logic: Calculating Estimated Payout (1 Bean = ₹1 logic or based on your app's rate)
-const estimatedPayout = (expert?.walletBalance || 0);
+    // 💡 Logic: Calculating Estimated Distribution (Standardized Unit Mapping)
+    const estimatedPayout = (expert?.walletBalance || 0);
 
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
             
-            {/* 🚀 MASS HEADER */}
+            {/* 🚀 OPERATIONAL HEADER */}
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={24} color="#6366F1" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>FINANCIAL OVERVIEW</Text>
+                <Text style={styles.headerTitle}>FINANCIAL ANALYTICS</Text>
                 <View style={styles.expertMiniProfile}>
                     <Text style={styles.avatarChar}>
-                        {expert?.name ? expert.name[0].toUpperCase() : 'E'}
+                        {expert?.name ? expert.name[0].toUpperCase() : 'C'}
                     </Text>
                 </View>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                 
-                {/* 💎 NEUMORPHIC BALANCE CARD */}
+                {/* 💎 NEUMORPHIC BALANCE INTERFACE */}
                 <View style={styles.cardContainer}>
                     <LinearGradient 
                         colors={['#6366F1', '#4338CA']} 
@@ -80,30 +80,30 @@ const estimatedPayout = (expert?.walletBalance || 0);
                     >
                         <View style={styles.cardTop}>
                             <View>
-                                <Text style={styles.balanceLabel}>AVAILABLE BEANS</Text>
+                                <Text style={styles.balanceLabel}>AVAILABLE ALLOCATIONS</Text>
                                 <View style={styles.row}>
                                     <MaterialCommunityIcons name="seed" size={24} color="#A5B4FC" />
                                     <Text style={styles.balanceValue}> ₹{(expert?.walletBalance || 0).toLocaleString()}</Text>
                                 </View>
                             </View>
                             <View style={styles.chip}>
-                                <Text style={styles.chipText}>{expert?.status === 'Approved' ? 'ACTIVE' : 'LIVE'}</Text>
+                                <Text style={styles.chipText}>{expert?.status === 'Approved' ? 'VERIFIED' : 'ACTIVE'}</Text>
                             </View>
                         </View>
 
                         <View style={styles.rupeeEquivalent}>
-                            <Text style={styles.eqLabel}>Estimated Payout:</Text>
+                            <Text style={styles.eqLabel}>Estimated Distribution:</Text>
                             <Text style={styles.eqValue}>₹{estimatedPayout.toLocaleString()}</Text>
                         </View>
 
                         <View style={styles.statsRow}>
                             <View style={styles.statItem}>
-                                <Text style={styles.statLabel}>Lifetime Beans</Text>
+                                <Text style={styles.statLabel}>Lifetime Units</Text>
                                 <Text style={styles.statValue}>{expert?.totalBeansEarned || 0}</Text>
                             </View>
                             <View style={styles.vDivider} />
                             <View style={styles.statItem}>
-                                <Text style={styles.statLabel}>Total Calls</Text>
+                                <Text style={styles.statLabel}>Total Sessions</Text>
                                 <Text style={styles.statValue}>{expert?.totalCallsHandled || 0}</Text>
                             </View>
                         </View>
@@ -112,7 +112,7 @@ const estimatedPayout = (expert?.walletBalance || 0);
 
                 {/* 📊 SYSTEM INSIGHTS SECTION */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>EXPERT SETTINGS</Text>
+                    <Text style={styles.sectionTitle}>CONSULTANT CONFIGURATION</Text>
                     
                     <View style={styles.infoBox}>
                         <View style={styles.infoRow}>
@@ -120,8 +120,8 @@ const estimatedPayout = (expert?.walletBalance || 0);
                                 <Feather name="trending-up" size={16} color="#10B981" />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.infoLabel}>Commission Rate</Text>
-                                <Text style={styles.infoValue}>Platform Standard (10%)</Text>
+                                <Text style={styles.infoLabel}>Platform Service Fee</Text>
+                                <Text style={styles.infoValue}>Enterprise Standard (10%)</Text>
                             </View>
                         </View>
 
@@ -130,25 +130,25 @@ const estimatedPayout = (expert?.walletBalance || 0);
                                 <Feather name="clock" size={16} color="#F59E0B" />
                             </View>
                             <View style={{ flex: 1 }}>
-                                <Text style={styles.infoLabel}>Expert Pricing</Text>
-                                <Text style={styles.infoValue}>{expert?.beansPerMin || 1000} Beans / min</Text>
+                                <Text style={styles.infoLabel}>Session Rate</Text>
+                                <Text style={styles.infoValue}>{expert?.beansPerMin || 1000} Units / min</Text>
                             </View>
                         </View>
                     </View>
                 </View>
 
-                {/* 🕒 TRANSACTION QUEUE */}
+                {/* 🕒 SETTLEMENT QUEUE */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>RECENT SETTLEMENTS</Text>
+                    <Text style={styles.sectionTitle}>RECENT DISTRIBUTIONS</Text>
                     <View style={styles.emptyBox}>
                         <BlurView intensity={5} style={styles.emptyBlur}>
                             <MaterialCommunityIcons name="history" size={40} color="#1E293B" />
-                            <Text style={styles.emptyText}>No recent withdrawal logs</Text>
+                            <Text style={styles.emptyText}>No recent distribution logs</Text>
                         </BlurView>
                     </View>
                 </View>
 
-                {/* ⚡ ACTION BUTTON */}
+                {/* ⚡ ACTION INTERFACE */}
                 <TouchableOpacity 
                     style={styles.payoutBtn} 
                     onPress={() => router.push(`/(admin)/withdrawals?expertId=${id}` as any)}
@@ -157,7 +157,7 @@ const estimatedPayout = (expert?.walletBalance || 0);
                         colors={['#0F172A', '#1E293B']} 
                         style={styles.payoutGradient}
                     >
-                        <Text style={styles.payoutBtnText}>AUDIT WITHDRAWAL REQUESTS</Text>
+                        <Text style={styles.payoutBtnText}>AUDIT DISBURSEMENT REQUESTS</Text>
                         <Feather name="arrow-right" size={18} color="#6366F1" />
                     </LinearGradient>
                 </TouchableOpacity>

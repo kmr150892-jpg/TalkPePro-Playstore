@@ -9,11 +9,11 @@ const UpdateAlert = () => {
         <View style={styles.container}>
             <View style={styles.card}>
                 <MaterialCommunityIcons name="rocket-launch" size={60} color="#6366F1" />
-                <Text style={styles.title}>NEW UPDATE AVAILABLE!</Text>
-                <Text style={styles.sub}>To continue using TalkPe, please update to the latest version for better stability and new features.</Text>
+                <Text style={styles.title}>CRITICAL SYSTEM UPDATE</Text>
+                <Text style={styles.sub}>To ensure secure consulting sessions on TalkPe Pro, please upgrade to the latest infrastructure version.</Text>
                 
                 <TouchableOpacity style={styles.btn} onPress={() => Linking.openURL(playStoreUrl)}>
-                    <Text style={styles.btnText}>UPDATE NOW</Text>
+                    <Text style={styles.btnText}>UPGRADE SECURELY</Text>
                 </TouchableOpacity>
             </View>
         </View>

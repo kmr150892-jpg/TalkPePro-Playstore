@@ -64,16 +64,20 @@ export default function VerifyExpertDetail() {
                 updateData.verifiedAt = serverTimestamp();
                 updateData.walletBalance = expert?.walletBalance || 0; 
                 updateData.totalBeansEarned = expert?.totalBeansEarned || 0;
-                updateData.currentLevel = 1;
+                
+                // 🔥 THE FIX: Start at Level 0 (Beginner) instead of 1 🔥
+                updateData.currentLevel = 0;
+                updateData.levelTitle = "BEGINNER";
+                
                 updateData.beansPerMin = 1000; 
                 updateData.userPrice = 2000;   
             }
 
             await updateDoc(userRef, updateData);
-            Alert.alert("SYSTEM UPDATED", `Expert is now ${isApprove ? 'Authorized' : 'Rejected'}.`);
+            Alert.alert("SYSTEM UPDATED", `Consultant access is now ${isApprove ? 'Authorized' : 'Declined'}.`);
             router.back();
         } catch (err) {
-            Alert.alert("ERROR", "Update failed.");
+            Alert.alert("ERROR", "System update failed.");
         } finally {
             setProcessing(false);
         }
@@ -84,8 +88,8 @@ export default function VerifyExpertDetail() {
         const nextStatus = !isCurrentlyBlocked;
 
         Alert.alert(
-            nextStatus ? "BLOCK EXPERT?" : "UNBLOCK EXPERT?",
-            `Are you sure you want to ${nextStatus ? 'restrict' : 'restore'} access for ${expert?.name}?`,
+            nextStatus ? "RESTRICT CONSULTANT?" : "RESTORE ACCESS?",
+            `Are you sure you want to ${nextStatus ? 'restrict' : 'restore'} platform access for ${expert?.name}?`,
             [
                 { text: "CANCEL", style: "cancel" },
                 { 
@@ -100,7 +104,7 @@ export default function VerifyExpertDetail() {
                                 status: nextStatus ? "Blocked" : "Active"
                             });
                         } catch (err) {
-                            Alert.alert("ERROR", "Block action failed.");
+                            Alert.alert("ERROR", "Access modification failed.");
                         } finally {
                             setProcessing(false);
                         }
@@ -115,7 +119,7 @@ export default function VerifyExpertDetail() {
         if (expert?.idProof) {
             Linking.openURL(expert.idProof);
         } else {
-            Alert.alert("Not Found", "ID Proof image not uploaded yet.");
+            Alert.alert("Not Found", "Identity document not uploaded yet.");
         }
     };
 
@@ -140,7 +144,7 @@ export default function VerifyExpertDetail() {
                     <Ionicons name="chevron-back" size={24} color="#6366F1" />
                 </TouchableOpacity>
                 <View style={styles.headerText}>
-                    <Text style={styles.headerTitle}>{isPending ? 'VERIFICATION' : 'EXPERT CONSOLE'}</Text>
+                    <Text style={styles.headerTitle}>{isPending ? 'ONBOARDING REVIEW' : 'CONSULTANT CONSOLE'}</Text>
                     <Text style={styles.headerSub}>SYSTEM ID: {String(expertId || '').toUpperCase()}</Text>
                 </View>
             </View>
@@ -164,29 +168,29 @@ export default function VerifyExpertDetail() {
                         <View style={[styles.statusBadge, { borderColor: isPending ? '#F59E0B' : (isBlocked ? '#EF4444' : '#10B981') }]}>
                             <View style={[styles.dot, { backgroundColor: isPending ? '#F59E0B' : (isBlocked ? '#EF4444' : '#10B981') }]} />
                             <Text style={[styles.statusText, { color: isPending ? '#F59E0B' : (isBlocked ? '#EF4444' : '#10B981') }]}>
-                                {isPending ? 'PENDING REVIEW' : (isBlocked ? 'ACCESS RESTRICTED' : 'ACTIVE EXPERT')}
+                                {isPending ? 'PENDING VERIFICATION' : (isBlocked ? 'ACCESS RESTRICTED' : 'ACTIVE CONSULTANT')}
                             </Text>
                         </View>
                     </View>
                 </View>
 
-                {/* REVENUE & ANALYTICS */}
+                {/* METRICS & ANALYTICS */}
                {!isPending && (
                     <View style={styles.section}>
                         <View style={styles.sectionHeader}>
                             <MaterialCommunityIcons name="finance" size={14} color="#6366F1" />
-                            <Text style={styles.sectionTitle}>REVENUE & ANALYTICS</Text>
+                            <Text style={styles.sectionTitle}>OPERATIONAL METRICS</Text>
                         </View>
                         <View style={styles.statsRow}>
                             <View style={styles.statBox}>
-                                <Text style={styles.statLabel}>TOTAL BEANS</Text>
+                                <Text style={styles.statLabel}>REWARDS (BEANS)</Text>
                                 <View style={styles.currencyRow}>
                                     <MaterialCommunityIcons name="leaf" size={16} color="#FBBF24" />
                                     <Text style={styles.statValue}> {expert?.walletBalance || 0}</Text>
                                 </View>
                             </View>
                             <View style={styles.statBox}>
-                                <Text style={styles.statLabel}>WALLET (RS)</Text>
+                                <Text style={styles.statLabel}>BALANCE (RS)</Text>
                                 <View style={styles.currencyRow}>
                                     <FontAwesome5 name="wallet" size={14} color="#10B981" />
                                     <Text style={styles.statValue}> ₹{Math.floor((expert?.walletBalance || 0) / 100)}</Text>
@@ -194,19 +198,19 @@ export default function VerifyExpertDetail() {
                             </View>
                         </View>
                         
-                        {/* ✅ ADDED: LEVEL BOX */}
+                        {/* ✅ TIER BOX */}
                         <View style={[styles.statBox, { marginTop: 15, width: '100%', flexDirection: 'row', justifyContent: 'space-between' }]}>
-                             <Text style={styles.statLabel}>CURRENT LEVEL</Text>
-                             <Text style={[styles.statValue, { fontSize: 14, color: '#6366F1' }]}>{expert?.levelTitle || 'ROOKIE L1'}</Text>
+                             <Text style={styles.statLabel}>CONSULTANT TIER</Text>
+                             <Text style={[styles.statValue, { fontSize: 14, color: '#6366F1' }]}>{expert?.levelTitle || 'BEGINNER L0'}</Text>
                         </View>
                     </View>
                 )}
 
-                {/* EXPERT CREDENTIALS */}
+                {/* CONSULTANT CREDENTIALS */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Feather name="shield" size={14} color="#6366F1" />
-                        <Text style={styles.sectionTitle}>EXPERT CREDENTIALS</Text>
+                        <Text style={styles.sectionTitle}>CONSULTANT CREDENTIALS</Text>
                     </View>
                     <View style={styles.glassBox}>
                         <View style={styles.infoRow}>
@@ -220,7 +224,7 @@ export default function VerifyExpertDetail() {
                         </View>
                         <View style={styles.divider} />
                         <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>RATE:</Text>
+                            <Text style={styles.infoLabel}>BASE RATE:</Text>
                             <View style={styles.valRow}>
                                 <MaterialCommunityIcons name="leaf" size={14} color="#FBBF24" style={{marginRight: 4}} />
                                 <Text style={styles.infoValue}>{expert?.pricePerMin || 1000} /min</Text>
@@ -234,11 +238,11 @@ export default function VerifyExpertDetail() {
                     </View>
                 </View>
 
-                {/* ✅ ADDED: BANK & ID SETTINGS SECTION */}
+                {/* FINANCIAL & ID CONFIGURATION */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <FontAwesome5 name="university" size={12} color="#6366F1" />
-                        <Text style={styles.sectionTitle}>BANK & ID SETTINGS</Text>
+                        <Text style={styles.sectionTitle}>FINANCIAL & ID CONFIGURATION</Text>
                     </View>
                     <View style={styles.glassBox}>
                         <View style={styles.infoRow}>
@@ -257,7 +261,7 @@ export default function VerifyExpertDetail() {
                         </View>
                         <View style={styles.divider} />
                         <View style={styles.infoRow}>
-                            <Text style={styles.infoLabel}>ID PROOF:</Text>
+                            <Text style={styles.infoLabel}>KYC DOCUMENT:</Text>
                             {expert?.idProof ? (
                                 <TouchableOpacity onPress={openIdProof}>
                                     <Image source={{ uri: expert.idProof }} style={styles.idThumb} />
@@ -278,7 +282,7 @@ export default function VerifyExpertDetail() {
                     {isPending ? (
                         <>
                             <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => handleVerification('REJECT')} disabled={processing}>
-                                <Text style={styles.rejectBtnText}>REJECT</Text>
+                                <Text style={styles.rejectBtnText}>DECLINE</Text>
                             </TouchableOpacity>
                             <TouchableOpacity style={[styles.actionBtn, styles.approveBtn]} onPress={() => handleVerification('APPROVE')} disabled={processing}>
                                 {processing ? <ActivityIndicator color="#fff" /> : <Text style={styles.approveBtnText}>AUTHORIZE</Text>}
@@ -291,7 +295,7 @@ export default function VerifyExpertDetail() {
                             disabled={processing}
                         >
                             <Feather name={isBlocked ? "unlock" : "slash"} size={18} color="#fff" />
-                            <Text style={styles.approveBtnText}>{isBlocked ? 'UNBLOCK ACCESS' : 'BLOCK EXPERT'}</Text>
+                            <Text style={styles.approveBtnText}>{isBlocked ? 'RESTORE ACCESS' : 'RESTRICT CONSULTANT'}</Text>
                         </TouchableOpacity>
                     )}
                 </BlurView>

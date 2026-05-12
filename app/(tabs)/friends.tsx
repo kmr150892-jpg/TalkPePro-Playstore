@@ -1,18 +1,89 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDoc, onSnapshot, query, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { collection, deleteDoc, doc, getDoc, increment, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
+
+const { width, height } = Dimensions.get('window');
+
+// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC FROM MEMORY V2)
+const calculateUserLevel = (totalSpent: number) => {
+  if (totalSpent >= 500000001) return { 
+      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#FF0033', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000']
+  }; 
+  if (totalSpent >= 100000001) return { 
+      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#D946EF', secondaryColor: '#c8040b', anim: 'mythic', themeBg: ['#15001A', '#000000']
+  }; 
+  if (totalSpent >= 50000000) return { 
+      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#9c77f3', secondaryColor: '#d31515', anim: 'grandmaster', themeBg: ['#08001A', '#000000']
+  };
+  if (totalSpent >= 10000000) return { 
+      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#970d50d4', anim: 'explosion', themeBg: ['#00101A', '#000000']
+  };
+  if (totalSpent >= 5000000) return { 
+      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000']
+  };
+  if (totalSpent >= 1000000) return { 
+      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000']
+  };
+  if (totalSpent >= 200001) return { 
+      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000']
+  };
+  // ✅ Level 1 Secondary Color is RED (#6b0402)
+  return { 
+      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000']
+  };
+};
 
 export default function FriendsList() {
   const [friends, setFriends] = useState<any[]>([]);
+  const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const user = auth.currentUser;
   const router = useRouter();
 
+  // 🌀 ANIMATION ENGINE REFS
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const floatAnim = useRef(new Animated.Value(0)).current;
+  const shimmerAnim = useRef(new Animated.Value(0)).current; // 🔥 ORB ANIMATION
+
   useEffect(() => {
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatAnim, { toValue: -5, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 2000, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+      ])
+    ).start();
+
+    // 🔥 Start Ambient Shimmer (SMOOTH FLOATING SEQUENCE)
+    Animated.loop(
+        Animated.sequence([
+            Animated.timing(shimmerAnim, {
+              toValue: 1,
+              duration: 4000,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true
+            }),
+            Animated.timing(shimmerAnim, {
+              toValue: 0,
+              duration: 4000,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true
+            })
+        ])
+    ).start();
+
     if (!user) return;
+
+    // Fetch User Data for Theme Sync
+    const userRef = doc(db, "users", user.uid);
+    const unsubUser = onSnapshot(userRef, (snap) => {
+      if (snap.exists()) setUserData(snap.data());
+    });
 
     const q = query(
       collection(db, "connections"),
@@ -25,12 +96,11 @@ export default function FriendsList() {
         snapshot.docs.map(async (connectionDoc) => {
           const data = connectionDoc.data();
           const expertId = data.receiverId;
-
           const expertRef = doc(db, "users", expertId);
           const expertSnap = await getDoc(expertRef);
 
           let expertInfo = {
-            name: data.receiverName || "Expert",
+            name: data.receiverName || "Consultant",
             image: data.receiverImage || null
           };
 
@@ -41,7 +111,7 @@ export default function FriendsList() {
           }
 
           return {
-            id: connectionDoc.id, // Firestore Document ID for deletion
+            id: connectionDoc.id,
             ...data,
             realName: expertInfo.name,
             realImage: expertInfo.image
@@ -52,37 +122,43 @@ export default function FriendsList() {
       setLoading(false);
     });
 
-    return () => unsubscribe();
+    return () => { unsubscribe(); unsubUser(); };
   }, [user]);
 
-  // ✅ CHAT NAVIGATION LOGIC
+  const totalSpent = userData?.totalSpentDiamonds || 0;
+  const userTier = calculateUserLevel(totalSpent);
+
   const handleChatPress = (expertId: string, expertName: string) => {
     if (!user) return;
-    // Unique Chat ID generation (Alphabetical order logic)
     const chatId = user.uid < expertId ? `${user.uid}_${expertId}` : `${expertId}_${user.uid}`;
-    
     router.push({
       pathname: '/chat/ChatScreen' as any,
       params: { chatId, receiverId: expertId, receiverName: expertName }
     });
   };
 
-  // ✅ UNFOLLOW LOGIC
   const handleUnfollow = (connectionId: string, name: string) => {
     Alert.alert(
-      "Unfollow Expert",
-      `Are you sure you want to unfollow ${name}?`,
+      "Terminate Link",
+      `Are you sure you want to disconnect your network link with ${name}?`,
       [
-        { text: "Cancel", style: "cancel" },
+        { text: "ABORT", style: "cancel" },
         { 
-          text: "Unfollow", 
+          text: "CONFIRM", 
           style: "destructive", 
           onPress: async () => {
             try {
+              const userRef = doc(db, "users", user!.uid);
+              const userSnap = await getDoc(userRef);
+              const currentCount = userSnap.data()?.friendsCount || 0;
+
               await deleteDoc(doc(db, "connections", connectionId));
-              // Snapshot automatic-ah update aagidum, so list-la irundhu poiyidum.
+              
+              if (currentCount > 0) {
+                await updateDoc(userRef, { friendsCount: increment(-1) });
+              }
             } catch (error) {
-              Alert.alert("Error", "Unfollow panna mudiyala.");
+              Alert.alert("System Error", "Unable to update network node.");
             }
           } 
         }
@@ -90,69 +166,133 @@ export default function FriendsList() {
     );
   };
 
+  const parallaxHeader = scrollY.interpolate({ inputRange: [0, 200], outputRange: [0, -30], extrapolate: 'clamp' });
+  const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
+
+  // 🔥 ALTERNATING BORDER STYLES (FLUID, 2px)
+  const borderType1 = {
+      borderLeftWidth: 2,
+      borderRightWidth: 2,
+      borderTopWidth: 0.5,
+      borderBottomWidth: 0.5,
+      borderLeftColor: userTier.color,
+      borderRightColor: userTier.color,
+      borderTopColor: userTier.secondaryColor + '80',
+      borderBottomColor: userTier.secondaryColor + '80',
+      backgroundColor: 'rgba(10, 10, 10, 0.65)',
+  };
+
+  const borderType2 = {
+      borderLeftWidth: 2,
+      borderRightWidth: 2,
+      borderTopWidth: 0.5,
+      borderBottomWidth: 0.5,
+      borderLeftColor: userTier.secondaryColor,
+      borderRightColor: userTier.secondaryColor,
+      borderTopColor: userTier.color + '80',
+      borderBottomColor: userTier.color + '80',
+      backgroundColor: 'rgba(10, 10, 10, 0.8)',
+  };
+
   if (loading) {
     return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#3B82F6" />
+      <View style={styles.darkLoader}>
+        <ActivityIndicator size="large" color={userTier.color} />
+        <Text style={[styles.loaderText, { color: userTier.color }]}>Syncing Network Nodes...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()}>
-          <Ionicons name="chevron-back" size={24} color="#FFF" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Friends</Text>
-      </View>
+    <View style={styles.mainContainer}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+      
+      {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
+      <LinearGradient colors={userTier.themeBg as any} style={StyleSheet.absoluteFill} />
+      
+      {/* 🔥 FLOATING SHIMMER ORBS */}
+      <Animated.View style={[styles.shimmerOrb, { top: 80, left: -60, backgroundColor: userTier.color, transform: [{ translateY: orbTranslateY }] }]} />
+      <Animated.View style={[styles.shimmerOrb, { bottom: 150, right: -60, backgroundColor: userTier.color, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+
+      {/* 🌌 Animated Parallax Auras */}
+      <Animated.View style={[styles.aura, { top: -50, left: -100, backgroundColor: userTier.color, opacity: 0.15, transform: [{ translateY: parallaxHeader }] }]} />
+      <Animated.View style={[styles.aura, { bottom: 50, right: -100, backgroundColor: userTier.secondaryColor, opacity: 0.1, transform: [{ translateY: parallaxHeader }] }]} />
+
+      <SafeAreaView style={styles.headerArea} edges={['top']}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => router.back()} style={[styles.backButton, { borderColor: userTier.color + '40' }]}>
+            <Ionicons name="chevron-back" size={24} color="#FFF" />
+          </TouchableOpacity>
+          <View>
+            <Text style={styles.headerTitle}>SECURE NETWORK</Text>
+            <Text style={[styles.headerSubTitle, { color: userTier.color }]}>{friends.length} Active Node Links</Text>
+          </View>
+        </View>
+      </SafeAreaView>
 
       {friends.length === 0 ? (
-        <View style={styles.center}>
-          <Text style={styles.emptyText}>No friends added yet. Follow experts to see them here!</Text>
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons name="earth-off" size={80} color={userTier.color} style={{ opacity: 0.2 }} />
+          <Text style={styles.emptyTitle}>Empty Network</Text>
+          <Text style={styles.emptyDesc}>Connect with consultants to expand your secure communication network.</Text>
         </View>
       ) : (
-        <FlatList
+        <Animated.FlatList
           data={friends}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 20 }}
-          renderItem={({ item }) => (
-            <View style={styles.friendCard}>
-              <TouchableOpacity 
-                style={styles.cardLeft}
-                onPress={() => router.push(`/expert-detail?id=${item.receiverId}` as any)}
-              >
-                <Image 
-                  source={{ 
-                    uri: item.realImage || `https://ui-avatars.com/api/?name=${item.realName}&background=3B82F6&color=fff` 
-                  }} 
-                  style={styles.friendImg} 
-                />
-                <View style={styles.friendInfo}>
-                  <Text style={styles.friendName}>{item.realName}</Text>
-                  <Text style={styles.statusLabel}>Connected</Text>
-                </View>
-              </TouchableOpacity>
+          contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+          showsVerticalScrollIndicator={false}
+          renderItem={({ item, index }) => {
+             // 🔥 Alternating Border Logic for Network Cards
+             const cardBorderStyle = index % 2 === 0 ? borderType1 : borderType2;
 
-              {/* ✅ CHAT BUTTON (NEW) */}
-              <TouchableOpacity 
-                style={styles.chatBtn}
-                onPress={() => handleChatPress(item.receiverId, item.realName)}
-              >
-                <Ionicons name="chatbubble-ellipses" size={22} color="#3B82F6" />
-                <Text style={styles.chatText}>Chat</Text>
-              </TouchableOpacity>
+             return (
+                <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+                  <BlurView intensity={25} tint="dark" style={[styles.stealthCardBase, cardBorderStyle]}>
+                    
+                    <TouchableOpacity 
+                      activeOpacity={0.8}
+                      style={styles.cardMain}
+                      onPress={() => router.push(`/expert-detail?id=${item.receiverId}` as any)}
+                    >
+                      <View style={[styles.avatarGlow, { shadowColor: index % 2 === 0 ? userTier.color : userTier.secondaryColor, borderColor: index % 2 === 0 ? userTier.color : userTier.secondaryColor }]}>
+                        <Image 
+                          source={{ uri: item.realImage || `https://ui-avatars.com/api/?name=${item.realName}&background=1E293B&color=fff&bold=true` }} 
+                          style={styles.friendImg} 
+                        />
+                      </View>
+                      <View style={styles.infoArea}>
+                        <Text style={styles.friendName}>{item.realName.toUpperCase()}</Text>
+                        <View style={styles.statusBadge}>
+                          <View style={[styles.pulseDot, { backgroundColor: '#10B981' }]} />
+                          <Text style={styles.statusText}>ENCRYPTED LINK ACTIVE</Text>
+                        </View>
+                      </View>
+                      <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.2)" />
+                    </TouchableOpacity>
 
-              {/* ✅ UNFOLLOW BUTTON */}
-              <TouchableOpacity 
-                style={styles.unfollowBtn}
-                onPress={() => handleUnfollow(item.id, item.realName)}
-              >
-                <Ionicons name="person-remove-outline" size={20} color="#EF4444" />
-                <Text style={styles.unfollowText}>Remove</Text>
-              </TouchableOpacity>
-            </View>
-          )}
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity 
+                        style={[styles.actionBtn, { borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }]}
+                        onPress={() => handleChatPress(item.receiverId, item.realName)}
+                      >
+                        <Ionicons name="chatbubble-ellipses" size={18} color={userTier.color} />
+                        <Text style={[styles.btnLabel, { color: userTier.color }]}>MESSAGE</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={styles.actionBtn}
+                        onPress={() => handleUnfollow(item.id, item.realName)}
+                      >
+                        <Ionicons name="link-outline" size={18} color="#FB7185" />
+                        <Text style={[styles.btnLabel, { color: '#FB7185' }]}>TERMINATE</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </BlurView>
+                </Animated.View>
+             );
+          }}
         />
       )}
     </View>
@@ -160,41 +300,35 @@ export default function FriendsList() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingTop: 50, gap: 15 },
-  headerTitle: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  friendCard: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    justifyContent: 'space-between',
-    backgroundColor: '#1E293B', 
-    padding: 12, 
-    borderRadius: 20, 
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.05)'
-  },
-  cardLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-  friendImg: { width: 55, height: 55, borderRadius: 27.5, backgroundColor: '#334155' },
-  friendInfo: { marginLeft: 12, flex: 1 },
-  friendName: { color: '#FFF', fontSize: 16, fontWeight: 'bold' },
-  statusLabel: { color: '#10B981', fontSize: 12, marginTop: 2 },
-  chatBtn: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingHorizontal: 15,
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.1)'
-  },
-  chatText: { color: '#3B82F6', fontSize: 10, fontWeight: '700', marginTop: 4, textTransform: 'uppercase' },
-  unfollowBtn: { 
-    alignItems: 'center', 
-    justifyContent: 'center', 
-    paddingHorizontal: 12,
-    borderLeftWidth: 1,
-    borderLeftColor: 'rgba(255,255,255,0.1)'
-  },
-  unfollowText: { color: '#EF4444', fontSize: 10, fontWeight: '700', marginTop: 4, textTransform: 'uppercase' },
-  emptyText: { color: '#64748B', textAlign: 'center', fontSize: 14 },
+  mainContainer: { flex: 1, backgroundColor: '#020617' },
+  // 🔥 DESIGN: AMBIENT SHIMMER ORBS
+  shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(100px)' },
+  aura: { position: 'absolute', width: 400, height: 400, borderRadius: 200, filter: 'blur(100px)' },
+  darkLoader: { flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' },
+  loaderText: { marginTop: 15, fontWeight: '900', letterSpacing: 2, fontSize: 10 },
+  
+  headerArea: { borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)', backgroundColor: 'rgba(2, 6, 23, 0.4)' },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 20 },
+  backButton: { backgroundColor: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 15, borderWidth: 1 },
+  headerTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 3 },
+  headerSubTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 4 },
+  
+  // ZERO BOX STEALTH CARD DESIGN (SYNCED)
+  stealthCardBase: { borderRadius: 35, marginBottom: 20, overflow: 'hidden', elevation: 10 },
+  cardMain: { flexDirection: 'row', alignItems: 'center', padding: 20, zIndex: 10 },
+  avatarGlow: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, padding: 2, shadowOpacity: 0.6, shadowRadius: 10, elevation: 10, backgroundColor: '#000' },
+  friendImg: { width: '100%', height: '100%', borderRadius: 28 },
+  infoArea: { marginLeft: 18, flex: 1 },
+  friendName: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
+  statusBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 },
+  pulseDot: { width: 6, height: 6, borderRadius: 3 },
+  statusText: { color: '#10B981', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+  
+  actionRow: { flexDirection: 'row', borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.05)', height: 60, backgroundColor: 'rgba(0,0,0,0.3)' },
+  actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  btnLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
+  
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
+  emptyTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', marginTop: 20, letterSpacing: 2 },
+  emptyDesc: { color: '#475569', textAlign: 'center', marginTop: 12, fontWeight: '700', lineHeight: 20, fontSize: 12 }
 });

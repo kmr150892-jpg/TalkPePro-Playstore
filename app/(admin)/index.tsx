@@ -25,7 +25,6 @@ const AdminPanel = () => {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState('DASHBOARD');
     const [loading, setLoading] = useState(true);
-    const [stats, setStats] = useState({ calls: 0, revenue: 0 });
     const [pendingExperts, setPendingExperts] = useState<any[]>([]);
     const [bankRequests, setBankRequests] = useState<any[]>([]); 
     const [totalPayoutPool, setTotalPayoutPool] = useState(0);
@@ -47,20 +46,6 @@ const AdminPanel = () => {
             }
         });
         unsubs.push(unsubSettings);
-
-        const qOrders = query(collection(db, "orders"), where("status", "==", "SUCCESS"));
-        const unsubOrders = onSnapshot(qOrders, (snap) => {
-            let total = 0;
-            snap.docs.forEach(d => { total += (d.data().amount || 0) / 100; });
-            setStats(prev => ({ ...prev, revenue: total }));
-        });
-        unsubs.push(unsubOrders);
-
-        const qCalls = query(collection(db, "calls"), where("status", "==", "ongoing"));
-        const unsubCalls = onSnapshot(qCalls, (snap) => {
-            setStats(prev => ({ ...prev, calls: snap.size }));
-        });
-        unsubs.push(unsubCalls);
 
         const qWithdrawals = query(
             collection(db, "withdrawals"), 
@@ -107,37 +92,37 @@ const AdminPanel = () => {
         Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     }, [activeTab]);
 
-    // ✅ UPDATED: Payout logic to sync with user balances correctly
+    // ✅ OPERATIONAL SYNC: Disbursement logic synchronized with professional ledger standards
     const handleMarkAsPaid = async (withdrawalRequest: any) => {
         try {
             const userRef = doc(db, "users", withdrawalRequest.userId);
             const withdrawalRef = doc(db, "withdrawals", withdrawalRequest.id);
             const amountToProcess = Number(withdrawalRequest.amountRupee || withdrawalRequest.amount || 0);
 
-            // 1. Update User Document - Adjust Payout balances
+            // 1. Update User Node - Synchronizing allocated balances
             await updateDoc(userRef, {
                 pendingPayout: increment(-amountToProcess), 
                 totalWithdrawnRs: increment(amountToProcess) 
             });
 
-            // 2. Update Withdrawal Status to SUCCESS
+            // 2. Finalize Disbursement Status
             await updateDoc(withdrawalRef, {
                 status: 'SUCCESS',
                 paidAt: serverTimestamp()
             });
 
-            Alert.alert("Success", "Payment marked as success!");
+            Alert.alert("Success", "Operational disbursement finalized.");
         } catch (error) {
-            console.error("Error updating payout:", error);
-            Alert.alert("Error", "Failed to update payout status.");
+            console.error("Ledger Sync Error:", error);
+            Alert.alert("Error", "System failed to update settlement records.");
         }
     };
 
     const toggleMaintenance = async () => {
         const newStatus = !isMaintenance;
         Alert.alert(
-            newStatus ? "⚠️ Enable Maintenance?" : "✅ Disable Maintenance?",
-            newStatus ? "This will block all users from using TalkPe." : "This will make the app live for everyone.",
+            newStatus ? "⚠️ Enable Optimization Mode?" : "✅ Restore Live Access?",
+            newStatus ? "This will restrict platform access for system maintenance." : "This will enable platform access for all users.",
             [
                 { text: "Cancel", style: "cancel" },
                 { 
@@ -145,7 +130,7 @@ const AdminPanel = () => {
                     onPress: async () => {
                         try {
                             await updateDoc(doc(db, "system", "app_settings"), { isMaintenance: newStatus });
-                        } catch (e) { console.log("Update failed", e); }
+                        } catch (e) { console.log("System update failed", e); }
                     } 
                 }
             ]
@@ -155,27 +140,19 @@ const AdminPanel = () => {
     const updateVersion = async () => {
         const cleanVersion = minVersion.trim();
         if (!cleanVersion) {
-            Alert.alert("Error", "Version cannot be empty");
+            Alert.alert("Error", "Version string cannot be null.");
             return;
         }
         setSavingVersion(true);
         try {
             await updateDoc(doc(db, "system", "app_settings"), { minVersion: cleanVersion });
-            Alert.alert("Success ✅", `Force update set to version ${cleanVersion}`);
+            Alert.alert("Success ✅", `System baseline set to version ${cleanVersion}`);
         } catch (e) {
-            Alert.alert("Error", "Failed to update version");
+            Alert.alert("Error", "Configuration update failure.");
         } finally {
             setSavingVersion(false);
         }
     };
-
-    const StatCard = ({ label, value, icon, color }: any) => (
-        <View style={[styles.statCard, { borderTopColor: color, borderTopWidth: 2 }]}>
-            <Feather name={icon} size={18} color={color} />
-            <Text style={styles.statValue}>{value}</Text>
-            <Text style={styles.statLabel}>{label}</Text>
-        </View>
-    );
 
     const SecurityLink = ({ title, sub, icon, route, color }: any) => (
         <TouchableOpacity
@@ -200,7 +177,7 @@ const AdminPanel = () => {
                     <View style={styles.liveIndicator}>
                         <View style={[styles.pulse, { backgroundColor: isMaintenance ? '#F59E0B' : '#10B981' }]} />
                         <Text style={styles.liveText}>
-                            {isMaintenance ? 'SYSTEM STATUS: MAINTENANCE' : 'SYSTEM MONITOR: ACTIVE'}
+                            {isMaintenance ? 'SYSTEM STATUS: OPTIMIZING' : 'SYSTEM MONITOR: OPERATIONAL'}
                         </Text>
                     </View>
                 </View>
@@ -211,7 +188,7 @@ const AdminPanel = () => {
 
             <View style={{ height: 50, marginBottom: 20 }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 20 }}>
-                    {['DASHBOARD', 'EXPERTS', 'PAYOUTS'].map((tab) => (
+                    {['DASHBOARD', 'CONSULTANTS', 'SETTLEMENTS'].map((tab) => (
                         <TouchableOpacity
                             key={tab}
                             onPress={() => setActiveTab(tab)}
@@ -237,10 +214,10 @@ const AdminPanel = () => {
                             >
                                 <View style={{ flex: 1 }}>
                                     <Text style={[styles.linkTitle, { color: isMaintenance ? '#F59E0B' : '#10B981' }]}>
-                                        {isMaintenance ? 'MAINTENANCE: ON 🛠️' : 'APP STATUS: LIVE ✅'}
+                                        {isMaintenance ? 'OPTIMIZATION: ACTIVE 🛠️' : 'PLATFORM STATUS: LIVE ✅'}
                                     </Text>
                                     <Text style={styles.linkSub}>
-                                        {isMaintenance ? 'Users are currently blocked' : 'System is running normally'}
+                                        {isMaintenance ? 'System access restricted' : 'All systems operational'}
                                     </Text>
                                 </View>
                                 <MaterialCommunityIcons 
@@ -252,7 +229,7 @@ const AdminPanel = () => {
 
                             <View style={styles.versionCard}>
                                 <View style={{ flex: 1 }}>
-                                    <Text style={styles.versionLabel}>FORCE UPDATE VERSION</Text>
+                                    <Text style={styles.versionLabel}>MINIMUM SYSTEM VERSION</Text>
                                     <TextInput 
                                         style={styles.versionInput}
                                         value={minVersion}
@@ -267,35 +244,33 @@ const AdminPanel = () => {
                                     disabled={savingVersion}
                                 >
                                     {savingVersion ? <ActivityIndicator size="small" color="#fff" /> : <MaterialCommunityIcons name="cloud-upload" size={20} color="#fff" />}
-                                    <Text style={styles.saveBtnText}>SAVE</Text>
+                                    <Text style={styles.saveBtnText}>COMMIT</Text>
                                 </TouchableOpacity>
                             </View>
 
-                            <View style={styles.statRow}>
-                                <StatCard label="LIVE CALLS" value={stats.calls} icon="activity" color="#6366F1" />
-                                <StatCard label="TOTAL REVENUE" value={`₹${stats.revenue.toLocaleString()}`} icon="trending-up" color="#10B981" />
-                            </View>
-
                             <Text style={styles.sectionTitle}>SYSTEM INSIGHTS</Text>
-                            <SecurityLink title="OPEN THE PULSE" sub="Real-time system vitals" icon="chart-timeline-variant" route="/analytics" color="#10B981" />
+                            <SecurityLink title="OPERATIONAL PULSE" sub="Real-time system health metrics" icon="chart-timeline-variant" route="/analytics" color="#10B981" />
 
-                            <Text style={styles.sectionTitle}>MASTER LEDGER</Text>
-                            <SecurityLink title="FINANCIAL LEDGER" sub="Track every movement" icon="database-sync" route="/finance/transactions" color="#818CF8" />
+                            <Text style={styles.sectionTitle}>AUDIT LEDGER</Text>
+                            <SecurityLink title="LEDGER VAULT" sub="Account-level history logs" icon="card-account-details-outline" route="/passbook" color="#A855F7" />
+                            <SecurityLink title="ANALYTICS MARGIN" sub="Interaction throughput metrics" icon="finance" route="/game-revenue" color="#10B981" />
+                            <SecurityLink title="SYSTEM LEDGER" sub="Financial traceability audit" icon="database-sync" route="/finance/transactions" color="#818CF8" />
 
-                            <Text style={styles.sectionTitle}>SECURITY & LOGS</Text>
-                            <SecurityLink title="REPORTS & ALERTS" sub="Manage complaints" icon="alert-octagon" route="/management/reports" color="#F43F5E" />
-                            <SecurityLink title="CALL MONITORING" sub="Live call logs" icon="shield-search" route="/logs/call-logs" color="#F59E0B" />
-                            <SecurityLink title="ENGINE HEALTH" sub="Agora latency monitor" icon="speedometer" route="/logs/system-latency" color="#10B981" />
+                            <Text style={styles.sectionTitle}>SECURITY & COMPLIANCE</Text>
+                            <SecurityLink title="REPORTS & FLAGS" sub="Community moderation alerts" icon="alert-octagon" route="/management/reports" color="#F43F5E" />
+                            <SecurityLink title="SESSION LOGS" sub="Interaction monitoring logs" icon="shield-search" route="/logs/call-logs" color="#F59E0B" />
+                            <SecurityLink title="ENGINE DIAGNOSTICS" sub="Connectivity performance audit" icon="speedometer" route="/logs/system-latency" color="#10B981" />
 
-                            <Text style={styles.sectionTitle}>MANAGEMENT</Text>
-                            <SecurityLink title="USER CONTROL" sub="Block or Unblock Users" icon="account-off" route="/management/user-control" color="#94A3B8" />
+                            <Text style={styles.sectionTitle}>ADMINISTRATION</Text>
+                            <SecurityLink title="REWARD GRANTS" sub="Process operational reward allocations" icon="gift" route="/reward-requests" color="#F59E0B" />
+                            <SecurityLink title="ACCESS CONTROL" sub="Manage profile permissions" icon="account-off" route="/management/user-control" color="#94A3B8" />
 
                             <TouchableOpacity style={styles.expertHubMainBtn} onPress={() => router.push('/experts/expert-list')}>
                                 <View style={styles.expertHubContent}>
                                     <View style={styles.expertHubIconBox}><MaterialCommunityIcons name="account-group" size={24} color="#fff" /></View>
                                     <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={styles.expertHubTitle}>EXPERT HUB (ACTIVE)</Text>
-                                        <Text style={styles.expertHubSub}>Master Management of Approved Experts</Text>
+                                        <Text style={styles.expertHubTitle}>CONSULTANT HUB (ACTIVE)</Text>
+                                        <Text style={styles.expertHubSub}>Global Management of Authorized Profiles</Text>
                                     </View>
                                     <Entypo name="chevron-right" size={24} color="#6366F1" />
                                 </View>
@@ -303,26 +278,26 @@ const AdminPanel = () => {
                         </View>
                     )}
 
-                    {activeTab === 'PAYOUTS' && (
+                    {activeTab === 'SETTLEMENTS' && (
                         <View>
                             <View style={styles.payoutMainCard}>
-                                <Text style={styles.payoutTitle}>TOTAL EXPERT LIABILITIES</Text>
+                                <Text style={styles.payoutTitle}>TOTAL SETTLEMENT LIABILITIES</Text>
                                 <Text style={styles.payoutAmt}>₹{totalPayoutPool.toLocaleString()}</Text>
                                 <TouchableOpacity style={styles.withdrawBtn} onPress={() => router.push('/finance/withdrawals' as any)}>
-                                    <Text style={styles.withdrawText}>MANAGE WITHDRAWALS</Text>
+                                    <Text style={styles.withdrawText}>AUDIT DISBURSEMENTS</Text>
                                     <Feather name="arrow-right" size={16} color="#312E81" />
                                 </TouchableOpacity>
                             </View>
                         </View>
                     )}
 
-                    {activeTab === 'EXPERTS' && (
+                    {activeTab === 'CONSULTANTS' && (
                         <View>
-                            <Text style={styles.sectionTitle}>PROFILE VERIFICATION ({pendingExperts.length})</Text>
+                            <Text style={styles.sectionTitle}>PROFILE ONBOARDING ({pendingExperts.length})</Text>
                             {pendingExperts.length === 0 && bankRequests.length === 0 ? (
                                 <View style={styles.emptyBox}>
                                     <MaterialCommunityIcons name="check-all" size={50} color="#1E293B" />
-                                    <Text style={{color: '#475569', marginTop: 10}}>All clear!</Text>
+                                    <Text style={{color: '#475569', marginTop: 10}}>Queue cleared.</Text>
                                 </View>
                             ) :
                             pendingExperts.map((exp: any) => (
@@ -332,23 +307,23 @@ const AdminPanel = () => {
                                             {(exp.profilePic || exp.photoURL) ? (
                                                 <Image source={{ uri: exp.profilePic || exp.photoURL }} style={styles.avatarImage} />
                                             ) : (
-                                                <Text style={styles.avatarChar}>{exp.name?.[0] || 'E'}</Text>
+                                                <Text style={styles.avatarChar}>{exp.name?.[0] || 'C'}</Text>
                                             )}
                                         </View>
                                         <View style={{ marginLeft: 15, flex: 1 }}>
-                                            <Text style={styles.expName}>{exp.name || 'Expert'}</Text>
-                                            <Text style={styles.expCat}>{exp.category || 'Consultant'}</Text>
+                                            <Text style={styles.expName}>{exp.name || 'User ID'}</Text>
+                                            <Text style={styles.expCat}>{exp.category || 'Professional'}</Text>
                                         </View>
                                     </View>
                                     <View style={[styles.badge, { backgroundColor: '#F59E0B20' }]}>
-                                        <Text style={[styles.badgeText, { color: '#F59E0B' }]}>REVIEW PROFILE</Text>
+                                        <Text style={[styles.badgeText, { color: '#F59E0B' }]}>AUDIT PROFILE</Text>
                                     </View>
                                 </TouchableOpacity>
                             ))}
 
                             {bankRequests.length > 0 && (
                                 <>
-                                    <Text style={styles.sectionTitle}>BANK VERIFICATION ({bankRequests.length})</Text>
+                                    <Text style={styles.sectionTitle}>KYC VERIFICATION ({bankRequests.length})</Text>
                                     {bankRequests.map((req: any) => (
                                         <TouchableOpacity 
                                             key={req.id} 
@@ -360,12 +335,12 @@ const AdminPanel = () => {
                                                     <FontAwesome5 name="university" size={16} color="#10B981" />
                                                 </View>
                                                 <View style={{ marginLeft: 15, flex: 1 }}>
-                                                    <Text style={styles.expName}>{req.expertName || 'Expert'}</Text>
-                                                    <Text style={styles.expCat}>Bank: {req.details?.accountNumber?.slice(-4).padStart(8, '*') || 'Pending Info'}</Text>
+                                                    <Text style={styles.expName}>{req.expertName || 'Profile ID'}</Text>
+                                                    <Text style={styles.expCat}>Ledger: {req.details?.accountNumber?.slice(-4).padStart(8, '*') || 'Data Syncing'}</Text>
                                                 </View>
                                             </View>
                                             <View style={[styles.badge, { backgroundColor: '#10B98120' }]}>
-                                                <Text style={[styles.badgeText, { color: '#10B981' }]}>BANK REVIEW</Text>
+                                                <Text style={[styles.badgeText, { color: '#10B981' }]}>KYC REVIEW</Text>
                                             </View>
                                         </TouchableOpacity>
                                     ))}
@@ -380,18 +355,18 @@ const AdminPanel = () => {
             <BlurView intensity={90} tint="dark" style={styles.bottomBar}>
                 <TouchableOpacity onPress={() => setActiveTab('DASHBOARD')} style={styles.barIcon}>
                     <MaterialCommunityIcons name="grid-large" size={22} color={activeTab === 'DASHBOARD' ? "#6366F1" : "#475569"} />
-                    <Text style={[styles.barLabel, activeTab === 'DASHBOARD' && {color: '#6366F1'}]}>Home</Text>
+                    <Text style={[styles.barLabel, activeTab === 'DASHBOARD' && {color: '#6366F1'}]}>Core</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setActiveTab('EXPERTS')} style={styles.barIcon}>
+                <TouchableOpacity onPress={() => setActiveTab('CONSULTANTS')} style={styles.barIcon}>
                     <View>
-                        <MaterialCommunityIcons name="shield-check" size={22} color={activeTab === 'EXPERTS' ? "#F59E0B" : "#475569"} />
+                        <MaterialCommunityIcons name="shield-check" size={22} color={activeTab === 'CONSULTANTS' ? "#F59E0B" : "#475569"} />
                         {(pendingExperts.length > 0 || bankRequests.length > 0) && <View style={styles.notifDot} />}
                     </View>
-                    <Text style={[styles.barLabel, activeTab === 'EXPERTS' && {color: '#F59E0B'}]}>Verify</Text>
+                    <Text style={[styles.barLabel, activeTab === 'CONSULTANTS' && {color: '#F59E0B'}]}>Audit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/management/reports' as any)} style={styles.barIcon}>
                     <Ionicons name="warning-outline" size={22} color="#F43F5E" />
-                    <Text style={styles.barLabel}>Alerts</Text>
+                    <Text style={styles.barLabel}>Safety</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/finance/transactions' as any)} style={styles.barIcon}>
                     <MaterialCommunityIcons name="script-text-outline" size={22} color="#94A3B8" />
@@ -414,10 +389,6 @@ const styles = StyleSheet.create({
     navTabActive: { backgroundColor: '#6366F1', borderColor: '#818CF8' },
     navTabText: { color: '#475569', fontWeight: 'bold', fontSize: 12 },
     navTabTextActive: { color: '#fff' },
-    statRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 15 },
-    statCard: { backgroundColor: '#0F172A', width: (width - 55) / 2, padding: 22, borderRadius: 28, borderWidth: 1, borderColor: '#1E293B' },
-    statValue: { color: '#fff', fontSize: 22, fontWeight: '900', marginVertical: 6 },
-    statLabel: { color: '#475569', fontSize: 10, fontWeight: '800' },
     sectionTitle: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginTop: 30, marginBottom: 12 },
     expertLinkCard: { marginTop: 8, padding: 22, borderRadius: 24, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 5 },
     maintenanceCard: { padding: 22, borderRadius: 28, borderWidth: 1.5, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0F172A', marginBottom: 8 },

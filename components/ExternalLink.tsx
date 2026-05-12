@@ -10,12 +10,13 @@ export function ExternalLink(
     <Link
       target="_blank"
       {...props}
-      href={props.href}
+      // @ts-ignore: TS doesn't recognize string as a valid Href type here, but WebBrowser needs it.
+      href={props.href as any}
       onPress={(e) => {
         if (Platform.OS !== 'web') {
-          // Prevent the default behavior of linking to the default browser on native.
+          // 🔥 SATTI FIX: Securely prevent default link redirection on mobile nodes.
           e.preventDefault();
-          // Open the link in an in-app browser.
+          // 🔥 SATTI FIX: Open the secure external resource via an in-app consultant-grade browser.
           WebBrowser.openBrowserAsync(props.href as string);
         }
       }}

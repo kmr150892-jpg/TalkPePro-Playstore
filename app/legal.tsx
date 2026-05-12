@@ -1,10 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
     Dimensions,
-    Platform,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -17,37 +16,40 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 const { width } = Dimensions.get('window');
 
 /**
- * TALKPE LEGAL CENTER 
- * Brief & Mass Version for Anjali
+ * TALKPE LEGAL CENTER
+ * Professional Play Store Compliant Version
  */
 export default function LegalScreen() {
     const router = useRouter();
     const [activeTab, setActiveTab] = useState<'terms' | 'privacy'>('terms');
 
     // Reusable Content Block for cleaner code
-    const ContentSection = ({ icon, title, text }: { icon: any, title: string, text: string }) => (
+    const ContentSection = ({ icon, title, text, color }: { icon: any, title: string, text: string, color: string }) => (
         <View style={styles.contentBlock}>
             <View style={styles.titleRow}>
-                <Ionicons name={icon} size={18} color="#3B82F6" style={{ marginRight: 10 }} />
-                <Text style={styles.contentTitle}>{title}</Text>
+                <View style={[styles.iconBox, { backgroundColor: `${color}20`, borderColor: `${color}50` }]}>
+                    <MaterialCommunityIcons name={icon} size={20} color={color} />
+                </View>
+                <Text style={[styles.contentTitle, { color: color }]}>{title}</Text>
             </View>
-            <Text style={styles.contentText}>{text}</Text>
+            <View style={styles.textWrapper}>
+                <Text style={styles.contentText}>{text}</Text>
+            </View>
         </View>
     );
 
     return (
         <View style={styles.mainContainer}>
-            <StatusBar barStyle="light-content" />
+            <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             
-            {/* Deep Space Gradient Background */}
             <LinearGradient 
-                colors={['#0F172A', '#1E293B', '#0F172A']} 
+                colors={['#020617', '#0F172A', '#020617']} 
                 style={StyleSheet.absoluteFill} 
             />
 
             <SafeAreaView style={{ flex: 1 }} edges={['top']}>
                 
-                {/* Header Section */}
+                {/* --- HEADER HUD --- */}
                 <View style={styles.header}>
                     <TouchableOpacity 
                         onPress={() => router.back()} 
@@ -57,29 +59,32 @@ export default function LegalScreen() {
                         <Ionicons name="chevron-back" size={24} color="#FFF" />
                     </TouchableOpacity>
                     <View style={styles.headerTextContainer}>
-                        <Text style={styles.headerTitle}>Legal Center</Text>
-                        <Text style={styles.headerSub}>Effective from March 2026</Text>
+                        <Text style={styles.headerTitle}>LEGAL CENTER</Text>
+                        <View style={styles.syncRow}>
+                            <View style={styles.pulseDot} />
+                            <Text style={styles.headerSub}>LAST UPDATED: MARCH 2026</Text>
+                        </View>
                     </View>
                 </View>
 
-                {/* Glassmorphic Tab Switcher */}
+                {/* --- TAB SWITCHER --- */}
                 <View style={styles.tabContainer}>
                     <TouchableOpacity 
                         activeOpacity={0.9}
-                        style={[styles.tab, activeTab === 'terms' && styles.activeTab]} 
+                        style={[styles.tab, activeTab === 'terms' && styles.activeTabTerms]} 
                         onPress={() => setActiveTab('terms')}
                     >
                         <Text style={[styles.tabText, activeTab === 'terms' && styles.activeTabText]}>
-                            Terms of Service
+                            TERMS OF SERVICE
                         </Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                         activeOpacity={0.9}
-                        style={[styles.tab, activeTab === 'privacy' && styles.activeTab]} 
+                        style={[styles.tab, activeTab === 'privacy' && styles.activeTabPrivacy]} 
                         onPress={() => setActiveTab('privacy')}
                     >
                         <Text style={[styles.tabText, activeTab === 'privacy' && styles.activeTabText]}>
-                            Privacy Policy
+                            PRIVACY POLICY
                         </Text>
                     </TouchableOpacity>
                 </View>
@@ -91,59 +96,77 @@ export default function LegalScreen() {
                     {activeTab === 'terms' ? (
                         <View style={styles.glassCard}>
                             <ContentSection 
-                                icon="document-text-outline"
-                                title="1. Professional Usage" 
-                                text="TalkPe is a platform for expert consultation. Users must maintain professional decorum during video calls. Any inappropriate behavior will result in a permanent ban without prior notice." 
+                                icon="shield-account"
+                                color="#6366F1"
+                                title="1. Professional Guidelines" 
+                                text="TalkPe Pro is a professional mentorship and consulting platform. All participants must engage with respect and decorum. Any form of harassment or misuse of the service will lead to immediate account suspension as per our zero-tolerance policy." 
                             />
                             <ContentSection 
-                                icon="wallet-outline"
-                                title="2. Diamond Transactions" 
-                                text="Diamonds are the internal currency of TalkPe. Recharges are processed via secure gateways. Diamonds are non-transferable and non-refundable once the consultation has started." 
+                                icon="diamond-stone"
+                                color="#0EA5E9"
+                                title="2. Digital Assets & Billing" 
+                                text="Our internal ecosystem utilizes Diamonds for professional consultations. All transactions are securely processed through official payment gateways. Once a consultation begins, assets are non-refundable as they represent the expert's committed time." 
                             />
                             <ContentSection 
-                                icon="videocam-outline"
-                                title="3. Call Termination" 
-                                text="Experts and users have the right to terminate a call if the conversation violates our safety protocols. Refund claims for such calls will be investigated by our support team." 
+                                icon="phone-cancel"
+                                color="#F43F5E"
+                                title="3. Interaction Safety" 
+                                text="Both the expert and the user maintain the right to end a consultation if professional safety protocols are compromised. TalkPe Pro reserves the right to review reported violations to ensure network integrity." 
                             />
                             <ContentSection 
-                                icon="alert-circle-outline"
-                                title="4. Account Security" 
-                                text="You are responsible for maintaining the confidentiality of your account credentials. TalkPe is not liable for unauthorized access resulting from user negligence." 
+                                icon="security"
+                                color="#10B981"
+                                title="4. User Responsibility" 
+                                text="You are responsible for maintaining the confidentiality of your account credentials. TalkPe Pro is not liable for unauthorized access resulting from user negligence or shared sensitive information." 
                             />
                         </View>
                     ) : (
                         <View style={styles.glassCard}>
                             <ContentSection 
-                                icon="shield-half-outline"
-                                title="1. Encryption Standard" 
-                                text="All video and audio communications on TalkPe are powered by Agora SDK with end-to-end encryption. We do not record, listen to, or store your private conversations." 
+                                icon="fountain-pen-tip"
+                                color="#A855F7"
+                                title="1. Communication Privacy" 
+                                text="All live interactions are powered by Agora SDK with industry-standard encryption. We operate under a zero-knowledge framework; your private consultations are confidential and are never recorded or monitored by TalkPe Pro." 
                             />
                             <ContentSection 
-                                icon="lock-closed-outline"
-                                title="2. Data Protection" 
-                                text="Your profile data (Name, Email, Profile Pic) is stored securely on Firebase. We never sell your personal information to third-party advertisers." 
+                                icon="database-lock"
+                                color="#EC4899"
+                                title="2. Information Security" 
+                                text="Your profile and identity data are secured within Firebase encrypted clusters. We maintain a strict policy against selling or sharing your personal data with third-party advertisers for marketing purposes." 
                             />
                             <ContentSection 
-                                icon="card-outline"
-                                title="3. Payment Privacy" 
-                                text="Financial transactions are handled exclusively by Razorpay. TalkPe does not store your credit card details, CVV, or banking passwords on our local servers." 
+                                icon="credit-card-chip"
+                                color="#F59E0B"
+                                title="3. Transaction Protection" 
+                                text="Financial details are processed via secure payment vaults. Sensitive information like CVV or banking passwords never pass through or get stored within the TalkPe Pro local system." 
                             />
                             <ContentSection 
-                                icon="phone-portrait-outline"
-                                title="4. Device Permissions" 
-                                text="We only request Camera and Microphone access for active calls, and Storage access for profile updates. You can revoke these permissions at any time through system settings." 
+                                icon="eye-off"
+                                color="#06B6D4"
+                                title="4. Data Permissions" 
+                                text="Camera and Microphone access is strictly requested for live call durations only. Any media access is limited to profile personalization. You can manage or revoke these permissions via your device settings at any time." 
                             />
                         </View>
                     )}
 
-                    {/* Footer Branding */}
+                    {/* --- FOOTER HUD --- */}
                     <View style={styles.footer}>
-                        <View style={styles.shieldBg}>
-                            <Ionicons name="shield-checkmark" size={35} color="#3B82F6" />
+                        <LinearGradient 
+                            colors={['#6366F1', '#D946EF']} 
+                            start={{x:0, y:0}} end={{x:1, y:0}} 
+                            style={styles.shieldGlow}
+                        >
+                            <View style={styles.shieldInner}>
+                                <Ionicons name="shield-checkmark" size={30} color="#FFF" />
+                            </View>
+                        </LinearGradient>
+                        <Text style={styles.footerText}>SECURE PROTOCOL v1.0.5</Text>
+                        <View style={styles.brandRow}>
+                            <Text style={styles.footerSub}>MANAGED BY </Text>
+                            <Text style={styles.brandHighlight}>TALKPE TECHNOLOGIES✨</Text>
                         </View>
-                        <Text style={styles.footerText}>TalkPe Secure Framework</Text>
-                        <Text style={styles.footerSub}>Certified by AI Star Factory ✨</Text>
                     </View>
+                    <View style={{ height: 40 }} />
                 </ScrollView>
             </SafeAreaView>
         </View>
@@ -151,73 +174,33 @@ export default function LegalScreen() {
 }
 
 const styles = StyleSheet.create({
-    mainContainer: { flex: 1, backgroundColor: '#0F172A' },
-    header: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        paddingHorizontal: 20, 
-        paddingVertical: 20 
-    },
-    headerTextContainer: { marginLeft: 15 },
-    headerTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: 0.5 },
-    headerSub: { color: '#64748B', fontSize: 13, fontWeight: '700', marginTop: 2 },
-    backBtn: { 
-        backgroundColor: 'rgba(255,255,255,0.06)', 
-        padding: 10, 
-        borderRadius: 15, 
-        borderWidth: 1, 
-        borderColor: 'rgba(255,255,255,0.1)' 
-    },
-    
-    tabContainer: { 
-        flexDirection: 'row', 
-        backgroundColor: 'rgba(255,255,255,0.04)', 
-        marginHorizontal: 20, 
-        marginTop: 5, 
-        borderRadius: 22, 
-        padding: 6,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.08)'
-    },
-    tab: { flex: 1, paddingVertical: 14, alignItems: 'center', borderRadius: 18 },
-    activeTab: { 
-        backgroundColor: '#3B82F6', 
-        ...Platform.select({
-            ios: { shadowColor: '#3B82F6', shadowOpacity: 0.4, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
-            android: { elevation: 8 }
-        })
-    },
-    tabText: { color: '#94A3B8', fontWeight: '800', fontSize: 14 },
+    mainContainer: { flex: 1, backgroundColor: '#020617' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 25 },
+    headerTextContainer: { marginLeft: 18 },
+    headerTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
+    syncRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+    pulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', marginRight: 8 },
+    headerSub: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+    backBtn: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    tabContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', marginHorizontal: 20, borderRadius: 25, padding: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    tab: { flex: 1, paddingVertical: 15, alignItems: 'center', borderRadius: 20 },
+    activeTabTerms: { backgroundColor: '#6366F1' },
+    activeTabPrivacy: { backgroundColor: '#A855F7' },
+    tabText: { color: '#475569', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
     activeTabText: { color: '#FFF' },
-
-    scrollContent: { padding: 20, paddingBottom: 60 },
-    glassCard: { 
-        backgroundColor: 'rgba(30, 41, 59, 0.4)', 
-        borderRadius: 35, 
-        padding: 25, 
-        borderWidth: 1.5, 
-        borderColor: 'rgba(255,255,255,0.08)' 
-    },
-    contentBlock: { marginBottom: 35 },
-    titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-    contentTitle: { 
-        color: '#3B82F6', 
-        fontSize: 16, 
-        fontWeight: '900', 
-        textTransform: 'uppercase', 
-        letterSpacing: 1 
-    },
-    contentText: { color: '#CBD5E1', fontSize: 14, lineHeight: 24, fontWeight: '600' },
-    
-    footer: { marginTop: 20, alignItems: 'center' },
-    shieldBg: { 
-        width: 80, height: 80, borderRadius: 40, 
-        backgroundColor: 'rgba(59, 130, 246, 0.1)', 
-        justifyContent: 'center', alignItems: 'center', 
-        marginBottom: 15,
-        borderWidth: 1,
-        borderColor: 'rgba(59, 130, 246, 0.2)'
-    },
-    footerText: { color: '#475569', fontSize: 15, fontWeight: '800' },
-    footerSub: { color: '#334155', fontSize: 13, fontWeight: '700', marginTop: 5 }
+    scrollContent: { padding: 20 },
+    glassCard: { backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 35, padding: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+    contentBlock: { marginBottom: 30 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+    iconBox: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, marginRight: 15 },
+    contentTitle: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.2 },
+    textWrapper: { paddingLeft: 53 },
+    contentText: { color: '#94A3B8', fontSize: 13, lineHeight: 22, fontWeight: '600' },
+    footer: { marginTop: 30, alignItems: 'center' },
+    shieldGlow: { width: 70, height: 70, borderRadius: 35, padding: 2, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+    shieldInner: { width: '100%', height: '100%', borderRadius: 33, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' },
+    footerText: { color: '#334155', fontSize: 11, fontWeight: '900', letterSpacing: 3 },
+    brandRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },
+    footerSub: { color: '#334155', fontSize: 10, fontWeight: '800' },
+    brandHighlight: { color: '#475569', fontSize: 10, fontWeight: '900' }
 });

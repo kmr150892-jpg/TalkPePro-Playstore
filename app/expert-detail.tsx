@@ -1,452 +1,741 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { activateKeepAwake, deactivateKeepAwake } from 'expo-keep-awake';
+import * as Application from 'expo-application';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  ScrollView,
-  Share,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    Platform,
+    ScrollView,
+    Share,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
+import { checkAndRequestCallPermissions } from '../utils/permissions';
 
 const { height, width } = Dimensions.get('window');
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
-const getLevelData = (totalBeans: number = 0) => {
-  if (totalBeans >= 100000000) return { lvl: 10, label: 'LEGEND L10', color: '#F59E0B' };
-  if (totalBeans >= 50000000) return { lvl: 9, label: 'MYTHIC L9', color: '#EC4899' };
-  if (totalBeans >= 30000000) return { lvl: 8, label: 'ELITE L8', color: '#8B5CF6' };
-  if (totalBeans >= 10000000) return { lvl: 7, label: 'MASTER L7', color: '#3B82F6' };
-  if (totalBeans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', color: '#06B6D4' };
-  if (totalBeans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', color: '#10B981' };
-  if (totalBeans >= 1000000)  return { lvl: 4, label: 'GOLD L4', color: '#EAB308' };
-  if (totalBeans >= 300000)   return { lvl: 3, label: 'SILVER L3', color: '#94A3B8' };
-  if (totalBeans >= 100000)    return { lvl: 2, label: 'BRONZE L2', color: '#B45309' };
-  if (totalBeans >= 30000)     return { lvl: 1, label: 'ROOKIE L1', color: '#6366F1' };
-  return { lvl: 0, label: 'BEGINNER L0', color: '#475569' };
+// 🔥 MASS UPDATE: ACCURATE THEME ENGINE (LOCKED DEEP-GLOW COLORS)
+const getLevelTheme = (beans: number = 0) => {
+    if (beans >= 100000000) return { lvl: 10, label: 'LEGEND L10', color: '#ff0404', grad: ['#ff0404', '#df03ee'] as const, shadow: '#F59E0B60' };
+    if (beans >= 50000000) return { lvl: 9, label: 'MYTHIC L9', color: '#f40691', grad: ['#f40691', '#0a0303'] as const, shadow: '#EC489960' };
+    if (beans >= 30000000) return { lvl: 8, label: 'ELITE L8', color: '#660aee', grad: ['#660aee', '#d40808'] as const, shadow: '#8B5CF660' };
+    if (beans >= 10000000) return { lvl: 7, label: 'MASTER L7', color: '#0af635', grad: ['#0af635', '#fd068a'] as const, shadow: '#3B82F660' };
+    if (beans >= 5000000) return { lvl: 6, label: 'DIAMOND L6', color: '#f70606', grad: ['#f70606', '#fad906'] as const, shadow: '#06B6D460' };
+    if (beans >= 3000000) return { lvl: 5, label: 'PLATINUM L5', color: '#136a3e', grad: ['#136a3e', '#f6085b'] as const, shadow: '#10B98160' };
+    if (beans >= 1000000) return { lvl: 4, label: 'GOLD L4', color: '#ffd001', grad: ['#ffd001', '#1d00f9'] as const, shadow: '#EAB30860' };
+    if (beans >= 300000) return { lvl: 3, label: 'SILVER L3', color: '#bababa', grad: ['#bababa', '#bc0e08'] as const, shadow: '#94A3B860' };
+    if (beans >= 100000) return { lvl: 2, label: 'BRONZE L2', color: '#ff8604', grad: ['#ff8604', '#1505fc'] as const, shadow: '#B4530960' };
+    if (beans >= 30000) return { lvl: 1, label: 'ROOKIE L1', color: '#03ffc8', grad: ['#03ffc8', '#f64a06'] as const, shadow: '#6366F160' };
+    return { lvl: 0, label: 'BEGINNER L0', color: '#f807cf', grad: ['#f807cf', '#2a06f5'] as const, shadow: '#764a7560' };
 };
 
 export default function ExpertDetail() {
-  const { id } = useLocalSearchParams();
-  const router = useRouter();
-  const user = auth.currentUser;
+    const params = useLocalSearchParams();
+    const expertId = (params.id || params.userId) as string; 
+    
+    const router = useRouter();
+    const user = auth.currentUser;
 
-  const [expert, setExpert] = useState<any>(null);
-  const [isCalling, setIsCalling] = useState(false);
-  const [userBalance, setUserBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [activeCallId, setActiveCallId] = useState<string | null>(null);
-  const [userData, setUserData] = useState<any>(null);
-  
-  // ✅ FOLLOW SYSTEM STATES
-  const [connectionStatus, setConnectionStatus] = useState<string | null>(null); 
-  const [followLoading, setFollowLoading] = useState(false);
+    const [expert, setExpert] = useState<any>(null);
+    const [isCalling, setIsCalling] = useState(false);
+    const [userBalance, setUserBalance] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [activeCallId, setActiveCallId] = useState<string | null>(null);
+    const [userData, setUserData] = useState<any>(null);
+    
+    const [connectionStatus, setConnectionStatus] = useState<string | null>(null); 
+    const [followLoading, setFollowLoading] = useState(false);
+    const [isBlockedByExpert, setIsBlockedByExpert] = useState(false);
 
-  const getJoinedDuration = (createdAt: any) => {
-    if (!createdAt) return '1 Day';
-    const joinedDate = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
-    const now = new Date();
-    const diffTime = Math.abs(now.getTime() - joinedDate.getTime());
-    const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
-    if (diffDays === 0) return '1 Day';
-    if (diffDays < 30) return `${diffDays} Days`;
-    if (diffDays < 365) return `${Math.floor(diffDays / 30)} Mo`;
-    return `${Math.floor(diffDays / 365)} Yr`;
-  };
+    const unsubCallRef = useRef<(() => void) | null>(null);
+    const ringTimerAnim = useRef(new Animated.Value(1)).current;
+    const shimmerAnim = useRef(new Animated.Value(0)).current; 
+    const radius = 75;
+    const stroke = 6;
+    const circumference = radius * 2 * Math.PI;
 
-  const onShare = async () => {
-    try {
-      await Share.share({
-        message: `Talk to ${expert?.name} on TalkPe! Expert in Video Consultation. Download now!`,
-        url: `https://talkpe.com/expert/${id}`,
-      });
-    } catch (error: any) { Alert.alert(error.message); }
-  };
+    const getJoinedDuration = (createdAt: any) => {
+        if (!createdAt) return '1 Day';
+        const joinedDate = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
+        const now = new Date();
+        const diffTime = Math.abs(now.getTime() - joinedDate.getTime());
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+        if (diffDays === 0) return '1 Day';
+        if (diffDays < 30) return `${diffDays} Days`;
+        if (diffDays < 365) return `${Math.floor(diffDays / 30)} Mo`;
+        return `${Math.floor(diffDays / 365)} Yr`;
+    };
 
-  useEffect(() => {
-    if (!id) return;
-    const unsubExpert = onSnapshot(doc(db, 'users', id as string), (docSnap) => {
-      if (docSnap.exists()) {
-        setExpert({ id: docSnap.id, ...docSnap.data() });
-      }
-      setLoading(false);
+    const onShare = async () => {
+        try {
+            await Share.share({
+                message: `Connect with ${expert?.name} on TALKPE PRO! Verified Professional Consultant. Download now!`,
+                url: `https://talkpe.com/expert/${expertId}`,
+            });
+        } catch (error: any) { Alert.alert(error.message); }
+    };
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.timing(shimmerAnim, {
+              toValue: 1,
+              duration: 4000,
+              easing: Easing.inOut(Easing.sin),
+              useNativeDriver: true
+            })
+        ).start();
+
+        if (!expertId) {
+            setLoading(false);
+            return;
+        }
+
+        const unsubExpert = onSnapshot(doc(db, 'users', expertId), (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.blockedUsers?.includes(user?.uid)) {
+                    setIsBlockedByExpert(true);
+                    setLoading(false);
+                    return; 
+                }
+                setIsBlockedByExpert(false);
+                setExpert({ id: docSnap.id, ...data });
+            }
+            setLoading(false);
+        });
+
+        let unsubUser: () => void;
+        let unsubFollow: () => void;
+
+        if (user?.uid) {
+            unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setUserData(data);
+                    setUserBalance(data.balance || 0);
+                }
+            });
+
+            const connectionId = `${user.uid}_${expertId}`;
+            unsubFollow = onSnapshot(doc(db, "connections", connectionId), (docSnap) => {
+                if (docSnap.exists()) setConnectionStatus(docSnap.data().status); 
+                else setConnectionStatus(null);
+            });
+        }
+        
+        return () => { 
+            unsubExpert(); 
+            if (unsubUser) unsubUser(); 
+            if (unsubFollow) unsubFollow();
+            if (unsubCallRef.current) unsubCallRef.current();
+        };
+    }, [expertId, user]);
+
+    const handleFollowAction = async () => {
+        if (!user) return Alert.alert("Login Required", "Please login to connect with consultants.");
+        if (connectionStatus === 'friend') return router.push('/friends' as any);
+        if (!userData) return Alert.alert("Wait", "User data is loading...");
+
+        setFollowLoading(true);
+        const connectionId = `${user.uid}_${expertId}`;
+        try {
+            if (connectionStatus === null) {
+                await setDoc(doc(db, "connections", connectionId), {
+                    senderId: user.uid,
+                    senderName: userData.userName || userData.name || "TalkPe Pro User",
+                    senderImage: userData.profilePic || userData.profileImage || "",
+                    receiverId: expertId,
+                    status: "pending",
+                    timestamp: serverTimestamp(),
+                });
+                Alert.alert("Sent", "Connection request sent!");
+            } else {
+                await deleteDoc(doc(db, "connections", connectionId));
+            }
+        } catch (error) { console.error(error); } finally { setFollowLoading(false); }
+    };
+
+    const handleCancelCall = async () => {
+        ringTimerAnim.stopAnimation();
+        if (unsubCallRef.current) {
+            unsubCallRef.current();
+            unsubCallRef.current = null;
+        }
+        if (activeCallId) {
+            try { await updateDoc(doc(db, "calls", activeCallId), { status: 'cancelled' }); } catch (err) { console.error(err); }
+        }
+        setIsCalling(false);
+        deactivateKeepAwake();
+        setActiveCallId(null);
+    };
+
+    const handleStartCall = async () => {
+        if (!expert?.isOnline) return Alert.alert("Consultant Offline 💤", "This consultant is currently offline.");
+        
+        if (expert?.status === 'live' || expert?.isLive === true || expert?.isLive === "true") {
+            return Alert.alert("Consultant is Live 🔴", "This consultant is currently hosting a live broadcast. Please join the session instead.");
+        }
+        
+        if (expert?.isBusy === true || expert?.isBusy === "true") {
+            return Alert.alert("Consultant is Busy ⏳", `${expert.name} is currently assisting another client. Please try again shortly.`);
+        }
+
+        // 👇👇 Satti's Permission Check Box 👇👇
+        const hasPermission = await checkAndRequestCallPermissions();
+        if (!hasPermission) {
+            return; // Permission kidaikkalana, intha edathulaye stop aagidum, call connect aagaathu!
+        }
+        // 👆👆 -------------------------------- 👆👆
+
+        if (!userData || (!userData.name && !userData.userName)) return Alert.alert("Syncing Profile...", "Please wait a moment.");
+        
+        const priceToCharge = Number(expert.userPrice || (expert.beansPerMin * 2) || (expert.pricePerMin * 2) || 2400);
+        
+        // 🔥 THE MICRO-FRACTION FIX 🔥
+        // Checks if user has > 0.05 minutes (approx 3 seconds). If less, it's considered ZERO.
+        const validFreeMins = Number(userData?.freeMinsRemaining || 0);
+        const isFreeCall = (userData?.isWelcomeCallAvailable === true) || (validFreeMins > 0.05);
+
+        // If not a free call and balance is low, block it!
+        if (!isFreeCall && userBalance < priceToCharge) {
+            Alert.alert("Insufficient Assets! 💎", `Requires ${priceToCharge.toLocaleString()} diamonds for a 1 min consultation.`, [
+                { text: "Later", style: "cancel" }, { text: "Add Assets", onPress: () => router.push('/recharge' as any) }
+            ]);
+            return;
+        }
+
+        // 🔥 THE ULTIMATE ANTI-HACK DEVICE FINGERPRINTING LOGIC 🔥
+        const proceedToCall = async () => {
+            setIsCalling(true);
+
+            if (isFreeCall) {
+                try {
+                    let deviceId = "unknown_device";
+                    if (Platform.OS === 'android') {
+                        deviceId = Application.getAndroidId() || "android_unknown";
+                    } else if (Platform.OS === 'ios') {
+                        deviceId = await Application.getIosIdForVendorAsync() || "ios_unknown";
+                    }
+
+                    // 1. Strict Firestore Hardware Check
+                    const deviceRef = doc(db, "used_devices", deviceId);
+                    const deviceSnap = await getDoc(deviceRef);
+
+                    if (deviceSnap.exists()) {
+                        const deviceData = deviceSnap.data();
+                        
+                        // Only block if the device is used by a DIFFERENT USER.
+                        if (deviceData.userId !== user?.uid) {
+                            // 🚫 BUSTED! The user cleared app data and created a NEW account to cheat.
+                            setIsCalling(false);
+                            Alert.alert(
+                                "Privilege Claimed 🚫", 
+                                "This device has already utilized the Complimentary Consultation on another account. Please add assets to continue consulting.",
+                                [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "Add Assets", onPress: () => router.push('/recharge' as any) }
+                                ]
+                            );
+                            
+                            // Fix their fake profile silently so it stops showing "FREE"
+                            if (user) {
+                                await updateDoc(doc(db, "users", user.uid), {
+                                    isWelcomeCallAvailable: false,
+                                    freeMinsRemaining: 0
+                                });
+                            }
+                            return; // 🛑 ABORT CALL INITIATION
+                        }
+                    } else {
+                        // 2. First time on this device ever! Lock the device ID permanently.
+                        await setDoc(deviceRef, {
+                            usedAt: serverTimestamp(),
+                            userId: user?.uid,
+                            hardwareId: deviceId
+                        });
+                    }
+
+                } catch (e) {
+                    console.log("Device security verification error:", e);
+                }
+            }
+
+            // Normal Call Flow 
+            initiateCall(priceToCharge, isFreeCall);
+        };
+
+        if (isFreeCall) {
+            Alert.alert(
+                "Welcome Privilege! 🎉", 
+                "You have a COMPLIMENTARY consultation available. Do you want to use it now?",
+                [
+                    { text: "Not Now", style: "cancel" },
+                    { text: "Yes, Start Session", onPress: proceedToCall }
+                ]
+            );
+        } else {
+            proceedToCall();
+        }
+    };
+
+    const initiateCall = async (priceToCharge: number, isFreeCall: boolean) => {
+        await activateKeepAwakeAsync(); 
+        try {
+            const callRef = await addDoc(collection(db, "calls"), {
+                userId: user?.uid,
+                userName: userData.userName || userData.name || "TalkPe Pro User",
+                userImage: userData.profilePic || userData.profileImage || "",
+                expertId: expert.id,
+                expertName: expert.name,
+                expertImage: expert.profilePic || expert.expertImage || expert.profileImage || "",
+                status: 'ringing', 
+                pricePerMin: isFreeCall ? 0 : priceToCharge, 
+                isFreeCall: isFreeCall, 
+                createdAt: serverTimestamp(), 
+                callerId: user?.uid 
+            });
+
+            setActiveCallId(callRef.id);
+            ringTimerAnim.setValue(1);
+            Animated.timing(ringTimerAnim, {
+                toValue: 0,
+                duration: 12000,
+                easing: Easing.linear,
+                useNativeDriver: false,
+            }).start(({ finished }) => {
+                if (finished) handleTimeout(callRef.id);
+            });
+
+            unsubCallRef.current = onSnapshot(doc(db, "calls", callRef.id), (snap) => {
+                if (snap.exists()) {
+                    const callData = snap.data();
+                    if (callData.status === 'accepted') {
+                        if (unsubCallRef.current) unsubCallRef.current();
+                        unsubCallRef.current = null;
+                        ringTimerAnim.stopAnimation();
+                        setIsCalling(false);
+                        deactivateKeepAwake();
+                        setActiveCallId(null);
+                        router.push({
+                            pathname: "/videocall",
+                            params: { 
+                                expertId: expert.id, 
+                                expertName: expert.name, 
+                                price: isFreeCall ? 0 : priceToCharge, 
+                                callId: callRef.id,
+                                isFree: isFreeCall ? "true" : "false" 
+                            }
+                        } as any);
+                    } else if (['rejected', 'missed', 'cancelled', 'timeout'].includes(callData.status)) {
+                        if (unsubCallRef.current) unsubCallRef.current();
+                        unsubCallRef.current = null;
+                        ringTimerAnim.stopAnimation();
+                        setIsCalling(false);
+                        deactivateKeepAwake();
+                        setActiveCallId(null);
+                        if (callData.status === 'rejected') Alert.alert("Engaged", "The consultant is currently engaged.");
+                    }
+                }
+            });
+        } catch (err) {
+            setIsCalling(false);
+            Alert.alert("Error", "Could not initiate consultation session.");
+        }
+    };
+
+    const handleTimeout = async (cid: string) => {
+        try {
+            if (unsubCallRef.current) { unsubCallRef.current(); unsubCallRef.current = null; }
+            await updateDoc(doc(db, "calls", cid), { status: 'missed' });
+            setIsCalling(false);
+            deactivateKeepAwake();
+            setActiveCallId(null);
+        } catch (e) { console.log(e); }
+    };
+
+    const handleJoinLive = async () => {
+        try {
+            const liveQuery = query(collection(db, "lives"), where("hostId", "==", expert.id), where("status", "==", "live"));
+            const liveSnap = await getDocs(liveQuery);
+
+            if (!liveSnap.empty) {
+                const actualLiveId = liveSnap.docs[0].id;
+                router.push({
+                    pathname: '/live/[liveId]' as any, 
+                    params: { liveId: actualLiveId }
+                });
+            } else {
+                Alert.alert("Broadcast Concluded", "Consultant is not currently broadcasting or the session has concluded.");
+            }
+        } catch (e) {
+            Alert.alert("Error", "Could not join the live session right now.");
+        }
+    };
+
+    if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#6366F1" /></View>;
+
+    if (isBlockedByExpert) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
+                <Ionicons name="eye-off-outline" size={80} color="#1E293B" />
+                <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 20 }}>Profile Not Available</Text>
+                <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 10 }}>This account is currently restricted. Please explore other consultants.</Text>
+                <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 30, backgroundColor: '#334155', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 15 }}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Go Back</Text></TouchableOpacity>
+            </View>
+        );
+    }
+
+    const theme = getLevelTheme(expert?.totalBeansEarned || 0);
+    const accentColor = expert?.isOnline ? theme.color : '#475569';
+    const isExpertLive = expert?.status === 'live' || expert?.isLive === true || expert?.isLive === "true"; 
+    const followThemeColor = connectionStatus === 'friend' ? '#1E293B' : (connectionStatus === 'pending' ? '#F59E0B' : theme.color);
+
+    const orbTranslateY = shimmerAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, -30]
     });
 
-    let unsubUser: () => void;
-    let unsubFollow: () => void;
-
-    if (user?.uid) {
-      unsubUser = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
-        if (docSnap.exists()) {
-          const data = docSnap.data();
-          setUserData(data);
-          setUserBalance(data.balance || 0);
-        }
-      });
-
-      // ✅ REAL-TIME CONNECTION CHECK
-      const connectionId = `${user.uid}_${id}`;
-      unsubFollow = onSnapshot(doc(db, "connections", connectionId), (docSnap) => {
-        if (docSnap.exists()) {
-          setConnectionStatus(docSnap.data().status); 
-        } else {
-          setConnectionStatus(null);
-        }
-      });
-    }
-    
-    return () => { 
-      unsubExpert(); 
-      if (unsubUser) unsubUser(); 
-      if (unsubFollow) unsubFollow();
+    const borderType1 = {
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderTopWidth: 0.5,
+        borderBottomWidth: 0.5,
+        borderLeftColor: theme.color,
+        borderRightColor: theme.color,
+        borderTopColor: theme.grad[1] + '80', 
+        borderBottomColor: theme.grad[1] + '80', 
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
-  }, [id, user]);
 
-  const handleFollowAction = async () => {
-    if (!user) return Alert.alert("Login Required", "Please login to follow experts.");
-    
-    // ✅ NEW: Redirection Logic for Friends
-    if (connectionStatus === 'friend') {
-      return router.push('/friends' as any);
-    }
+    const borderType2 = {
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderTopWidth: 0.5,
+        borderBottomWidth: 0.5,
+        borderLeftColor: theme.grad[1],
+        borderRightColor: theme.grad[1],
+        borderTopColor: theme.color + '80',
+        borderBottomColor: theme.color + '80',
+        backgroundColor: 'rgba(15, 23, 42, 0.45)',
+    };
 
-    if (!userData) return Alert.alert("Wait", "User data is loading...");
+    // 🔥 THE MICRO-FRACTION FIX FOR UI 🔥
+    const validFreeMinsUI = Number(userData?.freeMinsRemaining || 0);
+    const hasFreeCallUI = (userData?.isWelcomeCallAvailable === true) || (validFreeMinsUI > 0.05);
 
-    setFollowLoading(true);
-    const connectionId = `${user.uid}_${id}`;
+    return (
+        <View style={styles.container}>
+            <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+            
+            <LinearGradient colors={['#020617', theme.grad[1] + '30', '#020617']} style={StyleSheet.absoluteFill} />
+            <Animated.View style={[styles.shimmerOrb, { top: 250, right: -60, backgroundColor: theme.color, transform: [{ translateY: orbTranslateY }] }]} />
+            <Animated.View style={[styles.shimmerOrb, { top: 600, left: -90, backgroundColor: theme.grad[1], transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
-    try {
-      if (connectionStatus === null) {
-        await setDoc(doc(db, "connections", connectionId), {
-          senderId: user.uid,
-          senderName: userData.name || "User",
-          senderImage: userData.profilePic || userData.profileImage || "",
-          receiverId: id,
-          status: "pending",
-          timestamp: serverTimestamp(),
-        });
-        Alert.alert("Sent", "Follow request sent to expert!");
-      } else {
-        // This handles unfollowing if it's 'pending'
-        await deleteDoc(doc(db, "connections", connectionId));
-      }
-    } catch (error) {
-      console.error("Follow error:", error);
-    } finally {
-      setFollowLoading(false);
-    }
-  };
-
-  const handleCancelCall = async () => {
-    if (activeCallId) {
-      try {
-        await updateDoc(doc(db, "calls", activeCallId), { status: 'cancelled' });
-      } catch (err) {
-        console.error("Cancel call error:", err);
-      }
-    }
-    setIsCalling(false);
-    deactivateKeepAwake();
-    setActiveCallId(null);
-  };
-
-  const handleStartCall = async () => {
-    if (!expert?.isOnline) {
-      Alert.alert("Expert Offline 💤", "This expert is currently offline.");
-      return;
-    }
-
-    if (!userData || !userData.name) {
-      Alert.alert("Syncing Profile...", "Please wait a moment.");
-      return;
-    }
-    
-    const priceToCharge = Number(expert.userPrice || (expert.beansPerMin * 2) || (expert.pricePerMin * 2) || 2400);
-    
-    if (userBalance < priceToCharge) {
-      Alert.alert("Low Balance! 💎", `Need ${priceToCharge.toLocaleString()} diamonds for 1 min call.`, [
-        { text: "Later" }, { text: "Recharge", onPress: () => router.push('/recharge' as any) }
-      ]);
-      return;
-    }
-
-    setIsCalling(true);
-    activateKeepAwake();
-
-    try {
-      const callRef = await addDoc(collection(db, "calls"), {
-        userId: user?.uid,
-        userName: userData.name,
-        userImage: userData.profilePic || userData.profileImage || "",
-        expertId: expert.id,
-        expertName: expert.name,
-        expertImage: expert.profilePic || expert.profileImage || "",
-        status: 'dialing',
-        pricePerMin: priceToCharge,
-        createdAt: new Date(),
-        callerId: user?.uid 
-      });
-
-      setActiveCallId(callRef.id);
-
-      const unsubCallStatus = onSnapshot(doc(db, "calls", callRef.id), (snap) => {
-        if (snap.exists()) {
-          const callData = snap.data();
-          if (callData.status === 'accepted') {
-            unsubCallStatus();
-            setIsCalling(false);
-            deactivateKeepAwake();
-            setActiveCallId(null);
-            router.push({
-              pathname: "/videocall",
-              params: { expertId: expert.id, expertName: expert.name, price: priceToCharge, callId: callRef.id }
-            } as any);
-          } else if (callData.status === 'rejected') {
-            unsubCallStatus();
-            setIsCalling(false);
-            deactivateKeepAwake();
-            setActiveCallId(null);
-            Alert.alert("Call Rejected", "The expert is busy right now.");
-          }
-        }
-      });
-
-      setTimeout(async () => {
-        if (activeCallId === callRef.id) {
-          setIsCalling(false);
-          deactivateKeepAwake();
-          await updateDoc(doc(db, "calls", callRef.id), { status: 'timeout' });
-          setActiveCallId(null);
-        }
-      }, 30000);
-
-    } catch (err) {
-      setIsCalling(false);
-      Alert.alert("Error", "Could not initiate call.");
-    }
-  };
-
-  if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#3B82F6" /></View>;
-
-  const levelData = getLevelData(expert?.totalBeansEarned || 0);
-  const accentColor = expert?.isOnline ? levelData.color : '#475569';
-
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-
-      {isCalling && (
-        <View style={styles.callingOverlay}>
-          <LinearGradient colors={['rgba(15, 23, 42, 0.98)', '#0F172A']} style={StyleSheet.absoluteFill} />
-          <ActivityIndicator size="large" color={levelData.color} />
-          <Text style={styles.callingText}>Ringing {expert?.name}...</Text>
-          <Text style={styles.callingSubtext}>Waiting for expert to join... 💎</Text>
-          <TouchableOpacity style={styles.cancelCallBtn} onPress={handleCancelCall}>
-            <Text style={styles.cancelText}>CANCEL CALL</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 150 }}>
-        <View style={styles.imageWrapper}>
-          <Image 
-            source={{ uri: expert?.profilePic || expert?.profileImage || 'https://via.placeholder.com/400' }} 
-            style={styles.profileImg} 
-          />
-          <LinearGradient colors={['rgba(15, 23, 42, 0.5)', 'transparent', '#020617']} style={StyleSheet.absoluteFill} />
-          
-          <View style={styles.navRow}>
-            <TouchableOpacity onPress={() => router.back()} style={styles.iconCircle}>
-              <Ionicons name="chevron-back" size={24} color="#FFF" />
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onShare} style={styles.iconCircle}>
-              <Ionicons name="share-social-outline" size={22} color="#FFF" />
-            </TouchableOpacity>
-          </View>
-
-          <View style={[styles.floatingBadge, { backgroundColor: accentColor }]}>
-            <MaterialCommunityIcons name={levelData.lvl >= 7 ? "crown" : "shield-check"} size={14} color="#FFF" />
-            <Text style={styles.floatingBadgeText}>{expert?.isOnline ? levelData.label : 'OFFLINE'}</Text>
-          </View>
-        </View>
-
-        <View style={styles.infoContent}>
-          <View style={styles.nameRow}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.expertName}>{expert?.name}</Text>
-              <View style={styles.locationRow}>
-                <Ionicons name="location-sharp" size={14} color="#64748B" />
-                <Text style={styles.locationText}>{expert?.location || 'India'} • {expert?.age || '24'}y • {expert?.gender}</Text>
-              </View>
-            </View>
-            <View style={{ alignItems: 'flex-end', gap: 8 }}>
-              <View style={[styles.statusBadge, { backgroundColor: expert?.isOnline ? '#05966920' : '#33415520' }]}>
-                <View style={[styles.dot, { backgroundColor: expert?.isOnline ? '#10B981' : '#94A3B8' }]} />
-                <Text style={[styles.statusText, {color: expert?.isOnline ? '#10B981' : '#94A3B8'}]}>{expert?.isOnline ? 'ONLINE' : 'OFFLINE'}</Text>
-              </View>
-
-              {/* ✅ FOLLOW BUTTON WITH REDIRECT LOGIC */}
-              <TouchableOpacity 
-                style={[
-                  styles.followBtn, 
-                  connectionStatus !== null && styles.followingBtn,
-                  connectionStatus === 'pending' && { backgroundColor: '#F59E0B' } 
-                ]} 
-                onPress={handleFollowAction}
-                disabled={followLoading}
-              >
-                {followLoading ? (
-                  <ActivityIndicator size="small" color="#FFF" />
-                ) : (
-                  <>
-                    <MaterialCommunityIcons 
-                      name={connectionStatus === 'friend' ? "account-check" : connectionStatus === 'pending' ? "account-clock" : "account-plus"} 
-                      size={16} 
-                      color="#FFF" 
-                    />
-                    <Text style={styles.followBtnText}>
-  {connectionStatus === 'friend' ? "Following" : connectionStatus === 'pending' ? "Requested" : "Follow"}
-</Text>
-                  </>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          <View style={styles.statsCard}>
-            <View style={styles.statBox}>
-              <Text style={[styles.statVal, { color: accentColor }]}>L{levelData.lvl}</Text>
-              <Text style={styles.statLabel}>Level</Text>
-            </View>
-            <View style={styles.vDivider} />
-            <View style={styles.statBox}>
-              <Text style={[styles.statVal, { color: '#3B82F6' }]}>💎 {Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}</Text>
-              <Text style={styles.statLabel}>Diamonds/min</Text>
-            </View>
-            <View style={styles.vDivider} />
-            <View style={styles.statBox}>
-              <Text style={styles.statVal}>{getJoinedDuration(expert?.createdAt)}</Text>
-              <Text style={styles.statLabel}>Member</Text>
-            </View>
-          </View>
-
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionTitle}>Portfolios</Text>
-            <Text style={styles.galleryCount}>{expert?.gallery?.length || 0}/5</Text>
-          </View>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryScroll}>
-            {expert?.gallery && expert.gallery.length > 0 ? (
-              expert.gallery.map((img: string, index: number) => (
-                <View key={index} style={styles.galleryItem}>
-                  <Image source={{ uri: img }} style={styles.galleryImg} />
+            {isCalling && (
+                <View style={styles.callingOverlay}>
+                    <LinearGradient colors={['rgba(2, 6, 23, 0.98)', '#0F172A']} style={StyleSheet.absoluteFill} />
+                    <View style={styles.timerWrapper}>
+                        <Svg width={(radius + stroke) * 2} height={(radius + stroke) * 2} style={styles.timerSvg}>
+                            <Circle cx={radius + stroke} cy={radius + stroke} r={radius} stroke="rgba(255,255,255,0.05)" strokeWidth={stroke} fill="transparent" />
+                            <AnimatedCircle
+                                cx={radius + stroke} cy={radius + stroke} r={radius} stroke={theme.color} strokeWidth={stroke} fill="transparent"
+                                strokeDasharray={circumference}
+                                strokeDashoffset={ringTimerAnim.interpolate({ inputRange: [0, 1], outputRange: [circumference, 0] })}
+                                strokeLinecap="round"
+                            />
+                        </Svg>
+                        <View style={styles.callingAvatarContainer}><Image source={{ uri: expert?.profilePic || expert?.profileImage || 'https://via.placeholder.com/400' }} style={styles.callingAvatar} /></View>
+                    </View>
+                    <Text style={styles.callingText}>Connecting to {expert?.name}...</Text>
+                    <Text style={styles.callingSubtext}>Establishing Secure Link... 💎</Text>
+                    <TouchableOpacity style={styles.cancelCallBtn} onPress={handleCancelCall}>
+                        <View style={styles.cancelCircle}><Ionicons name="close" size={32} color="#FFF" /></View>
+                        <Text style={styles.cancelLabel}>CANCEL</Text>
+                    </TouchableOpacity>
                 </View>
-              ))
-            ) : (
-              <View style={styles.emptyGallery}><Text style={styles.emptyText}>No portfolio images</Text></View>
             )}
-          </ScrollView>
 
-          <Text style={[styles.sectionTitle, { marginTop: 30 }]}>Bio</Text>
-          <View style={styles.bioContainer}>
-              <Text style={styles.bioText}>{expert?.bio || "Verified professional on TalkPe."}</Text>
-          </View>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 150 }}>
+                <View style={styles.imageWrapper}>
+                    <Image source={{ uri: expert?.coverPhoto || expert?.profilePic || 'https://via.placeholder.com/600x800' }} style={styles.profileImg} />
+                    <LinearGradient colors={['rgba(2, 6, 23, 0.4)', 'transparent', '#020617']} style={StyleSheet.absoluteFill} />
+                    
+                    <View style={styles.coverAvatarNode}>
+                         <LinearGradient colors={theme.grad} style={styles.avatarRing}>
+                             <Image 
+                                 source={{ uri: expert?.profilePic || expert?.profileImage || 'https://via.placeholder.com/150' }} 
+                                 style={styles.expertMainAvatar} 
+                             />
+                         </LinearGradient>
+                         <LinearGradient colors={theme.grad} style={styles.avatarLevelBadge}>
+                             <Text style={styles.avatarLevelText}>{theme.label}</Text>
+                         </LinearGradient>
+                    </View>
 
-          <View style={styles.trustBanner}>
-            <MaterialCommunityIcons name="shield-check-outline" size={20} color="#10B981" />
-            <Text style={styles.trustText}>Verified Expert • Secure End-to-End Call</Text>
-          </View>
+                    <View style={styles.navRow}>
+                        <TouchableOpacity onPress={() => router.back()} style={styles.iconCircle}><Ionicons name="chevron-back" size={24} color="#FFF" /></TouchableOpacity>
+                        <TouchableOpacity onPress={onShare} style={styles.iconCircle}><Ionicons name="share-social-outline" size={22} color="#FFF" /></TouchableOpacity>
+                    </View>
+                </View>
+
+                {/* ZERO BOX INFO SECTION */}
+                <View style={styles.infoContent}>
+                    <View style={styles.nameRow}>
+                        <View style={{ flex: 1 }}>
+                            <Text style={styles.expertName}>{expert?.name}</Text>
+                            <View style={styles.locationRow}>
+                                <Ionicons name="location-sharp" size={14} color={theme.color} />
+                                <Text style={styles.locationText}>{expert?.location || 'India'} • {expert?.age || '24'}y • {expert?.gender}</Text>
+                            </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 10 }}>
+                            <View style={[styles.statusBadge, { backgroundColor: expert?.isOnline ? '#10B98115' : '#33415520', borderColor: expert?.isOnline ? '#10B98130' : '#334155', borderWidth: 1 }]}>
+                                <View style={[styles.dot, { backgroundColor: expert?.isOnline ? '#10B981' : '#94A3B8' }]} />
+                                <Text style={[styles.statusText, {color: expert?.isOnline ? '#10B981' : '#94A3B8'}]}>{expert?.isOnline ? 'ONLINE' : 'OFFLINE'}</Text>
+                            </View>
+                            <TouchableOpacity 
+                                style={[styles.followBtn, { backgroundColor: followThemeColor }]} 
+                                onPress={handleFollowAction} disabled={followLoading}>
+                                {followLoading ? <ActivityIndicator size="small" color="#FFF" /> : (
+                                    <>
+                                        <MaterialCommunityIcons name={connectionStatus === 'friend' ? "account-check" : connectionStatus === 'pending' ? "account-clock" : "account-plus"} size={18} color="#FFF" />
+                                        <Text style={styles.followBtnText}>{connectionStatus === 'friend' ? "Connected" : connectionStatus === 'pending' ? "Waiting" : "Connect"}</Text>
+                                    </>
+                                )}
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* 🔥 FLUID STATS CARD - BORDER TYPE 1 */}
+                    <View style={[styles.statsCard, borderType1]}>
+                        <View style={styles.statBox}>
+                            <Text style={[styles.statVal, { color: theme.color }]} numberOfLines={1} adjustsFontSizeToFit>{theme.label.split(' ')[0]}</Text>
+                            <Text style={styles.statLabel}>Consultant Tier</Text>
+                        </View>
+                        <View style={styles.vDivider} />
+                        <View style={styles.statBox}>
+                            <View style={styles.priceContainer}>
+                                <MaterialCommunityIcons name="diamond-stone" size={18} color={theme.color} />
+                                <Text style={[styles.statVal, { fontSize: 22 }]} numberOfLines={1} adjustsFontSizeToFit>{Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}</Text>
+                            </View>
+                            <Text style={styles.statLabel}>Per Minute Fee</Text>
+                        </View>
+                        <View style={styles.vDivider} />
+                        <View style={styles.statBox}>
+                            <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>{getJoinedDuration(expert?.createdAt)}</Text>
+                            <Text style={styles.statLabel}>Platform Tenure</Text>
+                        </View>
+                    </View>
+
+                    {expert?.expertiseTags && expert.expertiseTags.length > 0 && (
+                        <View style={styles.chipSection}>
+                            <Text style={[styles.sectionTitle, { color: theme.color }]}>Expertise In</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                                {expert.expertiseTags.map((tag: string, index: number) => (
+                                    <View key={index} style={[styles.chipItem, { borderColor: `${theme.color}40` }]}>
+                                        <Text style={[styles.chipText, { color: theme.color }]}>{tag.toUpperCase()}</Text>
+                                    </View>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
+
+                    <Text style={[styles.sectionTitle, { marginTop: 15, color: theme.color }]}>Professional Overview</Text>
+                    {/* 🔥 FLUID BIO BOX - BORDER TYPE 2 */}
+                    <View style={[styles.bioContainer, borderType2]}>
+                        <MaterialCommunityIcons name="format-quote-open" size={24} color={theme.color + '40'} style={styles.quoteIcon} />
+                        <Text style={styles.bioText}>{expert?.bio || "Professional consultant dedicated to providing high-quality guidance and support."}</Text>
+                    </View>
+
+                    {expert?.hobbies && expert.hobbies.length > 0 && (
+                        <View style={[styles.chipSection, { marginTop: 25 }]}>
+                            <Text style={[styles.sectionTitle, { color: theme.color }]}>Personal Interests</Text>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                                {expert.hobbies.map((tag: string, index: number) => (
+                                    <View key={index} style={styles.hobbyChip}><Text style={styles.hobbyText}>{tag}</Text></View>
+                                ))}
+                            </ScrollView>
+                        </View>
+                    )}
+
+                    <View style={[styles.sectionHeaderRow, { marginTop: 25 }]}>
+                        <Text style={[styles.sectionTitle, { color: theme.color }]}>Portfolio Visuals</Text>
+                        <Text style={styles.galleryCount}>{expert?.gallery?.length || 0}/5 SECURE</Text>
+                    </View>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryScroll}>
+                        {expert?.gallery?.length > 0 ? expert.gallery.map((img: string, index: number) => (
+                            <View key={index} style={[styles.galleryItem, borderType1, { padding: 4, borderRadius: 25 }]}><Image source={{ uri: img }} style={styles.galleryImg} /></View>
+                        )) : <View style={styles.emptyGallery}><Text style={styles.emptyText}>No visual data found</Text></View>}
+                    </ScrollView>
+
+                    {/* 🔥 TRUST BANNER - BORDER TYPE 1 */}
+                    <View style={[styles.trustBanner, borderType1]}>
+                        <MaterialCommunityIcons name="shield-lock" size={20} color={theme.color} />
+                        <Text style={[styles.trustText, { color: theme.color }]}>Quantum Secure End-to-End Encryption</Text>
+                    </View>
+                </View>
+            </ScrollView>
+
+            <View style={styles.bottomBar}>
+                {isExpertLive ? (
+                    <TouchableOpacity style={styles.liveActionBtn} onPress={handleJoinLive}>
+                        <LinearGradient colors={['#EF4444', '#991B1B']} style={styles.btnGradient}>
+                            <MaterialCommunityIcons name="access-point" size={26} color="#FFF" />
+                            <View>
+                                <Text style={styles.callBtnText}>JOIN LIVE SESSION</Text>
+                                <Text style={{color: '#FFF', fontSize: 10, fontWeight: '900'}}>TAP TO CONNECT</Text>
+                            </View>
+                        </LinearGradient>
+                    </TouchableOpacity>
+                ) : (
+                    <>
+                        <View style={styles.priceInfo}>
+                            <Text style={styles.totalLabel}>CONSULT FEE</Text>
+                            <View style={styles.priceRow}>
+                                <Ionicons name="diamond" size={18} color={accentColor} />
+                                <Text style={[styles.totalVal, { color: accentColor }]} numberOfLines={1} adjustsFontSizeToFit>
+                                    {hasFreeCallUI ? "COMPLIMENTARY" : Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}
+                                    {!hasFreeCallUI && <Text style={{fontSize: 12, color: '#475569'}}>/min</Text>}
+                                </Text>
+                            </View>
+                        </View>
+                        
+                        <TouchableOpacity 
+                            style={styles.callBtn} 
+                            onPress={handleStartCall} 
+                            disabled={!expert?.isOnline || expert?.isBusy === true || expert?.isBusy === "true"}
+                        >
+                            <LinearGradient 
+                                colors={
+                                    !expert?.isOnline ? ['#1E293B', '#0F172A'] : 
+                                    (expert?.isBusy === true || expert?.isBusy === "true") ? ['#F59E0B', '#B45309'] : 
+                                    theme.grad
+                                } 
+                                style={styles.btnGradient}
+                            >
+                                <Ionicons name={!expert?.isOnline ? "videocam-off" : (expert?.isBusy === true || expert?.isBusy === "true") ? "time" : "videocam"} size={22} color={expert?.isOnline ? "#FFF" : "#475569"} />
+                                <Text style={[styles.callBtnText, !expert?.isOnline && { color: '#475569' }]}>
+                                    {!expert?.isOnline ? "Offline" : (expert?.isBusy === true || expert?.isBusy === "true") ? "Engaged" : "CONSULT NOW"}
+                                </Text>
+                            </LinearGradient>
+                        </TouchableOpacity>
+                    </>
+                )}
+            </View>
         </View>
-      </ScrollView>
-
-      <View style={styles.bottomBar}>
-        <View style={styles.priceInfo}>
-          <Text style={styles.totalLabel}>CONSULTATION FEE</Text>
-          <View style={styles.priceRow}>
-              <Ionicons name="diamond" size={16} color={expert?.isOnline ? "#3B82F6" : "#475569"} />
-              <Text style={[styles.totalVal, !expert?.isOnline && { color: '#475569' }]}>
-                  {Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}
-                  <Text style={{fontSize: 12, color: '#94A3B8'}}>/min</Text>
-              </Text>
-          </View>
-        </View>
-        
-        <TouchableOpacity 
-          style={styles.callBtn} 
-          onPress={handleStartCall}
-          disabled={!expert?.isOnline}
-        >
-          <LinearGradient 
-            colors={expert?.isOnline ? [levelData.color, levelData.color + 'CC'] : ['#1E293B', '#0F172A']} 
-            style={[styles.btnGradient, !expert?.isOnline && { borderWidth: 1, borderColor: '#334155' }]}
-          >
-            <Ionicons name={expert?.isOnline ? "videocam" : "videocam-off"} size={22} color={expert?.isOnline ? "#FFF" : "#475569"} />
-            <Text style={[styles.callBtnText, !expert?.isOnline && { color: '#475569' }]}>
-                {expert?.isOnline ? "Start Call" : "Offline"}
-            </Text>
-          </LinearGradient>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+    );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#020617' },
-  loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
-  imageWrapper: { width: '100%', height: height * 0.52, position: 'relative' },
-  profileImg: { width: '100%', height: '100%', resizeMode: 'cover' },
-  navRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 55, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
-  iconCircle: { backgroundColor: 'rgba(2, 6, 23, 0.4)', padding: 10, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  floatingBadge: { position: 'absolute', bottom: 60, left: 20, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, gap: 6 },
-  floatingBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
-  infoContent: { padding: 25, marginTop: -45, backgroundColor: '#020617', borderTopLeftRadius: 40, borderTopRightRadius: 40, minHeight: 500 },
-  nameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  expertName: { color: '#FFF', fontSize: 30, fontWeight: '900' },
-  locationRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
-  locationText: { color: '#64748B', fontSize: 13, fontWeight: '600' },
-  statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, gap: 6 },
-  followBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#3B82F6', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, gap: 6 },
-  followingBtn: { backgroundColor: '#334155' },
-  followBtnText: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  statusText: { fontSize: 10, fontWeight: '900' },
-  statsCard: { flexDirection: 'row', justifyContent: 'space-around', marginVertical: 25, backgroundColor: '#1E293B30', padding: 22, borderRadius: 25, borderWidth: 1, borderColor: '#1E293B' },
-  statBox: { alignItems: 'center' },
-  vDivider: { width: 1, height: '40%', backgroundColor: '#334155', alignSelf: 'center' },
-  statVal: { color: '#FFF', fontSize: 19, fontWeight: '900' },
-  statLabel: { color: '#475569', fontSize: 9, marginTop: 4, fontWeight: '800', textTransform: 'uppercase' },
-  sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-  sectionTitle: { color: '#FFF', fontSize: 18, fontWeight: '900' },
-  galleryCount: { color: '#3B82F6', fontSize: 11, fontWeight: '800' },
-  galleryScroll: { flexDirection: 'row' },
-  galleryItem: { marginRight: 12, borderRadius: 18, overflow: 'hidden', backgroundColor: '#1E293B' },
-  galleryImg: { width: 120, height: 160, resizeMode: 'cover' },
-  emptyGallery: { width: width - 50, height: 100, backgroundColor: '#1E293B20', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#334155' },
-  emptyText: { color: '#475569', fontSize: 12 },
-  bioContainer: { backgroundColor: '#1E293B20', padding: 20, borderRadius: 22, marginTop: 10 },
-  bioText: { color: '#94A3B8', lineHeight: 22, fontSize: 14 },
-  trustBanner: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#10B98110', padding: 18, borderRadius: 20, marginTop: 30, gap: 10 },
-  trustText: { color: '#10B981', fontSize: 12, fontWeight: '700' },
-  callingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 9999, justifyContent: 'center', alignItems: 'center' },
-  callingText: { color: '#FFF', marginTop: 25, fontSize: 22, fontWeight: '900' },
-  callingSubtext: { color: '#3B82F6', marginTop: 10, fontSize: 14, fontWeight: '600' },
-  cancelCallBtn: { marginTop: 40, padding: 15, borderRadius: 15, borderWidth: 1, borderColor: '#F87171' },
-  cancelText: { color: '#F87171', fontWeight: '900', letterSpacing: 1 },
-  bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 22, paddingBottom: 40, backgroundColor: '#0F172A', borderTopLeftRadius: 35, borderTopRightRadius: 35, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: '#1E293B' },
-  priceInfo: { flex: 1 },
-  totalLabel: { color: '#475569', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-  priceRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
-  totalVal: { color: '#FFF', fontSize: 22, fontWeight: '900' },
-  callBtn: { width: '55%', height: 62, borderRadius: 20, overflow: 'hidden' },
-  btnGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10 },
-  callBtnText: { color: '#FFF', fontSize: 17, fontWeight: '900' }
+    container: { flex: 1, backgroundColor: '#020617' },
+    loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
+    
+    // 🔥 SHIMMER ORBS
+    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+
+    imageWrapper: { width: '100%', height: height * 0.40, position: 'relative', overflow: 'visible' },
+    profileImg: { width: '100%', height: '100%', resizeMode: 'cover' },
+    coverAvatarNode: { 
+        position: 'absolute', 
+        bottom: -45, 
+        left: '50%',
+        marginLeft: -50, 
+        zIndex: 11,
+        alignItems: 'center',
+        justifyContent: 'center' 
+    },
+    avatarRing: { padding: 4, borderRadius: 60, elevation: 10 },
+    expertMainAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#020617' },
+    avatarLevelBadge: { position: 'absolute', bottom: -8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 2, borderColor: '#020617' },
+    avatarLevelText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+    
+    navRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 55, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+    iconCircle: { backgroundColor: 'rgba(2, 6, 23, 0.4)', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    infoContent: { padding: 25, paddingTop: 65, minHeight: height },
+    nameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+    expertName: { color: '#FFF', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+    locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+    locationText: { color: '#94A3B8', fontSize: 14, fontWeight: '700' },
+    statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, gap: 8 },
+    followBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, gap: 8, elevation: 5 },
+    followBtnText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+    dot: { width: 8, height: 8, borderRadius: 4 },
+    statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    
+    // 🔥 ZERO BOX STATS CARD
+    statsCard: { 
+        flexDirection: 'row', 
+        justifyContent: 'space-around', 
+        alignItems: 'center',
+        marginVertical: 30, 
+        paddingVertical: 25, 
+        borderRadius: 35, 
+        width: width - 40,
+        alignSelf: 'center'
+    },
+    statBox: { flex: 1, alignItems: 'center', paddingHorizontal: 5 },
+    priceContainer: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
+    vDivider: { width: 1, height: '60%', backgroundColor: 'rgba(255,255,255,0.1)', alignSelf: 'center' },
+    statVal: { color: '#FFF', fontSize: 19, fontWeight: '900', textAlign: 'center' },
+    statLabel: { color: '#64748B', fontSize: 10, marginTop: 8, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
+    
+    chipSection: { marginBottom: 15 },
+    chipScroll: { paddingRight: 20, gap: 10, paddingVertical: 12 },
+    chipItem: { backgroundColor: 'rgba(255, 255, 255, 0.03)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, borderWidth: 1 },
+    chipText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+    hobbyChip: { backgroundColor: 'rgba(15, 23, 42, 0.6)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#1E293B' },
+    hobbyText: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
+    sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+    sectionTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 0.2 },
+    galleryCount: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    galleryScroll: { flexDirection: 'row', marginBottom: 10 },
+    galleryItem: { marginRight: 15, borderRadius: 25, overflow: 'hidden', elevation: 10 },
+    galleryImg: { width: 130, height: 180, resizeMode: 'cover', borderRadius: 20 },
+    emptyGallery: { width: width - 50, height: 120, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 30, justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#1E293B' },
+    emptyText: { color: '#475569', fontSize: 12, fontWeight: '700' },
+    
+    // 🔥 ZERO BOX BIO CONTAINER
+    bioContainer: { padding: 25, borderRadius: 35, marginTop: 15, position: 'relative' },
+    quoteIcon: { position: 'absolute', top: 15, left: 18 },
+    bioText: { color: '#94A3B8', lineHeight: 26, fontSize: 15, fontWeight: '600', paddingLeft: 8 },
+    
+    // 🔥 ZERO BOX TRUST BANNER
+    trustBanner: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, marginTop: 35, gap: 12 },
+    trustText: { fontSize: 12, fontWeight: '800' },
+    
+    callingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 9999, justifyContent: 'center', alignItems: 'center' },
+    timerWrapper: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 30 },
+    timerSvg: { position: 'absolute', transform: [{ rotate: '-90deg' }] },
+    callingAvatarContainer: { width: 150, height: 150, borderRadius: 75, overflow: 'hidden', borderWidth: 4, borderColor: '#020617', elevation: 25 },
+    callingAvatar: { width: '100%', height: '100%' },
+    callingText: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: 0.5 },
+    callingSubtext: { color: '#6366F1', marginTop: 10, fontSize: 15, fontWeight: '800', letterSpacing: 1 },
+    cancelCallBtn: { marginTop: 80, alignItems: 'center' },
+    cancelCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', elevation: 20, shadowColor: '#EF4444', shadowOpacity: 0.5, shadowRadius: 15 },
+    cancelLabel: { color: '#EF4444', marginTop: 15, fontWeight: '900', fontSize: 13, letterSpacing: 3 },
+    
+    // 🔥 ZERO BOX BOTTOM BAR
+    bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 22, paddingBottom: Platform.OS === 'ios' ? 45 : 30, backgroundColor: 'rgba(15, 23, 42, 0.95)', borderTopLeftRadius: 40, borderTopRightRadius: 40, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', elevation: 30 },
+    priceInfo: { flex: 1 },
+    totalLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+    priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'nowrap' },
+    totalVal: { color: '#FFF', fontSize: 26, fontWeight: '900', flexShrink: 1 },
+    callBtn: { width: '58%', height: 65, borderRadius: 32, overflow: 'hidden', elevation: 15 },
+    btnGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
+    callBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
+    liveActionBtn: { flex: 1, height: 68, borderRadius: 35, overflow: 'hidden', elevation: 15 }
 });

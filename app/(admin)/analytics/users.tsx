@@ -16,6 +16,7 @@ const UserAnalytics = () => {
             let eCount = 0;
             
             snap.docs.forEach(d => {
+                // Role identifier logic kept exactly as configured in DB
                 if (d.data().role === 'expert') eCount++;
                 else uCount++;
             });
@@ -32,11 +33,11 @@ const UserAnalytics = () => {
         <View style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()}><Feather name="arrow-left" size={24} color="#F59E0B" /></TouchableOpacity>
-                <Text style={styles.title}>USER GROWTH</Text>
+                <Text style={styles.title}>CLIENT BASE METRICS</Text>
             </View>
 
             <View style={styles.totalBox}>
-                <Text style={styles.totalLabel}>TOTAL REGISTERED</Text>
+                <Text style={styles.totalLabel}>TOTAL NETWORK SIZE</Text>
                 <Text style={styles.totalValue}>{counts.total}</Text>
             </View>
 
@@ -44,17 +45,17 @@ const UserAnalytics = () => {
                 <View style={styles.statBox}>
                     <MaterialCommunityIcons name="account" size={30} color="#6366F1" />
                     <Text style={styles.statNum}>{counts.users}</Text>
-                    <Text style={styles.statLabel}>CLIENTS</Text>
+                    <Text style={styles.statLabel}>ACTIVE CLIENTS</Text>
                 </View>
                 <View style={styles.statBox}>
                     <MaterialCommunityIcons name="star-face" size={30} color="#F59E0B" />
                     <Text style={styles.statNum}>{counts.experts}</Text>
-                    <Text style={styles.statLabel}>EXPERTS</Text>
+                    <Text style={styles.statLabel}>CONSULTANTS</Text>
                 </View>
             </View>
 
             <View style={styles.growthCard}>
-                <Text style={styles.growthText}>Ratio: {((counts.experts / counts.total) * 100).toFixed(1)}% Experts</Text>
+                <Text style={styles.growthText}>Network Distribution: {((counts.experts / counts.total) * 100).toFixed(1)}% Consultants</Text>
                 <View style={styles.progressBar}>
                     <View style={[styles.progressFill, { width: `${(counts.experts / counts.total) * 100}%` }]} />
                 </View>

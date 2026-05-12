@@ -1,10 +1,11 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react'; // 🔥 SYSTEM LOGIC: Reference hook for animations
 import {
     ActivityIndicator,
     Alert,
+    Animated, // 🔥 SYSTEM LOGIC: Animation engine for risk alerts
     Dimensions,
     FlatList,
     StatusBar,
@@ -22,20 +23,29 @@ export default function UserControl() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 🔍 Fetching only 'user' role
+        // 🔍 Synchronizing client-role profiles only
         const q = query(collection(db, "users"), where("role", "==", "user"));
         
-        // ✅ MASS UPDATE: Error handling added to prevent terminal crashes
+        // ✅ OPERATIONAL UPDATE: Error handling for secure database synchronization
         const unsub = onSnapshot(q, (snap) => {
-            const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            // 🔥 SYSTEM LOGIC: Mapping data nodes with extended attribute support 🔥
+            const list = snap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+            
+            // 🔥 SYSTEM LOGIC: Prioritizing high-risk profiles for administrative review 🔥
+            list.sort((a, b) => {
+                const countA = a.expertBlockCount || 0;
+                const countB = b.expertBlockCount || 0;
+                return countB - countA;
+            });
+
             setUsers(list);
             setLoading(false);
         }, (error) => {
-            // Silently handling permission or fetch errors
+            // Internal error handling for credential-restricted nodes
             if (error.code === 'permission-denied') {
-                console.log("Access restricted for some user documents.");
+                console.log("Access restricted for specific data nodes.");
             } else {
-                console.error("User Fetch Error:", error);
+                console.error("Profile Synchronization Error:", error);
             }
             setLoading(false);
         });
@@ -46,27 +56,27 @@ export default function UserControl() {
     const toggleBlockStatus = async (userId: string, currentStatus: boolean, name: string) => {
         const newStatus = !currentStatus;
         Alert.alert(
-            newStatus ? "⚠️ BLOCK USER?" : "✅ RESTORE ACCESS?",
-            `Are you sure you want to ${newStatus ? 'Restrict' : 'Unblock'} ${name || 'this user'}?`,
+            newStatus ? "⚠️ RESTRICT ACCESS?" : "✅ RESTORE ACCESS?",
+            `Are you sure you want to ${newStatus ? 'restrict' : 'restore'} platform access for ${name || 'this client'}?`,
             [
                 { text: "Cancel", style: "cancel" },
                 { 
                     text: "Confirm Action", 
                     onPress: async () => {
                         try {
-                            // Status change updated globally
+                            // Synchronizing access status across global platform nodes
                             await updateDoc(doc(db, "users", userId), {
                                 isBlocked: newStatus,
-                                status: newStatus ? "Blocked" : "Active", // Syncing status field too
+                                status: newStatus ? "Blocked" : "Active", // Ensuring field consistency
                                 lastAdminAction: new Date()
                             });
                             
-                            Alert.alert("Success", `User access has been ${newStatus ? 'restricted' : 'restored'}.`);
+                            Alert.alert("Success", `Client access has been ${newStatus ? 'restricted' : 'restored'} successfully.`);
                         } catch (err: any) {
                             if (err.code === 'permission-denied') {
-                                Alert.alert("System Failure", "You don't have permission to modify this user.");
+                                Alert.alert("Security Alert", "Administrative credentials insufficient for this modification.");
                             } else {
-                                Alert.alert("Error", "Update sync failed. Check connection.");
+                                Alert.alert("Error", "Ledger synchronization failed. Verify network stability.");
                             }
                         }
                     }
@@ -75,56 +85,100 @@ export default function UserControl() {
         );
     };
 
+    // 🔥 SYSTEM LOGIC: Dynamic Blinking Animation for High-Priority Alerts 🔥
+    const useBlinkAnimation = () => {
+        const anim = useRef(new Animated.Value(1)).current;
+        useEffect(() => {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(anim, { toValue: 0.3, duration: 800, useNativeDriver: true }),
+                    Animated.timing(anim, { toValue: 1, duration: 800, useNativeDriver: true })
+                ])
+            ).start();
+        }, []);
+        return anim;
+    };
+
     const renderUser = ({ item }: any) => {
         const isBlocked = item.isBlocked || item.status === 'Blocked';
+        
+        // 🔥 SYSTEM LOGIC: Global Trust-Score Verification 🔥
+        const blockCount = item.expertBlockCount || 0;
+        const isHighRisk = blockCount >= 5;
 
-        return (
-            <View style={[styles.card, isBlocked && styles.blockedCard]}>
-                <View style={styles.cardHeader}>
-                    {/* Premium Avatar with Initials */}
-                    <View style={styles.avatarContainer}>
-                        <LinearGradient 
-                            colors={['#1E293B', '#0F172A']} 
-                            style={styles.avatarGradient}
-                        >
-                            <Text style={styles.avatarText}>{item.name?.[0] || 'U'}</Text>
-                        </LinearGradient>
-                        <View style={[styles.indicator, { backgroundColor: isBlocked ? '#EF4444' : '#10B981' }]} />
-                    </View>
+        // Condition-safe internal renderer for animation synchronization
+        const BlinkRenderer = () => {
+            const blinkOpacity = useBlinkAnimation();
+            
+            return (
+                <View style={[styles.card, isBlocked ? styles.blockedCard : (isHighRisk ? styles.highRiskCard : {})]}>
+                    
+                    {/* 🔥 SYSTEM ALARM: HIGH-RISK INDICATOR 🔥 */}
+                    {isHighRisk && !isBlocked && (
+                        <Animated.View style={[styles.criticalAlertBadge, { opacity: blinkOpacity }]}>
+                            <MaterialCommunityIcons name="alert-octagram" size={14} color="#FFF" />
+                            <Text style={styles.criticalAlertText}>CRITICAL REVIEW REQUIRED</Text>
+                        </Animated.View>
+                    )}
 
-                    <View style={styles.userInfo}>
-                        <Text style={styles.userName} numberOfLines={1}>{item.name || 'TalkPe User'}</Text>
-                        <View style={styles.detailRow}>
-                            <Feather name="phone" size={10} color="#475569" />
-                            <Text style={styles.userPhone}> {item.phoneNumber || 'Hidden'}</Text>
+                    <View style={styles.cardHeader}>
+                        {/* Normalized Profile Avatar Component */}
+                        <View style={styles.avatarContainer}>
+                            <LinearGradient 
+                                colors={isHighRisk && !isBlocked ? ['#EF4444', '#7F1D1D'] : ['#1E293B', '#0F172A']} 
+                                style={styles.avatarGradient}
+                            >
+                                <Text style={[styles.avatarText, isHighRisk && !isBlocked && { color: '#FFF' }]}>{item.name?.[0] || 'C'}</Text>
+                            </LinearGradient>
+                            <View style={[styles.indicator, { backgroundColor: isBlocked ? '#EF4444' : (isHighRisk ? '#EF4444' : '#10B981') }]} />
+                        </View>
+
+                        <View style={styles.userInfo}>
+                            <Text style={styles.userName} numberOfLines={1}>{item.name || 'Platform Client'}</Text>
+                            <View style={styles.detailRow}>
+                                <Feather name="phone" size={10} color="#475569" />
+                                <Text style={styles.userPhone}> {item.phoneNumber || 'Verification Encrypted'}</Text>
+                            </View>
+                            
+                            {/* 🔥 Display total safety flags from consultants 🔥 */}
+                            {blockCount > 0 && (
+                                <View style={styles.detailRow}>
+                                    <MaterialCommunityIcons name="account-cancel-outline" size={12} color="#EF4444" />
+                                    <Text style={[styles.userPhone, { color: '#EF4444', fontWeight: 'bold' }]}>
+                                        {' '}Flagged by {blockCount} Consultants
+                                    </Text>
+                                </View>
+                            )}
+                        </View>
+
+                        <View style={[styles.badge, { backgroundColor: isBlocked ? '#EF444415' : (isHighRisk ? '#EF444430' : '#10B98115') }]}>
+                            <Text style={[styles.badgeText, { color: isBlocked ? '#EF4444' : (isHighRisk ? '#EF4444' : '#10B981') }]}>
+                                {isBlocked ? 'RESTRICTED' : (isHighRisk ? 'REVIEW' : 'ACTIVE')}
+                            </Text>
                         </View>
                     </View>
 
-                    <View style={[styles.badge, { backgroundColor: isBlocked ? '#EF444415' : '#10B98115' }]}>
-                        <Text style={[styles.badgeText, { color: isBlocked ? '#EF4444' : '#10B981' }]}>
-                            {isBlocked ? 'BANNED' : 'ACTIVE'}
-                        </Text>
+                    {/* Operational Footer */}
+                    <View style={styles.cardFooter}>
+                        <Text style={styles.idLabel}>REF: {item.id.substring(0, 18).toUpperCase()}...</Text>
+                        <TouchableOpacity 
+                            style={[styles.actionBtn, { backgroundColor: isBlocked ? '#10B981' : '#EF4444' }]} 
+                            onPress={() => toggleBlockStatus(item.id, isBlocked, item.name)}
+                            activeOpacity={0.8}
+                        >
+                            <MaterialCommunityIcons 
+                                name={isBlocked ? "account-check" : "account-off"} 
+                                size={18} 
+                                color="#fff" 
+                            />
+                            <Text style={styles.actionBtnText}>{isBlocked ? ' RESTORE' : ' RESTRICT'}</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
+            );
+        };
 
-                {/* Info Footer */}
-                <View style={styles.cardFooter}>
-                    <Text style={styles.idLabel}>UID: {item.id.substring(0, 18)}...</Text>
-                    <TouchableOpacity 
-                        style={[styles.actionBtn, { backgroundColor: isBlocked ? '#10B981' : '#EF4444' }]} 
-                        onPress={() => toggleBlockStatus(item.id, isBlocked, item.name)}
-                        activeOpacity={0.8}
-                    >
-                        <MaterialCommunityIcons 
-                            name={isBlocked ? "account-check" : "account-off"} 
-                            size={18} 
-                            color="#fff" 
-                        />
-                        <Text style={styles.actionBtnText}>{isBlocked ? ' RESTORE' : ' BLOCK'}</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
-        );
+        return <BlinkRenderer />;
     };
 
     return (
@@ -134,8 +188,8 @@ export default function UserControl() {
 
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.title}>USER ROSTER</Text>
-                    <Text style={styles.subtitle}>Active accounts on TalkPe Network</Text>
+                    <Text style={styles.title}>CLIENT ROSTER</Text>
+                    <Text style={styles.subtitle}>Registered accounts on TalkPe secure network</Text>
                 </View>
                 <View style={styles.statsBadge}>
                     <Text style={styles.statsCount}>{users.length}</Text>
@@ -156,7 +210,7 @@ export default function UserControl() {
                     ListEmptyComponent={
                         <View style={styles.emptyView}>
                             <MaterialCommunityIcons name="account-search-outline" size={60} color="#1E293B" />
-                            <Text style={styles.emptyText}>No users in the database.</Text>
+                            <Text style={styles.emptyText}>No registered profiles in current database.</Text>
                         </View>
                     }
                 />
@@ -195,10 +249,15 @@ const styles = StyleSheet.create({
         marginBottom: 15, 
         borderWidth: 1, 
         borderColor: '#1E293B',
-        elevation: 5
+        elevation: 5,
+        position: 'relative' 
     },
     blockedCard: { borderColor: '#EF444430', backgroundColor: '#EF444405' },
+    highRiskCard: { borderColor: '#EF4444', backgroundColor: 'rgba(239, 68, 68, 0.05)', borderWidth: 1.5 }, 
     
+    criticalAlertBadge: { position: 'absolute', top: -8, right: 20, backgroundColor: '#EF4444', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4, elevation: 10, shadowColor: '#EF4444', shadowRadius: 8, shadowOpacity: 0.8 },
+    criticalAlertText: { color: '#FFF', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+
     cardHeader: { flexDirection: 'row', alignItems: 'center' },
     avatarContainer: { position: 'relative' },
     avatarGradient: { 

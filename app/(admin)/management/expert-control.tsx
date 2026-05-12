@@ -40,7 +40,7 @@ export default function ExpertControl() {
     useEffect(() => {
         setLoading(true);
         
-        // Only fetch users who are already experts
+        // Only fetch users who are authorized consultants
         const q = query(
             collection(db, "users"), 
             where("role", "==", "expert")
@@ -49,7 +49,7 @@ export default function ExpertControl() {
         const unsub = onSnapshot(q, (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExpertData));
             
-            // Sorting: Active experts first, Suspended at the bottom
+            // Sorting: Active consultants first, Restricted profiles at the bottom
             const sortedList = list.sort((a, b) => {
                 if (a.isBlocked === b.isBlocked) return 0;
                 return a.isBlocked ? 1 : -1;
@@ -68,8 +68,8 @@ export default function ExpertControl() {
     const toggleBlockStatus = async (userId: string, currentStatus: boolean) => {
         const newStatus = !currentStatus;
         Alert.alert(
-            newStatus ? "RESTRICT ACCOUNT?" : "RESTORE ACCOUNT?",
-            `Confirming action for this expert profile. Proceed?`,
+            newStatus ? "RESTRICT PROFILE?" : "RESTORE ACCESS?",
+            `Confirming credential modification for this consultant. Proceed?`,
             [
                 { text: "CANCEL", style: "cancel" },
                 { 
@@ -77,12 +77,15 @@ export default function ExpertControl() {
                     onPress: async () => {
                         try {
                             const userRef = doc(db, "users", userId);
+                            // 🔥 SYSTEM LOGIC: forceLogout flag instantly synchronizes status across platform nodes 🔥
                             await updateDoc(userRef, {
                                 isBlocked: newStatus,
-                                status: newStatus ? "Blocked" : "Active"
+                                status: newStatus ? "Blocked" : "Active",
+                                forceLogout: newStatus ? true : false,
+                                updatedAt: new Date().toISOString()
                             });
                         } catch (err) {
-                            Alert.alert("SYSTEM ERROR", "Action failed. Check Firestore rules.");
+                            Alert.alert("SYSTEM ERROR", "Configuration failed. Verify database permissions.");
                         }
                     }
                 }
@@ -102,13 +105,13 @@ export default function ExpertControl() {
                     </View>
 
                     <View style={{ flex: 1, marginLeft: 15 }}>
-                        <Text style={styles.name}>{item.name || 'ANONYMOUS EXPERT'}</Text>
-                        <Text style={styles.idText}>SYSTEM ID: {item.uid?.slice(0, 15) || item.id.slice(0, 15)}</Text>
+                        <Text style={styles.name}>{item.name || 'AUTHORIZED CONSULTANT'}</Text>
+                        <Text style={styles.idText}>SYSTEM ID: {item.uid?.slice(0, 15).toUpperCase() || item.id.slice(0, 15).toUpperCase()}</Text>
                     </View>
                     
                     <View style={[styles.statusBadge, { backgroundColor: isBlocked ? '#EF444415' : '#10B98115' }]}>
                         <Text style={[styles.statusText, { color: isBlocked ? '#EF4444' : '#10B981' }]}>
-                            {isBlocked ? 'SUSPENDED' : 'ACTIVE'}
+                            {isBlocked ? 'RESTRICTED' : 'ACTIVE'}
                         </Text>
                     </View>
                 </View>
@@ -116,12 +119,12 @@ export default function ExpertControl() {
                 {/* PERFORMANCE METRICS GRID */}
                 <View style={styles.metricsGrid}>
                     <View style={styles.metricItem}>
-                        <Text style={styles.metricLabel}>RANK LEVEL</Text>
+                        <Text style={styles.metricLabel}>TIER LEVEL</Text>
                         <Text style={styles.metricValue}>{item.currentLevel ?? 0}</Text>
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.metricItem}>
-                        <Text style={styles.metricLabel}>EARNING /MIN</Text>
+                        <Text style={styles.metricLabel}>REWARD /MIN</Text>
                         <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
                            <MaterialCommunityIcons name="leaf" size={12} color="#FBBF24" />
                            <Text style={styles.metricValue}>{item.beansPerMin || 0}</Text>
@@ -129,7 +132,7 @@ export default function ExpertControl() {
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.metricItem}>
-                        <Text style={styles.metricLabel}>USER RATE</Text>
+                        <Text style={styles.metricLabel}>CLIENT RATE</Text>
                         <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
                            <MaterialCommunityIcons name="diamond" size={12} color="#818CF8" />
                            <Text style={styles.metricValue}>{item.userPrice || 0}</Text>
@@ -172,18 +175,18 @@ export default function ExpertControl() {
                     <Feather name="settings" size={24} color="#475569" />
                 </TouchableOpacity>
                 <View>
-                    <Text style={styles.title}>EXPERT HUB</Text>
+                    <Text style={styles.title}>CONSULTANT HUB</Text>
                     <Text style={styles.subtitle}>Administrative Terminal • TalkPe OS</Text>
                 </View>
-                <div style={styles.countBadge}>
+                <View style={styles.countBadge}>
                     <Text style={styles.countText}>{experts.length}</Text>
-                </div>
+                </View>
             </View>
 
             {loading ? (
                 <View style={styles.loaderArea}>
                     <ActivityIndicator size="large" color="#6366F1" />
-                    <Text style={styles.loaderText}>SYNCING HUB...</Text>
+                    <Text style={styles.loaderText}>SYNCHRONIZING...</Text>
                 </View>
             ) : (
                 <FlatList
@@ -195,7 +198,7 @@ export default function ExpertControl() {
                     ListEmptyComponent={
                         <View style={styles.emptyContainer}>
                             <MaterialCommunityIcons name="account-off-outline" size={60} color="#1E293B" />
-                            <Text style={styles.emptyText}>NO REGISTERED EXPERTS</Text>
+                            <Text style={styles.emptyText}>NO AUTHORIZED PROFILES</Text>
                         </View>
                     }
                 />

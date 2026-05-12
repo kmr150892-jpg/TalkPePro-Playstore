@@ -18,7 +18,7 @@ const SystemLatency = () => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 📊 Fetching latest RTC stats from Agora logs in Firestore
+        // 📊 SYSTEM DIAGNOSTICS: Fetching latest engine performance metrics from secure logs
         const q = query(collection(db, "system_health"), orderBy("timestamp", "desc"), limit(20));
         const unsubscribe = onSnapshot(q, (snap) => {
             setHealthData(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -28,34 +28,34 @@ const SystemLatency = () => {
     }, []);
 
     const getStatusColor = (latency: number) => {
-        if (latency < 100) return '#10B981'; // Good (Green)
-        if (latency < 250) return '#F59E0B'; // Average (Yellow)
-        return '#EF4444'; // Bad (Red)
+        if (latency < 100) return '#10B981'; // Optimal (Green)
+        if (latency < 250) return '#F59E0B'; // Functional (Yellow)
+        return '#EF4444'; // Critical (Red)
     };
 
     const renderHealthCard = ({ item }: any) => (
         <View style={styles.healthCard}>
             <View style={styles.cardHeader}>
-                <Text style={styles.sessionText}>SID: {item.sessionId?.slice(-8)}</Text>
+                <Text style={styles.sessionText}>REF: {item.sessionId?.slice(-8).toUpperCase()}</Text>
                 <View style={[styles.statusDot, { backgroundColor: getStatusColor(item.latency) }]} />
             </View>
 
             <View style={styles.statsRow}>
                 <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>LATENCY</Text>
+                    <Text style={styles.statLabel}>RESPONSE TIME</Text>
                     <Text style={[styles.statValue, { color: getStatusColor(item.latency) }]}>{item.latency}ms</Text>
                 </View>
                 <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>PACKET LOSS</Text>
-                    <Text style={styles.statValue}>{item.packetLoss}%</Text>
+                    <Text style={styles.statLabel}>DATA INTEGRITY</Text>
+                    <Text style={styles.statValue}>{100 - item.packetLoss}%</Text>
                 </View>
                 <View style={styles.statItem}>
-                    <Text style={styles.statLabel}>BITRATE</Text>
+                    <Text style={styles.statLabel}>THROUGHPUT</Text>
                     <Text style={styles.statValue}>{item.bitrate}kbps</Text>
                 </View>
             </View>
 
-            <Text style={styles.footerText}>User: {item.userName} • Device: {item.deviceOS}</Text>
+            <Text style={styles.footerText}>Client: {item.userName} • Platform: {item.deviceOS}</Text>
         </View>
     );
 
@@ -63,8 +63,8 @@ const SystemLatency = () => {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
             <View style={styles.header}>
-                <Text style={styles.title}>AGORA ENGINE HEALTH</Text>
-                <Text style={styles.subtitle}>Real-time Network & Latency Monitor</Text>
+                <Text style={styles.title}>ENGINE DIAGNOSTICS</Text>
+                <Text style={styles.subtitle}>Real-time Network Stability & Optimization Monitor</Text>
             </View>
 
             {loading ? (
@@ -74,8 +74,9 @@ const SystemLatency = () => {
                     data={healthData}
                     keyExtractor={(item) => item.id}
                     renderItem={renderHealthCard}
+                    showsVerticalScrollIndicator={false}
                     contentContainerStyle={{ padding: 20 }}
-                    ListEmptyComponent={<Text style={styles.empty}>No active session data found.</Text>}
+                    ListEmptyComponent={<Text style={styles.empty}>No active diagnostic data found.</Text>}
                 />
             )}
         </View>
@@ -91,14 +92,14 @@ const styles = StyleSheet.create({
     cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sessionText: { color: '#475569', fontSize: 10, fontWeight: 'bold' },
     statusDot: { 
-    width: 10, 
-    height: 10, 
-    borderRadius: 5, 
-    shadowColor: '#10B981', 
-    shadowRadius: 10, // shadowBlur-ku badhila
-    shadowOpacity: 0.8, 
-    elevation: 5 // Android-la glow effect vara
-},
+        width: 10, 
+        height: 10, 
+        borderRadius: 5, 
+        shadowColor: '#10B981', 
+        shadowRadius: 10, 
+        shadowOpacity: 0.8, 
+        elevation: 5 
+    },
     statsRow: { flexDirection: 'row', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#1E293B', paddingTop: 15 },
     statItem: { alignItems: 'center' },
     statLabel: { color: '#475569', fontSize: 9, fontWeight: '900', marginBottom: 4 },

@@ -1,4 +1,4 @@
-    import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { collectionGroup, doc, getDoc, onSnapshot, query, serverTimestamp, updateDoc } from 'firebase/firestore';
@@ -34,7 +34,7 @@ import { recordTransaction } from '../../../utils/finance';
             holderName?: string;
         };
         createdAt?: any;
-        userPath?: string; // Sub-collection path-kaaga
+        userPath?: string; // Secure sub-collection path mapping
     }
 
     export default function AdminWithdrawals() {
@@ -46,12 +46,12 @@ import { recordTransaction } from '../../../utils/finance';
         useEffect(() => {
             const currentUserUID = auth.currentUser?.uid;
             if (currentUserUID !== ADMIN_UID) {
-                Alert.alert("🚨 ACCESS DENIED", "Anjali mattum thaan idhai handle panna mudiyum!");
+                Alert.alert("🚨 ACCESS RESTRICTED", "Authorized TalkPe Pro credentials required.");
                 router.replace('/(admin)'); 
                 return;
             }
 
-            // collectionGroup use panna thaan users kulla irukura sub-collection varum
+            // collectionGroup optimized for decentralized withdrawal nodes
             const q = query(collectionGroup(db, "withdrawals"));
 
             const unsub = onSnapshot(q, (snap) => {
@@ -61,13 +61,13 @@ import { recordTransaction } from '../../../utils/finance';
                         return { 
                             id: d.id, 
                             ...data,
-                            // Firestore field names different ah irundhalum correct ah fetch panna
+                            // Normalizing field names across distributed Firestore nodes
                             amount: data.amount || data.amountRupee || 0,
                             status: data.status || 'PENDING',
-                            userPath: d.ref.path // Update panna path venum
+                            userPath: d.ref.path // Reference path for atomic updates
                         } as WithdrawalRequest;
                     })
-                    // FIX: Case insensitive filter. "Pending", "PENDING", "pending" ellamae varum
+                    // Case insensitive filter for global pending synchronization
                     .filter(item => {
                         const currentStatus = item.status ? item.status.toString().toLowerCase() : '';
                         return currentStatus === 'pending';
@@ -79,7 +79,7 @@ import { recordTransaction } from '../../../utils/finance';
                 setStats({ totalPending: sum, count: list.length });
                 setLoading(false);
             }, (err) => {
-                console.error("Firestore Error:", err);
+                console.error("Secure Queue Sync Error:", err);
                 setLoading(false);
             });
             return () => unsub();
@@ -89,22 +89,20 @@ import { recordTransaction } from '../../../utils/finance';
     const amountToProcess = Math.floor(Number(request.amount)); 
     
     Alert.alert(
-        status === 'SUCCESS' ? "💰 CONFIRM PAYOUT" : "❌ REJECT REQUEST",
-        `Action: ₹${amountToProcess.toLocaleString()}?`,
+        status === 'SUCCESS' ? "💰 AUTHORIZE SETTLEMENT" : "❌ DECLINE REQUEST",
+        `Confirm disbursement of ₹${amountToProcess.toLocaleString()}?`,
         [
             { text: "Cancel", style: "cancel" },
             { 
                 text: "Confirm Action", 
                 onPress: async () => {
                     try {
-                        // 🔴 CHECK: expertRef address create pandrom
+                        // 🔴 SYSTEM CHECK: Consultant reference verification
                         const expertRef = doc(db, "users", request.userId);
-                        
-                        // 🔴 CHECK: getDoc (Make sure it's imported at the top!)
                         const expertSnap = await getDoc(expertRef);
 
                         if (!expertSnap.exists()) {
-                            Alert.alert("Error", "User not found in database!");
+                            Alert.alert("Error", "Associated user record not found.");
                             return;
                         }
 
@@ -120,13 +118,13 @@ import { recordTransaction } from '../../../utils/finance';
 
                             await recordTransaction(
                                 request.userId, 
-                                request.expertName || "Expert", 
+                                request.expertName || "Consultant", 
                                 amountToProcess, 
                                 'PAYOUT', 
-                                `Payout ID: ${request.id}`
+                                `Ref ID: ${request.id}`
                             );
                         } else {
-                            // REJECTED Case
+                            // Atomic reversal for declined requests
                             const currentWallet = Number(expertData.walletBalance || 0);
                             await updateDoc(expertRef, { 
                                 pendingPayout: Math.max(0, currentPending - amountToProcess),
@@ -134,7 +132,7 @@ import { recordTransaction } from '../../../utils/finance';
                             });
                         }
 
-                        // Sub-collection update
+                        // Synchronization of secure sub-collection node
                         if (request.userPath) {
                             await updateDoc(doc(db, request.userPath), {
                                 status: status,
@@ -143,11 +141,10 @@ import { recordTransaction } from '../../../utils/finance';
                             });
                         }
 
-                        Alert.alert("Success! ✅", "Database Updated.");
+                        Alert.alert("Success! ✅", "System Ledger Synchronized.");
                     } catch (err: any) {
-                        console.error("Update Error:", err);
-                        // Inga thaan error ennanu clear-ah theriyum
-                        Alert.alert("Error", err.message || "Database update failure!");
+                        console.error("Disbursement Sync Error:", err);
+                        Alert.alert("Error", err.message || "Failed to update settlement records.");
                     }
                 } 
             }
@@ -155,9 +152,9 @@ import { recordTransaction } from '../../../utils/finance';
     );
 };
         const copyToClipboard = (text: string, label: string) => {
-            if(!text) return Alert.alert("Error", `${label} missing!`);
+            if(!text) return Alert.alert("Error", `${label} verification failed!`);
             Clipboard.setString(text);
-            Alert.alert("Copied! ✅", `${label} copy aagiduchu.`);
+            Alert.alert("Copied! ✅", `${label} added to clipboard.`);
         };
 
         if (loading) return (
@@ -172,11 +169,11 @@ import { recordTransaction } from '../../../utils/finance';
                         <Ionicons name="chevron-back" size={24} color="#6366F1" />
                     </TouchableOpacity>
                     <View style={{ flex: 1, marginLeft: 15 }}>
-                        <Text style={styles.headerTitle}>PAYOUT QUEUE</Text>
-                        <Text style={styles.headerSub}>ADMIN CONSOLE • ANJALI</Text>
+                        <Text style={styles.headerTitle}>SETTLEMENT QUEUE</Text>
+                        <Text style={styles.headerSub}>ADMIN CONSOLE • TALKPE PRO</Text>
                     </View>
                     <View style={styles.statusPulse}>
-                        <View style={styles.pulseDot} /><Text style={styles.liveText}>LIVE</Text>
+                        <View style={styles.pulseDot} /><Text style={styles.liveText}>SYNCED</Text>
                     </View>
                 </View>
 
@@ -184,7 +181,7 @@ import { recordTransaction } from '../../../utils/finance';
                     <View style={styles.statContainer}>
                         <LinearGradient colors={['#6366F1', '#4338CA']} style={styles.statBox}>
                             <View>
-                                <Text style={styles.statL}>TOTAL OUTSTANDING</Text>
+                                <Text style={styles.statL}>TOTAL OUTSTANDING DISBURSEMENTS</Text>
                                 <Text style={styles.statV}>₹{stats.totalPending.toLocaleString()}</Text>
                             </View>
                             <View style={styles.countBadge}><Text style={styles.countText}>{stats.count} REQS</Text></View>
@@ -195,30 +192,30 @@ import { recordTransaction } from '../../../utils/finance';
                         {requests.length === 0 ? (
                             <View style={styles.empty}>
                                 <MaterialCommunityIcons name="check-decagram" size={60} color="#1E293B" />
-                                <Text style={styles.emptyT}>All Payouts Completed!</Text>
+                                <Text style={styles.emptyT}>All Settlements Completed!</Text>
                             </View>
                         ) : (
                             requests.map((item) => (
                                 <View key={item.id} style={styles.card}>
                                     <View style={styles.cardHeader}>
                                         <View>
-                                            <Text style={styles.expertId}>NAME: {item.expertName || 'Unknown Expert'}</Text>
-                                            <Text style={styles.expertIdSub}>UID: {item.userId.slice(0, 15)}...</Text>
+                                            <Text style={styles.expertId}>CONSULTANT: {item.expertName || 'System ID'}</Text>
+                                            <Text style={styles.expertIdSub}>UID: {item.userId.slice(0, 15).toUpperCase()}...</Text>
                                             <Text style={styles.cardAmount}>₹{item.amount.toLocaleString()}</Text>
                                         </View>
                                         <View style={styles.waitingBadge}>
                                             <Feather name="clock" size={10} color="#F59E0B" />
-                                            <Text style={styles.waitingText}> PENDING</Text>
+                                            <Text style={styles.waitingText}> AWAITING</Text>
                                         </View>
                                     </View>
 
                                     <View style={styles.detailsContainer}>
-                                        <Text style={styles.sectionLabel}>PAYMENT DESTINATION</Text>
+                                        <Text style={styles.sectionLabel}>DISBURSEMENT DESTINATION</Text>
                                         
                                         <TouchableOpacity style={styles.detailRow} onPress={() => copyToClipboard(item.bankDetails?.upiId || "", "UPI ID")}>
                                             <View>
-                                                <Text style={styles.upiLabel}>UPI ID</Text>
-                                                <Text style={styles.upiValue}>{item.bankDetails?.upiId || 'Not Provided'}</Text>
+                                                <Text style={styles.upiLabel}>UPI ENDPOINT</Text>
+                                                <Text style={styles.upiValue}>{item.bankDetails?.upiId || 'Verification Pending'}</Text>
                                             </View>
                                             <Ionicons name="copy-outline" size={16} color="#6366F1" />
                                         </TouchableOpacity>
@@ -227,9 +224,9 @@ import { recordTransaction } from '../../../utils/finance';
 
                                         <TouchableOpacity style={styles.detailRow} onPress={() => copyToClipboard(item.bankDetails?.accountNumber || "", "Account Number")}>
                                             <View>
-                                                <Text style={styles.upiLabel}>BANK ACCOUNT / IFSC</Text>
+                                                <Text style={styles.upiLabel}>CREDIT ACCOUNT / IFSC</Text>
                                                 <Text style={styles.bankValue}>{item.bankDetails?.accountNumber || 'N/A'} • {item.bankDetails?.ifsc || 'N/A'}</Text>
-                                                <Text style={styles.holderName}>HOLDER: {item.bankDetails?.holderName || 'N/A'}</Text>
+                                                <Text style={styles.holderName}>BENEFICIARY: {item.bankDetails?.holderName || 'N/A'}</Text>
                                             </View>
                                             <Ionicons name="copy-outline" size={16} color="#6366F1" />
                                         </TouchableOpacity>
@@ -237,11 +234,11 @@ import { recordTransaction } from '../../../utils/finance';
 
                                     <View style={styles.actionRow}>
                                         <TouchableOpacity style={[styles.actionBtn, styles.rejectBtn]} onPress={() => handleProcessPayment(item, 'REJECTED')}>
-                                            <Text style={styles.rejectBtnText}>REJECT</Text>
+                                            <Text style={styles.rejectBtnText}>DECLINE</Text>
                                         </TouchableOpacity>
                                         <TouchableOpacity style={[styles.actionBtn, styles.successBtn]} onPress={() => handleProcessPayment(item, 'SUCCESS')}>
                                             <LinearGradient colors={['#10B981', '#059669']} style={styles.btnGradient}>
-                                                <Text style={styles.successBtnText}>MARK AS PAID</Text>
+                                                <Text style={styles.successBtnText}>AUTHORIZE SETTLEMENT</Text>
                                             </LinearGradient>
                                         </TouchableOpacity>
                                     </View>

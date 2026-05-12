@@ -7,16 +7,16 @@ const MaintenanceScreen = () => {
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
             <View style={styles.iconCircle}>
-                <MaterialCommunityIcons name="tools" size={60} color="#F59E0B" />
+                <MaterialCommunityIcons name="shield-sync" size={60} color="#F59E0B" />
             </View>
-            <Text style={styles.title}>TALKPE IS UPDATING</Text>
+            <Text style={styles.title}>SYSTEM OPTIMIZATION IN PROGRESS</Text>
             <Text style={styles.subText}>
-                We are currently performing scheduled maintenance to improve your experience. 
-                We'll be back online shortly!
+                We are currently performing a secure infrastructure upgrade to enhance your consulting experience. 
+                The TalkPe Pro network will be back online shortly.
             </Text>
             <View style={styles.statusBadge}>
                 <View style={styles.pulse} />
-                <Text style={styles.statusText}>ENGINEERS AT WORK</Text>
+                <Text style={styles.statusText}>SECURE UPLINK SYNCING</Text>
             </View>
         </View>
     );

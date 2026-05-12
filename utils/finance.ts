@@ -1,7 +1,7 @@
 import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
-// 🚀 MASTER TRANSACTION FUNCTION
+// 🚀 SECURE LEDGER ACTIVITY PROTOCOL
 export const recordTransaction = async (
   userId: string, 
   userName: string, 
@@ -19,8 +19,8 @@ export const recordTransaction = async (
       timestamp: serverTimestamp(),
       status: "SUCCESS"
     });
-    console.log(`✅ ${type} Logged in Ledger`);
+    console.log(`✅ Secure ${type} recorded in System Ledger`);
   } catch (error) {
-    console.error("❌ Ledger Update Failed:", error);
+    console.error("❌ Secure Ledger Synchronization Failed:", error);
   }
 };

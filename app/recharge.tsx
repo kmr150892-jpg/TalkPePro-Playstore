@@ -1,236 +1,375 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { collection, doc, increment, onSnapshot, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
-import RazorpayCheckout from 'react-native-razorpay';
+// 🔥 LATEST v12 NAMED IMPORTS FOR GOOGLE BILLING (No getProducts to avoid TS error)
+import {
+    endConnection,
+    finishTransaction,
+    initConnection,
+    purchaseErrorListener,
+    purchaseUpdatedListener,
+    requestPurchase
+} from 'react-native-iap';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
 
-// 🔥 MASS UPDATED BUNDLES: As per your new pricing logic
+const { width } = Dimensions.get('window');
+
+// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
+const calculateUserLevel = (totalSpent: number) => {
+  if (totalSpent >= 500000001) return { 
+      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000']
+  }; 
+  if (totalSpent >= 100000001) return { 
+      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000']
+  }; 
+  if (totalSpent >= 50000000) return { 
+      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000']
+  };
+  if (totalSpent >= 10000000) return { 
+      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000']
+  };
+  if (totalSpent >= 5000000) return { 
+      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000']
+  };
+  if (totalSpent >= 1000000) return { 
+      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000']
+  };
+  if (totalSpent >= 200001) return { 
+      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000']
+  };
+  return { 
+      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000']
+  };
+};
+
+// 🔥 GOOGLE PLAY PRODUCT IDs (Console-la ithae IDs create pannanum)
 const BUNDLES = [
-  { id: '1', diamonds: '10,000', value: 10000, time: 'Talk Time: 5 Minutes Max', price: '₹100', numericPrice: 100 },
-  { id: '2', diamonds: '50,000', value: 50000, time: 'Talk Time: 25 Minutes Max', price: '₹500', numericPrice: 500 },
-  { id: '3', diamonds: '1,00,000', value: 100000, time: 'Talk Time: 50 Minutes Max', price: '₹1,000', numericPrice: 1000, bestSeller: true },
-  { id: '4', diamonds: '1,50,000', value: 150000, time: 'Talk Time: 75 Minutes Max', price: '₹1,500', numericPrice: 1500 },
-  { id: '5', diamonds: '2,00,000', value: 200000, time: 'Talk Time: 100 Minutes Max', price: '₹2,000', numericPrice: 2000 },
+    { id: 'diamonds_100', diamonds: '10,000', value: 10000, time: 'Consultation: ~5 Minutes', price: '₹100', numericPrice: 100 },
+    { id: 'diamonds_500', diamonds: '50,000', value: 50000, time: 'Consultation: ~25 Minutes', price: '₹500', numericPrice: 500 },
+    { id: 'diamonds_1000', diamonds: '1,00,000', value: 100000, time: 'Consultation: ~50 Minutes', price: '₹1,000', numericPrice: 1000, bestSeller: true },
+    { id: 'diamonds_1500', diamonds: '1,50,000', value: 150000, time: 'Consultation: ~75 Minutes', price: '₹1,500', numericPrice: 1500 },
+    { id: 'diamonds_2000', diamonds: '2,00,000', value: 200000, time: 'Consultation: ~100 Minutes', price: '₹2,000', numericPrice: 2000 },
+    { id: 'diamonds_3000', diamonds: '3,00,000', value: 300000, time: 'Consultation: ~150 Minutes', price: '₹3,000', numericPrice: 3000 },
+    { id: 'diamonds_5000', diamonds: '5,00,000', value: 500000, time: 'Consultation: ~250 Minutes', price: '₹5,000', numericPrice: 5000 },
+    { id: 'diamonds_8000', diamonds: '8,00,000', value: 800000, time: 'Consultation: ~400 Minutes', price: '₹8,000', numericPrice: 8000 },
+    { id: 'diamonds_10000', diamonds: '10,00,000', value: 1000000, time: 'Consultation: ~500 Minutes', price: '₹10,000', numericPrice: 10000 },
 ];
 
 export default function RechargeScreen() {
-  const router = useRouter();
-  const [selected, setSelected] = useState('3'); // Default to Best Seller
-  const [balance, setBalance] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [isBuying, setIsBuying] = useState(false); 
-  const user = auth.currentUser;
+    const router = useRouter();
+    const [selected, setSelected] = useState('diamonds_1000');
+    const [balance, setBalance] = useState(0);
+    const [totalSpentDiamonds, setTotalSpentDiamonds] = useState(0);
+    const [loading, setLoading] = useState(true);
+    const [isBuying, setIsBuying] = useState(false);
+    const user = auth.currentUser;
 
-  const RAZORPAY_KEY_ID = 'rzp_test_SVinrPnj1KVHuH'; 
+    const floatAnim = useRef(new Animated.Value(0)).current;
+    const trailX = useRef(new Animated.Value(-width)).current;
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+    const shimmerAnim = useRef(new Animated.Value(0)).current; 
 
-  useEffect(() => {
-    if (!user) return;
-    const userRef = doc(db, "users", user.uid);
-    const unsubscribe = onSnapshot(userRef, (docSnap) => {
-      if (docSnap.exists()) {
-        setBalance(docSnap.data().balance || 0);
-      }
-      setLoading(false);
-    });
-    return unsubscribe;
-  }, [user]);
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(floatAnim, { toValue: -8, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(floatAnim, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+            ])
+        ).start();
 
-  const handleBuy = async () => {
-    if (!user) {
-      Alert.alert("Error", "Please login to continue.");
-      return;
-    }
-    
-    const selectedBundle = BUNDLES.find(b => b.id === selected);
-    if (!selectedBundle) return;
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1.05, duration: 1000, useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true })
+            ])
+        ).start();
 
-    setIsBuying(true);
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(shimmerAnim, { toValue: 0, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ).start();
 
-    const options = {
-      description: `TalkPe Recharge: ${selectedBundle.diamonds} Diamonds`,
-      image: 'https://your-logo-url.com/logo.png', 
-      currency: 'INR',
-      key: RAZORPAY_KEY_ID,
-      amount: selectedBundle.numericPrice * 100, 
-      name: 'TalkPe AI',
-      prefill: {
-        email: user.email || '',
-        contact: '',
-        name: user.displayName || 'User'
-      },
-      theme: { color: '#3B82F6' }
+        const runTrail = () => {
+            trailX.setValue(-width);
+            Animated.timing(trailX, { toValue: width, duration: 3000, useNativeDriver: true }).start(() => runTrail());
+        };
+        runTrail();
+
+        if (!user) { setLoading(false); return; }
+
+        const userRef = doc(db, "users", user.uid);
+        const unsubscribe = onSnapshot(userRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const d = docSnap.data();
+                setBalance(d.balance || 0);
+                setTotalSpentDiamonds(d.totalSpentDiamonds || 0);
+            }
+            setLoading(false);
+        });
+
+        // 🔥 Initialize In-App Purchases connection with react-native-iap v12
+        let purchaseUpdateSubscription: any = null;
+        let purchaseErrorSubscription: any = null;
+
+        const initIAP = async () => {
+            try {
+                await initConnection();
+            } catch (err) {
+                console.warn("IAP Init Warning:", err);
+            }
+        };
+        initIAP();
+
+        // 1. Set purchase listener
+        purchaseUpdateSubscription = purchaseUpdatedListener(async (purchase: any) => {
+            const receipt = purchase.transactionReceipt;
+            
+            if (receipt) {
+                try {
+                    const selectedBundle = BUNDLES.find(b => b.id === purchase.productId);
+                    if (selectedBundle && user) {
+                        const userRef = doc(db, "users", user.uid);
+                        const transactionRef = doc(collection(db, "transactions"));
+                        
+                        // Update Firestore
+                        await updateDoc(userRef, {
+                            balance: increment(selectedBundle.value),
+                            totalSpentDiamonds: increment(selectedBundle.value)
+                        });
+
+                        await setDoc(transactionRef, {
+                            userId: user.uid,
+                            userName: user.displayName || 'Consultation User',
+                            amount: selectedBundle.numericPrice,
+                            diamondsAdded: selectedBundle.value,
+                            type: 'asset_purchase',
+                            method: 'Google Play Billing',
+                            orderId: purchase.transactionId || purchase.transactionReceipt,
+                            timestamp: serverTimestamp(),
+                            status: 'success'
+                        });
+
+                        await finishTransaction({ purchase, isConsumable: true });
+                        Alert.alert("Success 🎉", "Transaction complete. Assets securely added to your vault.");
+                    }
+                } catch (error) {
+                    console.error("Firestore Update Error:", error);
+                } finally {
+                    setIsBuying(false);
+                }
+            }
+        });
+
+        purchaseErrorSubscription = purchaseErrorListener((error: any) => {
+            setIsBuying(false);
+            if (String(error.code) !== 'E_USER_CANCELLED' && String(error.code) !== 'USER_CANCELED') {
+               Alert.alert("Failed", "Google Play Billing process was interrupted.");
+            }
+        });
+
+        return () => { 
+            unsubscribe();
+            if (purchaseUpdateSubscription) purchaseUpdateSubscription.remove();
+            if (purchaseErrorSubscription) purchaseErrorSubscription.remove();
+            endConnection();
+        };
+    }, [user]);
+
+    const handleBuy = async () => {
+        if (!user) { Alert.alert("Identification Error", "Please login to access your asset vault."); return; }
+        const selectedBundle = BUNDLES.find(b => b.id === selected);
+        if (!selectedBundle) return;
+        setIsBuying(true);
+
+        try {
+            // 2. Start purchase process - using "as any" to bypass strict sku/skus TS errors entirely
+            await requestPurchase({ sku: selectedBundle.id } as any);
+        } catch (error) {
+            console.error("IAP Error:", error);
+            setIsBuying(false);
+            Alert.alert("Error", "Could not establish connection to Google Play Billing.");
+        }
     };
 
-    try {
-      // 1. Trigger Razorpay
-      const data: any = await (RazorpayCheckout as any).open(options);
-      
-      // 2. 🔥 SUCCESS: Update User Balance & Log Transaction
-      const userRef = doc(db, "users", user.uid);
-      const transactionRef = doc(collection(db, "transactions"));
+    const userTier = calculateUserLevel(totalSpentDiamonds);
+    const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 
-      // Update balance
-      await updateDoc(userRef, {
-        balance: increment(selectedBundle.value)
-      });
+    const borderType1 = {
+        borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0.5, borderBottomWidth: 0.5,
+        borderLeftColor: userTier.color, borderRightColor: userTier.color,
+        borderTopColor: userTier.secondaryColor + '80', borderBottomColor: userTier.secondaryColor + '80',
+        backgroundColor: 'rgba(5, 5, 5, 0.65)',
+    };
 
-      // Log the recharge transaction for history
-      await setDoc(transactionRef, {
-        userId: user.uid,
-        userName: user.displayName || 'User',
-        amount: selectedBundle.numericPrice,
-        diamondsAdded: selectedBundle.value,
-        type: 'recharge',
-        paymentId: data.razorpay_payment_id,
-        timestamp: serverTimestamp(),
-        status: 'success'
-      });
+    const borderType2 = {
+        borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0.5, borderBottomWidth: 0.5,
+        borderLeftColor: userTier.secondaryColor, borderRightColor: userTier.secondaryColor,
+        borderTopColor: userTier.color + '80', borderBottomColor: userTier.color + '80',
+        backgroundColor: 'rgba(5, 5, 5, 0.8)',
+    };
 
-      Alert.alert(
-        "Payment Success! 🎉", 
-        `${selectedBundle.diamonds} Diamonds added to your wallet.`,
-        [{ text: "Done", onPress: () => router.back() }]
-      );
+    return (
+        <View style={styles.mainContainer}>
+            <StatusBar barStyle="light-content" />
+            <LinearGradient colors={userTier.themeBg as any} style={StyleSheet.absoluteFill} />
+            
+            <Animated.View style={[styles.shimmerOrb, { top: 80, right: -60, backgroundColor: userTier.color, transform: [{ translateY: orbTranslateY }] }]} />
+            <Animated.View style={[styles.shimmerOrb, { bottom: 150, left: -60, backgroundColor: userTier.secondaryColor, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
-    } catch (error: any) {
-      if (error && error.code !== 2) {
-         Alert.alert("Payment Failed", "Transaction could not be completed.");
-      }
-    } finally {
-      setIsBuying(false);
-    }
-  };
-
-  return (
-    <View style={styles.mainContainer}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient colors={['#0F172A', '#1E293B']} style={StyleSheet.absoluteFill} />
-
-      <SafeAreaView style={{ flex: 1 }}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="chevron-back" size={24} color="#FFF" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Recharge Diamonds</Text>
-        </View>
-
-        <ScrollView contentContainerStyle={{ padding: 20 }} showsVerticalScrollIndicator={false}>
-          
-          <LinearGradient colors={['#3B82F6', '#2563EB']} style={styles.balanceCard}>
-            <View>
-              <Text style={styles.balanceLabel}>TOTAL BALANCE</Text>
-              <View style={styles.balanceRow}>
-                <Ionicons name="diamond" size={28} color="#FFF" />
-                {loading ? (
-                  <ActivityIndicator color="#FFF" style={{ marginLeft: 10 }} />
-                ) : (
-                  <Text style={styles.balanceAmount}>{balance.toLocaleString()}</Text>
-                )}
-              </View>
-            </View>
-            <Ionicons name="wallet-outline" size={60} color="rgba(255,255,255,0.2)" />
-          </LinearGradient>
-
-          <Text style={styles.sectionTitle}>SELECT TALK TIME BUNDLE</Text>
-
-          {BUNDLES.map((bundle) => (
-            <TouchableOpacity 
-              key={bundle.id} 
-              onPress={() => setSelected(bundle.id)}
-              style={[
-                styles.bundleItem, 
-                selected === bundle.id && styles.bundleSelected
-              ]}
-              activeOpacity={0.8}
-            >
-              <View style={styles.bundleLeft}>
-                <View style={[styles.diamondIcon, { backgroundColor: selected === bundle.id ? '#3B82F6' : '#1E293B' }]}>
-                  <Ionicons name="diamond" size={22} color={selected === bundle.id ? '#FFF' : '#3B82F6'} />
+            <SafeAreaView style={{ flex: 1 }}>
+                <View style={styles.header}>
+                    <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: userTier.color + '40' }]}>
+                        <Ionicons name="chevron-back" size={24} color="#FFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.headerTitle}>ASSET VAULT</Text>
                 </View>
-                <View style={{ marginLeft: 15 }}>
-                  <Text style={styles.bundleDiamonds}>{bundle.diamonds} Diamonds</Text>
-                  <Text style={styles.bundleTime}>{bundle.time}</Text>
-                </View>
-              </View>
 
-              <View style={styles.priceTag}>
-                 {bundle.bestSeller && (
-                    <View style={styles.bestSellerBadge}>
-                        <Text style={styles.bestSellerText}>BEST SELLER</Text>
+                <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
+                    
+                    <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+                        <View style={[styles.stealthBalanceCard, borderType1]}>
+                            <View style={[styles.quadBorder, { 
+                                borderLeftColor: userTier.color, borderRightColor: userTier.color, 
+                                borderTopColor: userTier.secondaryColor, borderBottomColor: userTier.secondaryColor 
+                            }]} />
+                            <Animated.View style={[styles.glowTrail, { backgroundColor: userTier.color, transform: [{ translateX: trailX }] }]} />
+                            
+                            <View style={styles.cardInternal}>
+                                <View style={{ flex: 1 }}>
+                                    <View style={[styles.rankBadge, { borderColor: userTier.color + '60' }]}>
+                                        <MaterialCommunityIcons name="crown" size={12} color={userTier.color} />
+                                        <Text style={[styles.rankText, { color: userTier.color }]}>{userTier.label}</Text>
+                                    </View>
+                                    <Text style={styles.balanceLabel}>AVAILABLE ASSETS</Text>
+                                    <View style={styles.balanceRow}>
+                                        <Ionicons name="diamond" size={24} color={userTier.color} />
+                                        {loading ? (
+                                            <ActivityIndicator color="#FFF" style={{ marginLeft: 10 }} />
+                                        ) : (
+                                            <Text style={styles.balanceAmount}>{balance.toLocaleString()}</Text>
+                                        )}
+                                    </View>
+                                </View>
+                                <MaterialCommunityIcons name="integrated-circuit-chip" size={50} color="rgba(255,255,255,0.1)" />
+                            </View>
+                        </View>
+                    </Animated.View>
+
+                    <Text style={[styles.sectionTitle, { color: userTier.color }]}>SELECT ASSET BUNDLE</Text>
+
+                    {BUNDLES.map((bundle, index) => {
+                        const bundleBorder = index % 2 === 0 ? borderType1 : borderType2;
+                        return (
+                            <TouchableOpacity 
+                                key={bundle.id} 
+                                onPress={() => setSelected(bundle.id)}
+                                activeOpacity={0.8}
+                                style={[
+                                    styles.bundleItem, 
+                                    bundleBorder,
+                                    selected === bundle.id && { borderColor: userTier.color, backgroundColor: userTier.color + '20' }
+                                ]}
+                            >
+                                <View style={styles.bundleLeft}>
+                                    <View style={[styles.diamondIconBase, { backgroundColor: selected === bundle.id ? userTier.color : 'rgba(255,255,255,0.05)' }]}>
+                                        <Ionicons name="diamond" size={22} color={selected === bundle.id ? '#000' : userTier.color} />
+                                    </View>
+                                    <View style={{ marginLeft: 15 }}>
+                                        <Text style={styles.bundleDiamonds}>{bundle.diamonds}</Text>
+                                        <Text style={styles.bundleTime}>{bundle.time}</Text>
+                                    </View>
+                                </View>
+
+                                <View style={styles.priceTagArea}>
+                                    {bundle.bestSeller && (
+                                        <View style={[styles.popularBadge, { backgroundColor: userTier.color, shadowColor: userTier.color }]}>
+                                            <Text style={styles.popularText}>POPULAR</Text>
+                                        </View>
+                                    )}
+                                    <View style={[styles.priceActionBtn, { backgroundColor: selected === bundle.id ? userTier.color : 'rgba(255,255,255,0.05)' }]}>
+                                        <Text style={[styles.priceValue, { color: selected === bundle.id ? '#000' : userTier.color }]}>{bundle.price}</Text>
+                                    </View>
+                                </View>
+                            </TouchableOpacity>
+                        );
+                    })}
+                    
+                    <View style={styles.encryptionInfo}>
+                        <Ionicons name="shield-checkmark" size={16} color="#10B981" />
+                        <Text style={styles.encryptionText}>Google Play Certified Secure Payment</Text>
                     </View>
-                 )}
-                 <View style={[styles.priceBtn, { backgroundColor: selected === bundle.id ? '#3B82F6' : 'rgba(59, 130, 246, 0.1)' }]}>
-                    <Text style={[styles.priceText, { color: selected === bundle.id ? '#FFF' : '#3B82F6' }]}>{bundle.price}</Text>
-                 </View>
-              </View>
-            </TouchableOpacity>
-          ))}
-          
-          <View style={styles.infoBox}>
-            <Ionicons name="information-circle-outline" size={18} color="#94A3B8" />
-            <Text style={styles.infoText}>Consultation Rate: 2,000 Diamonds / Min</Text>
-          </View>
-        </ScrollView>
+                </ScrollView>
 
-        <View style={styles.footer}>
-          <TouchableOpacity 
-            style={[styles.buyBtn, isBuying && { opacity: 0.7 }]} 
-            onPress={handleBuy}
-            disabled={isBuying}
-          >
-            {isBuying ? (
-                <ActivityIndicator color="#FFF" />
-            ) : (
-                <>
-                    <Text style={styles.buyBtnText}>Confirm Purchase</Text>
-                    <Ionicons name="chevron-forward" size={20} color="#FFF" />
-                </>
-            )}
-          </TouchableOpacity>
+                <View style={styles.footerArea}>
+                    <TouchableOpacity 
+                        style={[styles.buyBtn, isBuying && { opacity: 0.6 }, { backgroundColor: userTier.color, shadowColor: userTier.color }]} 
+                        onPress={handleBuy}
+                        disabled={isBuying}
+                    >
+                        {isBuying ? (
+                            <ActivityIndicator color="#000" />
+                        ) : (
+                            <Animated.View style={[styles.buyBtnContent, { transform: [{ scale: pulseAnim }] }]}>
+                                <Text style={styles.buyBtnLabel}>AUTHORIZE TRANSACTION</Text>
+                                <Ionicons name="flash" size={18} color="#000" />
+                            </Animated.View>
+                        )}
+                    </TouchableOpacity>
+                </View>
+
+            </SafeAreaView>
         </View>
-
-      </SafeAreaView>
-    </View>
-  );
+    );
 }
 
 const styles = StyleSheet.create({
-  mainContainer: { flex: 1, backgroundColor: '#0F172A' },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 },
-  backBtn: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 12 },
-  headerTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', marginLeft: 20 },
-  balanceCard: { padding: 30, borderRadius: 30, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
-  balanceLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
-  balanceRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 5 },
-  balanceAmount: { color: '#FFF', fontSize: 38, fontWeight: '900' },
-  sectionTitle: { color: '#94A3B8', fontSize: 12, fontWeight: '900', letterSpacing: 1.5, marginBottom: 20, paddingLeft: 5 },
-  bundleItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 18, borderRadius: 25, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  bundleSelected: { borderColor: '#3B82F6', backgroundColor: 'rgba(59, 130, 246, 0.08)' },
-  bundleLeft: { flexDirection: 'row', alignItems: 'center' },
-  diamondIcon: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
-  bundleDiamonds: { color: '#FFF', fontSize: 17, fontWeight: '900' },
-  bundleTime: { color: '#64748B', fontSize: 12, marginTop: 2 },
-  priceTag: { alignItems: 'flex-end' },
-  bestSellerBadge: { backgroundColor: '#F59E0B', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, position: 'absolute', top: -35, right: 0 },
-  bestSellerText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
-  priceBtn: { paddingHorizontal: 18, paddingVertical: 10, borderRadius: 15 },
-  priceText: { fontWeight: '900', fontSize: 16 },
-  infoBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 10, marginBottom: 20 },
-  infoText: { color: '#94A3B8', fontSize: 12, fontWeight: '600' },
-  footer: { padding: 20, paddingBottom: 35, borderTopWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-  buyBtn: { backgroundColor: '#3B82F6', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 18, borderRadius: 22, gap: 12, elevation: 10, shadowColor: '#3B82F6', shadowOpacity: 0.3, shadowRadius: 10 },
-  buyBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900' }
+    mainContainer: { flex: 1, backgroundColor: '#020617' },
+    shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(100px)' },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15 },
+    backBtn: { backgroundColor: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 12, borderWidth: 1 },
+    headerTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', marginLeft: 15, letterSpacing: 2 },
+    stealthBalanceCard: { height: 130, borderRadius: 35, overflow: 'hidden', elevation: 20, marginBottom: 35 },
+    quadBorder: { ...StyleSheet.absoluteFillObject, borderLeftWidth: 4, borderRightWidth: 4, borderTopWidth: 1.2, borderBottomWidth: 1.2, borderRadius: 35, opacity: 0.8 },
+    glowTrail: { position: 'absolute', width: 100, height: '200%', top: '-50%', opacity: 0.15, transform: [{ rotate: '30deg' }] },
+    cardInternal: { flex: 1, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 22, zIndex: 10 },
+    rankBadge: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, alignSelf: 'flex-start', marginBottom: 10, borderWidth: 1 },
+    rankText: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+    balanceLabel: { color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '900', letterSpacing: 1.5 },
+    balanceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+    balanceAmount: { color: '#FFF', fontSize: 30, fontWeight: '900' },
+    sectionTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 3, marginBottom: 20, paddingLeft: 5 },
+    bundleItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18, borderRadius: 25, marginBottom: 18 }, 
+    bundleLeft: { flexDirection: 'row', alignItems: 'center' },
+    diamondIconBase: { width: 48, height: 48, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    bundleDiamonds: { color: '#FFF', fontSize: 17, fontWeight: '900' },
+    bundleTime: { color: '#64748b', fontSize: 10, marginTop: 2, fontWeight: '700' },
+    priceTagArea: { alignItems: 'flex-end', position: 'relative' },
+    popularBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, position: 'absolute', top: -30, right: 0, elevation: 8 },
+    popularText: { color: '#000', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+    priceActionBtn: { paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+    priceValue: { fontWeight: '900', fontSize: 14 },
+    encryptionInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 15 },
+    encryptionText: { color: '#475569', fontSize: 11, fontWeight: '800' },
+    footerArea: { padding: 20, paddingBottom: 35 },
+    buyBtn: { borderRadius: 30, overflow: 'hidden', elevation: 15, shadowOpacity: 0.4, shadowRadius: 10 },
+    buyBtnContent: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 20, gap: 10 },
+    buyBtnLabel: { color: '#000', fontSize: 15, fontWeight: '900', letterSpacing: 2 }
 });

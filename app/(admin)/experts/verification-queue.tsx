@@ -21,7 +21,7 @@ export default function VerificationQueue() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 🔥 OPTION B LOGIC: Pending applications mattum fetch pannum
+        // 🔥 SYSTEM LOGIC: Pending consultant onboarding requests mattum fetch pannum
         const q = query(
             collection(db, "users"), 
             where("isApplying", "==", true),
@@ -59,13 +59,13 @@ export default function VerificationQueue() {
             <TouchableOpacity 
                 activeOpacity={0.8}
                 style={styles.card}
-                // 🔥 MASS FIX: Path correction based on your folder structure
+                // 🔥 ROUTING FIX: Path correction based on your secure folder structure
                 onPress={() => router.push(`/(admin)/experts/verify-expert/${item.id}` as any)}
             >
                 <View style={styles.cardContent}>
                     <View style={styles.avatarContainer}>
                         <Image source={{ uri: photo }} style={styles.avatar} />
-                        {/* Orange pulse for Pending status */}
+                        {/* System pulse for Pending status */}
                         <View style={styles.activePulse} />
                     </View>
                     
@@ -121,7 +121,7 @@ export default function VerificationQueue() {
                                 <Feather name="shield-off" size={40} color="#1E293B" />
                             </View>
                             <Text style={styles.emptyTitle}>NO PENDING TASKS</Text>
-                            <Text style={styles.emptySub}>All expert applications have been processed.</Text>
+                            <Text style={styles.emptySub}>All consultant applications have been processed.</Text>
                         </View>
                     }
                 />

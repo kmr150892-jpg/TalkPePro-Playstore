@@ -17,21 +17,6 @@ const { width } = Dimensions.get('window');
 export default function AnalyticsDashboard() {
     const router = useRouter();
 
-    // Reusable Stat Card Component
-    const StatCard = ({ label, value, icon, color, onPress }: any) => (
-        <TouchableOpacity 
-            activeOpacity={0.8} 
-            onPress={onPress}
-            style={styles.statCard}
-        >
-            <View style={[styles.statIcon, { backgroundColor: `${color}15` }]}>
-                <MaterialCommunityIcons name={icon} size={20} color={color} />
-            </View>
-            <Text style={styles.statValue}>{value}</Text>
-            <Text style={styles.statLabel}>{label}</Text>
-        </TouchableOpacity>
-    );
-
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
@@ -45,7 +30,7 @@ export default function AnalyticsDashboard() {
                         <Feather name="chevron-left" size={24} color="#6366F1" />
                     </TouchableOpacity>
                     <View>
-                        <Text style={styles.welcomeText}>ANALYTICS HUB</Text>
+                        <Text style={styles.welcomeText}>SYSTEM OPERATIONS</Text>
                         <Text style={styles.adminName}>PLATFORM PULSE</Text>
                     </View>
                 </View>
@@ -53,7 +38,7 @@ export default function AnalyticsDashboard() {
                 {/* MAIN NAVIGATION TILES */}
                 <View style={styles.menuGrid}>
                     
-                    {/* 1. REVENUE ANALYTICS */}
+                    {/* 1. SYSTEM YIELD */}
                     <TouchableOpacity 
                         activeOpacity={0.7}
                         style={[styles.mainTile, { borderColor: '#10B98130' }]} 
@@ -61,11 +46,11 @@ export default function AnalyticsDashboard() {
                     >
                         <LinearGradient colors={['#10B98120', 'transparent']} style={styles.tileGrad} />
                         <MaterialCommunityIcons name="currency-inr" size={30} color="#10B981" />
-                        <Text style={styles.tileTitle}>REVENUE</Text>
-                        <Text style={styles.tileSub}>Income & Payout Stats</Text>
+                        <Text style={styles.tileTitle}>SYSTEM YIELD</Text>
+                        <Text style={styles.tileSub}>Platform Income & Distributions</Text>
                     </TouchableOpacity>
 
-                    {/* 2. CALL ANALYTICS */}
+                    {/* 2. SESSION LOGS */}
                     <TouchableOpacity 
                         activeOpacity={0.7}
                         style={[styles.mainTile, { borderColor: '#6366F130' }]} 
@@ -73,11 +58,11 @@ export default function AnalyticsDashboard() {
                     >
                         <LinearGradient colors={['#6366F120', 'transparent']} style={styles.tileGrad} />
                         <Feather name="phone-call" size={28} color="#6366F1" />
-                        <Text style={styles.tileTitle}>CALL LOGS</Text>
-                        <Text style={styles.tileSub}>Traffic & Duration</Text>
+                        <Text style={styles.tileTitle}>SESSION LOGS</Text>
+                        <Text style={styles.tileSub}>Operational Traffic & Metrics</Text>
                     </TouchableOpacity>
 
-                    {/* 3. EXPERT VERIFICATION - Updated Route Logic */}
+                    {/* 3. CONSULTANT VERIFICATION - Updated Route Logic */}
                     <TouchableOpacity 
                         activeOpacity={0.7}
                         style={[styles.mainTile, { borderColor: '#8B5CF630', width: '100%' }]} 
@@ -87,13 +72,13 @@ export default function AnalyticsDashboard() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
                             <MaterialCommunityIcons name="shield-check-outline" size={32} color="#8B5CF6" />
                             <View>
-                                <Text style={styles.tileTitle}>EXPERT QUEUE</Text>
-                                <Text style={styles.tileSub}>Manage Pending Verifications</Text>
+                                <Text style={styles.tileTitle}>CONSULTANT QUEUE</Text>
+                                <Text style={styles.tileSub}>Manage Identity Verifications</Text>
                             </View>
                         </View>
                     </TouchableOpacity>
 
-                    {/* 4. USER GROWTH */}
+                    {/* 4. CLIENT GROWTH */}
                     <TouchableOpacity 
                         activeOpacity={0.7}
                         style={[styles.mainTile, { borderColor: '#F59E0B30', width: '100%' }]} 
@@ -103,19 +88,11 @@ export default function AnalyticsDashboard() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
                             <Feather name="users" size={30} color="#F59E0B" />
                             <View>
-                                <Text style={styles.tileTitle}>USER GROWTH</Text>
-                                <Text style={styles.tileSub}>Registrations & Retention</Text>
+                                <Text style={styles.tileTitle}>CLIENT GROWTH</Text>
+                                <Text style={styles.tileSub}>Onboarding & Retention</Text>
                             </View>
                         </View>
                     </TouchableOpacity>
-                </View>
-
-                {/* QUICK OVERVIEW SECTION */}
-                <Text style={styles.sectionLabel}>LATEST METRICS</Text>
-                <View style={styles.statsRow}>
-                    <StatCard label="Live" value="12" icon="video-outline" color="#6366F1" />
-                    <StatCard label="Today" value="₹4.2k" icon="currency-inr" color="#10B981" />
-                    <StatCard label="Growth" value="+14%" icon="trending-up" color="#F59E0B" />
                 </View>
 
             </ScrollView>
@@ -134,11 +111,5 @@ const styles = StyleSheet.create({
     mainTile: { width: (width - 55) / 2, height: 140, backgroundColor: '#0F172A', borderRadius: 28, padding: 20, justifyContent: 'center', borderWidth: 1, borderColor: '#1E293B', overflow: 'hidden' },
     tileGrad: { ...StyleSheet.absoluteFillObject },
     tileTitle: { color: '#fff', fontSize: 15, fontWeight: '900', marginTop: 10, letterSpacing: 0.5 },
-    tileSub: { color: '#475569', fontSize: 10, fontWeight: '700', marginTop: 4 },
-    sectionLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginLeft: 25, marginTop: 35, marginBottom: 15 },
-    statsRow: { flexDirection: 'row', paddingHorizontal: 20, gap: 12 },
-    statCard: { flex: 1, backgroundColor: '#0F172A', padding: 15, borderRadius: 22, borderWidth: 1, borderColor: '#1E293B', alignItems: 'center' },
-    statIcon: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', marginBottom: 10 },
-    statValue: { color: '#fff', fontSize: 16, fontWeight: '900' },
-    statLabel: { color: '#475569', fontSize: 8, fontWeight: '800', marginTop: 2 }
+    tileSub: { color: '#475569', fontSize: 10, fontWeight: '700', marginTop: 4 }
 });

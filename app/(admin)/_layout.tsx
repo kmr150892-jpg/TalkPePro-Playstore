@@ -15,7 +15,7 @@ export default function AdminLayout() {
           headerTitleStyle: { 
             fontWeight: '900',
             fontSize: 18,
-            // letterSpacing property-ai safe-ah handle panna inga thookitom
+            // letterSpacing property handled safely for cross-platform rendering
           },
           headerShadowVisible: false,
           headerShown: false, 
@@ -32,7 +32,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="analytics/index" 
           options={{ 
-            title: 'SYSTEM PULSE',
+            title: 'OPERATIONAL METRICS',
             headerShown: true,
           }} 
         />
@@ -40,7 +40,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="finance/transactions" 
           options={{ 
-            title: 'MASTER LEDGER',
+            title: 'SYSTEM LEDGER',
             headerShown: true,
           }} 
         />
@@ -48,7 +48,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="finance/withdrawals" 
           options={{ 
-            title: 'PAYOUT REQUESTS',
+            title: 'DISBURSEMENT QUEUE',
             headerShown: true,
           }} 
         />
@@ -56,7 +56,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="experts/expert-list" 
           options={{ 
-            title: 'EXPERT HUB',
+            title: 'CONSULTANT HUB',
             headerShown: false, 
           }} 
         />
@@ -64,7 +64,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="experts/verification-queue" 
           options={{ 
-            title: 'PENDING QUEUE',
+            title: 'ONBOARDING QUEUE',
             headerShown: true,
           }} 
         />
@@ -72,7 +72,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="experts/verify-expert/[id]" 
           options={{ 
-            title: 'VERIFICATION',
+            title: 'CREDENTIAL AUDIT',
             headerShown: true,
             presentation: 'modal',
           }} 
@@ -81,7 +81,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="management/reports" 
           options={{ 
-            title: 'SYSTEM ALERTS',
+            title: 'COMPLIANCE ALERTS',
             headerShown: true,
           }} 
         />
@@ -89,7 +89,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="management/user-control" 
           options={{ 
-            title: 'USER SHIELD',
+            title: 'ACCESS CONTROL',
             headerShown: true,
           }} 
         />

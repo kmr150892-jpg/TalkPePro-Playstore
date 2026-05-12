@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "TalkPe",
+    "name": "TalkPe Pro",
     "slug": "TalkPe",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -8,37 +8,39 @@
     "scheme": "talkpe",
     "userInterfaceStyle": "automatic",
     "splash": {
-      "image": "./assets/images/splash-icon.png",
+      "image": "./assets/images/splash-ok.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#000000"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.talkpe.app"
     },
     "android": {
-  "package": "com.talkpe.app",
-  "googleServicesFile": "./google-services.json",
-  "permissions": [
-    "CAMERA",
-    "READ_EXTERNAL_STORAGE",
-    "WRITE_EXTERNAL_STORAGE",
-    "RECORD_AUDIO"
-  ],
-  "adaptiveIcon": {
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png",
-        "backgroundColor": "#E6F4FE"
+      "package": "com.talkpe.app",
+      "versionCode": 13,
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "CAMERA",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE",
+        "RECORD_AUDIO"
+      ],
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#020617"
       }
     },
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/icon.png"
     },
     "plugins": [
       "expo-router",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      "expo-web-browser",
+      "expo-video"
     ],
     "experiments": {
       "typedRoutes": true
@@ -48,6 +50,7 @@
       "eas": {
         "projectId": "8998b989-95f7-4559-a6e1-a43ca339d4d1"
       }
-    }
+    },
+    "owner": "kmr123"
   }
 }

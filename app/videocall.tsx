@@ -1,20 +1,24 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import * as KeepAwake from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenCapture from 'expo-screen-capture';
+import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import {
-    addDoc, collection,
+    addDoc,
+    arrayUnion,
+    collection,
     doc, getDoc,
     increment, onSnapshot, orderBy, query,
-    serverTimestamp, setDoc, updateDoc
+    serverTimestamp, setDoc, updateDoc, where
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
+    Alert,
     Animated,
+    AppState,
     Dimensions,
     Easing,
-    FlatList,
     Image,
     KeyboardAvoidingView,
     PanResponder,
@@ -23,9 +27,8 @@ import {
     StatusBar,
     StyleSheet,
     Text,
-    TextInput,
     TouchableOpacity,
-    View,
+    View
 } from 'react-native';
 import createAgoraRtcEngine, {
     ChannelProfileType,
@@ -36,47 +39,89 @@ import createAgoraRtcEngine, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
 
-// ✅ SVG Imports for Round Timer
-import Svg, { Circle } from 'react-native-svg';
-
-// ✅ GAME LOGIC IMPORT
 import GameOverlay from '../components/GameOverlay';
+import BottomControls from '../components/videocall/BottomControls';
+import CallSummary from '../components/videocall/CallSummary';
+import FloatingChat from '../components/videocall/FloatingChat';
+import GiftPanel from '../components/videocall/GiftPanel';
+import GiftRain from '../components/videocall/GiftRain';
+import RingingOverlay from '../components/videocall/RingingOverlay';
 import { checkWinner } from '../utils/gameLogic';
 
-const { width, height } = Dimensions.get('window');
+const { width } = Dimensions.get('window');
 const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80'; 
 
-const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const getExpertTierRate = (beans: number) => {
+    if (beans >= 100000000) return 8000;
+    if (beans >= 50000000) return 7000;
+    if (beans >= 30000000) return 5400;
+    if (beans >= 10000000) return 4800;
+    if (beans >= 5000000) return 4200;
+    if (beans >= 3000000) return 3600;
+    if (beans >= 1000000) return 3000;
+    if (beans >= 300000) return 2400; 
+    if (beans >= 100000) return 1800; 
+    if (beans >= 30000) return 1200;  
+    return 1000; 
+};
+
+const getQuickMatchTierRate = (beans: number) => {
+    if (beans >= 100000000) return 4400; 
+    if (beans >= 50000000) return 4000;  
+    if (beans >= 30000000) return 3600;  
+    if (beans >= 10000000) return 3200;  
+    if (beans >= 5000000) return 2800;   
+    if (beans >= 3000000) return 2400;   
+    if (beans >= 1000000) return 2000;   
+    if (beans >= 300000) return 1600;    
+    if (beans >= 100000) return 1200;    
+    if (beans >= 30000) return 1200;     
+    return 1000; 
+};
 
 export default function VideoCallScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const user = auth.currentUser;
     
-    // Call Params
-    const expertId = params.expertId as string;
-    const expertName = params.expertName as string;
+    const initialExpertId = (params.expertId as string) || (params.expertID as string) || (params.hostId as string); 
+    const [expertIdState, setExpertIdState] = useState<string | undefined>(initialExpertId);
+    
+    const isConfirmedExpert = user?.uid === expertIdState || user?.uid === initialExpertId || params.role === 'expert';
+    const role = isConfirmedExpert ? 'expert' : ((params.role as string)?.toLowerCase() || 'user'); 
+    
+    const safeExpertId = expertIdState || (role === 'expert' ? user?.uid : "UNKNOWN_EXPERT") as string;
+
+    const [expertName, setExpertName] = useState(params.expertName as string || "Consultant");
     const callId = params.callId as string;
-    const role = (params.role as string) || (auth.currentUser?.uid === expertId ? 'expert' : 'user'); 
+    const channelName = callId; 
     
-    // Agora Refs & State
+    const isQuickMatch = callId?.startsWith('match_');
+
     const engine = useRef<IRtcEngine | null>(null);
     const [joined, setJoined] = useState(false);
     const [remoteUid, setRemoteUid] = useState<number | null>(null);
     const [isMuted, setIsMuted] = useState(false);
-    const [isCallAccepted, setIsCallAccepted] = useState(role !== 'expert'); 
-    const [isRinging, setIsRinging] = useState(role === 'expert');
     
-    // 🔥 DOUBLE CALCULATION PROTECTION STATE
+    // 🔥 SATTI NEW STATE FOR BEAUTY FILTER
+    const [isBeautyEnabled, setIsBeautyEnabled] = useState(false);
+
+    const [isCallAccepted, setIsCallAccepted] = useState(role === 'user'); 
+    const [isRinging, setIsRinging] = useState(true); 
+    
     const [isFinishing, setIsFinishing] = useState(false);
     const databaseUpdated = useRef(false); 
+    const callInitRef = useRef(false); 
+    const isMounted = useRef(true);
 
-    // ⏲️ AUTO-CUT & TIMER BAR ANIMATION
     const ringTimerAnim = useRef(new Animated.Value(1)).current; 
+    
+    const [callerDisplayName, setCallerDisplayName] = useState(params.callerName as string || "Client User");
+    const [realCallerId, setRealCallerId] = useState<string | undefined>(params.callerId as string);
+    
+    const [callerProfilePic, setCallerProfilePic] = useState<string | null>((params.callerImage as string) || (params.callerPic as string) || null);
+    const [expertProfilePic, setExpertProfilePic] = useState<string | null>((params.expertImage as string) || (params.expertPic as string) || (params.hostImage as string) || null);
 
-    // ✅ Caller Name Handling
-    const [callerDisplayName, setCallerDisplayName] = useState(params.callerName as string || "TalkPe User");
-
-    // 💰 BILLING & TIMER STATES
     const [secondsElapsed, setSecondsElapsed] = useState(0);
     const [showLowBalanceWarning, setShowLowBalanceWarning] = useState(false);
     const [remainingSeconds, setRemainingSeconds] = useState<number | null>(null); 
@@ -84,28 +129,34 @@ export default function VideoCallScreen() {
     const [showSummary, setShowSummary] = useState(false);
     const [finalAmount, setFinalAmount] = useState(0);
     const [finalDuration, setFinalDuration] = useState(0);
-    const startTimeRef = useRef<number | null>(null);
-    const user = auth.currentUser;
-
-    // 🔥 LOCAL DIAMOND TRACKER STATE
-    const [localBalance, setLocalBalance] = useState<number>(0);
-    const diamondRatePerMin = 2000;
-    const ratePerSecond = diamondRatePerMin / 60;
-
-    // 🔥 RED PULSE ANIMATION STATE
-    const pulseAnim = useRef(new Animated.Value(0)).current;
     
-    // 💬 CHAT STATES
+    const localDurationRef = useRef<number>(0); 
+    
+    const diamondRateRef = useRef<number>(1200); 
+    const [localBalance, setLocalBalance] = useState<number>(0);
+
+    const pulseAnim = useRef(new Animated.Value(0)).current;
     const [messages, setMessages] = useState<any[]>([]);
     const [inputText, setInputText] = useState('');
     const [isChatVisible, setIsChatVisible] = useState(false);
-
-    // 🎮 SYNCED GAME STATES
+    const [isXNext, setIsXNext] = useState(true);
     const [isGameVisible, setIsGameVisible] = useState(false);
     const [board, setBoard] = useState(Array(9).fill(null));
-    const [isXNext, setIsXNext] = useState(true);
+    const [userData, setUserData] = useState<any>(null); 
 
-    // 🎥 FLOATING VIDEO DRAG LOGIC
+    const isFreeCall = params.isFree === "true" || params.isFreeTrial === "true" || params.isTrial === "true"; 
+    const [freeTimeLeft, setFreeTimeLeft] = useState(0); 
+    const [isFreeModeActive, setIsFreeModeActive] = useState(isFreeCall);
+    const initialTrialSecondsRef = useRef<number>(0);
+
+    const [isGiftPanelVisible, setIsGiftPanelVisible] = useState(false);
+    const [giftRainVisible, setGiftRainVisible] = useState(false);
+    const [activeGiftType, setActiveGiftType] = useState<'diamond' | 'fireworks' | 'confetti'>('diamond');
+    const [totalGiftsDiamonds, setTotalGiftsDiamonds] = useState(0);
+    const [totalGiftsBeans, setTotalGiftsBeans] = useState(0);
+
+    const [remoteDisconnected, setRemoteDisconnected] = useState(false);
+
     const pan = useRef(new Animated.ValueXY({ x: width - 120, y: 110 })).current;
     const panResponder = useRef(
         PanResponder.create({
@@ -119,9 +170,136 @@ export default function VideoCallScreen() {
         })
     ).current;
 
-    // 🔥 Pulse Animation logic for Red Alert (ONLY FOR USER)
     useEffect(() => {
-        if (role !== 'expert' && remainingSeconds !== null && remainingSeconds <= 15 && joined && remoteUid && !showSummary) {
+        isMounted.current = true;
+        if (!callId || !user) return;
+        
+        const rtdb = getDatabase();
+        const myPresenceRef = ref(rtdb, `presence_calls/${callId}/${role}`);
+        const otherRole = role === 'expert' ? 'user' : 'expert';
+        const otherPresenceRef = ref(rtdb, `presence_calls/${callId}/${otherRole}`);
+        const connectedRef = ref(rtdb, ".info/connected");
+        
+        const unsubConnected = onValue(connectedRef, (snap) => {
+            if (snap.val() === true) {
+                onDisconnect(myPresenceRef).set("ended").then(() => {
+                    set(myPresenceRef, "active");
+                });
+            }
+        });
+
+        const unsubOther = onValue(otherPresenceRef, async (snap) => {
+            if (snap.exists() && snap.val() === "ended") {
+                setRemoteDisconnected(true); 
+            }
+        });
+
+        return () => { 
+            isMounted.current = false;
+            unsubConnected();
+            unsubOther();
+            set(myPresenceRef, "ended"); 
+        };
+    }, [callId, role, user]);
+
+    useEffect(() => {
+        if (remoteDisconnected && !isFinishing) {
+            handleCallEnd(true, 'completed', true); 
+        }
+    }, [remoteDisconnected, isFinishing]);
+
+    useEffect(() => {
+        if (!callId) return;
+        const handleAppStateChange = async (nextAppState: string) => {
+            if (nextAppState === 'background' || nextAppState === 'inactive') {
+                if (!isFinishing) {
+                    handleCallEnd(true, 'completed');
+                }
+            }
+        };
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => { subscription.remove(); };
+    }, [callId, role, safeExpertId, isFinishing]);
+
+    useEffect(() => {
+        let unsubCallerPic: (() => void) | undefined;
+        let unsubExpertPic: (() => void) | undefined;
+
+        if (realCallerId) {
+            unsubCallerPic = onSnapshot(doc(db, "users", realCallerId), (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const pic = data.profilePic || data.photoURL || data.image || null;
+                    if (pic) setCallerProfilePic(pic);
+                    if (!params.callerName) {
+                         setCallerDisplayName(data.name || data.userName || data.displayName || "Client User");
+                    }
+                }
+            });
+        }
+
+        if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
+            unsubExpertPic = onSnapshot(doc(db, "users", safeExpertId), (snap) => {
+                if (snap.exists()) {
+                    const data = snap.data();
+                    const pic = data.profilePic || data.photoURL || data.image || null;
+                    if (pic) setExpertProfilePic(pic);
+                    if (!params.expertName) {
+                         setExpertName(data.name || data.userName || data.displayName || "Consultant");
+                    }
+                }
+            });
+        }
+
+        return () => {
+            if (unsubCallerPic) unsubCallerPic();
+            if (unsubExpertPic) unsubExpertPic();
+        };
+    }, [realCallerId, safeExpertId]);
+
+    useEffect(() => {
+        if (role === 'expert' && isCallAccepted && safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
+            updateDoc(doc(db, "users", safeExpertId), { isBusy: true }).catch(() => {});
+        }
+    }, [isCallAccepted, role, safeExpertId]);
+
+    useEffect(() => {
+        const fetchFreeTime = async () => {
+            if (user?.uid && role !== 'expert') {
+                try {
+                    const uSnap = await getDoc(doc(db, "users", user.uid));
+                    if (uSnap.exists()) {
+                        const uData = uSnap.data();
+                        setUserData(uData); 
+                        const minsRem = uData.freeMinsRemaining || 0;
+                        const secsRem = Math.floor(minsRem * 60);
+                        setFreeTimeLeft(secsRem);
+                        initialTrialSecondsRef.current = secsRem; 
+                        
+                        if (minsRem > 0) {
+                            setIsFreeModeActive(true); 
+                        } else {
+                            setIsFreeModeActive(false);
+                        }
+                    }
+                } catch (e) {}
+            }
+        };
+        fetchFreeTime();
+    }, [user, role]);
+
+    useEffect(() => {
+        const activateSecurity = async () => {
+            await ScreenCapture.preventScreenCaptureAsync();
+        };
+        activateSecurity();
+        return () => {
+            ScreenCapture.allowScreenCaptureAsync();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (remainingSeconds !== null && remainingSeconds <= 10 && joined && remoteUid && !showSummary) {
             Animated.loop(
                 Animated.sequence([
                     Animated.timing(pulseAnim, { toValue: 1, duration: 500, useNativeDriver: false, easing: Easing.inOut(Easing.ease) }),
@@ -132,45 +310,83 @@ export default function VideoCallScreen() {
             pulseAnim.stopAnimation();
             pulseAnim.setValue(0);
         }
-    }, [remainingSeconds, joined, remoteUid, role]);
+    }, [remainingSeconds, joined, remoteUid]);
 
-    // 🔥 AUTOMATIC DAILY RESET LOGIC
     useEffect(() => {
-        const checkDailyReset = async () => {
-            if (role === 'expert' && expertId) {
-                try {
-                    const expertSnap = await getDoc(doc(db, "users", expertId));
-                    if (expertSnap.exists()) {
-                        const expertData = expertSnap.data();
-                        const today = new Date().toISOString().split('T')[0];
-                        const lastResetDate = expertData.lastBonusDate || "";
+        if (role !== 'expert' || !user?.uid) return;
 
-                        if (today !== lastResetDate) {
-                            await updateDoc(doc(db, "users", expertId), {
-                                todayBeans: 0,
-                                todayMinutes: 0,
-                                milestone_100k: false,
-                                milestone_300k: false,
-                                milestone_500k: false,
-                                lastBonusDate: today
-                            });
-                        }
+        const busyQuery = query(
+            collection(db, "calls"),
+            where("expertId", "==", user.uid),
+            where("status", "==", "dialing")
+        );
+
+        const unsubBusy = onSnapshot(busyQuery, (snapshot) => {
+            snapshot.docChanges().forEach(async (change) => {
+                if (change.type === "added") {
+                    const newCallId = change.doc.id;
+                    if (newCallId !== callId) {
+                        try {
+                            await updateDoc(doc(db, "calls", newCallId), { status: 'rejected' });
+                        } catch (e) {}
                     }
-                } catch (e) {}
-            }
-        };
-        if (joined && remoteUid) checkDailyReset();
-    }, [joined, remoteUid, role, expertId]);
+                }
+            });
+        });
+
+        return () => unsubBusy();
+    }, [role, user?.uid, callId]);
 
     useEffect(() => {
         const enableKeepAwake = async () => {
             try {
-                await KeepAwake.activateKeepAwakeAsync('TalkPe_Call_Active');
-            } catch (e) {}
+                if (isMounted.current) {
+                    await KeepAwake.activateKeepAwakeAsync('TalkPe_Call_Active');
+                }
+            } catch (e) {
+                console.log("KeepAwake Error Ignored:", e);
+            }
         };
-        enableKeepAwake();
+        
+        setTimeout(() => enableKeepAwake(), 500);
 
         if (!callId) return;
+
+        const fetchExpertData = async () => {
+            let finalExpertId = safeExpertId;
+            let callDocRate = 0;
+            if (!expertIdState && callId) {
+                const callSnap = await getDoc(doc(db, "calls", callId));
+                if (callSnap.exists()) {
+                    finalExpertId = callSnap.data().expertId;
+                    callDocRate = callSnap.data().userPrice || callSnap.data().pricePerMin || callSnap.data().beansPerMin || 0;
+                    setExpertIdState(finalExpertId);
+                }
+            }
+            if (finalExpertId && finalExpertId !== 'UNKNOWN_EXPERT') {
+                try {
+                    const expertSnap = await getDoc(doc(db, "users", finalExpertId));
+                    if (expertSnap.exists()) {
+                        const eData = expertSnap.data();
+                        if (!params.expertName) setExpertName(eData.name || eData.userName || eData.displayName || "Consultant");
+                        const pic = eData.profilePic || eData.photoURL || null;
+                        if (pic && !expertProfilePic) setExpertProfilePic(pic); 
+                        
+                        const totalBeans = eData.totalBeansEarned || eData.totalBeans || 0;
+                        let finalUserPaymentRate = 0;
+
+                        if (isQuickMatch) {
+                            const qmBaseRate = getQuickMatchTierRate(totalBeans);
+                            finalUserPaymentRate = qmBaseRate * 2; 
+                        } else {
+                            finalUserPaymentRate = callDocRate || eData.userPrice || eData.pricePerMin || eData.beansPerMin || getExpertTierRate(totalBeans);
+                        }
+
+                        diamondRateRef.current = finalUserPaymentRate;
+                    }
+                } catch (error) {}
+            }
+        };
 
         const fetchCallerData = async () => {
             try {
@@ -179,42 +395,81 @@ export default function VideoCallScreen() {
                     const cData = callSnap.data();
                     const cUid = cData.callerId;
                     if (cUid) {
+                        setRealCallerId(cUid); 
                         const userSnap = await getDoc(doc(db, "users", cUid));
                         if (userSnap.exists()) {
                             const uData = userSnap.data();
-                            const realName = uData.userName || uData.name || uData.displayName || "TalkPe User";
-                            setCallerDisplayName(realName);
-                            await updateDoc(doc(db, "calls", callId), { callerName: realName, status: 'ringing' });
+                            const realName = uData.name || uData.userName || uData.displayName || "Client User";
+                            if (!params.callerName) setCallerDisplayName(realName);
+                            const pic = uData.profilePic || uData.photoURL || null;
+                            if (pic && !callerProfilePic) setCallerProfilePic(pic); 
+                            
+                            // 🔥 FIX 1: Instant Ringing Update to DB 🔥
+                            await updateDoc(doc(db, "calls", callId), { callerName: params.callerName || realName, status: 'ringing' });
                         }
                     }
                 }
             } catch (error) {}
         };
 
+        fetchExpertData(); 
+
+        ringTimerAnim.setValue(1);
+        Animated.timing(ringTimerAnim, {
+            toValue: 0,
+            duration: 12000, 
+            easing: Easing.linear,
+            useNativeDriver: false,
+        }).start(({ finished }) => {
+            if (finished && !isCallAccepted && !remoteUid) {
+                handleMissedCall(); 
+            }
+        });
+
         if (role === 'expert') {
             fetchCallerData();
-            ringTimerAnim.setValue(1);
-            Animated.timing(ringTimerAnim, {
-                toValue: 0,
-                duration: 10000, 
-                easing: Easing.linear,
-                useNativeDriver: false,
-            }).start(({ finished }) => {
-                if (finished && !isCallAccepted && !remoteUid) {
-                    onRejectCall(); 
-                }
-            });
-        }
+        } else {
+            const initializeUserCall = async () => {
+                if (callInitRef.current) return; 
+                callInitRef.current = true;
 
-        if (role !== 'expert') {
-            setDoc(doc(db, "calls", callId), {
-                callerId: user?.uid,
-                callerName: user?.displayName || "Anjali", 
-                expertId: expertId,
-                status: 'ringing',
-                createdAt: serverTimestamp()
-            }, { merge: true });
-            setTimeout(() => { if (!remoteUid && !isCallAccepted) handleCallEnd(false); }, 15000);
+                let currentExpertId = safeExpertId;
+                const callSnap = await getDoc(doc(db, "calls", callId));
+                
+                if (currentExpertId && callId) {
+                    try {
+                        const uSnap = await getDoc(doc(db, "users", user!.uid));
+                        const uData = uSnap.exists() ? uSnap.data() : {};
+                        const finalName = uData.name || user?.displayName || "Client User";
+                        const finalPic = uData.profilePic || user?.photoURL || null; 
+                        if (finalPic && !callerProfilePic) setCallerProfilePic(finalPic); 
+                        
+                        const dbMinsRem = uData.freeMinsRemaining || 0;
+                        const isDbTrial = dbMinsRem > 0;
+
+                        const eSnap = await getDoc(doc(db, "users", currentExpertId));
+                        const eData = eSnap.exists() ? eSnap.data() : {};
+                        const eFinalName = eData.name || eData.userName || "Consultant";
+                        const eFinalPic = eData.profilePic || eData.photoURL || null;
+                        
+                        // 🔥 FIX 1 (Part 2): Instant Ringing Set on Call Creation 🔥
+                        await setDoc(doc(db, "calls", callId), {
+                            callerId: user?.uid,
+                            callerName: params.callerName || finalName, 
+                            callerImage: finalPic, 
+                            expertId: currentExpertId,
+                            expertName: params.expertName || eFinalName, 
+                            expertImage: eFinalPic, 
+                            status: 'ringing', 
+                            createdAt: serverTimestamp(),
+                            isFreeTrial: isDbTrial 
+                        }, { merge: true });
+                    } catch (err) {
+                        console.error("User initialization error:", err);
+                    }
+                }
+            };
+            initializeUserCall(); 
         }
 
         const q = query(collection(db, "calls", callId, "messages"), orderBy("timestamp", "asc"));
@@ -230,16 +485,67 @@ export default function VideoCallScreen() {
         const unsubStatus = onSnapshot(doc(db, "calls", callId), (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
-                if (data.callerName) setCallerDisplayName(data.callerName);
-                if (data.status === 'accepted') {
+                
+                if (data.callerId && !realCallerId) setRealCallerId(data.callerId);
+                if (data.expertId && data.expertId !== expertIdState) setExpertIdState(data.expertId); 
+
+                if (data.callerName && !callerDisplayName) setCallerDisplayName(data.callerName);
+                if (data.expertName && !params.expertName) setExpertName(data.expertName);
+                if (data.expertImage && !expertProfilePic) setExpertProfilePic(data.expertImage);
+                if (data.callerImage && !callerProfilePic) setCallerProfilePic(data.callerImage);
+
+                if (!isQuickMatch && (data.userPrice || data.pricePerMin || data.beansPerMin)) {
+                    const price = data.userPrice || data.pricePerMin || data.beansPerMin;
+                    diamondRateRef.current = price;
+                }
+
+                if (data.lastGift && data.lastGift.timestamp > (Date.now() - 5000)) {
+                    setActiveGiftType(data.lastGift.type);
+                    setGiftRainVisible(true);
+                }
+
+                if (data.totalGiftsDiamonds !== undefined) {
+                    setTotalGiftsDiamonds(data.totalGiftsDiamonds);
+                    setTotalGiftsBeans(data.totalGiftsBeans || 0);
+                }
+
+                if (data.status === 'accepted' && !isCallAccepted) {
                     ringTimerAnim.stopAnimation();
                     setIsRinging(false);
                     setIsCallAccepted(true);
                 }
-                if (data.lowBalanceAlert !== undefined) setShowLowBalanceWarning(data.lowBalanceAlert);
+                
+                if (data.lowBalanceAlert !== undefined) {
+                    setShowLowBalanceWarning(data.lowBalanceAlert);
+                    if (data.remainingSeconds !== undefined) {
+                        setRemainingSeconds(data.remainingSeconds);
+                    }
+                }
 
-                if ((data.status === 'rejected' || data.status === 'ended' || data.status === 'cancelled') && !showSummary) {
-                    handleCallEnd(data.status === 'ended');
+                if (data.status === 'user_ended' && role === 'expert' && !isFinishing) {
+                    handleCallEnd(true, 'completed');
+                }
+
+                if (['rejected', 'ended', 'cancelled', 'completed', 'missed', 'blocked'].includes(data.status)) {
+                    if (!showSummary && !databaseUpdated.current) { 
+                        const finalDur = data.finalDuration || 0;
+                        setFinalDuration(finalDur);
+                        
+                        if (role === 'expert') {
+                            setFinalAmount(data.expertEarnings || 0);
+                        } else {
+                            setFinalAmount(data.totalDiamonds || 0);
+                        }
+                        
+                        databaseUpdated.current = true;
+                        setIsFinishing(true);
+                        
+                        // 🔥 FIX 2: Instant Video Feed Kill on external end command 🔥
+                        if (engine.current) { engine.current.leaveChannel(); engine.current.release(); engine.current = null; }
+                        
+                        setShowSummary(true);
+                        setTimeout(() => router.replace(role === 'expert' ? '/expert/dashboard' : '/(tabs)'), 5000);
+                    }
                 }
             }
         });
@@ -247,11 +553,10 @@ export default function VideoCallScreen() {
         return () => { 
             unsubStatus(); 
             unsubChat(); 
-            KeepAwake.deactivateKeepAwake('TalkPe_Call_Active').catch(() => {});
+            KeepAwake.deactivateKeepAwake('TalkPe_Active_Call').catch(() => {});
         };
-    }, [callId, remoteUid, showSummary, role]);
+    }, [callId, role]); 
 
-    // Game Sync
     useEffect(() => {
         if (!callId) return;
         const unsubGame = onSnapshot(doc(db, "calls", callId, "game", "state"), (snap) => {
@@ -265,9 +570,8 @@ export default function VideoCallScreen() {
         return () => unsubGame();
     }, [callId]);
 
-    // User Balance Monitor
     useEffect(() => {
-        const targetUserId = role === 'expert' ? params.callerId : user?.uid;
+        const targetUserId = role === 'expert' ? (realCallerId || params.callerId) : user?.uid;
         if (targetUserId && typeof targetUserId === 'string' && targetUserId.trim() !== "") {
             const unsubscribe = onSnapshot(doc(db, 'users', targetUserId), (docSnap) => {
                 if (docSnap.exists()) {
@@ -275,52 +579,78 @@ export default function VideoCallScreen() {
                     setCurrentBalance(bal);
                     if (localBalance === 0) setLocalBalance(bal);
                 }
-            }, (error) => {
-                console.log("Balance Listener Error:", error);
             });
             return () => unsubscribe();
         }
-    }, [user?.uid, role, params.callerId]);
+    }, [user?.uid, role, realCallerId, params.callerId]);
 
-    // 🔥 TRACKER & AUTO-CUT (Exact 1s Cut Logic)
     useEffect(() => {
         let interval: any; 
         if (joined && remoteUid && !showSummary) {
             interval = setInterval(() => {
-                setSecondsElapsed(prev => prev + 1);
+                localDurationRef.current += 1; 
+                const currentDuration = localDurationRef.current;
+                setSecondsElapsed(currentDuration);
+                
+                const exactRatePerSec = diamondRateRef.current / 60;
 
-                if (role !== 'expert') {
-                    setLocalBalance(prevBal => {
-                        const nextBal = prevBal - ratePerSecond;
-                        const totalRemainingSecs = Math.floor(nextBal / ratePerSecond);
-                        setRemainingSeconds(totalRemainingSecs);
+                if (isFreeModeActive && initialTrialSecondsRef.current > 0) {
+                    const nextTime = Math.max(0, initialTrialSecondsRef.current - currentDuration);
+                    setFreeTimeLeft(nextTime);
 
-                        if (nextBal <= 1000 && !showLowBalanceWarning) {
-                            updateDoc(doc(db, "calls", callId), { lowBalanceAlert: true }).catch(()=>{});
-                        }
+                    if (role !== 'expert') setRemainingSeconds(nextTime);
 
-                        // 🔥 SECURITY CUT: Stop 1 second before reaching 0 to prevent loss
-                        if (nextBal <= ratePerSecond) {
+                    if (nextTime <= 0) {
+                        setIsFreeModeActive(false); 
+                        if (localBalance < exactRatePerSec) {
                             clearInterval(interval);
-                            handleCallEnd(true);
-                            return 0;
+                            handleCallEnd(true, 'completed');
                         }
-                        return nextBal;
-                    });
-                } else {
-                    if (currentBalance !== null) {
-                        const currentRemoteSecs = Math.floor(currentBalance / ratePerSecond);
-                        setRemainingSeconds(currentRemoteSecs);
+                    }
+                    
+                    if (nextTime <= 10 && nextTime > 0) {
+                        if (!showLowBalanceWarning) setShowLowBalanceWarning(true);
+                        updateDoc(doc(db, "calls", callId), { lowBalanceAlert: true, remainingSeconds: nextTime }).catch(()=>{});
+                    }
+                } 
+                else {
+                    if (role !== 'expert') {
+                        setLocalBalance(prevBal => {
+                            const nextBal = prevBal - exactRatePerSec; 
+                            const currentRemSecs = Math.floor(nextBal / exactRatePerSec);
+                            setRemainingSeconds(currentRemSecs);
+                            
+                            if (currentRemSecs <= 10 && !showLowBalanceWarning) {
+                                setShowLowBalanceWarning(true);
+                                updateDoc(doc(db, "calls", callId), { lowBalanceAlert: true, remainingSeconds: currentRemSecs }).catch(()=>{});
+                            } else if (currentRemSecs <= 10) {
+                                updateDoc(doc(db, "calls", callId), { remainingSeconds: currentRemSecs }).catch(()=>{});
+                            }
+                            
+                            if (nextBal <= 0) {
+                                clearInterval(interval);
+                                handleCallEnd(true, 'completed');
+                                return 0; 
+                            }
+                            return nextBal;
+                        });
+                    } else if (currentBalance !== null) {
+                        const exactRatePerSec = diamondRateRef.current / 60;
+                        setRemainingSeconds(Math.floor(currentBalance / exactRatePerSec));
                         setLocalBalance(currentBalance);
                     }
                 }
             }, 1000);
         }
         return () => clearInterval(interval);
-    }, [joined, remoteUid, showSummary, role, currentBalance, showLowBalanceWarning]);
+    }, [joined, remoteUid, showSummary, role, currentBalance, isFreeModeActive]);
 
     useEffect(() => {
         const init = async () => {
+            setIsFinishing(false);
+            databaseUpdated.current = false; 
+            setSecondsElapsed(0); 
+
             if (Platform.OS === 'android') {
                 try {
                     await PermissionsAndroid.requestMultiple([
@@ -329,8 +659,15 @@ export default function VideoCallScreen() {
                     ]);
                 } catch (err) {}
             }
+
+            if (engine.current) {
+                await engine.current.leaveChannel();
+                await engine.current.release();
+                engine.current = null;
+            }
+
             if (isCallAccepted) {
-                setTimeout(() => setupVideoSDKEngine(), 500);
+                setTimeout(() => setupVideoSDKEngine(), 800); 
             }
         };
         init();
@@ -346,28 +683,140 @@ export default function VideoCallScreen() {
             if (engine.current) return;
             engine.current = createAgoraRtcEngine();
             const rtcEngine = engine.current;
-            rtcEngine.initialize({ appId: AGORA_APP_ID });
+            rtcEngine.initialize({ appId: AGORA_APP_ID, channelProfile: ChannelProfileType.ChannelProfileCommunication });
             rtcEngine.enableVideo();
-            rtcEngine.startPreview(); 
             rtcEngine.enableAudio();
+            rtcEngine.startPreview(); 
+                
             rtcEngine.registerEventHandler({
-                onJoinChannelSuccess: () => setJoined(true),
-                onUserJoined: (_, uid) => { 
-                    setRemoteUid(uid); 
-                    startTimeRef.current = Date.now(); 
+                onJoinChannelSuccess: async () => {
+                    setJoined(true);
+                    if (callId) await updateDoc(doc(db, "calls", callId), { status: 'connected', connectedAt: serverTimestamp() }).catch(()=>{});
                 },
-                onUserOffline: () => handleCallEnd(true),
+                onUserJoined: async (_, uid) => { 
+                    setRemoteUid(uid); 
+                    databaseUpdated.current = false;
+                    localDurationRef.current = 0; 
+                },
+                onUserOffline: () => handleCallEnd(true, 'completed', true), 
+                onError: (err) => console.log(err)
             });
-            rtcEngine.joinChannel('', callId || 'test_room', 0, {
+
+            rtcEngine.joinChannel('', channelName, 0, {
                 clientRoleType: ClientRoleType.ClientRoleBroadcaster,
-                channelProfile: ChannelProfileType.ChannelProfileCommunication,
+                autoSubscribeAudio: true, autoSubscribeVideo: true,
+                publishCameraTrack: true, publishMicrophoneTrack: true
             });
         } catch (e) {}
+    };
+
+    const toggleBeautyFilter = () => {
+        if (!engine.current) return;
+        const nextState = !isBeautyEnabled;
+        try {
+            engine.current.setBeautyEffectOptions(nextState, {
+                lighteningContrastLevel: 1, 
+                lighteningLevel: 0.7, 
+                smoothnessLevel: 0.7, 
+                rednessLevel: 0.1,
+            });
+            setIsBeautyEnabled(nextState);
+        } catch (error) {
+            console.log("Beauty engine error:", error);
+        }
+    };
+
+    const handleSendGift = async (amount: number, type: string) => {
+        if (!user) return;
+        const targetUserIdForLog = realCallerId || params.callerId || user?.uid || 'unknown';
+
+        try {
+            const userRef = doc(db, "users", user.uid);
+            const userSnap = await getDoc(userRef);
+
+            if (!userSnap.exists()) return;
+
+            const dbBalance = Number(userSnap.data().balance || 0);
+
+            const activeRate = diamondRateRef.current;
+            const accruedCallCost = isFreeModeActive ? 0 : Math.floor(localDurationRef.current * (activeRate / 60));
+            
+            const realAvailableBalance = dbBalance - accruedCallCost;
+
+            if (realAvailableBalance < amount) {
+                Alert.alert(
+                    "Insufficient Assets! 💎", 
+                    `Requires ${amount.toLocaleString()} assets. Available: ${realAvailableBalance.toLocaleString()} (accounting for session cost).`,
+                    [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Add Assets", onPress: () => router.push('/recharge' as any) }
+                    ]
+                );
+                return; 
+            }
+
+            setLocalBalance(prev => prev - amount);
+
+            const expertBeans = Math.floor(amount / 2);
+            const today = new Date().toISOString().split('T')[0];
+            
+            await updateDoc(userRef, { balance: increment(-amount) });
+            
+            const expertRef = doc(db, "users", safeExpertId); 
+            const expertSnap = await getDoc(expertRef);
+            
+            if (expertSnap.exists()) {
+                const eData = expertSnap.data();
+                const isNewDay = eData.lastBonusDate !== today;
+                
+                let currentTopVip = eData.topVipSupporter || { name: 'None', amount: 0, date: '' };
+                if (isNewDay || amount > currentTopVip.amount) {
+                     currentTopVip = { name: userData?.name || callerDisplayName, amount: amount, date: today };
+                }
+
+                const updatedTodayBeans = isNewDay ? expertBeans : (Number(eData.todayBeans) || 0) + expertBeans;
+                let achievedMilestone = "0 / 100K";
+                if (updatedTodayBeans >= 500000) achievedMilestone = "ELITE (500K)";
+                else if (updatedTodayBeans >= 300000) achievedMilestone = "PRO (300K)";
+                else if (updatedTodayBeans >= 100000) achievedMilestone = "STARTER (100K)";
+
+                await updateDoc(expertRef, {
+                    walletBalance: increment(expertBeans),
+                    beans: increment(expertBeans),
+                    totalBeansEarned: increment(expertBeans), 
+                    totalDiamondsReceived: increment(amount), 
+                    todayBeans: isNewDay ? expertBeans : increment(expertBeans),
+                    topVipSupporter: currentTopVip,
+                    currentDailyMilestone: achievedMilestone,
+                    lastBonusDate: today
+                });
+                
+                await addDoc(collection(db, "transactions"), {
+                    userId: targetUserIdForLog, expertId: safeExpertId, expertName, 
+                    diamonds: amount, beans: expertBeans,
+                    type: 'gift', status: 'completed', giftType: type,
+                    timestamp: serverTimestamp()
+                });
+            }
+            
+            await updateDoc(doc(db, "calls", callId), {
+                lastGift: { type, amount, timestamp: Date.now() },
+                totalGiftsDiamonds: increment(amount),
+                totalGiftsBeans: increment(expertBeans)
+            });
+        } catch (error) { console.error("Gift error:", error); }
     };
 
     const onAcceptCall = async () => {
         ringTimerAnim.stopAnimation(); 
         if (callId) await updateDoc(doc(db, "calls", callId), { status: 'accepted' });
+
+        if (role === 'expert' && safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
+            try {
+                await updateDoc(doc(db, "users", safeExpertId), { isBusy: true });
+            } catch (e) { console.log(e); }
+        }
+
         setIsRinging(false);
         setIsCallAccepted(true);
     };
@@ -376,180 +825,282 @@ export default function VideoCallScreen() {
         ringTimerAnim.stopAnimation(); 
         if (callId) await updateDoc(doc(db, "calls", callId), { status: 'rejected' });
         setIsRinging(false);
-        handleCallEnd(false);
+        handleCallEnd(false, 'rejected');
     };
 
-    const handleCallEnd = async (shouldDeduct = true) => {
-        if (isFinishing || showSummary) return;
-        setIsFinishing(true);
+    const handleMissedCall = async () => {
+        if (isCallAccepted || remoteUid || isFinishing) return;
+        if (callId) await updateDoc(doc(db, "calls", callId), { status: 'missed' });
+        handleCallEnd(false, 'missed');
+    };
 
-        if (engine.current) {
-            engine.current.leaveChannel();
-            engine.current.release();
-            engine.current = null;
+    const handleBlockUser = async () => {
+        let targetUserId = realCallerId || params.callerId as string;
+        if (!targetUserId && callId) {
+            const snap = await getDoc(doc(db, "calls", callId));
+            if (snap.exists()) targetUserId = snap.data().callerId;
         }
+        if (!targetUserId) return;
+        Alert.alert("Restrict Client", "Do you want to permanently restrict this client?", [
+            { text: "Cancel", style: "cancel" },
+            { text: "Confirm", style: "destructive", onPress: async () => {
+                try {
+                    await updateDoc(doc(db, "users", auth.currentUser!.uid), { blockedUsers: arrayUnion(targetUserId) });
+                    handleCallEnd(true, 'ended');
+                } catch (error) {}
+            }}
+        ]);
+    };
 
-        if (callId) {
-            await updateDoc(doc(db, "calls", callId), { status: 'ended' }).catch(()=>{});
-        }
+    // 🔥 FIX 2: Instant Video Feed Kill on Manual Disconnect 🔥
+    const handleCallEnd = async (shouldDeduct = true, finalStatus = 'completed', isRemoteKill = false) => {
+        if (isFinishing || showSummary || databaseUpdated.current) return;
 
-        let duration = 0;
-        let calculatedDiamonds = 0;
-        if (startTimeRef.current) {
-            // 🔥 PRECISE BILLING CALCULATION
-            const rawDuration = Math.floor((Date.now() - startTimeRef.current) / 1000);
-            duration = Math.max(0, rawDuration);
-            
-            // Capping logic for stability
-            const billingSeconds = (duration > 60 && duration <= 65) ? 60 : duration;
-            
-            const possibleDiamonds = Math.floor(billingSeconds * (2000 / 60)); 
-            calculatedDiamonds = (currentBalance !== null && possibleDiamonds > currentBalance) ? Math.floor(currentBalance) : possibleDiamonds;
-        }
+        setIsFinishing(true); 
         
-        // 🔥 STRICT 50% PAYOUT: Ensuring 2000 Diamonds = Exactly 1000 Beans
-        const amountToShow = role === 'expert' ? Math.floor(Math.floor(calculatedDiamonds) / 2) : calculatedDiamonds;
-        setFinalAmount(amountToShow);
-        setFinalDuration(duration);
-        setShowSummary(true);
+        // 🛑 INSTANT VIDEO KILL! No 4-second delay 🛑
+        if (engine.current) { 
+            engine.current.leaveChannel(); 
+            engine.current.release(); 
+            engine.current = null; 
+        }
 
-        if (shouldDeduct && duration > 5 && !databaseUpdated.current) {
-            databaseUpdated.current = true; 
-            
+        const duration = localDurationRef.current;
+
+        if (role === 'user' && !isRemoteKill && finalStatus === 'completed') {
+            try { await updateDoc(doc(db, "calls", callId), { status: "user_ended" }); } catch (e) {}
+            // 🔥 SATTI FIX: Release expert busy state immediately when user cuts the call
+            if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
+                try { updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
+            }
+            return; 
+        }
+
+        let isBiller = role === 'expert';
+
+        if (role === 'user' && isRemoteKill) {
+            await new Promise(resolve => setTimeout(resolve, 3000));
             try {
-                const callMins = Math.max(1, Math.floor(duration / 60));
-
-                if (role === 'expert') {
-                    // 🔥 Fixed Integer Payout Logic
-                    const expertEarnings = Math.floor(Math.floor(calculatedDiamonds) / 2);
-                    const expertSnap = await getDoc(doc(db, "users", expertId));
+                const snap = await getDoc(doc(db, "calls", callId));
+                if (snap.exists() && ['completed', 'ended'].includes(snap.data().status) && snap.data().finalDuration !== undefined) {
+                    setFinalDuration(snap.data().finalDuration);
+                    setFinalAmount(snap.data().totalDiamonds);
                     
-                    if (expertSnap.exists()) {
-                        const expertData = expertSnap.data();
-                        const currentTodayBeans = (expertData.todayBeans || 0) + expertEarnings;
-                        let bonusToCredit = 0;
-                        let milestoneUpdates = {};
+                    if (snap.data().totalGiftsDiamonds !== undefined) {
+                        setTotalGiftsDiamonds(snap.data().totalGiftsDiamonds);
+                        setTotalGiftsBeans(snap.data().totalGiftsBeans || 0);
+                    }
 
-                        if (currentTodayBeans >= 500000 && !expertData.milestone_500k) {
-                            bonusToCredit = 15000; milestoneUpdates = { milestone_500k: true };
-                        } else if (currentTodayBeans >= 300000 && !expertData.milestone_300k) {
-                            bonusToCredit = 10000; milestoneUpdates = { milestone_300k: true };
-                        } else if (currentTodayBeans >= 100000 && !expertData.milestone_100k) {
-                            bonusToCredit = 5000; milestoneUpdates = { milestone_100k: true };
+                    databaseUpdated.current = true;
+                    cleanupAndExit(finalStatus);
+                    return;
+                }
+            } catch(e) {}
+            isBiller = true; 
+        }
+
+        if (databaseUpdated.current) return; 
+        databaseUpdated.current = true;
+
+        // 🔥 SATTI FIX: GLOBAL BUSY STATE RELEASE 🔥
+        if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
+            try { await updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
+        }
+
+        if (shouldDeduct && duration > 5) {
+            try {
+                const checkCallSnap = await getDoc(doc(db, "calls", callId));
+                let dbCallerId = realCallerId || (params.callerId as string);
+                let dbCallerName = callerDisplayName || "Client User";
+
+                if (checkCallSnap.exists()) {
+                    const cData = checkCallSnap.data();
+                    
+                    if (cData.totalGiftsDiamonds !== undefined) {
+                        setTotalGiftsDiamonds(cData.totalGiftsDiamonds);
+                        setTotalGiftsBeans(cData.totalGiftsBeans || 0);
+                    }
+
+                    if (['completed', 'ended'].includes(cData.status) && cData.finalDuration !== undefined) {
+                         setFinalDuration(cData.finalDuration || duration);
+                         setFinalAmount(role === 'expert' ? cData.expertEarnings : cData.totalDiamonds);
+                         cleanupAndExit(finalStatus);
+                         return;
+                    }
+                    dbCallerId = cData.callerId || dbCallerId;
+                    dbCallerName = cData.callerName || dbCallerName;
+                }
+
+                if (isBiller) {
+                    const targetCallerId = (role === 'user' ? user?.uid : dbCallerId);
+                    const exactCallMins = duration / 60; 
+                    const today = new Date().toISOString().split('T')[0];
+                    const activeRate = diamondRateRef.current;
+
+                    let expertEarningsBeans = Math.floor((duration * (activeRate / 60)) / 2);
+                    let billableDiamonds = Math.floor(duration * (activeRate / 60));
+                    let uiFinalUserAmount = billableDiamonds;
+
+                    let usedFreeSeconds = 0;
+                    let freshFreeTimeLeftInSeconds = 0;
+                    let isActuallyTrial = false;
+
+                    if (targetCallerId) {
+                        const initialFreeMinsData = await getDoc(doc(db, "users", targetCallerId));
+                        if (initialFreeMinsData.exists()) {
+                            const currentFreeMins = initialFreeMinsData.data().freeMinsRemaining || 0;
+                            freshFreeTimeLeftInSeconds = currentFreeMins * 60;
+                            isActuallyTrial = freshFreeTimeLeftInSeconds > 0;
+
+                            if (isActuallyTrial) {
+                                usedFreeSeconds = Math.min(duration, freshFreeTimeLeftInSeconds);
+                                const excessSeconds = Math.max(0, duration - freshFreeTimeLeftInSeconds);
+                                billableDiamonds = Math.floor(excessSeconds * (activeRate / 60));
+                                uiFinalUserAmount = (duration <= freshFreeTimeLeftInSeconds) ? 0 : billableDiamonds;
+                            }
+
+                            const newFreeMinsBalance = Math.max(0, currentFreeMins - (usedFreeSeconds / 60));
+                            const currentActualBalance = initialFreeMinsData.data().balance || 0;
+                            const finalDeduction = (isActuallyTrial && duration <= freshFreeTimeLeftInSeconds) ? 0 : Math.min(billableDiamonds, currentActualBalance);
+
+                            await updateDoc(doc(db, "users", targetCallerId), { 
+                                balance: increment(-finalDeduction), 
+                                totalMinutesSpent: increment(exactCallMins),
+                                freeMinsRemaining: newFreeMinsBalance, 
+                                isWelcomeCallAvailable: newFreeMinsBalance > 0.05
+                            });
                         }
+                    }
 
-                        await updateDoc(doc(db, "users", expertId), { 
-                            walletBalance: increment(expertEarnings + bonusToCredit),
-                            beans: increment(expertEarnings + bonusToCredit),
-                            totalBeansEarned: increment(expertEarnings),
-                            todayBeans: increment(expertEarnings), 
-                            totalCalls: increment(1), 
-                            totalMinutes: increment(callMins), 
-                            todayMinutes: increment(callMins), 
-                            lastCallFrom: callerDisplayName || "User",
-                            topCallerName: callerDisplayName || "User",
-                            longestCallDuration: duration > (expertData.longestCallDuration || 0) ? duration : (expertData.longestCallDuration || 0),
-                            ...milestoneUpdates
-                        });
+                    const expertRef = doc(db, "users", safeExpertId); 
+                    const expertSnap = await getDoc(expertRef);
+                    if (expertSnap.exists()) {
+                        const eData = expertSnap.data();
+                        const isNewDay = eData.lastBonusDate !== today;
+                        let currentTopVip = eData.topVipSupporter || { name: 'None', amount: 0, date: '' };
+                        if (isNewDay || billableDiamonds > currentTopVip.amount) {
+                             currentTopVip = { name: dbCallerName, amount: billableDiamonds, date: today };
+                        }
+                        
+                        const updatedTodayBeans = isNewDay ? expertEarningsBeans : (Number(eData.todayBeans) || 0) + expertEarningsBeans;
+                        let achievedMilestone = "0 / 100K";
+                        if (updatedTodayBeans >= 500000) achievedMilestone = "ELITE (500K)";
+                        else if (updatedTodayBeans >= 300000) achievedMilestone = "PRO (300K)";
+                        else if (updatedTodayBeans >= 100000) achievedMilestone = "STARTER (100K)";
+                        const currentLongest = Number(eData.longestCallDuration) || 0;
+                        const newLongest = duration > currentLongest ? duration : currentLongest;
 
-                        await addDoc(collection(db, "transactions"), {
-                            userId: params.callerId || 'user', expertId: expertId, expertName: expertName || 'Expert',
-                            diamonds: Math.floor(calculatedDiamonds), beans: expertEarnings,
-                            duration: duration, type: 'video_call', status: 'completed', timestamp: serverTimestamp()
+                        await updateDoc(expertRef, { 
+                            walletBalance: increment(expertEarningsBeans), 
+                            beans: increment(expertEarningsBeans), 
+                            totalBeansEarned: increment(expertEarningsBeans),
+                            todayBeans: isNewDay ? expertEarningsBeans : increment(expertEarningsBeans),
+                            todayMinutes: isNewDay ? exactCallMins : increment(exactCallMins), 
+                            todayCalls: isNewDay ? 1 : increment(1),
+                            totalMinutes: increment(exactCallMins), 
+                            totalCalls: increment(1),
+                            topVipSupporter: currentTopVip,
+                            currentDailyMilestone: achievedMilestone, 
+                            lastCallFrom: dbCallerName, 
+                            lastBonusDate: today,
+                            longestCallDuration: newLongest 
                         });
                     }
-                } else {
-                    await updateDoc(doc(db, "users", user!.uid), { 
-                        balance: increment(-Math.floor(calculatedDiamonds)) 
+                    
+                    await updateDoc(doc(db, "calls", callId), { 
+                        status: 'completed', 
+                        finalDuration: duration, 
+                        totalDiamonds: uiFinalUserAmount, 
+                        expertEarnings: expertEarningsBeans, 
+                        endedAt: serverTimestamp() 
                     });
+                    
+                    await addDoc(collection(db, "transactions"), { 
+                        userId: targetCallerId || 'unknown', expertId: safeExpertId, diamonds: uiFinalUserAmount, beans: expertEarningsBeans, duration, type: 'video_call', status: 'completed', timestamp: serverTimestamp() 
+                    });
+
+                    setFinalDuration(duration);
+                    setFinalAmount(role === 'expert' ? expertEarningsBeans : uiFinalUserAmount); 
                 }
-            } catch (error) {
-                console.log("DB Update Error:", error);
-            }
+            } catch (error) { console.log("Billing Error:", error); }
+        } else {
+             if (isRemoteKill || role === 'expert') {
+                 updateDoc(doc(db, "calls", callId), { status: finalStatus, endedAt: serverTimestamp() }).catch(()=>{});
+             }
         }
 
-        setTimeout(() => {
+        cleanupAndExit(finalStatus);
+    };
+
+    const cleanupAndExit = (finalStatus: string) => {
+        // Redundant cleanup just in case
+        if (engine.current) { engine.current.leaveChannel(); engine.current.release(); engine.current = null; }
+
+        // 🔥 SATTI FIX: GUARANTEED RELEASE ON ANY EXIT 🔥
+        if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
+            try { updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
+        }
+
+        if (['missed', 'rejected', 'cancelled', 'blocked'].includes(finalStatus)) {
             router.replace(role === 'expert' ? '/expert/dashboard' : '/(tabs)');
-        }, 3500); 
+        } else {
+            setShowSummary(true);
+            const targetPath = (role !== 'expert' && isFreeModeActive && currentBalance! < 10 && remainingSeconds === 0) 
+                ? '/recharge' 
+                : (role === 'expert' ? '/expert/dashboard' : '/(tabs)');
+            setTimeout(() => router.replace(targetPath as any), 5000); 
+        }
     };
 
     const sendMessage = async () => {
         if (inputText.trim() === '' || !callId) return;
-        const text = inputText;
-        setInputText('');
-        try {
-            await addDoc(collection(db, "calls", callId, "messages"), {
-                text: text, senderId: user?.uid, senderRole: role, timestamp: serverTimestamp()
-            });
-        } catch (e) {}
+        const text = inputText; setInputText('');
+        const senderLabel = userData?.name || callerDisplayName;
+        await addDoc(collection(db, "calls", callId, "messages"), { 
+            text, 
+            senderId: user?.uid, 
+            senderName: senderLabel, 
+            senderRole: role, 
+            timestamp: serverTimestamp() 
+        });
     };
 
-    const winner = (board && typeof checkWinner === 'function') ? checkWinner(board) : null;
-
-    const handleSquareClick = async (index: number) => {
-        if (!board || board[index] || winner) return;
-        const isUserTurn = (role !== 'expert' && isXNext);
-        const isExpertTurn = (role === 'expert' && !isXNext);
-        if (!isUserTurn && !isExpertTurn) return; 
-        const newBoard = [...board];
-        newBoard[index] = isXNext ? 'X' : 'O';
-        try {
-            await setDoc(doc(db, "calls", callId, "game", "state"), {
-                board: newBoard, isXNext: !isXNext, isVisible: true, gameType: 'tictactoe'
-            }, { merge: true });
-        } catch (e) {}
-    };
-
-    const toggleGameVisibility = async () => {
-        try {
-            await setDoc(doc(db, "calls", callId, "game", "state"), { isVisible: !isGameVisible }, { merge: true });
-        } catch (e) {}
-    };
-
-    const resetGame = async () => {
-        try {
-            await setDoc(doc(db, "calls", callId, "game", "state"), {
-                board: Array(9).fill(null), isXNext: true, isVisible: true, gameType: 'tictactoe'
-            }, { merge: true });
-        } catch (e) {}
-    };
-
-    const formatTime = (totalSeconds: number) => {
-        const mins = Math.floor(totalSeconds / 60);
-        const secs = Math.floor(totalSeconds % 60);
+    const formatTime = (ts: number) => {
+        const mins = Math.floor(ts / 60); const secs = Math.floor(ts % 60);
         return `${mins < 10 ? '0' + mins : mins}:${secs < 10 ? '0' + secs : secs}`;
     };
 
-    const radius = 80;
-    const stroke = 6;
-    const circumference = radius * 2 * Math.PI;
+    const topHeaderProfilePic = role === 'expert' 
+        ? (callerProfilePic || `https://ui-avatars.com/api/?name=${callerDisplayName}&background=0F172A&color=00F2FE&bold=true`)
+        : (expertProfilePic || `https://ui-avatars.com/api/?name=${expertName}&background=0F172A&color=00F2FE&bold=true`);
 
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#000" />
-            
-            <Animated.View 
-                style={[styles.redAlertOverlay, { opacity: pulseAnim.interpolate({inputRange: [0, 1], outputRange: [0, 0.45]}) }]} 
-                pointerEvents="none" 
-            />
+            <Animated.View style={[styles.redAlertOverlay, { opacity: pulseAnim.interpolate({inputRange: [0, 1], outputRange: [0, 0.45]}) }]} pointerEvents="none" />
 
             <View style={StyleSheet.absoluteFill}>
-                {remoteUid ? (
-                    <RtcSurfaceView canvas={{ uid: remoteUid }} style={styles.fullVideo} />
-                ) : (
+                {remoteUid ? <RtcSurfaceView canvas={{ uid: remoteUid }} style={styles.fullVideo} /> : (
                     <View style={styles.waitingBox}>
                         <LinearGradient colors={['#020617', '#1E293B']} style={StyleSheet.absoluteFill} />
-                        <MaterialCommunityIcons name="video-wireless-outline" size={80} color="#3B82F6" />
-                        <Text style={styles.waitingText}>Connecting to Encrypted Stream...</Text>
+                        <MaterialCommunityIcons name="shield-check-outline" size={80} color="#3B82F6" />
+                        <Text style={styles.waitingText}>Establishing Secure Node...</Text>
                     </View>
                 )}
             </View>
 
-            <GameOverlay
-                isVisible={isGameVisible} gameType="tictactoe" board={board}
-                isXNext={isXNext} winner={winner} expertName={expertName}
-                onClose={toggleGameVisibility} onSquareClick={handleSquareClick} onReset={resetGame}
-            />
+            <GameOverlay isVisible={isGameVisible} gameType="tictactoe" board={board} isXNext={isXNext} winner={checkWinner(board)} expertName={expertName} onClose={async () => await setDoc(doc(db, "calls", callId, "game", "state"), { isVisible: false }, { merge: true })} onSquareClick={async (i) => { if (!board[i]) { const nb = [...board]; nb[i] = isXNext ? 'X' : 'O'; await setDoc(doc(db, "calls", callId, "game", "state"), { board: nb, isXNext: !isXNext, isVisible: true }, { merge: true }); }}} onReset={async () => await setDoc(doc(db, "calls", callId, "game", "state"), { board: Array(9).fill(null), isXNext: true, isVisible: true }, { merge: true })} />
+
+            <GiftRain visible={giftRainVisible} giftType={activeGiftType} onComplete={() => setGiftRainVisible(false)} />
+
+            {showLowBalanceWarning && remainingSeconds !== null && remainingSeconds <= 10 && !showSummary && (
+                <View style={styles.warningContainer} pointerEvents="none">
+                    <Animated.Text style={[styles.warningTimerText, { opacity: pulseAnim }]}>
+                        {remainingSeconds}s
+                    </Animated.Text>
+                    <Text style={styles.warningSubText}>Session ending soon</Text>
+                </View>
+            )}
 
             {joined && !showSummary && (
                 <Animated.View {...panResponder.panHandlers} style={[styles.localVideoFloating, { transform: pan.getTranslateTransform() }]}>
@@ -559,120 +1110,81 @@ export default function VideoCallScreen() {
 
             {isCallAccepted && !showSummary && (
                 <View style={styles.topHeader}>
-                    <View style={[styles.statusBadge, showLowBalanceWarning && {backgroundColor: '#EF4444'}]}>
-                        <View style={styles.liveDot} />
-                        <Text style={styles.liveText}>{formatTime(secondsElapsed)}</Text>
-                        
-                        {role !== 'expert' && remainingSeconds !== null && remainingSeconds <= 10 && (
-                            <View style={styles.balanceTag}>
-                                <MaterialCommunityIcons name="diamond-stone" size={14} color="#FFF" />
-                                <Text style={styles.balanceText}>{Math.floor(localBalance)}</Text>
+                    <View style={styles.headerContent}>
+                        <View style={styles.headerInfo}>
+                            <View style={styles.headerAvatarWrapper}>
+                                <Image source={{ uri: topHeaderProfilePic }} style={styles.headerAvatarPic} />
                             </View>
+                            <View style={{ marginLeft: 12 }}>
+                                <View style={styles.statusBadge}>
+                                    <View style={styles.liveDot} />
+                                    <Text style={styles.liveText}>{formatTime(secondsElapsed)}</Text>
+                                    {isFreeModeActive && <Text style={styles.freeBadgeText}> COMPLIMENTARY</Text>}
+                                </View>
+                                <Text style={styles.callerNameText}>{role === 'expert' ? (callerDisplayName || "Client") : expertName}</Text>
+                            </View>
+                        </View>
+                        
+                        {role === 'expert' && (
+                            <TouchableOpacity style={styles.topRightBlockBtn} onPress={handleBlockUser} activeOpacity={0.7}>
+                                <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
+                                <Text style={styles.blockBtnText}>RESTRICT</Text>
+                            </TouchableOpacity>
                         )}
                     </View>
-                    <Text style={styles.callerNameText}>{role === 'expert' ? callerDisplayName : expertName}</Text>
                 </View>
             )}
 
-            {isRinging && role === 'expert' && (
-                <View style={styles.ringingOverlay}>
-                    <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={styles.callerInfo}>
-                        <View style={styles.roundTimerContainer}>
-                            <Svg width={(radius + stroke) * 2} height={(radius + stroke) * 2} style={styles.absSvg}>
-                                <Circle cx={radius + stroke} cy={radius + stroke} r={radius} stroke="rgba(255,255,255,0.1)" strokeWidth={stroke} fill="transparent" />
-                                <AnimatedCircle
-                                    cx={radius + stroke} cy={radius + stroke} r={radius} stroke="#3B82F6" strokeWidth={stroke} fill="transparent"
-                                    strokeDasharray={circumference}
-                                    strokeDashoffset={ringTimerAnim.interpolate({ inputRange: [0, 1], outputRange: [circumference, 0] })}
-                                    strokeLinecap="round"
-                                />
-                            </Svg>
-                            <Image source={{ uri: `https://ui-avatars.com/api/?name=${callerDisplayName || "User"}&background=3B82F6&color=fff&size=256` }} style={styles.callerAvatar} />
-                        </View>
-                        <Text style={styles.incomingLabel}>Incoming Video Request</Text>
-                        <Text style={styles.callerName}>{callerDisplayName || "TalkPe User"}</Text>
-                    </View>
-                    <View style={styles.ringingActions}>
-                        <TouchableOpacity style={[styles.ringBtn, styles.rejectBtn]} onPress={onRejectCall}><Ionicons name="close" size={42} color="#FFF" /></TouchableOpacity>
-                        <TouchableOpacity style={[styles.ringBtn, styles.acceptBtn]} onPress={onAcceptCall}><Ionicons name="videocam" size={38} color="#FFF" /></TouchableOpacity>
-                    </View>
-                </View>
+            {isRinging && !isCallAccepted && (
+                <RingingOverlay 
+                    role={role} 
+                    callerDisplayName={callerDisplayName} 
+                    expertName={expertName} 
+                    ringTimerAnim={ringTimerAnim} 
+                    onAcceptCall={onAcceptCall} 
+                    onRejectCall={onRejectCall} 
+                    handleCallEnd={handleCallEnd}
+                    callerId={realCallerId}
+                    expertId={safeExpertId} 
+                />
             )}
 
             {showSummary && (
-                <View style={styles.summaryOverlay}>
-                    <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={styles.summaryCard}>
-                        <MaterialCommunityIcons name={role === 'expert' ? "seed" : "diamond-stone"} size={60} color={role === 'expert' ? "#fbbf24" : "#3B82F6"} />
-                        <Text style={styles.summaryTitle}>Call Session Summary</Text>
-                        <View style={styles.summaryRow}><Text style={styles.summaryLabel}>Total Duration</Text><Text style={styles.summaryValue}>{formatTime(finalDuration)}</Text></View>
-                        <View style={[styles.summaryRow, styles.totalRow]}>
-                            <Text style={styles.summaryLabel}>{role === 'expert' ? 'Net Beans Earned' : 'Diamonds Deducted'}</Text>
-                            <Text style={[styles.summaryValue, { color: role === 'expert' ? '#fbbf24' : '#3B82F6' }]}>{finalAmount}</Text>
-                        </View>
-                    </View>
-                </View>
+                <CallSummary role={role} finalDurationFormatted={formatTime(finalDuration)} finalAmount={finalAmount} giftAmount={role === 'expert' ? totalGiftsBeans : totalGiftsDiamonds} />
             )}
 
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} pointerEvents="box-none">
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0} 
+                style={{ flex: 1 }} 
+                pointerEvents="box-none"
+            >
                 <View style={styles.uiWrapper} pointerEvents="box-none">
                     {isChatVisible && (
-                        <View style={styles.floatingChatContainer}>
-                            <BlurView intensity={60} tint="dark" style={styles.chatBlurBox}>
-                                <View style={styles.chatHeaderMini}>
-                                    <Text style={styles.chatTitle}>Secure Live Chat</Text>
-                                    <TouchableOpacity onPress={() => setIsChatVisible(false)}><Ionicons name="close-circle" size={22} color="rgba(255,255,255,0.4)" /></TouchableOpacity>
-                                </View>
-                                <FlatList
-                                    data={messages}
-                                    keyExtractor={(item) => item.id}
-                                    style={styles.miniChatList}
-                                    showsVerticalScrollIndicator={false}
-                                    renderItem={({ item }) => (
-                                        <View style={[styles.miniBubble, item.senderId === user?.uid ? styles.myMiniChat : styles.theirMiniChat]}>
-                                            <Text style={styles.miniChatText}>{item.text}</Text>
-                                        </View>
-                                    )}
-                                />
-                                <View style={styles.miniInputRow}>
-                                    <TextInput style={styles.miniInput} placeholder="Type a message..." placeholderTextColor="#94A3B8" value={inputText} onChangeText={setInputText} />
-                                    <TouchableOpacity onPress={sendMessage} style={styles.miniSendBtn}><Ionicons name="send" size={20} color="#3B82F6" /></TouchableOpacity>
-                                </View>
-                            </BlurView>
-                        </View>
+                        <FloatingChat messages={messages} inputText={inputText} setInputText={setInputText} sendMessage={sendMessage} setIsChatVisible={setIsChatVisible} currentUserId={user?.uid} />
                     )}
-
+                    {isGiftPanelVisible && role === 'user' && (
+                        <GiftPanel userBalance={localBalance} onClose={() => setIsGiftPanelVisible(false)} onSendGift={handleSendGift} />
+                    )}
                     {isCallAccepted && !showSummary && (
-                        <View style={styles.bottomControlsArea}>
-                            {showLowBalanceWarning && (
-                                <View style={[styles.warningFloating, (remainingSeconds && remainingSeconds <= 30) ? {backgroundColor: '#B91C1C'} : {}]}>
-                                    <Ionicons name="alert-circle" size={18} color="#FFF" />
-                                    <Text style={styles.warningText}>
-                                        {remainingSeconds && remainingSeconds <= 30 
-                                            ? `Call will cut in ${remainingSeconds}s` 
-                                            : "User Low Balance! Call may end soon."}
-                                    </Text>
-                                </View>
-                            )}
-                            <View style={styles.buttonsRow}>
-                                <TouchableOpacity style={[styles.blurBtn, isGameVisible && styles.activeBtn]} onPress={toggleGameVisibility}>
-                                    <Ionicons name="game-controller" size={26} color="#FFF" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.blurBtn} onPress={() => { engine.current?.muteLocalAudioStream(!isMuted); setIsMuted(!isMuted); }}>
-                                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={26} color="#FFF" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.hangupBtn} onPress={() => handleCallEnd(true)}>
-                                    <Ionicons name="call" size={34} color="#FFF" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={[styles.blurBtn, isChatVisible && styles.activeBtn]} onPress={() => setIsChatVisible(!isChatVisible)}>
-                                    <Ionicons name="chatbubble-ellipses" size={26} color="#FFF" />
-                                </TouchableOpacity>
-                                <TouchableOpacity style={styles.blurBtn} onPress={() => engine.current?.switchCamera()}>
-                                    <Ionicons name="camera-reverse" size={26} color="#FFF" />
-                                </TouchableOpacity>
-                            </View>
-                        </View>
+                        <BottomControls 
+                            showLowBalanceWarning={showLowBalanceWarning} 
+                            isFreeModeActive={isFreeModeActive} 
+                            freeTimeLeft={freeTimeLeft} 
+                            remainingSeconds={remainingSeconds} 
+                            isGameVisible={isGameVisible} 
+                            isChatVisible={isChatVisible} 
+                            isMuted={isMuted} 
+                            isBeautyEnabled={isBeautyEnabled}
+                            toggleBeauty={toggleBeautyFilter} 
+                            toggleGameVisibility={async () => await setDoc(doc(db, "calls", callId, "game", "state"), { isVisible: !isGameVisible }, { merge: true })} 
+                            toggleChatVisibility={() => setIsChatVisible(!isChatVisible)} 
+                            toggleMute={() => { engine.current?.muteLocalAudioStream(!isMuted); setIsMuted(!isMuted); }} 
+                            switchCamera={() => engine.current?.switchCamera()} 
+                            handleCallEnd={handleCallEnd} 
+                            role={role}
+                            onOpenGiftPanel={role === 'user' ? () => setIsGiftPanelVisible(true) : () => {}} 
+                        />
                     )}
                 </View>
             </KeyboardAvoidingView>
@@ -687,50 +1199,21 @@ const styles = StyleSheet.create({
     uiWrapper: { flex: 1, justifyContent: 'flex-end' },
     localVideoFloating: { width: 110, height: 160, position: 'absolute', borderRadius: 20, borderWidth: 2, borderColor: '#3B82F6', zIndex: 100, backgroundColor: '#000', overflow: 'hidden', elevation: 10 },
     innerVideo: { flex: 1 },
-    topHeader: { position: 'absolute', top: 40, left: 20, zIndex: 20 },
-    statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25 },
+    topHeader: { position: 'absolute', top: 40, left: 20, right: 20, zIndex: 150 },
+    headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: width - 40 },
+    headerInfo: { flexDirection: 'row', alignItems: 'center' },
+    headerAvatarWrapper: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden', backgroundColor: '#000' },
+    headerAvatarPic: { width: '100%', height: '100%' },
+    statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25, alignSelf: 'flex-start' },
     liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 10 },
     liveText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
-    balanceTag: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(59, 130, 246, 0.4)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, marginLeft: 10 },
-    balanceText: { color: '#FFF', fontSize: 13, fontWeight: '700', marginLeft: 4 },
-    callerNameText: { color: '#FFF', fontSize: 24, fontWeight: '900', marginTop: 12, textShadowColor: '#000', textShadowRadius: 15 },
-    floatingChatContainer: { position: 'absolute', bottom: 130, left: 15, right: 15, maxHeight: 220, zIndex: 30 },
-    chatBlurBox: { borderRadius: 25, padding: 15, overflow: 'hidden', backgroundColor: 'rgba(15, 23, 42, 0.7)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
-    chatHeaderMini: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
-    chatTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 11, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1 },
-    miniChatList: { maxHeight: 100 }, 
-    miniBubble: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 15, marginBottom: 6, maxWidth: '85%' },
-    myMiniChat: { alignSelf: 'flex-end', backgroundColor: '#3B82F6' },
-    theirMiniChat: { alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.15)' },
-    miniChatText: { color: '#FFF', fontSize: 14, fontWeight: '500' },
-    miniInputRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 25, paddingHorizontal: 15, marginTop: 10, height: 45 },
-    miniInput: { flex: 1, color: '#FFF', fontSize: 14 },
-    miniSendBtn: { marginLeft: 10 },
-    bottomControlsArea: { width: '100%', alignItems: 'center', marginBottom: 40, zIndex: 40 },
-    buttonsRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', width: '100%' },
-    blurBtn: { width: 56, height: 56, borderRadius: 28, backgroundColor: 'rgba(255,255,255,0.12)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
-    activeBtn: { backgroundColor: '#3B82F6', borderColor: '#60A5FA' },
-    hangupBtn: { width: 75, height: 75, borderRadius: 37.5, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', transform: [{ rotate: '135deg' }], elevation: 8 },
-    ringingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 200, justifyContent: 'center', alignItems: 'center' },
-    roundTimerContainer: { width: 180, height: 180, justifyContent: 'center', alignItems: 'center', position: 'relative' },
-    absSvg: { position: 'absolute', transform: [{ rotate: '-90deg' }] },
-    callerInfo: { alignItems: 'center', marginBottom: 60 },
-    callerAvatar: { width: 140, height: 140, borderRadius: 70 },
-    incomingLabel: { color: '#3B82F6', fontSize: 14, fontWeight: '900', marginTop: 25, textTransform: 'uppercase', letterSpacing: 2 },
-    callerName: { color: '#FFF', fontSize: 32, fontWeight: '900', marginTop: 5 },
-    ringingActions: { flexDirection: 'row', gap: 60 },
-    ringBtn: { width: 85, height: 85, borderRadius: 42.5, justifyContent: 'center', alignItems: 'center', elevation: 10 },
-    acceptBtn: { backgroundColor: '#22C55E' },
-    rejectBtn: { backgroundColor: '#EF4444' },
-    summaryOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 1000, justifyContent: 'center', alignItems: 'center' },
-    summaryCard: { width: '88%', backgroundColor: 'rgba(15, 23, 42, 0.98)', borderRadius: 35, padding: 35, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.3)' },
-    summaryTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', marginVertical: 25 },
-    summaryRow: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 20 },
-    summaryLabel: { color: '#94A3B8', fontSize: 16, fontWeight: '600' },
-    summaryValue: { color: '#FFF', fontSize: 18, fontWeight: '800' },
-    totalRow: { borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)', paddingTop: 20 },
-    warningFloating: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#EF4444', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 15, marginBottom: 20, elevation: 5 },
-    warningText: { color: '#FFF', fontSize: 14, fontWeight: '900', marginLeft: 8 },
+    freeBadgeText: { color: '#FBBF24', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+    callerNameText: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4, textShadowColor: '#000', textShadowRadius: 15 },
+    topRightBlockBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 5, zIndex: 999 },
+    blockBtnText: { color: '#EF4444', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
     waitingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     waitingText: { color: '#FFF', fontSize: 14, fontWeight: '600', marginTop: 15, opacity: 0.8 },
+    warningContainer: { position: 'absolute', top: '40%', alignSelf: 'center', zIndex: 120, alignItems: 'center' },
+    warningTimerText: { color: '#FFF', fontSize: 100, fontWeight: '900', textShadowColor: '#EF4444', textShadowRadius: 30 },
+    warningSubText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', backgroundColor: 'rgba(239, 68, 68, 0.8)', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 15, overflow: 'hidden', marginTop: -10 }
 });

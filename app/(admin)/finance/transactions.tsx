@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import {
     ActivityIndicator,
     FlatList,
+    ScrollView,
     StatusBar,
     StyleSheet,
     Text,
@@ -18,44 +19,163 @@ export default function MasterLedger() {
     const [transactions, setTransactions] = useState<any[]>([]);
     const [filteredData, setFilteredData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
-    const [activeFilter, setActiveFilter] = useState('ALL');
+    
+    // 🔥 Default active filter changed from 'ALL' to 'TODAY_RECHARGE'
+    const [activeFilter, setActiveFilter] = useState('TODAY_RECHARGE');
 
     useEffect(() => {
-        // 🔥 LIVE MASTER LEDGER: Fetches every single movement
-        const q = query(collection(db, "transactions"), orderBy("timestamp", "desc"), limit(100));
+        setLoading(true);
+        // 🔥 LIVE MASTER LEDGER: Fetches Inflows, Disbursements AND Authorized Reward Grants 🔥
+        // Increased limit to 500 so recharges don't get hidden behind 100s of operational logs
+        const qTx = query(collection(db, "transactions"), orderBy("timestamp", "desc"), limit(500));
+        const qVouchers = query(collection(db, "reward_requests"), orderBy("requestDate", "desc"), limit(100));
+        const qPayouts = query(collection(db, "withdrawals"), orderBy("createdAt", "desc"), limit(100)); 
         
-        const unsub = onSnapshot(q, (snap) => {
-            const list = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setTransactions(list);
-            setFilteredData(list);
+        let txList: any[] = [];
+        let voucherList: any[] = [];
+        let payoutList: any[] = [];
+
+        const updateList = () => {
+            // Combine all collections and sort them by time sequence
+            const combined = [...txList, ...voucherList, ...payoutList].sort((a, b) => {
+                const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
+                const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+                return timeB - timeA;
+            });
+            setTransactions(combined);
             setLoading(false);
+        };
+
+        const unsubTx = onSnapshot(qTx, (snap) => {
+            // Remove potential duplicates by secure ID
+            const uniqueTxs = new Map();
+            snap.docs.forEach(doc => {
+                uniqueTxs.set(doc.id, { id: doc.id, ...doc.data() });
+            });
+            txList = Array.from(uniqueTxs.values());
+            updateList();
         });
 
-        return () => unsub();
+        // 🔥 SYSTEM LOGIC: Fetch Reward Grants that are marked as 'Delivered'
+        const unsubVouchers = onSnapshot(qVouchers, (snap) => {
+            const uniqueVouchers = new Map();
+            snap.docs.forEach(docSnapshot => {
+                const data = docSnapshot.data();
+                if (data.status === 'Delivered') {
+                    uniqueVouchers.set(docSnapshot.id, {
+                        id: docSnapshot.id,
+                        type: 'VOUCHER', // Unit mapping to VOUCHER
+                        userName: data.userName || data.userEmail || 'Client',
+                        amount: data.costDeducted || 0,
+                        voucherName: data.voucherName || 'Reward Grant',
+                        timestamp: data.processedDate || data.requestDate // Use operational time
+                    });
+                }
+            });
+            voucherList = Array.from(uniqueVouchers.values());
+            updateList();
+        });
+
+        // 🔥 SYSTEM LOGIC: STRICT DISBURSEMENT DUPLICATE REMOVAL & STATUS VERIFICATION 🔥
+        const unsubPayouts = onSnapshot(qPayouts, (snap) => {
+            const uniquePayouts = new Map();
+            snap.docs.forEach(docSnapshot => {
+                const data = docSnapshot.data();
+                const status = (data.status || '').toUpperCase();
+                
+                // Only take fully completed distributions
+                if (status === 'SUCCESS' || status === 'PAID') {
+                    uniquePayouts.set(docSnapshot.id, {
+                        id: docSnapshot.id,
+                        type: 'PAYOUT', // Unit mapping to PAYOUT
+                        userName: data.expertName || data.userName || 'Consultant',
+                        amount: data.amountRupee || data.amount || data.payoutAmount || 0,
+                        timestamp: data.paidAt || data.createdAt || data.processedAt
+                    });
+                }
+            });
+            payoutList = Array.from(uniquePayouts.values());
+            updateList();
+        });
+
+        return () => { unsubTx(); unsubVouchers(); unsubPayouts(); };
     }, []);
 
-    // 🎯 Filter Logic
+    // 🔥 AUTOMATIC FILTER ENGINE: Runs perfectly when data updates or tab changes
+    useEffect(() => {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const filtered = transactions.filter(t => {
+            const upType = t.type ? t.type.toUpperCase() : '';
+
+            // Handle "TODAY_" filters strictly for current operational cycle
+            if (activeFilter.startsWith('TODAY_')) {
+                const expectedType = activeFilter.replace('TODAY_', '');
+                if (upType !== expectedType) return false;
+                
+                // Ensure synchronization within current date
+                const timeData = t.processedAt || t.processedDate || t.paidAt || t.createdAt || t.timestamp || t.date;
+                if (!timeData) return false;
+                try {
+                    const txDate = timeData.toDate ? timeData.toDate() : new Date(timeData);
+                    return txDate >= today;
+                } catch(e) {
+                    return false;
+                }
+            } 
+            // Handle "TOTAL_" cumulative filters
+            else if (activeFilter.startsWith('TOTAL_')) {
+                const expectedType = activeFilter.replace('TOTAL_', '');
+                return upType === expectedType;
+            } 
+            // Handle Standard Filters
+            else {
+                return upType === activeFilter;
+            }
+        });
+
+        setFilteredData(filtered);
+    }, [transactions, activeFilter]);
+
     const applyFilter = (type: string) => {
         setActiveFilter(type);
-        if (type === 'ALL') {
-            setFilteredData(transactions);
-        } else {
-            const filtered = transactions.filter(t => t.type === type);
-            setFilteredData(filtered);
-        }
     };
 
     const getIcon = (type: string) => {
-        switch(type) {
+        const upType = type ? type.toUpperCase() : '';
+        switch(upType) {
             case 'RECHARGE': return { name: 'plus-circle', color: '#10B981' };
-            case 'CALL_DEDUCTION': return { name: 'phone-outgoing', color: '#EF4444' };
             case 'PAYOUT': return { name: 'external-link', color: '#6366F1' };
+            case 'VOUCHER': return { name: 'gift', color: '#F59E0B' }; 
             default: return { name: 'help-circle', color: '#475569' };
         }
     };
 
     const renderItem = ({ item }: { item: any }) => {
-        const iconData = getIcon(item.type);
+        const upType = item.type ? item.type.toUpperCase() : '';
+        const iconData = getIcon(upType);
+        
+        let displayName = item.userName || item.user_name || item.callerName || item.expertName || 'System';
+        
+        // Amount logic (handling exact values from operational ledger)
+        const displayAmount = Number(item.amountRupee || item.amount || item.rechargeAmount || item.payoutAmount || item.costDeducted || 0);
+
+        // Formatted Operational Timestamp
+        let dateString = "Timestamp Unknown";
+        const timeData = item.paidAt || item.processedDate || item.processedAt || item.createdAt || item.timestamp || item.date;
+        if (timeData) {
+            try {
+                dateString = timeData.toDate ? timeData.toDate().toLocaleString('en-IN') : new Date(timeData).toLocaleString('en-IN');
+            } catch(e) {}
+        }
+
+        const isPositive = (upType === 'RECHARGE');
+        const isVoucher = (upType === 'VOUCHER');
+        
+        // Dynamic Label Mapping
+        const typeLabel = isVoucher ? `REWARD: ${item.voucherName?.toUpperCase()}` : (upType ? upType.replace('_', ' ') : 'UNKNOWN');
+
         return (
             <View style={styles.logCard}>
                 <View style={[styles.iconBox, { backgroundColor: iconData.color + '15' }]}>
@@ -63,16 +183,16 @@ export default function MasterLedger() {
                 </View>
                 
                 <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={styles.txTitle}>{item.userName || item.expertName || 'System'}</Text>
-                    <Text style={styles.txId}>ID: {item.id.slice(0,12)}...</Text>
-                    <Text style={styles.txDate}>{item.timestamp?.toDate().toLocaleString()}</Text>
+                    <Text style={styles.txTitle}>{displayName}</Text>
+                    <Text style={styles.txId}>REF: {item.id.slice(0,12).toUpperCase()}...</Text>
+                    <Text style={styles.txDate}>{dateString}</Text>
                 </View>
 
                 <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.txAmount, { color: item.type === 'RECHARGE' ? '#10B981' : '#EF4444' }]}>
-                        {item.type === 'RECHARGE' ? '+' : '-'} ₹{item.amount}
+                    <Text style={[styles.txAmount, { color: isPositive ? '#10B981' : (isVoucher ? '#F59E0B' : '#EF4444') }]}>
+                        {isPositive ? '+ ₹' : (isVoucher ? '- ' : '- ₹')}{displayAmount.toLocaleString('en-IN')}{isVoucher ? ' 💎' : ''}
                     </Text>
-                    <Text style={styles.txTypeLabel}>{item.type.replace('_', ' ')}</Text>
+                    <Text style={styles.txTypeLabel}>{typeLabel}</Text>
                 </View>
             </View>
         );
@@ -86,22 +206,24 @@ export default function MasterLedger() {
                 <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
                     <Ionicons name="chevron-back" size={24} color="#6366F1" />
                 </TouchableOpacity>
-                <Text style={styles.headerTitle}>MASTER LEDGER</Text>
+                <Text style={styles.headerTitle}>SYSTEM MASTER LEDGER</Text>
             </View>
 
-            {/* ⚡ FILTER CHIPS */}
-            <View style={styles.filterRow}>
-                {['ALL', 'RECHARGE', 'CALL_DEDUCTION', 'PAYOUT'].map((f) => (
-                    <TouchableOpacity 
-                        key={f} 
-                        onPress={() => applyFilter(f)}
-                        style={[styles.chip, activeFilter === f && styles.activeChip]}
-                    >
-                        <Text style={[styles.chipText, activeFilter === f && styles.activeChipText]}>
-                            {f === 'CALL_DEDUCTION' ? 'CALLS' : f}
-                        </Text>
-                    </TouchableOpacity>
-                ))}
+            {/* ⚡ ANALYTICS FILTERS */}
+            <View>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
+                    {['TODAY_RECHARGE', 'TOTAL_RECHARGE', 'TODAY_PAYOUT', 'TOTAL_PAYOUT', 'TODAY_VOUCHER', 'TOTAL_VOUCHER'].map((f) => (
+                        <TouchableOpacity 
+                            key={f} 
+                            onPress={() => applyFilter(f)}
+                            style={[styles.chip, activeFilter === f && styles.activeChip]}
+                        >
+                            <Text style={[styles.chipText, activeFilter === f && styles.activeChipText]}>
+                                {f.replace('TODAY_', "TODAY'S ").replace('TOTAL_', 'TOTAL ')}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
             </View>
 
             {loading ? (
@@ -113,7 +235,7 @@ export default function MasterLedger() {
                     keyExtractor={item => item.id}
                     contentContainerStyle={{ padding: 20, paddingBottom: 100 }}
                     ListEmptyComponent={
-                        <Text style={styles.emptyText}>No transactions found.</Text>
+                        <Text style={styles.emptyText}>No operational logs found in current cycle.</Text>
                     }
                 />
             )}

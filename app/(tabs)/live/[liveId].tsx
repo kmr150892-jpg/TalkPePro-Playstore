@@ -1,0 +1,1163 @@
+import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { useIsFocused } from '@react-navigation/native';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { addDoc, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+// 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
+import React, { useEffect, useRef, useState } from 'react';
+// 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
+import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, RtcSurfaceView } from 'react-native-agora';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import GiftOverlay from '../../../components/GiftOverlay';
+import LiveGameSheet from '../../../components/LiveGameSheet';
+import TurboRacingSheet from '../../../components/TurboRacingSheet'; // ✅ RACING SHEET IMPORTED
+import { auth, db } from '../../../firebaseConfig';
+import { checkAndRequestCallPermissions } from '../../../utils/permissions';
+
+// --- NEW: Security Import ---
+
+const { width, height } = Dimensions.get('window');
+const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80';
+
+const FloatingHeart = ({ x }: { x: number }) => {
+    const animation = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.timing(animation, {
+            toValue: 1,
+            duration: 3000,
+            useNativeDriver: true,
+            easing: Easing.out(Easing.quad),
+        }).start();
+    }, []);
+
+    const translateY = animation.interpolate({
+        inputRange: [0, 1],
+        outputRange: [0, -height * 0.6],
+    });
+
+    const opacity = animation.interpolate({
+        inputRange: [0, 0.7, 1],
+        outputRange: [1, 1, 0],
+    });
+
+    const scale = animation.interpolate({
+        inputRange: [0, 0.2, 1],
+        outputRange: [0.5, 1.5, 1],
+    });
+
+    const rotate = animation.interpolate({
+        inputRange: [0, 0.25, 0.5, 0.75, 1],
+        outputRange: ['0deg', '15deg', '-15deg', '15deg', '0deg']
+    });
+
+    return (
+        <Animated.View
+            style={[
+                styles.floatingReaction,
+                { transform: [{ translateY }, { scale }, { rotate }], opacity, left: x }
+            ]}
+        >
+            <Ionicons name="heart" size={35} color="#EF4444" />
+        </Animated.View>
+    );
+};
+
+// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
+const calculateUserLevel = (totalSpent: number) => {
+  if (totalSpent >= 500000001) return { 
+      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000']
+  }; 
+  if (totalSpent >= 100000001) return { 
+      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000']
+  }; 
+  if (totalSpent >= 50000000) return { 
+      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000']
+  };
+  if (totalSpent >= 10000000) return { 
+      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000']
+  };
+  if (totalSpent >= 5000000) return { 
+      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000']
+  };
+  if (totalSpent >= 1000000) return { 
+      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000']
+  };
+  if (totalSpent >= 200001) return { 
+      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000']
+  };
+  return { 
+      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000']
+  };
+};
+
+export default function UserLiveViewScreen() {
+    const router = useRouter();
+    const navigation = useNavigation();
+    const params = useLocalSearchParams();
+    const engine = useRef<IRtcEngine | null>(null);
+    const liveId = params.liveId as string;
+    const isMounted = useRef(true);
+    const isFocused = useIsFocused(); 
+
+    const [joined, setJoined] = useState(false);
+    const [messages, setMessages] = useState<any[]>([]);
+    const [inputText, setInputText] = useState('');
+    const [viewerCount, setViewerCount] = useState(0);
+    const [hostUid, setHostUid] = useState<number>(0);
+    const [giftAlert, setGiftAlert] = useState<string | null>(null);
+    const [activeGrandGift, setActiveGrandGift] = useState<any>(null); 
+    const [hostName, setHostName] = useState<string>("Consultant");
+    const [hostImage, setHostImage] = useState<string>("");
+    const [callRate, setCallRate] = useState<number>(25); 
+    const [hostLevel, setHostLevel] = useState<string>("L1");
+    const [showGiftModal, setShowGiftModal] = useState(false);
+    const [hostFirestoreId, setHostFirestoreId] = useState<string | null>(null);
+    const [reactions, setReactions] = useState<{ id: number; x: number }[]>([]);
+    const [userData, setUserData] = useState<any>(null);
+    
+    const [isCalling, setIsCalling] = useState(false);
+    const [callRequestId, setCallRequestId] = useState<string | null>(null);
+    const [showBusyStatus, setShowBusyStatus] = useState(false);
+
+    // 🔥 SATTI FIX: NEW STATE FOR UI FREEZE DURING GRACEFUL EXIT 🔥
+    const [isLiveEndedWaiting, setIsLiveEndedWaiting] = useState(false);
+    const [exitMessage, setExitMessage] = useState("");
+
+    // 🔥 THE FIX: CALL TRANSITION SHIELDS 🔥
+    const isCallingRef = useRef(false);
+    const navigatingToCallRef = useRef(false);
+
+    useEffect(() => {
+        isCallingRef.current = isCalling;
+    }, [isCalling]);
+
+    // 🔥 GAME FEATURE STATE
+    const [gameVisible, setGameVisible] = useState(false);
+    const [racingVisible, setRacingVisible] = useState(false); 
+    const [myWalletBalance, setMyWalletBalance] = useState(0);
+
+    // 🔥 FIX: Use refs to avoid stale closure issues during Graceful Exit
+    const gameVisibleRef = useRef(false);
+    const racingVisibleRef = useRef(false);
+    
+    useEffect(() => { gameVisibleRef.current = gameVisible; }, [gameVisible]);
+    useEffect(() => { racingVisibleRef.current = racingVisible; }, [racingVisible]);
+
+    // 🔥 Trial Check Reference
+    const hasTrialMinsRef = useRef(false);
+    
+    // 🔥 NEW: Graceful Exit Reference
+    const isClosingRef = useRef(false);
+
+    // 🔥 SATTI FIX: THE ULTIMATE SMART MULTI-BET CHECKER & EXACT ROUND SYNC EXIT 🔥
+    const handleRoomEnded = async () => {
+        if (isClosingRef.current || isCallingRef.current || navigatingToCallRef.current) return;
+
+        isClosingRef.current = true;
+        leaveChannel(); // Safely disconnect Agora so video/audio stops immediately
+
+        try {
+            // Check ALL possible games they might be playing simultaneously
+            let activeGamesToWaitFor: { id: string, roundId: number }[] = [];
+
+            if (auth.currentUser) {
+                // 1. Check Turbo Racing
+                const racingSnap = await getDoc(doc(db, 'global_games', 'turbo_racing'));
+                if (racingSnap.exists()) {
+                    const racingRoundId = racingSnap.data().roundId;
+                    if (racingRoundId !== undefined) {
+                        const betSnap = await getDoc(doc(db, 'global_games', 'turbo_racing', 'rounds', racingRoundId.toString(), 'bets', auth.currentUser.uid));
+                        if (betSnap.exists()) {
+                            activeGamesToWaitFor.push({ id: 'turbo_racing', roundId: racingRoundId });
+                        }
+                    }
+                }
+
+                // 2. Check Fortune Clash
+                const diceSnap = await getDoc(doc(db, 'global_games', 'fortune_clash'));
+                if (diceSnap.exists()) {
+                    const clashRoundId = diceSnap.data().roundId;
+                    if (clashRoundId !== undefined) {
+                        const betSnap = await getDoc(doc(db, 'global_games', 'fortune_clash', 'rounds', clashRoundId.toString(), 'bets', auth.currentUser.uid));
+                        if (betSnap.exists()) {
+                            activeGamesToWaitFor.push({ id: 'fortune_clash', roundId: clashRoundId });
+                        }
+                    }
+                }
+            }
+
+            // 🔥 IF ANY BET IS ACTIVE -> SHOW RESULT & WAIT UNTIL EXACT NEXT ROUND 🔥
+            if (activeGamesToWaitFor.length > 0) {
+                setExitMessage("🚨 CONSULTANT LEFT THE BROADCAST 🚨\nWaiting for your final game result... ⏳");
+                
+                // Lock UI screen instantly so user cannot touch anything
+                setIsLiveEndedWaiting(true);
+                
+                // Open ONLY the games they are actually playing
+                if (activeGamesToWaitFor.some(g => g.id === 'turbo_racing')) setRacingVisible(true);
+                if (activeGamesToWaitFor.some(g => g.id === 'fortune_clash')) setGameVisible(true);
+
+                let completedGames = 0;
+                let hasTriggeredExit = false;
+                let unsubs: (() => void)[] = [];
+
+                const checkAllFinished = () => {
+                    if (completedGames === activeGamesToWaitFor.length && !hasTriggeredExit) {
+                        hasTriggeredExit = true;
+                        unsubs.forEach(unsub => unsub && unsub()); // Clear listeners
+                        setRacingVisible(false); // Force close game
+                        setGameVisible(false); // Force close game
+                        setTimeout(() => handleBackNavigation(), 500); 
+                    }
+                };
+
+                unsubs = activeGamesToWaitFor.map(game => {
+                    let isDelayStarted = false; // 🔥 Ensures we only trigger the wait ONCE per game
+                    return onSnapshot(doc(db, 'global_games', game.id), (snap) => {
+                        if (snap.exists() && !hasTriggeredExit && !isDelayStarted) {
+                            const latestRoundId = snap.data().roundId;
+                            const currentPhase = snap.data().phase; // 🔥 SATTI FIX: Fetch the current Phase!
+                            
+                            // 🚀 WE EXIT ONLY IF THE ROUND HAS MOVED FORWARD AND IT IS SHOWING THE RESULT!
+                            if (latestRoundId === game.roundId && currentPhase === 'RESULT') {
+                                isDelayStarted = true;
+                                // We wait exactly 4 seconds for the user to absorb their win/loss result before exiting
+                                setTimeout(() => {
+                                    if (!hasTriggeredExit) {
+                                        completedGames++;
+                                        checkAllFinished();
+                                    }
+                                }, 4000); 
+                            }
+                            else if (latestRoundId > game.roundId) {
+                                isDelayStarted = true;
+                                completedGames++;
+                                checkAllFinished();
+                            }
+                        }
+                    });
+                });
+
+                // Fail-safe if game engine gets stuck
+                setTimeout(() => {
+                    if (!hasTriggeredExit) {
+                        hasTriggeredExit = true;
+                        unsubs.forEach(unsub => unsub && unsub());
+                        setRacingVisible(false);
+                        setGameVisible(false);
+                        setTimeout(() => handleBackNavigation(), 500);
+                    }
+                }, 60000);
+                return;
+            }
+        } catch (e) { console.log(e); }
+
+        // 🔥 IF NO BET PLACED -> EXIT IMMEDIATELY 🔥
+        setExitMessage("Consultant left the broadcast. Exiting... 🚀");
+        setIsLiveEndedWaiting(true); // Lock the screen
+        
+        // 🔥 SATTI FIX: Force close modals and WAIT 500ms before showing Alert! 🔥
+        setRacingVisible(false); 
+        setGameVisible(false);
+        setShowGiftModal(false);
+        setActiveGrandGift(null);
+        setShowBusyStatus(false);
+        
+        setTimeout(() => {
+            Alert.alert(
+                "Broadcast Concluded", 
+                "Consultant has left the broadcast. See you next time! 🚀", 
+                [{ text: "OK", onPress: () => handleBackNavigation() }],
+                { cancelable: false }
+            );
+        }, 500);
+
+        // Auto-navigate back after 3.5 seconds just in case user ignores Alert
+        setTimeout(() => handleBackNavigation(), 3500); 
+    };
+
+    // 🔥 Check User Trial Status on Load
+    useEffect(() => {
+        const fetchTrialStatus = async () => {
+            if (auth.currentUser) {
+                try {
+                    const uSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
+                    if (uSnap.exists()) {
+                        const data = uSnap.data();
+                        if (data.freeMinsRemaining && data.freeMinsRemaining > 0) {
+                            hasTrialMinsRef.current = true;
+                        } else {
+                            hasTrialMinsRef.current = false;
+                        }
+                    }
+                } catch (e) {}
+            }
+        };
+        fetchTrialStatus();
+    }, []);
+
+    // 🌀 ANIMATION REFS
+    const giftAnim = useRef(new Animated.Value(0)).current;
+    const blinkAnim = useRef(new Animated.Value(0.4)).current;
+    const shakeAnim = useRef(new Animated.Value(0)).current;
+    const shimmerAnim = useRef(new Animated.Value(0)).current; 
+
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(blinkAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+                Animated.timing(blinkAnim, { toValue: 0.4, duration: 800, useNativeDriver: true })
+            ])
+        ).start();
+
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(shakeAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+                Animated.timing(shakeAnim, { toValue: -1, duration: 100, useNativeDriver: true }),
+                Animated.timing(shakeAnim, { toValue: 1, duration: 100, useNativeDriver: true }),
+                Animated.timing(shakeAnim, { toValue: 0, duration: 100, useNativeDriver: true }),
+                Animated.delay(1500)
+            ])
+        ).start();
+
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(shimmerAnim, { toValue: 0, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
+
+    const rotation = shakeAnim.interpolate({
+        inputRange: [-1, 1],
+        outputRange: ['-6deg', '6deg']
+    });
+
+    const checkBlockStatus = async () => {
+        if (!auth.currentUser || !liveId) return false;
+        try {
+            const liveRef = doc(db, "lives", liveId);
+            const liveSnap = await getDoc(liveRef);
+            if (!liveSnap.exists()) return false;
+            
+            const expertId = liveSnap.data().hostId;
+            const expertRef = doc(db, "users", expertId);
+            const expertSnap = await getDoc(expertRef);
+            
+            const blockedList = expertSnap.data()?.blockedUsers || [];
+            if (blockedList.includes(auth.currentUser.uid)) {
+                Alert.alert("Access Denied", "You are not allowed to join this session.");
+                handleBackNavigation();
+                return true;
+            }
+            return false;
+        } catch (e) {
+            console.log("Block check error:", e);
+            return false;
+        }
+    };
+
+    const joinLiveLogic = async () => {
+        if (!auth.currentUser || !liveId) return;
+
+        const isBlocked = await checkBlockStatus();
+        if (isBlocked) return;
+
+        const viewerRef = doc(db, "lives", liveId, "activeViewers", auth.currentUser.uid);
+        const userProfileRef = doc(db, "users", auth.currentUser.uid);
+
+        try {
+            const viewerSnap = await getDoc(viewerRef);
+            
+            if (!viewerSnap.exists()) {
+                const userSnap = await getDoc(userProfileRef);
+                let currentUserPic = auth.currentUser?.photoURL || ""; 
+                let currentUserName = auth.currentUser?.displayName || "Client";
+
+                if (userSnap.exists()) {
+                    const uData = userSnap.data();
+                    currentUserPic = uData.profilePic || currentUserPic;
+                    currentUserName = uData.name || currentUserName;
+                    setUserData(uData);
+                }
+
+                await setDoc(viewerRef, {
+                    uid: auth.currentUser?.uid,
+                    name: currentUserName,
+                    profilePic: currentUserPic, 
+                    joinedAt: serverTimestamp()
+                }, { merge: true });
+                
+                await updateDoc(doc(db, "lives", liveId), { viewerCount: increment(1) });
+
+                await addDoc(collection(db, "lives", liveId, "messages"), {
+                    text: `${currentUserName} joined the session 🙌`,
+                    senderName: "System",
+                    senderId: "system_msg",
+                    timestamp: serverTimestamp(),
+                    isSystem: true
+                });
+            } else {
+                const userSnap = await getDoc(userProfileRef);
+                if (userSnap.exists()) setUserData(userSnap.data());
+            }
+        } catch (e) { console.log("Join error:", e); }
+    };
+
+    const leaveLiveLogic = async () => {
+        if (!auth.currentUser || !liveId) return;
+        const viewerRef = doc(db, "lives", liveId, "activeViewers", auth.currentUser.uid);
+        const liveDocRef = doc(db, "lives", liveId);
+        const currentUserName = userData?.name || auth.currentUser?.displayName || "Client";
+
+        try {
+            const viewerSnap = await getDoc(viewerRef);
+            if (viewerSnap.exists()) {
+                await deleteDoc(viewerRef);
+                await addDoc(collection(db, "lives", liveId, "messages"), {
+                    text: `${currentUserName} left the session 👋`,
+                    senderName: "System",
+                    senderId: "system_msg",
+                    timestamp: serverTimestamp(),
+                    isSystem: true
+                });
+                const liveSnap = await getDoc(liveDocRef);
+                if (liveSnap.exists() && (liveSnap.data().viewerCount || 0) > 0) {
+                    await updateDoc(liveDocRef, { viewerCount: increment(-1) });
+                }
+            }
+        } catch (e) { console.log("Leave cleanup error:", e); }
+    };
+
+    useEffect(() => {
+        isMounted.current = true;
+        
+        if (liveId && auth.currentUser && isFocused) { 
+            // 🔥 SATTI FIX: RESET EXIT STATES ON RE-ENTRY 🔥
+            setIsLiveEndedWaiting(false);
+            setExitMessage("");
+            isClosingRef.current = false;
+
+            setupAgora();
+            const unsubListeners = listenToStreamData();
+            const unsubCallRequest = listenToCallRequest();
+            const unsubBlockRealtime = listenToBlockRealtime();
+            
+            // 🌍 GLOBAL SYNC: Wallet Balance Listener
+            const unsubWallet = onSnapshot(doc(db, "users", auth.currentUser.uid), (docSnap) => {
+                if (docSnap.exists() && isMounted.current) {
+                    const freshData = docSnap.data();
+                    setUserData(freshData); // Update complete user data for calls
+                    setMyWalletBalance(freshData.balance || 0); 
+                }
+            });
+            
+            joinLiveLogic();
+
+            return () => {
+                isMounted.current = false;
+                leaveLiveLogic(); 
+                unsubListeners(); 
+                unsubCallRequest();
+                unsubBlockRealtime();
+                unsubWallet();
+                leaveChannel();
+            };
+        }
+    }, [liveId, isFocused]);
+
+    const listenToBlockRealtime = () => {
+        if (!auth.currentUser || !liveId) return () => {};
+        
+        let unsubExpert: (() => void) | null = null;
+
+        const unsubLive = onSnapshot(doc(db, "lives", liveId), (liveSnap) => {
+            if (liveSnap.exists() && isMounted.current) {
+                const expertId = liveSnap.data().hostId;
+                
+                if (unsubExpert) unsubExpert();
+
+                unsubExpert = onSnapshot(doc(db, "users", expertId), (expertSnap) => {
+                    const blockedList = expertSnap.data()?.blockedUsers || [];
+                    
+                    if (blockedList.includes(auth.currentUser?.uid)) {
+                        if (unsubExpert) unsubExpert();
+                        unsubLive();
+
+                        Alert.alert(
+                            "Blocked", 
+                            "You are not allowed to view this session.",
+                            [{ text: "OK", onPress: () => handleBackNavigation() }],
+                            { cancelable: false }
+                        );
+                    }
+                });
+            }
+        });
+
+        return () => {
+            unsubLive();
+            if (unsubExpert) unsubExpert();
+        };
+    };
+
+    // 🔥 UPDATED AGORA SETUP
+    const setupAgora = async () => {
+        try {
+            if (engine.current) return; 
+
+            engine.current = createAgoraRtcEngine();
+            const rtcEngine = engine.current;
+            rtcEngine.initialize({ appId: AGORA_APP_ID });
+            rtcEngine.enableVideo();
+            
+            rtcEngine.registerEventHandler({
+                onJoinChannelSuccess: () => { 
+                    if (isMounted.current) setJoined(true); 
+                },
+                onUserJoined: (connection, uid) => { 
+                    if (isMounted.current) setHostUid(uid); 
+                },
+                onUserOffline: () => { 
+                    if (isMounted.current && !isCallingRef.current && !navigatingToCallRef.current) {
+                        handleRoomEnded(); 
+                    }
+                },
+            });
+
+            rtcEngine.joinChannel('', liveId, 0, {
+                clientRoleType: ClientRoleType.ClientRoleAudience,
+                channelProfile: ChannelProfileType.ChannelProfileLiveBroadcasting,
+            });
+        } catch (e) { 
+            console.error("Agora Setup error =>", e); 
+        }
+    };
+
+    // 🔥 UPDATED STREAM LISTENER
+    const listenToStreamData = () => {
+        const q = query(collection(db, "lives", liveId, "messages"), orderBy("timestamp", "desc"));
+        const unsubChat = onSnapshot(q, (snap) => setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        
+        const unsubDoc = onSnapshot(doc(db, "lives", liveId), (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.status === 'ended') {
+                    if (!isCallingRef.current && !navigatingToCallRef.current) {
+                        handleRoomEnded();
+                    }
+                    return;
+                }
+                setViewerCount(data.viewerCount || 0);
+                setHostName(data.hostName || data.displayName || "Consultant"); 
+                setHostImage(data.hostImage || data.profilePic || "");
+                setHostLevel(data.levelTitle || data.currentLevel || "L0"); 
+                setCallRate(data.pricePerMin || 0);
+                setHostFirestoreId(data.hostId || null);
+            }
+        });
+
+        const unsubGifts = onSnapshot(collection(db, "lives", liveId, "gifts"), (snap) => {
+            snap.docChanges().forEach((change) => {
+                if (change.type === "added") {
+                    const data = change.doc.data();
+                    if (data.amount >= 1000) {
+                        setActiveGrandGift(data);
+                    }
+                }
+            });
+        });
+
+        return () => { unsubChat(); unsubDoc(); unsubGifts(); };
+    };
+
+    // 🔥 UPDATED CALL LISTENER WITH EXPERT NAME FLASH FIX 🔥
+    const listenToCallRequest = () => {
+        if (!auth.currentUser) return () => {};
+
+        const q = query(
+            collection(db, "calls"),
+            where("userId", "==", auth.currentUser.uid),
+            where("status", "in", ["accepted", "rejected"]),
+            orderBy("createdAt", "desc")
+        );
+
+        const unsub = onSnapshot(q, async (snap) => {
+            if (snap.metadata.hasPendingWrites) return; 
+
+            for (const change of snap.docs) {
+                const callData = change.data();
+                
+                const now = new Date().getTime();
+                const callTime = callData.createdAt?.toMillis() || 0;
+                const isRecent = (now - callTime) < 30000; 
+
+                if (callData.status === "accepted") {
+                    navigatingToCallRef.current = true;
+                    
+                    unsub(); 
+                    setIsCalling(false);
+                    isCallingRef.current = false;
+                    
+                    leaveChannel(); 
+                    leaveLiveLogic();
+
+                    // 🔥 SATTI FIX: Passing exact Host Name and Image to prevent the "Expert" flash bug! 🔥
+                    router.push({
+                        pathname: "/videocall" as any,
+                        params: { 
+                            callId: change.id, 
+                            role: 'user',
+                            expertName: callData.expertName || hostName || "Consultant", 
+                            expertImage: callData.expertImage || hostImage || "",
+                            isFreeTrial: hasTrialMinsRef.current ? "true" : "false" 
+                        }
+                    });
+                } else if (callData.status === "rejected" && isRecent) {
+                    setIsCalling(false);
+                    isCallingRef.current = false;
+                    
+                    if (hostFirestoreId) {
+                        const expertRef = doc(db, "users", hostFirestoreId);
+                        const expertSnap = await getDoc(expertRef);
+                        
+                        if (expertSnap.exists() && expertSnap.data().isBusy === true) {
+                            setShowBusyStatus(true);
+                            
+                            await addDoc(collection(db, "lives", liveId, "messages"), {
+                                text: `${hostName} is currently on another call. Please try later.`,
+                                senderName: "System",
+                                senderId: "system_msg",
+                                timestamp: serverTimestamp(),
+                                isSystem: true
+                            });
+
+                            setTimeout(() => setShowBusyStatus(false), 4000);
+                        }
+                    }
+                }
+            }
+        });
+
+        return unsub;
+    };
+
+    // 🔥 SATTI FIX: ROBUST CALL INITIATOR WITH PERMISSION CHECK 🔥
+    const handleCallButtonPress = async () => {
+        if (!hostFirestoreId || !auth.currentUser) return;
+        if (isCalling) return;
+
+        // 👇👇 Satti's Permission Check Added Here 👇👇
+        const hasPermission = await checkAndRequestCallPermissions();
+        if (!hasPermission) {
+            return; // If permission denied, do not proceed with call request
+        }
+        // 👆👆 -------------------------------------- 👆👆
+
+        try {
+            setIsCalling(true);
+            isCallingRef.current = true; 
+
+            // Force Fetch latest user profile to ensure picture/name is 100% there
+            let verifiedUserName = auth.currentUser.displayName || "Client";
+            let verifiedUserPic = auth.currentUser.photoURL || "";
+            
+            const userProfileRef = doc(db, "users", auth.currentUser.uid);
+            const userSnap = await getDoc(userProfileRef);
+            
+            if (userSnap.exists()) {
+                const freshData = userSnap.data();
+                verifiedUserName = freshData.name || verifiedUserName;
+                verifiedUserPic = freshData.profilePic || verifiedUserPic;
+            }
+
+            const callRef = await addDoc(collection(db, "calls"), {
+                userId: auth.currentUser.uid,
+                userName: verifiedUserName,
+                userImage: verifiedUserPic,
+                expertId: hostFirestoreId,
+                expertName: hostName, 
+                expertImage: hostImage, 
+                status: "pending",
+                createdAt: serverTimestamp(),
+                pricePerMin: callRate,
+                type: "video"
+            });
+            setCallRequestId(callRef.id);
+        } catch (error) {
+            setIsCalling(false);
+            isCallingRef.current = false; 
+            Alert.alert("Error", "Could not initiate call request.");
+        }
+    };
+
+    const triggerGiftAnim = () => {
+        Animated.sequence([
+            Animated.timing(giftAnim, { toValue: 1, duration: 600, useNativeDriver: true, easing: Easing.back(1.5) }),
+            Animated.delay(2500),
+            Animated.timing(giftAnim, { toValue: 0, duration: 400, useNativeDriver: true })
+        ]).start();
+    };
+
+    const sendGift = async (name: string, price: number) => {
+        if (!auth.currentUser) return;
+
+        try {
+            const userRef = doc(db, "users", auth.currentUser.uid);
+            const userSnap = await getDoc(userRef);
+
+            if (userSnap.exists()) {
+                const uData = userSnap.data();
+                const currentBalance = uData.balance || 0; 
+
+                if (currentBalance < price) {
+                    Alert.alert("Insufficient Balance", "Please recharge your wallet to send this reward.");
+                    return;
+                }
+
+                await updateDoc(userRef, { 
+                    balance: increment(-price) 
+                });
+
+                await addDoc(collection(db, "lives", liveId, "gifts"), {
+                    giftName: name, 
+                    amount: price, 
+                    senderName: uData.name || "Premium Client", 
+                    senderId: auth.currentUser?.uid,
+                    timestamp: serverTimestamp()
+                });
+
+                // 🔥 SATTI FIX: ROYAL VIP GIFT MESSAGE TO CHAT 🔥
+                await addDoc(collection(db, "lives", liveId, "messages"), {
+                    uid: "system_gift",
+                    name: "System",
+                    text: `🎁 ${uData.name || "Premium Client"} sent a ${name}!`,
+                    timestamp: serverTimestamp(),
+                    isGift: true 
+                }).catch(e => console.log(e));
+
+                setGiftAlert(`You sent ${name}! 💎`);
+                setShowGiftModal(false);
+                triggerGiftAnim();
+                setTimeout(() => setGiftAlert(null), 3000);
+            }
+        } catch (error) {
+            console.error("Gift error:", error);
+            Alert.alert("Error", "Failed to send reward. Please try again.");
+        }
+    };
+
+    const sendMessage = async () => {
+        if (inputText.trim() === '' || !liveId) return;
+        const text = inputText; setInputText('');
+        const expertRef = doc(db, "users", hostFirestoreId || "");
+        const expertSnap = await getDoc(expertRef);
+        const blockedList = expertSnap.data()?.blockedUsers || [];
+        
+        if (blockedList.includes(auth.currentUser?.uid)) {
+            Alert.alert("Error", "Blocked users cannot send messages.");
+            return;
+        }
+
+        await addDoc(collection(db, "lives", liveId, "messages"), {
+            text: text, 
+            senderName: userData?.name || auth.currentUser?.displayName || "Client", 
+            senderId: auth.currentUser?.uid,
+            timestamp: serverTimestamp(), 
+            isHost: false
+        });
+    };
+
+    const addReaction = () => {
+        const newReaction = { id: Date.now(), x: Math.random() * (width - 150) + 75 };
+        setReactions((prev) => [...prev, newReaction]);
+        setTimeout(() => {
+            setReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
+        }, 3000);
+    };
+
+    const leaveChannel = () => { 
+        if (engine.current) {
+            engine.current.leaveChannel(); 
+            engine.current.release(); 
+            engine.current = null;
+            setJoined(false); 
+            setHostUid(0); 
+        }
+    };
+
+    const handleBackNavigation = async () => {
+        await leaveLiveLogic(); 
+        if (router.canGoBack()) router.back();
+        else router.replace('/');
+    };
+
+    // 🔥 THEME CALCULATIONS
+    const totalSpent = userData?.totalSpentDiamonds || 0;
+    const userTier = calculateUserLevel(totalSpent);
+    const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
+
+    // 🔥 ALTERNATING BORDER STYLES (FLUID, 2px)
+    const borderType1 = {
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderTopWidth: 0.5,
+        borderBottomWidth: 0.5,
+        borderLeftColor: userTier.color,
+        borderRightColor: userTier.color,
+        borderTopColor: userTier.secondaryColor + '80',
+        borderBottomColor: userTier.secondaryColor + '80',
+    };
+
+    const borderType2 = {
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderTopWidth: 0.5,
+        borderBottomWidth: 0.5,
+        borderLeftColor: userTier.secondaryColor,
+        borderRightColor: userTier.secondaryColor,
+        borderTopColor: userTier.color + '80',
+        borderBottomColor: userTier.color + '80',
+    };
+
+    return (
+        <View style={styles.container}>
+            {/* 🔥 SATTI FIX: KEYBOARD AVOIDING VIEW WRAPS ENTIRE SCREEN 🔥 */}
+            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+                
+                {/* BACKGROUND ELEMENTS */}
+                <LinearGradient colors={userTier.themeBg as any} style={StyleSheet.absoluteFill} />
+                <Animated.View style={[styles.shimmerOrb, { top: 100, left: -60, backgroundColor: userTier.color, transform: [{ translateY: orbTranslateY }] }]} />
+                <Animated.View style={[styles.shimmerOrb, { bottom: 200, right: -60, backgroundColor: userTier.secondaryColor, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+
+                {/* VIDEO CONTAINER */}
+                <View style={styles.videoContainer}>
+                    {isFocused && joined && hostUid !== 0 ? (
+                        <RtcSurfaceView 
+                            key={hostUid} 
+                            canvas={{ uid: hostUid }} 
+                            style={styles.fullVideo} 
+                            connection={{ channelId: liveId }} 
+                        />
+                    ) : (
+                        <LinearGradient colors={['rgba(15,23,42,0.5)', 'rgba(30,41,59,0.5)']} style={styles.loadingContainer}>
+                            <ActivityIndicator size="large" color={userTier.color} style={{ marginBottom: 20 }} />
+                            <Text style={[styles.loadingText, { color: userTier.color }]}>Connecting to {hostName}...</Text>
+                        </LinearGradient>
+                    )}
+                </View>
+
+                {/* INVISIBLE EXIT SHIELD */}
+                {isLiveEndedWaiting && (
+                    <View style={[StyleSheet.absoluteFillObject, { zIndex: 9999, elevation: 9999, backgroundColor: 'transparent' }]} onStartShouldSetResponder={() => true}>
+                        <View style={{ position: 'absolute', top: height * 0.15, width: '100%', alignItems: 'center' }}>
+                            <View style={{ backgroundColor: 'rgba(239,68,68,0.95)', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 25, borderWidth: 2, borderColor: '#FFF', shadowColor: '#000', shadowRadius: 10, shadowOpacity: 0.8, elevation: 15 }}>
+                                <Text style={{ color: '#FFF', fontWeight: '900', fontSize: 14, textAlign: 'center', lineHeight: 22 }}>
+                                    {exitMessage || "Closing session..."}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                )}
+
+                <SafeAreaView style={{ flex: 1 }} pointerEvents="box-none">
+                    
+                    {/* 🔥 SATTI FIX: FULLY COVERED HEADER BLOCK 🔥 */}
+                    <View style={styles.header}>
+                        <BlurView intensity={90} tint="dark" style={[styles.fullWidthCard, borderType1]}>
+                            <View style={styles.topRow}>
+                                <View style={styles.profileInfoSide}>
+                                    <View style={styles.avatarWrapper}>
+                                        {hostImage ? (
+                                            <Image source={{ uri: hostImage }} style={[styles.hostAvatar, { borderColor: userTier.color }]} />
+                                        ) : (
+                                            <View style={[styles.avatarPlaceholder, { backgroundColor: userTier.color }]}>
+                                                <Text style={styles.placeholderText}>{hostName.charAt(0).toUpperCase()}</Text>
+                                            </View>
+                                        )}
+                                        <View style={styles.liveIndicator}>
+                                            <View style={styles.liveDot} />
+                                            <Text style={styles.countText}>{viewerCount}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.nameContainer}>
+                                        {/* 🔥 SATTI FIX: Level Badge moved below the name 🔥 */}
+                                        <View style={{flexDirection: 'column', alignItems: 'flex-start', gap: 2}}>
+                                            <Text style={styles.hostNameText} numberOfLines={1}>{hostName}</Text>
+                                            <Text style={[styles.onlineStatus, { color: userTier.color }]}>Active Now</Text>
+                                        </View>
+                                    </View>
+                                </View>
+                                
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    {/* 🔥 SATTI FIX: TURBO RACING CAR ICON CHANGED TO RED 🔥 */}
+                                    <TouchableOpacity onPress={() => setRacingVisible(true)} style={[styles.closeIcon, { borderColor: '#EF4444', borderWidth: 1, backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                                        <Ionicons name="car-sport" size={22} color="#EF4444" />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#F59E0B', borderWidth: 1, backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                                       <Ionicons name="game-controller" size={22} color="#F59E0B" />
+                                    </TouchableOpacity>
+
+                                    <TouchableOpacity onPress={handleBackNavigation} style={[styles.closeIcon, { borderColor: userTier.secondaryColor + '40', borderWidth: 1 }]}>
+                                        <Ionicons name="close" size={22} color="#FFF" />
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+
+                            <View style={styles.actionRow}>
+                                <TouchableOpacity onPress={handleCallButtonPress} style={{flex: 1.5}} disabled={isCalling}>
+                                    <Animated.View style={[
+                                        styles.callBtnMass, 
+                                        { opacity: isCalling ? 1 : blinkAnim, transform: [{ rotate: rotation }], backgroundColor: userTier.color, shadowColor: userTier.color },
+                                        isCalling && { backgroundColor: userTier.secondaryColor }
+                                    ]}>
+                                        {isCalling ? (
+                                            <ActivityIndicator size="small" color="#FFF" />
+                                        ) : (
+                                            <Ionicons name="call" size={14} color="#FFF" />
+                                        )}
+                                        <Text style={styles.callTextMass}>
+                                            {isCalling ? "Calling..." : `${callRate}💎/m`}
+                                        </Text>
+                                    </Animated.View>
+                                </TouchableOpacity>
+                                <TouchableOpacity onPress={() => setShowGiftModal(true)} style={[styles.giftBtnMass, { borderColor: userTier.secondaryColor + '60' }]}>
+                                    <FontAwesome5 name="gift" size={12} color={userTier.color} />
+                                    <Text style={styles.giftTextMass}>Reward</Text>
+                                </TouchableOpacity>
+                                <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.levelTag}>
+                                    <FontAwesome5 name="crown" size={8} color="#FFF" />
+                                    <Text style={styles.levelTextTag}>{hostLevel}</Text>
+                                </LinearGradient>
+                            </View>
+                        </BlurView>
+                    </View>
+
+                    {showBusyStatus && (
+                        <View style={styles.busyOverlay}>
+                            <BlurView intensity={90} tint="dark" style={[styles.busyCard, borderType1]}>
+                                <View style={[styles.busyIconCircle, { backgroundColor: userTier.secondaryColor + '30' }]}>
+                                    <Ionicons name="time" size={32} color={userTier.color} />
+                                </View>
+                                <Text style={styles.busyTitle}>Consultant is Engaged</Text>
+                                <Text style={styles.busySub}>The consultant is currently on another call or unable to pick up. Please try again in a few minutes.</Text>
+                            </BlurView>
+                        </View>
+                    )}
+
+                    <Animated.View style={[styles.giftNotify, { opacity: giftAnim, transform: [{ scale: giftAnim }] }]}>
+                        <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.giftPop}>
+                            <FontAwesome5 name="gem" size={20} color="#FFF" />
+                            <Text style={styles.giftPopText}>{giftAlert}</Text>
+                        </LinearGradient>
+                    </Animated.View>
+
+                    {reactions.map((r) => (
+                        <FloatingHeart key={r.id} x={r.x} />
+                    ))}
+
+                    {/* SPACER TO PUSH CHAT TO BOTTOM */}
+                    <View style={{ flex: 1 }} pointerEvents="none" />
+
+                    {/* 🔥 SATTI FIX: FLEX INTERACTION AREA FOR KEYBOARD FIX 🔥 */}
+                    <View style={styles.interactionArea} pointerEvents="box-none">
+                        <FlatList
+                            data={messages}
+                            keyExtractor={(item) => item.id}
+                            inverted={true} 
+                            renderItem={({ item, index }) => {
+                                // 🔥 SATTI FIX: ROYAL GIFT MESSAGE RENDER IN CHAT 🔥
+                                if (item.isGift) {
+                                    return (
+                                        <LinearGradient 
+                                            colors={['rgba(245, 158, 11, 0.2)', 'rgba(236, 72, 153, 0.2)']} 
+                                            start={{x:0, y:0}} end={{x:1, y:1}} 
+                                            style={styles.giftChatBubble}
+                                        >
+                                            <Text style={styles.giftChatText}>{item.text}</Text>
+                                        </LinearGradient>
+                                    );
+                                }
+
+                                // Normal System Message (Join/Leave)
+                                if (item.isSystem) {
+                                    return (
+                                        <View style={[styles.chatBubble, { backgroundColor: 'rgba(16, 185, 129, 0.1)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6 }]}>
+                                            <Text style={[styles.chatText, { color: '#032cf9', fontWeight: 'bold' }]}>{item.text}</Text>
+                                        </View>
+                                    );
+                                }
+
+                                // Normal User Message
+                                const msgBorder = index % 2 === 0 ? borderType1 : borderType2;
+                                return (
+                                    <View style={[styles.chatBubble, msgBorder]}>
+                                        <Text style={styles.chatName}>{item.senderName}: <Text style={styles.chatMessage}>{item.text}</Text></Text>
+                                    </View>
+                                );
+                            }}
+                            style={styles.chatList}
+                            contentContainerStyle={{ paddingTop: 20 }}
+                            showsVerticalScrollIndicator={false}
+                        />
+
+                        <View style={styles.inputBar}>
+                            <TextInput 
+                                style={[styles.textInput, { borderColor: userTier.color + '50' }]} 
+                                placeholder="Chat..." 
+                                placeholderTextColor="#94A3B8"
+                                value={inputText}
+                                onChangeText={setInputText}
+                                editable={!isLiveEndedWaiting}
+                            />
+                            <TouchableOpacity onPress={addReaction} disabled={isLiveEndedWaiting} style={[styles.reactionBtn, { backgroundColor: userTier.secondaryColor, shadowColor: userTier.secondaryColor }]}>
+                                <Ionicons name="heart" size={24} color="#FFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={sendMessage} disabled={isLiveEndedWaiting} style={[styles.sendBtn, { backgroundColor: userTier.color, shadowColor: userTier.color }]}>
+                                <Ionicons name="paper-plane" size={20} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </SafeAreaView>
+            </KeyboardAvoidingView>
+
+            <GiftOverlay 
+                giftData={activeGrandGift} 
+                onComplete={() => setActiveGrandGift(null)} 
+                role="user"
+            />
+
+            <Modal visible={showGiftModal} transparent animationType="slide">
+                <View style={styles.modalOverlay}>
+                    <BlurView intensity={100} tint="dark" style={[styles.modalContent, borderType2, { borderBottomWidth: 0 }]}>
+                        <View style={styles.modalHeader}>
+                            <Text style={styles.modalTitle}>Send Appreciation 💎</Text>
+                            <TouchableOpacity onPress={() => setShowGiftModal(false)}>
+                                <Ionicons name="close" size={28} color={userTier.color} />
+                            </TouchableOpacity>
+                        </View>
+                        <View style={styles.giftGrid}>
+                            <TouchableOpacity onPress={() => sendGift('Rose', 1000)} style={[styles.giftBtnMain, borderType1]}>
+                                <Text style={styles.giftEmoji}>🌹</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>1k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Heart', 3000)} style={[styles.giftBtnMain, borderType2]}>
+                                <Text style={styles.giftEmoji}>❤️</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>3k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Crown', 5000)} style={[styles.giftBtnMain, borderType1]}>
+                                <Text style={styles.giftEmoji}>👑</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>5k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Lion', 10000)} style={[styles.giftBtnMain, borderType2]}>
+                                <Text style={styles.giftEmoji}>🦁</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>10k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Super Car', 25000)} style={[styles.giftBtnMain, borderType1]}>
+                                <Text style={styles.giftEmoji}>🏎️</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>25k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Galaxy Rocket', 50000)} style={[styles.giftBtnMain, borderType2]}>
+                                <Text style={styles.giftEmoji}>🚀</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>50k</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </BlurView>
+                </View>
+            </Modal>
+
+            {/* ✅ GAME SHEETS FOR USER COMPONENT */}
+            <LiveGameSheet 
+                visible={gameVisible} 
+                onClose={() => setGameVisible(false)} 
+                liveId={liveId} 
+                isHost={false} 
+                userWalletBalance={myWalletBalance} 
+            />
+
+            <TurboRacingSheet 
+                visible={racingVisible} 
+                onClose={() => setRacingVisible(false)} 
+                liveId={liveId} 
+                isHost={false} 
+                userWalletBalance={myWalletBalance} 
+            />
+        </View>
+    );
+}
+
+const styles = StyleSheet.create({
+    container: { flex: 1, backgroundColor: '#020617' },
+    videoContainer: { ...StyleSheet.absoluteFillObject },
+    videoGrid: { flex: 1, flexDirection: 'column' },
+    fullVideo: { flex: 1 },
+    halfVideo: { flex: 0.5, borderBottomWidth: 1, borderColor: '#1E293B' },
+    loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' }, // <--- SATTI FIX ADDED
+    loadingText: { color: '#0400fe', alignSelf: 'center', marginTop: '50%', fontWeight: '900', letterSpacing: 2 },
+    shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(100px)' },
+    
+    // 🔥 SATTI FIX: HEADER STYLING TO FULLY COVER ELEMENTS 🔥
+    header: { position: 'absolute', top: 50, left: 15, right: 15, zIndex: 10 },
+    fullWidthCard: { padding: 18, borderRadius: 30, backgroundColor: 'rgba(2, 6, 23, 0.85)', overflow: 'hidden' }, // Deep solid background
+    topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+    profileInfoSide: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    avatarWrapper: { position: 'relative' },
+    hostAvatar: { width: 54, height: 54, borderRadius: 27, borderWidth: 2 },
+    avatarPlaceholder: { width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center' },
+    placeholderText: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
+    liveIndicator: { position: 'absolute', bottom: -5, alignSelf: 'center', backgroundColor: '#EF4444', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, borderRadius: 10, gap: 3 },
+    liveDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#FFF' },
+    countText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
+    nameContainer: { marginLeft: 15 },
+    hostNameText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
+    onlineStatus: { fontSize: 11, fontWeight: '600' },
+    closeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+    actionRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
+    callBtnMass: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 20, gap: 6, flex: 1.5, shadowOpacity: 0.3, shadowRadius: 5 },
+    callTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
+    giftBtnMass: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 12, borderRadius: 20, gap: 5, borderWidth: 1 },
+    giftTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
+    levelTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, gap: 5 },
+    levelTextTag: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+    
+    giftNotify: { position: 'absolute', top: 200, alignSelf: 'center', zIndex: 100 },
+    giftPop: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 25, paddingVertical: 12, borderRadius: 30, gap: 12, shadowColor: '#000', shadowRadius: 10, elevation: 10 },
+    giftPopText: { color: '#FFF', fontWeight: '900', fontSize: 15 },
+    
+    // 🔥 SATTI FIX: INTERACTION AREA CHANGED TO FLEX FOR KEYBOARD FIX 🔥
+    interactionArea: { height: height * 0.45, paddingHorizontal: 20, paddingBottom: 15, justifyContent: 'flex-end' },
+    chatList: { flex: 1, marginBottom: 15 },
+    chatBubble: { backgroundColor: 'rgba(15, 23, 42, 0.6)', padding: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '85%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+    chatName: { color: '#fe9d00', fontWeight: '900', fontSize: 11, letterSpacing: 0.5 },
+    chatMessage: { color: '#FFF', fontWeight: '600', fontSize: 12 },
+    chatText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600' },
+    
+    // 🔥 SATTI FIX: ROYAL GIFT BUBBLE STYLES 🔥
+    giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)' },
+    giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 11, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 },
+
+    inputBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, gap: 12 },
+    textInput: { flex: 1, height: 50, backgroundColor: 'rgba(15,23,42,0.85)', borderRadius: 25, paddingHorizontal: 20, color: '#FFF', borderWidth: 1 },
+    sendBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowRadius: 5, shadowOpacity: 0.4 },
+    floatingReaction: { position: 'absolute', bottom: 120, zIndex: 99 },
+    reactionBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowRadius: 5, shadowOpacity: 0.4 },
+    
+    modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
+    modalContent: { borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 25, overflow: 'hidden' },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+    modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },
+    giftGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, justifyContent: 'center', marginBottom: 30 },
+    giftBtnMain: { width: 80, height: 95, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
+    giftEmoji: { fontSize: 34 },
+    giftPrice: { fontSize: 14, fontWeight: '900', marginTop: 8 },
+    
+    busyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
+    busyCard: { width: width * 0.85, padding: 35, borderRadius: 35, alignItems: 'center', overflow: 'hidden' },
+    busyIconCircle: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 25 },
+    busyTitle: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
+    busySub: { color: '#94A3B8', fontSize: 15, textAlign: 'center', lineHeight: 24 }
+});

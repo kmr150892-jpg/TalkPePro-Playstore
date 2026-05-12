@@ -7,8 +7,10 @@ import { Text, View } from '@/components/Themed';
 export default function ModalScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Modal</Text>
+      {/* ✅ Professional Wording for Play Store Review */}
+      <Text style={styles.title}>System Information</Text>
       <View style={styles.separator} lightColor="#eee" darkColor="rgba(255,255,255,0.1)" />
+      
       <EditScreenInfo path="app/modal.tsx" />
 
       {/* Use a light status bar on iOS to account for the black space above the modal */}
@@ -22,10 +24,12 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: '#020617', // ✅ Fixed: Theme sync background
   },
   title: {
     fontSize: 20,
     fontWeight: 'bold',
+    color: '#FFF', // ✅ Fixed: White text for visibility
   },
   separator: {
     marginVertical: 30,

@@ -1,17 +1,22 @@
 import { Feather, FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import { deleteUser } from 'firebase/auth'; // 🔥 Added for Delete
+import { arrayUnion, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore'; // 🔥 Added deleteDoc
+import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  Animated,
   Dimensions,
-  FlatList,
+  Easing,
   Image,
   Modal,
   Platform,
   ScrollView,
+  Share, // 🔥 Added for Share
   StyleSheet,
   Switch,
   Text,
@@ -20,40 +25,72 @@ import {
   UIManager,
   View
 } from 'react-native';
-
-// ✅ Firebase Core
-import { arrayUnion, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
 
-const { width } = Dimensions.get('window');
+// --- COMPONENTS ---
+
+const { height, width } = Dimensions.get('window');
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const ADMIN_UID = "jOQ0LxpaFkhuqIiMtOcYCGb3nEf2";
 
-// ✅ Cloudinary Config
 const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dvwjxeexc/image/upload";
 const UPLOAD_PRESET = "talkpe"; 
 
-// ✅ Enable LayoutAnimation for Android
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// ✅ MASTER LEVEL LOGIC
-const getExpertLevel = (totalBeans: number = 0) => {
-  let levelData;
-  if (totalBeans >= 100000000) levelData = { lvl: 10, rate: 8000, label: 'LEGEND L10', next: 0, prev: 50000000 };
-  else if (totalBeans >= 50000000) levelData = { lvl: 9, rate: 7000, label: 'MYTHIC L9', next: 100000000, prev: 30000000 };
-  else if (totalBeans >= 30000000) levelData = { lvl: 8, rate: 5400, label: 'ELITE L8', next: 50000000, prev: 10000000 };
-  else if (totalBeans >= 10000000) levelData = { lvl: 7, rate: 4800, label: 'MASTER L7', next: 30000000, prev: 5000000 };
-  else if (totalBeans >= 5000000)  levelData = { lvl: 6, rate: 4200, label: 'DIAMOND L6', next: 10000000, prev: 3000000 };
-  else if (totalBeans >= 3000000)  levelData = { lvl: 5, rate: 3600, label: 'PLATINUM L5', next: 5000000, prev: 1000000 };
-  else if (totalBeans >= 1000000)  levelData = { lvl: 4, rate: 3000, label: 'GOLD L4', next: 3000000, prev: 300000 };
-  else if (totalBeans >= 300000)   levelData = { lvl: 3, rate: 2400, label: 'SILVER L3', next: 1000000, prev: 100000 };
-  else if (totalBeans >= 100000)    levelData = { lvl: 2, rate: 1800, label: 'BRONZE L2', next: 300000, prev: 30000 };
-  else if (totalBeans >= 30000)     levelData = { lvl: 1, rate: 1200, label: 'ROOKIE L1', next: 100000, prev: 0 };
-  else levelData = { lvl: 0, rate: 1000, label: 'BEGINNER L0', next: 30000, prev: 0 };
+// ✅ ACCURATE THEME & LEVEL CONFIG (🔥 SUPER SMART FETCH: EXTRACTS REAL LEVEL FROM ANY STRING 🔥)
+const getLevelConfig = (userData: any) => {
+    const getObj = (lvl: number) => {
+        if (lvl >= 10) return { lvl: 10, label: 'LEGEND L10', colors: ['#ff0404', '#F59E0B', '#df03ee'] as const, glow: '#F59E0B', next: 0, prev: 50000000, rate: 8000 };
+        if (lvl === 9) return { lvl: 9, label: 'MYTHIC L9', colors: ['#f40691', '#dbc0c0', '#0a0303'] as const, glow: '#EC4899', next: 100000000, prev: 30000000, rate: 7000 };
+        if (lvl === 8) return { lvl: 8, label: 'ELITE L8', colors: ['#660aee', '#d4cfdf', '#d40808'] as const, glow: '#8B5CF6', next: 50000000, prev: 10000000, rate: 5400 };
+        if (lvl === 7) return { lvl: 7, label: 'MASTER L7', colors: ['#0af635', '#ca0bf5', '#fd068a'] as const, glow: '#3B82F6', next: 30000000, prev: 5000000, rate: 4800 };
+        if (lvl === 6) return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
+        if (lvl === 5) return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
+        if (lvl === 4) return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
+        if (lvl === 3) return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+        if (lvl === 2) return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
+        if (lvl === 1) return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
+        return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
+    };
 
-  return { ...levelData, minRate: 300, maxRate: levelData.rate };
+    // 1. Robust Direct Level Override (Extracts number from "Level 1", "L1", "1", etc.)
+    const rawLvl = userData?.expertLevel ?? userData?.currentLevel ?? userData?.level;
+    if (rawLvl !== undefined && rawLvl !== null) {
+        if (typeof rawLvl === 'number') return getObj(rawLvl);
+        if (typeof rawLvl === 'string') {
+            const match = rawLvl.match(/\d+/);
+            if (match) return getObj(parseInt(match[0], 10));
+        }
+    }
+
+    // 2. Robust Title Fallback
+    const title = String(userData?.levelTitle || '').toUpperCase();
+    if (title) {
+        const match = title.match(/\d+/);
+        if (match) return getObj(parseInt(match[0], 10));
+    }
+
+    // 3. Beans Fallback
+    const beans = Number(userData?.totalBeansEarned) || Number(userData?.beans) || 0;
+    if (beans >= 100000000) return getObj(10);
+    if (beans >= 50000000) return getObj(9);
+    if (beans >= 30000000) return getObj(8);
+    if (beans >= 10000000) return getObj(7);
+    if (beans >= 5000000)  return getObj(6);
+    if (beans >= 3000000)  return getObj(5);
+    if (beans >= 1000000)  return getObj(4);
+    if (beans >= 300000)   return getObj(3);
+    if (beans >= 100000)   return getObj(2);
+    if (beans >= 30000)    return getObj(1);
+    return getObj(0);
 };
+
+const EXPERTISE_TAGS = ["Professional Advice", "Career Guide", "Dancing", "Tech Support", "Consulting", "Wellness", "Design", "Entertainment","Management","Singing", "Marketing", "Management", "Education"];
+const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytics 📊", "Public Speaking 🎙️", "Networking 🤝", "Planning 📅", "Strategy 🎯"];
 
 export default function ConsoleHome({ expertData: initialData, isOnline, setIsOnline }: any) {
   const router = useRouter();
@@ -63,43 +100,80 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const [expertData, setExpertData] = useState(initialData);
   const [modalVisible, setModalVisible] = useState(false);
   const [rateModalVisible, setRateModalVisible] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false); 
   
-  // ✅ FOLLOW LOGIC STATES
-  const [followModalVisible, setFollowModalVisible] = useState(false);
-  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
-  const [acceptedFollowers, setAcceptedFollowers] = useState<any[]>([]);
-
   const [editName, setEditName] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editAge, setEditAge] = useState('');
   const [editGender, setEditGender] = useState('');
   const [newRate, setNewRate] = useState('1000');
+  
+  const [editExpertise, setEditExpertise] = useState<string[]>([]);
+  const [editHobbies, setEditHobbies] = useState<string[]>([]);
 
   const [uploading, setUploading] = useState(false);
+  const [coverUploading, setCoverUploading] = useState(false); 
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const totalBeans = expertData?.totalBeansEarned || expertData?.totalBeans || 0;
-  const walletBalance = expertData?.walletBalance ?? expertData?.beansBalance ?? 0;
-  
-  const levelInfo = getExpertLevel(totalBeans);
-  
-  const range = levelInfo.next - levelInfo.prev;
-  const earnedInRange = totalBeans - levelInfo.prev;
-  const progressPercent = levelInfo.next > 0 ? Math.max(0, Math.min((earnedInRange / range) * 100, 100)) : 100;
-  
-  const pendingBeansCount = levelInfo.next - totalBeans;
-  const statusColor = isOnline ? '#10B981' : '#94A3B8';
+  const shimmerAnim = useRef(new Animated.Value(0)).current;
 
+  // 🔥 DYNAMIC THEME ENGINE
+  const config = getLevelConfig(expertData);
+  const walletBalance = expertData?.walletBalance ?? expertData?.beansBalance ?? 0;
+  const totalBeans = expertData?.totalBeansEarned || expertData?.totalBeans || 0;
+  
+  const theme = {
+    primary: config.colors[0],
+    secondary: config.colors[2] || config.colors[1] || config.colors[0],
+    accent: config.glow !== 'transparent' ? config.glow : config.colors[0],
+    bgGradient: [
+        config.lvl >= 7 ? `${config.colors[0]}40` : '#020617', 
+        config.lvl >= 3 ? `${config.colors[1] || config.colors[0]}20` : '#0F172A', 
+        '#020617'
+    ] as const 
+  };
+
+  const range = config.next - config.prev;
+  const earnedInRange = totalBeans - config.prev;
+  const progressPercent = config.next > 0 ? Math.max(0, Math.min((earnedInRange / range) * 100, 100)) : 100;
+  const pendingBeans = config.next - totalBeans;
+
+  const [isCreatingParty, setIsCreatingParty] = useState(false);
+  const [incomingCall, setIncomingCall] = useState<any>(null);
+  const [showCallModal, setShowCallModal] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const pulseAnim = useRef(new Animated.Value(1)).current;
+
+  // 🔥 SATTI FIX: Track Previous Level for Auto-Max Price Update 🔥
+  const prevLvlRef = useRef<number | null>(null);
+
+  // 🛡️ 1. AUTH OBSERVER (AUTO ONLINE ON LOGIN)
   useEffect(() => {
-    const authUnsub = auth.onAuthStateChanged((u) => setUser(u));
+    const authUnsub = auth.onAuthStateChanged((u) => {
+        if (u) {
+            setUser(u);
+            updateDoc(doc(db, "users", u.uid), { isOnline: true }).catch((err) => {
+                console.log("Auto Online Fail", err);
+            });
+            setIsOnline(true);
+        }
+    });
+    Animated.loop(
+      Animated.timing(shimmerAnim, {
+        toValue: 1,
+        duration: 4000,
+        easing: Easing.inOut(Easing.sin),
+        useNativeDriver: true
+      })
+    ).start();
     return () => authUnsub();
   }, []);
 
   useEffect(() => {
     if (!user?.uid) return;
-
     const unsub = onSnapshot(doc(db, "users", user.uid), (snap) => {
       if (snap.exists()) {
         const data = snap.data();
@@ -109,103 +183,111 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         setEditLocation(data.location || '');
         setEditAge(data.age || '');
         setEditGender(data.gender || '');
-        setNewRate(String(data.pricePerMin || '1000'));
-      }
-    });
-
-    // ✅ FIXED REAL-TIME LISTENER FOR PENDING VS FRIENDS
-    const q = query(collection(db, "connections"), where("receiverId", "==", user.uid));
-
-const unsubConn = onSnapshot(q, (snap) => {
-  const allConns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-
-  // 🚀 HARD FILTER (NO OVERLAP GUARANTEE)
-  const pending: any[] = [];
-  const friends: any[] = [];
-
-  allConns.forEach((c: any) => {
-    if (c.status === "pending") {
-      pending.push(c);
-    } else if (c.status === "friend") {
-      friends.push(c);
-    }
-  });
-
-  // ✅ CLEAN STATE UPDATE (FORCE NO DUPLICATES)
-  setPendingRequests([...pending]);
-  setAcceptedFollowers([...friends]);
-});
-
-    return () => { unsub(); unsubConn(); };
-  }, [user?.uid]);
-
-  // ✅ LEVEL SYNC
-  useEffect(() => {
-    const syncLevelDetails = async () => {
-      if (user?.uid && expertData) {
-        const currentRate = expertData.pricePerMin || 1000;
-        if (expertData.currentLevel !== levelInfo.lvl || currentRate < levelInfo.rate) {
-          try {
-            await updateDoc(doc(db, "users", user.uid), {
-              currentLevel: levelInfo.lvl,
-              levelTitle: levelInfo.label,
-              pricePerMin: levelInfo.rate,
-              beansPerMin: levelInfo.rate,
-              userPrice: levelInfo.rate * 2
-            });
-          } catch (e) { console.log("Silent level sync error"); }
+        
+        // Only initialize rate if newRate hasn't been set by user/auto-update yet
+        if (!newRate || newRate === '1000' && data.pricePerMin !== 1000) {
+            setNewRate(String(data.pricePerMin || '1000'));
+        }
+        
+        setEditExpertise(data.expertiseTags || []);
+        setEditHobbies(data.hobbies || []);
+        
+        if (data.isOnline !== undefined && data.isOnline !== isOnline) {
+            setIsOnline(data.isOnline);
         }
       }
-    };
-    syncLevelDetails();
-  }, [totalBeans, user?.uid]);
+    });
+    return () => unsub();
+  }, [user?.uid]);
 
-  // ✅ ACCEPT/REJECT LOGIC - UPDATED TO CLEAR LIST IMMEDIATELY
-  const handleAcceptRequest = async (connId: string) => {
-    try {
-      const connRef = doc(db, "connections", connId);
-      // Status update pannunaale onSnapshot automatic-ah "New Requests" la irunthu thookidum
-      await updateDoc(connRef, { 
-        status: "friend",
-        acceptedAt: serverTimestamp()
-      });
-    } catch (e) { Alert.alert("Error", "Could not accept request."); }
+  // 🔥 SATTI FIX: AUTO-MAX PRICE ON LEVEL CHANGE 🔥
+  useEffect(() => {
+      if (expertData && user?.uid) {
+          if (prevLvlRef.current === null) {
+              prevLvlRef.current = config.lvl;
+          } else if (prevLvlRef.current !== config.lvl) {
+              // Level Changed! Auto update to new Max Price
+              const newMaxRate = config.rate;
+              setNewRate(String(newMaxRate));
+              
+              updateDoc(doc(db, "users", user.uid), {
+                  pricePerMin: newMaxRate,
+                  beansPerMin: newMaxRate,
+                  userPrice: newMaxRate * 2,
+                  lastRateUpdate: serverTimestamp()
+              }).then(() => {
+                  Alert.alert(
+                      "Level Updated! 🚀", 
+                      `Your rank changed! Your Consultation Rate has been automatically updated to the new Max Price: ${newMaxRate} Rewards/Min!`
+                  );
+              }).catch(()=>{});
+              
+              prevLvlRef.current = config.lvl;
+          }
+      }
+  }, [config.lvl, config.rate, expertData, user?.uid]);
+
+  // 🔥 SATTI FIX: 30-MINUTE COOLDOWN LOCK FOR RATE CHANGE 🔥
+  const handleOpenRateModal = () => {
+      if (expertData?.lastRateUpdate) {
+          let lastUpdateMillis = 0;
+          
+          if (typeof expertData.lastRateUpdate.toMillis === 'function') {
+              lastUpdateMillis = expertData.lastRateUpdate.toMillis();
+          } else if (expertData.lastRateUpdate.seconds) {
+              lastUpdateMillis = expertData.lastRateUpdate.seconds * 1000;
+          }
+
+          if (lastUpdateMillis > 0) {
+              const now = Date.now();
+              const diffMins = (now - lastUpdateMillis) / (1000 * 60);
+
+              if (diffMins < 30) {
+                  const remainingMins = Math.ceil(30 - diffMins);
+                  Alert.alert(
+                      "Rate Locked ⏳", 
+                      `You can only update your rate once every 30 minutes. Please wait ${remainingMins} more minute(s).`
+                  );
+                  return; // Lock the modal from opening
+              }
+          }
+      }
+      setRateModalVisible(true);
   };
 
-  const handleRejectOrUnfollow = async (connId: string, type: string) => {
+  // 🔥 SHARE APP LOGIC
+  const handleShareApp = async () => {
     try {
-      await deleteDoc(doc(db, "connections", connId));
-      if(type === 'unfollow') Alert.alert("Success", "Follower removed.");
-    } catch (e) { Alert.alert("Error", "Action failed."); }
+        const result = await Share.share({
+            message: `I’m available on the TalkPe Pro platform! Connect with me for a professional consultation session. 🚀💎 Platform Link: https://play.google.com/store/apps/details?id=com.talkpe.app`,
+            title: 'Download TalkPe Pro'
+        });
+
+        if (result.action === Share.sharedAction) {
+            console.log('Shared successfully!');
+        } else if (result.action === Share.dismissedAction) {
+            console.log('Share dismissed by user');
+        }
+    } catch (error: any) {
+        Alert.alert("Share Error", error.message);
+    }
   };
 
   const handleUpdateRate = async () => {
     const rateNum = parseInt(newRate);
-    if (expertData?.lastRateUpdate) {
-        const lastUpdate = expertData.lastRateUpdate.toDate().getTime();
-        const now = new Date().getTime();
-        const diffMins = (now - lastUpdate) / (1000 * 60);
-        if (diffMins < 30) {
-            Alert.alert("Time Restriction", `Wait ${Math.ceil(30 - diffMins)} more minutes.`);
-            return;
-        }
-    }
-    if (isNaN(rateNum) || rateNum < levelInfo.minRate || rateNum > levelInfo.maxRate) {
-      Alert.alert("Invalid Rate", `As a ${levelInfo.label}, rate must be between ${levelInfo.minRate} and ${levelInfo.maxRate}.`);
+    if (isNaN(rateNum) || rateNum < 300 || rateNum > config.rate) {
+      Alert.alert("Invalid Rate", `Range: 300 - ${config.rate}`);
       return;
     }
     setSaving(true);
     try {
-      if (user?.uid) {
-        await updateDoc(doc(db, "users", user.uid), {
-          pricePerMin: rateNum,
-          beansPerMin: rateNum,
-          userPrice: rateNum * 2,
-          lastRateUpdate: serverTimestamp() 
-        });
-        setRateModalVisible(false);
-        Alert.alert("Success", "Consultation rate updated!");
-      }
+      await updateDoc(doc(db, "users", user!.uid), {
+        pricePerMin: rateNum,
+        beansPerMin: rateNum,
+        userPrice: rateNum * 2,
+        lastRateUpdate: serverTimestamp() 
+      });
+      setRateModalVisible(false);
     } catch (e) { Alert.alert("Error", "Update failed."); } finally { setSaving(false); }
   };
 
@@ -232,9 +314,21 @@ const unsubConn = onSnapshot(q, (snap) => {
     }
   };
 
+  const pickCoverImage = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') return;
+    let result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], allowsEditing: true, aspect: [16, 9], quality: 0.6 });
+    if (!result.canceled && user?.uid) {
+      setCoverUploading(true);
+      const url = await uploadToCloudinary(result.assets[0].uri);
+      if (url) await updateDoc(doc(db, "users", user.uid), { coverPhoto: url });
+      setCoverUploading(false);
+    }
+  };
+
   const uploadGalleryImage = async () => {
     if ((expertData?.gallery?.length || 0) >= 5) {
-      Alert.alert("Portfolio Full", "Maximum 5 photos allowed.");
+      Alert.alert("Portfolio Full", "Max 5 photos.");
       return;
     }
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -248,386 +342,599 @@ const unsubConn = onSnapshot(q, (snap) => {
     }
   };
 
+  const toggleTag = (tag: string, list: string[], setList: any, maxLimit: number) => {
+    if (list.includes(tag)) {
+        setList(list.filter((t: string) => t !== tag));
+    } else {
+        if (list.length >= maxLimit) {
+            Alert.alert("Limit Reached", `You can select up to ${maxLimit} tags here.`);
+            return;
+        }
+        setList([...list, tag]);
+    }
+  };
+
   const handleSaveProfile = async () => {
     if (!user?.uid) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "users", user.uid), { 
-        name: editName, bio: editBio, location: editLocation, age: editAge, gender: editGender
-      });
+      await updateDoc(doc(db, "users", user.uid), { name: editName, bio: editBio.trim(), location: editLocation, age: editAge, gender: editGender, expertiseTags: editExpertise, hobbies: editHobbies });
       setModalVisible(false);
     } catch (error) { Alert.alert("Error", "Save failed"); } finally { setSaving(false); }
   };
 
-  const handleLogout = () => { auth.signOut().then(() => { router.replace('/'); }); };
+  const handleLogout = async () => { 
+      if (user?.uid) {
+          try {
+              await updateDoc(doc(db, "users", user.uid), { isOnline: false });
+          } catch (e) {}
+      }
+      auth.signOut().then(() => { router.replace('/'); }); 
+  };
+
+  const handleTerminateExpert = () => {
+      const walletBal = expertData?.walletBalance ?? expertData?.beansBalance ?? 0;
+      const msg = walletBal > 0 
+          ? `Hold on! You have ${walletBal} rewards in your wallet. Deleting your account means this balance is gone forever.`
+          : "Final warning: This will permanently wipe your Consultant profile and all associated data.";
+
+      Alert.alert(
+          "TERMINATE IDENTITY?",
+          msg,
+          [
+              { text: "Cancel", style: "cancel" },
+              {
+                  text: "Delete My Identity",
+                  style: "destructive",
+                  onPress: async () => {
+                      if (!user) return;
+                      setIsDeleting(true);
+                      try {
+                          await updateDoc(doc(db, "users", user.uid), { isOnline: false });
+                          await deleteDoc(doc(db, "users", user.uid));
+                          await deleteUser(user);
+                          Alert.alert("Terminated", "Your identity has been removed from the grid.");
+                          router.replace('/');
+                      } catch (error: any) {
+                          if (error.code === 'auth/requires-recent-login') {
+                              Alert.alert("Security Check", "Please Logout and Login again before deleting for safety.");
+                          } else {
+                              Alert.alert("Error", "Termination failed. Check connection.");
+                          }
+                      } finally { setIsDeleting(false); }
+                  }
+              }
+          ]
+      );
+  };
+
+  const orbTranslateY = shimmerAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0, -30]
+  });
+
+  const borderType1 = {
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderTopWidth: 0.5,
+    borderBottomWidth: 0.5,
+    borderLeftColor: theme.primary,
+    borderRightColor: theme.primary,
+    borderTopColor: theme.secondary + '80',
+    borderBottomColor: theme.secondary + '80',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  };
+
+  const borderType2 = {
+    borderLeftWidth: 2,
+    borderRightWidth: 2,
+    borderTopWidth: 0.5,
+    borderBottomWidth: 0.5,
+    borderLeftColor: theme.secondary,
+    borderRightColor: theme.secondary,
+    borderTopColor: theme.primary + '80',
+    borderBottomColor: theme.primary + '80',
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  };
+
+  const toggleOnlineStatus = async (status: boolean) => {
+    if (!user?.uid) return;
+    setIsOnline(status);
+    try {
+        await updateDoc(doc(db, "users", user.uid), { isOnline: status });
+    } catch (e) { 
+        console.log("Status Update Error", e); 
+        setIsOnline(!status);
+    }
+  };
 
   return (
-    <ScrollView style={styles.mainContainer} contentContainerStyle={styles.container} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.mainContainer} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
       
-      {/* HEADER BAR */}
-      <View style={styles.headerBar}>
-        <View style={styles.leftHeader}>
-            <Text style={styles.logoText}>TALKPE<Text style={{color: '#818CF8'}}>PRO</Text></Text>
-            <Text style={styles.subLogo}>EXPERT CONSOLE</Text>
-        </View>
-        <View style={styles.rightHeader}>
-          {isAdmin && (
-            <TouchableOpacity style={styles.adminIconBtn} onPress={() => router.push('/(admin)' as any)}>
-              <MaterialCommunityIcons name="shield-crown" size={20} color="#10B981" />
-            </TouchableOpacity>
-          )}
-          <TouchableOpacity style={styles.iconCircle} onPress={() => router.push('/expert/notifications' as any)}>
-            <Ionicons name="notifications-outline" size={20} color="#FFF" />
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.iconCircle, {marginLeft: 8}]} onPress={handleLogout}>
-            <Feather name="log-out" size={18} color="#F43F5E" />
-          </TouchableOpacity>
-        </View>
-      </View>
+      {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
+      <LinearGradient colors={theme.bgGradient} style={StyleSheet.absoluteFill} />
+      
+      {/* Shimmer Orbs for Animation */}
+      <Animated.View style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
+      <Animated.View style={[styles.shimmerOrb, { top: 450, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
-      {/* PROFILE INFO SECTION */}
-      <View style={styles.profileSection}>
-        <View style={styles.avatarWrapper}>
-          {uploading ? (
-            <View style={[styles.avatar, styles.loaderCenter]}><ActivityIndicator color="#3B82F6" /></View>
-          ) : (
-            <Image source={{ uri: expertData?.profilePic || 'https://via.placeholder.com/150' }} style={styles.avatar} />
-          )}
-          <TouchableOpacity style={styles.cameraIconBtn} onPress={pickImage} disabled={uploading}>
-            <Ionicons name="camera" size={14} color="#FFF" />
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.nameText}>{expertData?.name || expertData?.displayName || 'Expert'}</Text>
-        
-        <View style={styles.identityRow}>
-          <View style={styles.idChip}>
-            <Ionicons name="location-sharp" size={10} color="#818CF8" />
-            <Text style={styles.idChipText}>{expertData?.location || "N/A"}</Text>
-          </View>
-          <View style={styles.idChip}>
-            <MaterialCommunityIcons name="cake-variant" size={10} color="#818CF8" />
-            <Text style={styles.idChipText}>{expertData?.age || "00"}</Text>
-          </View>
-          <View style={styles.idChip}>
-            <Ionicons name="person" size={10} color="#818CF8" />
-            <Text style={styles.idChipText}>{expertData?.gender || "N/A"}</Text>
-          </View>
-        </View>
-
-        <TouchableOpacity style={styles.editBtn} onPress={() => setModalVisible(true)}>
-            <Text style={styles.editBtnText}>EDIT PROFILE & IDENTITY</Text>
-        </TouchableOpacity>
-        <LinearGradient colors={['#818CF8', '#4F46E5']} style={styles.levelBadge}>
-          <Text style={styles.levelBadgeText}>{levelInfo.label}</Text>
-        </LinearGradient>
-      </View>
-
-      {/* ONLINE STATUS TOGGLE */}
-      <View style={[styles.statusCard, { backgroundColor: isOnline ? '#05966910' : '#1E293B40' }]}>
-        <View style={styles.statusInfo}>
-          <View style={[styles.liveIndicator, { backgroundColor: statusColor }]} />
-          <Text style={[styles.statusText, { color: isOnline ? '#10B981' : '#94A3B8' }]}>
-            {isOnline ? "Available for Calls" : "Currently Offline"}
-          </Text>
-        </View>
-        <Switch value={isOnline} onValueChange={setIsOnline} trackColor={{ false: "#334155", true: "#059669" }} thumbColor={"#FFF"} />
-      </View>
-
-      {/* ANALYTICS / STATS GRID */}
-      <View style={styles.statsGrid}>
-        <TouchableOpacity style={styles.statBox} onPress={() => setFollowModalVisible(true)}>
-          <MaterialCommunityIcons name="account-clock" size={20} color="#818CF8" />
-          <Text style={styles.statValue}>{pendingRequests.length}</Text>
-          <Text style={styles.statLabel}>NEW REQUESTS</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity style={[styles.statBox, { borderColor: '#FBBF24', borderWidth: 0.5 }]} onPress={() => setRateModalVisible(true)}>
-          <FontAwesome5 name="seedling" size={18} color="#FBBF24" />
-          <Text style={styles.statValue}>{expertData?.pricePerMin || 1000}</Text>
-          <Text style={[styles.statLabel, {color: '#FBBF24'}]}>EDIT RATE</Text>
-        </TouchableOpacity>
-
-        <View style={styles.statBox}>
-          <MaterialCommunityIcons name="bank" size={20} color="#10B981" />
-          <Text style={styles.statValue}>₹{(expertData?.pricePerMin * 0.01 || 0).toFixed(0)}</Text>
-          <Text style={styles.statLabel}>INR/MIN</Text>
-        </View>
-      </View>
-
-      {/* MY FOLLOWERS BUTTON */}
-      <TouchableOpacity 
-          style={styles.followersButton} 
-          onPress={() => setFollowModalVisible(true)}
-      >
-          <View style={styles.followersBtnContent}>
-              <View style={styles.followersLeft}>
-                  <View style={styles.iconCircleSmall}>
-                      <Ionicons name="people" size={16} color="#818CF8" />
-                  </View>
-                  <Text style={styles.followersBtnText}>MY FOLLOWERS ({acceptedFollowers.length})</Text>
-              </View>
-              <Feather name="chevron-right" size={18} color="#475569" />
-          </View>
-      </TouchableOpacity>
-
-      {/* WALLET BOX */}
-      <View style={styles.walletContainer}>
-          <View style={styles.balanceMain}>
-              <View style={{flexDirection: 'row', alignItems: 'center'}}>
-                <MaterialCommunityIcons name="wallet" size={18} color="#10B981" />
-                <Text style={styles.walletLabel}> WITHDRAWABLE BALANCE</Text>
-              </View>
-              <Text style={styles.walletValue}>
-                {walletBalance.toLocaleString()} <Text style={{fontSize: 12, color: '#475569'}}>BEANS</Text>
-              </Text>
-          </View>
-          <View style={styles.lifetimeBox}>
-              <Text style={styles.lifetimeLabel}>LIFETIME EARNINGS (LEVEL EXP)</Text>
-              <Text style={styles.lifetimeValue}>{totalBeans.toLocaleString()} <FontAwesome5 name="seedling" size={10} color="#818CF8" /></Text>
-          </View>
-      </View>
-
-      {/* PROGRESS TRACKER */}
-      <View style={styles.progressWrapper}>
-          <View style={styles.progressTextRow}>
-            <Text style={styles.sectionTitle}>NEXT LEVEL PROGRESS</Text>
-            <Text style={styles.percentText}>{progressPercent.toFixed(1)}%</Text>
-          </View>
-          <View style={styles.progressBg}>
-             <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
-             <Text style={styles.progressLabel}>
-              {levelInfo.next > 0 
-                ? `${pendingBeansCount.toLocaleString()} beans pending to Level ${levelInfo.lvl + 1}` 
-                : "MAX LEVEL REACHED"}
-            </Text>
-          </View>
-      </View>
-
-      {/* PORTFOLIO GALLERY */}
-      <View style={styles.galleryWrapper}>
-         <View style={styles.progressTextRow}>
-            <Text style={styles.sectionTitle}>MY PORTFOLIO ({expertData?.gallery?.length || 0}/5)</Text>
-            <TouchableOpacity onPress={uploadGalleryImage} disabled={galleryUploading}>
-               {galleryUploading ? <ActivityIndicator size="small" color="#3B82F6" /> : <Feather name="plus-square" size={20} color="#3B82F6" />}
-            </TouchableOpacity>
+      <View style={styles.coverContainer}>
+         <Image source={{ uri: expertData?.coverPhoto || 'https://images.unsplash.com/photo-1557682250-33bd709cbe85?q=80&w=2029&auto=format&fit=crop' }} style={styles.coverImage} />
+         <LinearGradient colors={['rgba(2,6,23,0.5)', 'transparent', 'rgba(2,6,23,0.9)']} style={StyleSheet.absoluteFill} />
+         
+         <View style={styles.headerBar}>
+            <View style={styles.leftHeader}>
+                <Text style={styles.logoText}>TALKPE<Text style={{color: theme.primary}}>PRO</Text></Text>
+                <Text style={styles.subLogo}>COMMAND CENTER</Text>
+            </View>
+            <View style={styles.rightHeader}>
+              
+              {isAdmin && (
+                <TouchableOpacity style={styles.adminIconBtn} onPress={() => router.push('/(admin)' as any)}>
+                  <MaterialCommunityIcons name="shield-crown" size={20} color="#10B981" />
+                </TouchableOpacity>
+              )}
+              <TouchableOpacity style={styles.iconCircle} onPress={() => router.push("/expert/notifications")}>
+                <Ionicons name="notifications-outline" size={18} color="#FFF" />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.iconCircle, {marginLeft: 8}]} onPress={() => router.push("/blocked-users")}>
+                <Ionicons name="person-remove-outline" size={18} color="#EF4444" />
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.iconCircle, {marginLeft: 8}]} onPress={handleLogout}>
+                <Feather name="log-out" size={18} color="#F43F5E" />
+              </TouchableOpacity>
+            </View>
          </View>
-         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryScroll}>
-            {expertData?.gallery?.map((img: string, index: number) => (
-              <Image key={index} source={{ uri: img }} style={styles.galleryImg} />
-            ))}
-            {(!expertData?.gallery || expertData?.gallery.length === 0) && (
-              <View style={styles.emptyGallery}><Text style={styles.emptyText}>Upload your expertise photos</Text></View>
-            )}
-         </ScrollView>
+
+         {/* 🔥 MOVED: SHARE BUTTON (BOTTOM LEFT OF BANNER) 🔥 */}
+         <TouchableOpacity style={styles.shareCoverBtn} onPress={handleShareApp}>
+             <Ionicons name="share-social" size={14} color="#FFF" />
+             <Text style={styles.editCoverText}>Share</Text>
+         </TouchableOpacity>
+
+         {/* 🔥 MOVED: EDIT BANNER BUTTON (BOTTOM RIGHT OF BANNER) 🔥 */}
+         <TouchableOpacity style={styles.editCoverBtn} onPress={pickCoverImage} disabled={coverUploading}>
+            {coverUploading ? <ActivityIndicator size="small" color="#FFF" /> : <><Ionicons name="camera" size={14} color="#FFF" /><Text style={styles.editCoverText}>Banner</Text></>}
+         </TouchableOpacity>
       </View>
 
-      {/* BIO SECTION */}
-      <View style={styles.bioWrapper}>
-        <Text style={styles.sectionTitle}>BIO & EXPERTISE</Text>
-        <View style={styles.bioBox}>
-          <Text style={styles.bioText}>{expertData?.bio || "Describe your skills to attract users."}</Text>
-        </View>
+      <View style={styles.contentContainer}>
+         
+          <View style={styles.profileSection}>
+            <View style={styles.avatarWrapper}>
+              <LinearGradient colors={[theme.primary, theme.secondary || '#1E293B']} style={styles.avatarRing}>
+                {uploading ? (
+                  <View style={[styles.avatar, styles.loaderCenter]}><ActivityIndicator color={theme.primary} /></View>
+                ) : (
+                  <Image source={{ uri: expertData?.profilePic || 'https://via.placeholder.com/150' }} style={styles.avatar} />
+                )}
+              </LinearGradient>
+              <TouchableOpacity style={[styles.cameraIconBtn, {backgroundColor: theme.primary}]} onPress={pickImage} disabled={uploading}>
+                <Ionicons name="camera" size={18} color="#FFF" />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.nameText}>{expertData?.name || 'Consultant'}</Text>
+            
+            <View style={[styles.fluidIdentityCapsule, borderType1]}>
+              <View style={styles.fluidIdSection}>
+                <Ionicons name="location-sharp" size={16} color={theme.primary} />
+                <Text style={styles.fluidIdLabel}>LOCATION</Text>
+                <Text style={styles.fluidIdVal}>{expertData?.location || "India"}</Text>
+              </View>
+              
+              <View style={[styles.fluidDivider, { backgroundColor: theme.primary + '30' }]} />
+              
+              <View style={styles.fluidIdSection}>
+                <MaterialCommunityIcons name="cake-variant" size={16} color={theme.primary} />
+                <Text style={styles.fluidIdLabel}>AGE</Text>
+                <Text style={styles.fluidIdVal}>{expertData?.age || "24"}</Text>
+              </View>
+              
+              <View style={[styles.fluidDivider, { backgroundColor: theme.primary + '30' }]} />
+              
+              <View style={styles.fluidIdSection}>
+                <Ionicons name="person" size={16} color={theme.primary} />
+                <Text style={styles.fluidIdLabel}>GENDER</Text>
+                <Text style={styles.fluidIdVal}>{expertData?.gender || "N/A"}</Text>
+              </View>
+            </View>
+
+            <View style={styles.expertActionRow}>
+                <TouchableOpacity style={[styles.fluidActionPill, borderType2]} onPress={() => setModalVisible(true)}>
+                    <Text style={[styles.editProfileText, {color: theme.primary}]}>EDIT PROFILE</Text>
+                </TouchableOpacity>
+                <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.fluidCrownBadge}>
+                    <MaterialCommunityIcons name="crown" size={14} color="#FFF" />
+                    <Text style={styles.levelBadgeText}>{config.label}</Text>
+                </LinearGradient>
+            </View>
+          </View>
+
+          <View style={[styles.fluidStatusCard, borderType1]}>
+            <View style={styles.statusInner}>
+              <View style={[styles.statusDot, { backgroundColor: isOnline ? '#10B981' : '#94A3B8', shadowColor: isOnline ? '#10B981' : '#94A3B8' }]} />
+              <View>
+                <Text style={[styles.statusLabel, { color: isOnline ? '#10B981' : '#94A3B8' }]}>{isOnline ? "ONLINE/OFFLINE" : "STANDBY MODE"}</Text>
+                <Text style={styles.statusSubText}>{isOnline ? "Receiving incoming requests" : "Currently offline from system"}</Text>
+              </View>
+            </View>
+            <Switch value={isOnline} onValueChange={toggleOnlineStatus} trackColor={{ false: "#1E293B", true: "#059669" }} thumbColor={"#FFF"} />
+          </View>
+
+          <View style={styles.fluidStatsGrid}>
+            <TouchableOpacity style={[styles.fluidStatCard, borderType2]} onPress={() => router.push('/expert-history')}>
+              <MaterialCommunityIcons name="history" size={20} color={theme.primary} />
+              <Text style={styles.statValue}>LOGS</Text> 
+              <Text style={styles.statLabel}>HISTORY</Text>
+            </TouchableOpacity>
+            {/* 🔥 SATTI FIX: UPDATED ONPRESS TO TRIGGER 30-MIN LOCK LOGIC 🔥 */}
+            <TouchableOpacity style={[styles.fluidStatCard, borderType1]} onPress={handleOpenRateModal}>
+              <FontAwesome5 name="fire-alt" size={18} color="#FBBF24" />
+              <Text style={styles.statValue}>{expertData?.pricePerMin || 1000}</Text>
+              <Text style={styles.statLabel}>EDIT RATE</Text>
+            </TouchableOpacity>
+            <View style={[styles.fluidStatCard, borderType2]}>
+              <MaterialCommunityIcons name="currency-inr" size={20} color="#10B981" />
+              <Text style={styles.statValue}>₹{(expertData?.pricePerMin * 0.01 || 0).toFixed(0)}</Text>
+              <Text style={styles.statLabel}>PER MIN</Text>
+            </View>
+          </View>
+
+          <View style={[styles.fluidWalletCard, borderType1]}>
+              <View style={styles.walletHeader}>
+                <Text style={styles.walletTitle}>NET REVENUE REWARDS</Text>
+                <MaterialCommunityIcons name="integrated-circuit-chip" size={32} color={theme.primary + '60'} />
+              </View>
+              <Text style={styles.walletBeansValue}>{walletBalance.toLocaleString()}</Text>
+              <View style={styles.walletFooter}>
+                <Text style={[styles.walletSubTitle, {color: 'rgba(255,255,255,0.6)'}]}>WITHDRAWABLE BALANCE</Text>
+                <View style={[styles.lifetimeBadge, { backgroundColor: theme.primary + '20' }]}>
+                    <Text style={[styles.lifetimeText, { color: theme.primary }]}>LIFETIME REWARDS: {totalBeans.toLocaleString()}</Text>
+                </View>
+              </View>
+          </View>
+
+          <View style={styles.cyberProgressBox}>
+              <View style={styles.progressTextRow}>
+                <Text style={styles.sectionTitle}>RANK PROGRESS</Text>
+                <Text style={[styles.percentText, { color: theme.primary }]}>{progressPercent.toFixed(0)}%</Text>
+              </View>
+              <View style={styles.neonBarContainer}>
+                <View style={styles.neonBarBg}>
+                  <LinearGradient
+                    colors={[theme.primary, theme.accent, '#FFF']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                    style={[styles.neonBarFill, { width: `${progressPercent}%` }]}
+                  />
+                </View>
+                <View style={styles.barSegments}>
+                    {[1,2,3,4,5,6,7,8].map(i => <View key={i} style={styles.segmentLine} />)}
+                </View>
+              </View>
+              <Text style={styles.nextLevelText}>{config.next > 0 ? `${pendingBeans.toLocaleString()} more to reach Level ${config.lvl + 1}` : "ULTIMATE RANK REACHED"}</Text>
+          </View>
+
+          {expertData?.expertiseTags && expertData.expertiseTags.length > 0 && (
+             <View style={styles.marginSection}>
+                <Text style={styles.sectionTitle}>CORE EXPERTISE</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                    {expertData.expertiseTags.map((tag: string, index: number) => (
+                        <LinearGradient key={index} colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.premiumChip}>
+                            <MaterialCommunityIcons name="star-four-points" size={12} color="#FFF" style={{marginRight: 6}} />
+                            <Text style={styles.premiumChipText}>{tag}</Text>
+                        </LinearGradient>
+                    ))}
+                </ScrollView>
+             </View>
+          )}
+
+          {expertData?.hobbies && expertData.hobbies.length > 0 && (
+             <View style={styles.marginSection}>
+                <Text style={styles.sectionTitle}>INTERESTS & HOBBIES</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                    {expertData.hobbies.map((tag: string, index: number) => (
+                        <View key={index} style={[styles.cyberHobbyChip, { borderLeftColor: theme.primary }]}>
+                            <Text style={styles.cyberHobbyText}>{tag}</Text>
+                        </View>
+                    ))}
+                </ScrollView>
+             </View>
+          )}
+
+          <View style={styles.marginSection}>
+             <View style={styles.progressTextRow}>
+                <Text style={styles.sectionTitle}>PORTFOLIO GALLERY</Text>
+                <TouchableOpacity onPress={uploadGalleryImage} disabled={galleryUploading}>
+                    {galleryUploading ? <ActivityIndicator size="small" color={theme.primary} /> : <Feather name="plus-circle" size={20} color={theme.primary} />}
+                </TouchableOpacity>
+             </View>
+             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop: 10}}>
+                {expertData?.gallery?.map((img: string, index: number) => <Image key={index} source={{ uri: img }} style={styles.galleryImg} />)}
+                {(!expertData?.gallery || expertData?.gallery.length === 0) && <View style={styles.emptyGallery}><Text style={styles.emptyText}>Upload your work</Text></View>}
+             </ScrollView>
+          </View>
+
+          <View style={styles.bioWrapper}>
+            <Text style={styles.sectionTitle}>BIO DESCRIPTION</Text>
+            <BlurView intensity={15} tint="dark" style={[styles.fluidBioBox, borderType2]}>
+              <Text style={styles.bioText}>{expertData?.bio || "Describe your professional skills."}</Text>
+            </BlurView>
+          </View>
+
+          {/* 🔥 SUPPORT & LEGAL BUTTONS 🔥 */}
+          <View style={[styles.compactRow, { marginTop: 30 }]}>
+              <TouchableOpacity
+                  style={[styles.compactBtn, { borderColor: theme.primary, borderWidth: 1 }]}
+                  onPress={() => router.push('/expert/support' as any)}
+              >
+                  <LinearGradient
+                      colors={[theme.primary + '30', 'rgba(0,0,0,0.6)']}
+                      start={{x:0, y:0}} end={{x:1, y:1}}
+                      style={[styles.compactGradient, { paddingVertical: 15 }]}
+                  >
+                      <MaterialCommunityIcons name="headset" size={16} color={theme.primary} />
+                      <Text style={[styles.compactBtnText, { color: theme.primary }]}>SUPPORT HUB</Text>
+                  </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                  style={[styles.compactBtn, { borderColor: theme.secondary, borderWidth: 1 }]}
+                  onPress={() => router.push('/expert/legal' as any)}
+              >
+                  <LinearGradient
+                      colors={[theme.secondary + '30', 'rgba(0,0,0,0.6)']}
+                      start={{x:0, y:0}} end={{x:1, y:1}}
+                      style={[styles.compactGradient, { paddingVertical: 15 }]}
+                  >
+                      <MaterialCommunityIcons name="shield-lock" size={16} color={theme.secondary} />
+                      <Text style={[styles.compactBtnText, { color: theme.secondary }]}>LEGAL</Text>
+                  </LinearGradient>
+              </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity style={styles.homeDeleteBtn} onPress={handleTerminateExpert} disabled={isDeleting}>
+              {isDeleting ? <ActivityIndicator color="#EF4444" /> : (
+                  <>
+                      <Ionicons name="trash-outline" size={14} color="#EF4444" />
+                      <Text style={styles.homeDeleteText}>TERMINATE IDENTITY</Text>
+                  </>
+              )}
+          </TouchableOpacity>
+
       </View>
 
-      {/* FOLLOWERS & REQUESTS MODAL - LOGIC UPDATED */}
-      <Modal visible={followModalVisible} animationType="slide" transparent={true}>
-        <View style={styles.overlay}>
-          <View style={[styles.modalBox, { maxHeight: '85%' }]}>
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
-                <Text style={styles.modalTitle}>Follower Manager</Text>
-                <TouchableOpacity onPress={() => setFollowModalVisible(false)}>
-                    <Ionicons name="close-circle" size={26} color="#F43F5E" />
+      <Modal visible={rateModalVisible} animationType="fade" transparent={true}>
+        <View style={styles.overlay}><View style={styles.modalBox}>
+            <Text style={styles.modalTitle}>Set Consultation Rate</Text>
+            <Text style={{color: '#94A3B8', fontSize: 12, marginBottom: 20}}>Rank: <Text style={{color: theme.primary}}>{config.label}</Text>. Max: <Text style={{color: '#FFF'}}>{config.rate}</Text> rewards.</Text>
+            
+            <Text style={styles.inputLabel}>Rewards Per Minute</Text>
+            
+            {/* 🔥 SATTI FIX: MAX PRICE QUICK BUTTON ADDED HERE 🔥 */}
+            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}>
+                <TextInput style={[styles.input, {flex: 1, marginBottom: 0}]} value={newRate} onChangeText={setNewRate} keyboardType="numeric" placeholderTextColor="#475569" />
+                <TouchableOpacity 
+                    style={{backgroundColor: `${theme.primary}20`, padding: 15, borderRadius: 15, marginLeft: 10, borderWidth: 1, borderColor: theme.primary}}
+                    onPress={() => setNewRate(String(config.rate))}
+                >
+                    <Text style={{color: theme.primary, fontWeight: '900', fontSize: 10, letterSpacing: 1}}>SET MAX</Text>
                 </TouchableOpacity>
             </View>
 
-            {/* TAB 1: NEW REQUESTS (PENDING ONLY) */}
-            <View style={styles.tabHeader}>
-              <Ionicons name="notifications" size={14} color="#818CF8" />
-              <Text style={styles.tabHeaderText}>NEW REQUESTS ({pendingRequests.length})</Text>
-            </View>
-            <FlatList
-              data={pendingRequests}
-              keyExtractor={(item) => item.id}
-              style={{maxHeight: 250, marginBottom: 15}}
-              renderItem={({ item }) => (
-                <View style={styles.requestItem}>
-                  <Image source={{ uri: item.senderImage || 'https://via.placeholder.com/150' }} style={styles.requestAvatar} />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ color: '#FFF', fontWeight: '800' }}>{item.senderName}</Text>
-                    <Text style={{ color: '#475569', fontSize: 10 }}>Wants to follow you</Text>
-                  </View>
-                  <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <TouchableOpacity onPress={() => handleAcceptRequest(item.id)} style={styles.acceptBtn}><Ionicons name="checkmark" size={18} color="#FFF" /></TouchableOpacity>
-                    <TouchableOpacity onPress={() => handleRejectOrUnfollow(item.id, 'reject')} style={styles.rejectBtn}><Ionicons name="close" size={18} color="#FFF" /></TouchableOpacity>
-                  </View>
-                </View>
-              )}
-              ListEmptyComponent={<Text style={styles.emptyListText}>No new requests at this moment.</Text>}
-            />
-
-            {/* TAB 2: MY FOLLOWERS (FRIENDS ONLY) */}
-            <View style={[styles.tabHeader, {marginTop: 10}]}>
-              <Ionicons name="people" size={14} color="#10B981" />
-              <Text style={[styles.tabHeaderText, {color: '#10B981'}]}>MY FOLLOWERS ({acceptedFollowers.length})</Text>
-            </View>
-            <FlatList
-              data={acceptedFollowers}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <View style={[styles.requestItem, {backgroundColor: '#1E293B60'}]}>
-                  <Image source={{ uri: item.senderImage || 'https://via.placeholder.com/150' }} style={styles.requestAvatar} />
-                  <View style={{ flex: 1, marginLeft: 12 }}>
-                    <Text style={{ color: '#FFF', fontWeight: '800' }}>{item.senderName}</Text>
-                    <Text style={{ color: '#10B981', fontSize: 10 }}>Connected</Text>
-                  </View>
-                  <TouchableOpacity onPress={() => handleRejectOrUnfollow(item.id, 'unfollow')} style={styles.removeBtn}>
-                    <Text style={styles.removeBtnText}>UNFOLLOW</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              ListEmptyComponent={<Text style={styles.emptyListText}>You don't have any followers yet.</Text>}
-            />
-          </View>
-        </View>
-      </Modal>
-
-      {/* RATE SETTINGS MODAL */}
-      <Modal visible={rateModalVisible} animationType="fade" transparent={true}>
-        <View style={styles.overlay}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Set Call Rate</Text>
-            <Text style={{color: '#94A3B8', fontSize: 12, marginBottom: 20}}>
-              Level: <Text style={{color: '#818CF8'}}>{levelInfo.label}</Text>. 
-              Range: <Text style={{color: '#FFF'}}>{levelInfo.minRate}</Text> - <Text style={{color: '#FFF'}}>{levelInfo.maxRate}</Text> beans/min.
-            </Text>
-            <Text style={styles.inputLabel}>Beans Per Minute</Text>
-            <TextInput style={styles.input} value={newRate} onChangeText={setNewRate} keyboardType="numeric" placeholderTextColor="#475569" />
-            <TouchableOpacity style={styles.saveBtn} onPress={handleUpdateRate} disabled={saving}>
-                {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>UPDATE RATE</Text>}
-            </TouchableOpacity>
+            <TouchableOpacity style={[styles.saveBtn, {backgroundColor: theme.primary}]} onPress={handleUpdateRate} disabled={saving}>{saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>CONFIRM RATE</Text>}</TouchableOpacity>
             <TouchableOpacity onPress={() => setRateModalVisible(false)} style={{marginTop: 15, alignItems: 'center'}}><Text style={{color: '#F43F5E'}}>Cancel</Text></TouchableOpacity>
-          </View>
-        </View>
+        </View></View>
       </Modal>
 
-      {/* IDENTITY EDIT MODAL */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.overlay}>
-          <ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: 'center'}}>
-          <View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Update Identity</Text>
-            <Text style={styles.inputLabel}>Display Name</Text>
-            <TextInput style={styles.input} value={editName} onChangeText={setEditName} placeholderTextColor="#475569" />
-            <Text style={styles.inputLabel}>Location</Text>
-            <TextInput style={styles.input} value={editLocation} onChangeText={setEditLocation} placeholderTextColor="#475569" />
-            <View style={{flexDirection: 'row', gap: 10}}>
-                <View style={{flex: 1}}>
-                    <Text style={styles.inputLabel}>Age</Text>
-                    <TextInput style={styles.input} value={editAge} onChangeText={setEditAge} keyboardType="numeric" placeholderTextColor="#475569" />
-                </View>
-                <View style={{flex: 1}}>
-                    <Text style={styles.inputLabel}>Gender</Text>
-                    <View style={styles.genderRow}>
-                        {['Male', 'Female'].map((g) => (
-                            <TouchableOpacity key={g} onPress={() => setEditGender(g)} style={[styles.genderBtn, editGender === g && styles.genderBtnActive]}>
-                                <Text style={[styles.genderBtnText, editGender === g && {color: '#FFF'}]}>{g}</Text>
-                            </TouchableOpacity>
-                        ))}
-                    </View>
-                </View>
+        <View style={styles.overlay}><ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: 'center', paddingVertical: 40}} showsVerticalScrollIndicator={false}>
+          <View style={styles.modalBoxLarge}>
+            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
+                <Text style={styles.modalTitle}>Update Identity</Text>
+                <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close-circle" size={24} color="#475569" /></TouchableOpacity>
             </View>
-            <Text style={styles.inputLabel}>Bio</Text>
-            <TextInput style={[styles.input, { height: 80 }]} value={editBio} onChangeText={setEditBio} multiline placeholderTextColor="#475569" />
-            <TouchableOpacity style={styles.saveBtn} onPress={handleSaveProfile} disabled={saving}>
-                {saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>SAVE CHANGES</Text>}
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setModalVisible(false)} style={{marginTop: 15, alignItems: 'center'}}><Text style={{color: '#F43F5E'}}>Cancel</Text></TouchableOpacity>
+            <Text style={[styles.inputLabel, {color: theme.primary}]}>Display Name</Text>
+            <TextInput style={styles.input} value={editName} onChangeText={setEditName} placeholderTextColor="#475569" />
+            <View style={{flexDirection: 'row', gap: 10}}>
+                <View style={{flex: 1}}><Text style={[styles.inputLabel, {color: theme.primary}]}>Age</Text><TextInput style={styles.input} value={editAge} onChangeText={setEditAge} keyboardType="numeric" placeholderTextColor="#475569" /></View>
+                <View style={{flex: 1.5}}><Text style={[styles.inputLabel, {color: theme.primary}]}>Location</Text><TextInput style={styles.input} value={editLocation} onChangeText={setEditLocation} placeholderTextColor="#475569" /></View>
+            </View>
+            <Text style={[styles.inputLabel, {color: theme.primary}]}>Gender</Text>
+            <View style={styles.genderRow}>{['Male', 'Female', 'Other'].map((g) => (
+                <TouchableOpacity key={g} onPress={() => setEditGender(g)} style={[styles.genderBtn, editGender === g && {backgroundColor: `${theme.primary}20`, borderColor: theme.primary}]}><Text style={[styles.genderBtnText, editGender === g && {color: theme.primary, fontWeight: '900'}]}>{g}</Text></TouchableOpacity>
+            ))}</View>
+            <Text style={[styles.inputLabel, {color: theme.primary}]}>Expertise (Max 3)</Text>
+            <View style={styles.tagsWrapper}>{EXPERTISE_TAGS.map((tag) => {
+                const isSel = editExpertise.includes(tag);
+                return <TouchableOpacity key={tag} onPress={() => toggleTag(tag, editExpertise, setEditExpertise, 3)} style={[styles.tagChip, isSel && {backgroundColor: theme.primary, borderColor: theme.primary}]}><Text style={[styles.tagChipText, isSel && {color: '#FFF'}]}>{tag}</Text></TouchableOpacity>
+            })}</View>
+            <Text style={[styles.inputLabel, {color: theme.primary}]}>Hobbies (Max 5)</Text>
+            <View style={styles.tagsWrapper}>{HOBBIES_TAGS.map((tag) => {
+                const isSel = editHobbies.includes(tag);
+                return <TouchableOpacity key={tag} onPress={() => toggleTag(tag, editHobbies, setEditHobbies, 5)} style={[styles.tagChip, isSel && {backgroundColor: theme.primary, borderColor: theme.primary}]}><Text style={[styles.tagChipText, isSel && {color: '#FFF'}]}>{tag}</Text></TouchableOpacity>
+            })}</View>
+            <Text style={[styles.inputLabel, {color: theme.primary}]}>Bio</Text>
+            <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} value={editBio} onChangeText={setEditBio} multiline placeholderTextColor="#475569" />
+            <TouchableOpacity style={[styles.saveBtn, {backgroundColor: theme.primary}]} onPress={handleSaveProfile} disabled={saving}>{saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>SAVE PROFILE</Text>}</TouchableOpacity>
           </View>
-          </ScrollView>
-        </View>
+        </ScrollView></View>
       </Modal>
 
-      <View style={{ height: 100 }} />
     </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: '#020617' },
-  container: { padding: 20 },
-  headerBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
-  leftHeader: { flex: 1 },
+  shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+  coverContainer: { width: '100%', height: 250, position: 'relative' },
+  coverImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+  headerBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', position: 'absolute', top: 5, left: 10, right: 5, zIndex: 10 },
   logoText: { color: '#FFF', fontSize: 22, fontWeight: '900' },
-  subLogo: { color: '#475569', fontSize: 8, fontWeight: '800' },
+  subLogo: { color: '#94A3B8', fontSize: 8, fontWeight: '800', letterSpacing: 1 },
+  leftHeader: { flex: 1 },
+  
+  // 🔥 BOTTOM LEFT: SHARE BUTTON
+  shareCoverBtn: { position: 'absolute', bottom: 2, left: 3, backgroundColor: 'rgb(243, 6, 156)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.4)', elevation: 5, zIndex: 10 },
+  // 🔥 BOTTOM RIGHT: CAMERA BUTTON
+  editCoverBtn: { position: 'absolute', bottom: 2, right: 3, backgroundColor: 'rgba(4, 4, 247, 0.6)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', zIndex: 10 },
+  
+  editCoverText: { color: '#FFF', fontSize: 11, fontWeight: '800', marginLeft: 6, letterSpacing: 0.5 },
+  
+  contentContainer: { paddingHorizontal: 20, marginTop: -60 },
   rightHeader: { flexDirection: 'row', alignItems: 'center' },
-  adminIconBtn: { width: 40, height: 40, backgroundColor: '#10B98110', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 8 },
-  iconCircle: { width: 40, height: 40, backgroundColor: '#1E293B', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
-  profileSection: { alignItems: 'center', marginBottom: 30 },
-  avatarWrapper: { position: 'relative' },
-  avatar: { width: 110, height: 110, borderRadius: 40, borderWidth: 3, borderColor: '#1E293B' },
-  loaderCenter: { justifyContent: 'center', alignItems: 'center', backgroundColor: '#1E293B' },
-  cameraIconBtn: { position: 'absolute', bottom: 0, right: -5, backgroundColor: '#3B82F6', padding: 6, borderRadius: 8 },
-  nameText: { color: '#FFF', fontSize: 26, fontWeight: '900', marginTop: 10 },
-  identityRow: { flexDirection: 'row', gap: 8, marginTop: 10, marginBottom: 5 },
-  idChip: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20, gap: 5 },
-  idChipText: { color: '#94A3B8', fontSize: 10, fontWeight: '700' },
-  editBtn: { marginVertical: 10, backgroundColor: '#3B82F615', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 8 },
-  editBtnText: { color: '#3B82F6', fontSize: 10, fontWeight: '900' },
-  levelBadge: { paddingHorizontal: 20, paddingVertical: 7, borderRadius: 12 },
-  levelBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
-  statusCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 15, borderRadius: 15, marginBottom: 20 },
-  statusInfo: { flexDirection: 'row', alignItems: 'center' },
-  liveIndicator: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
-  statusText: { fontSize: 13, fontWeight: '700' },
-  statsGrid: { flexDirection: 'row', gap: 8, marginBottom: 15 },
-  statBox: { flex: 1, backgroundColor: '#1E293B60', paddingVertical: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: '#1E293B' },
-  statValue: { color: '#FFF', fontSize: 16, fontWeight: '900' },
-  statLabel: { color: '#475569', fontSize: 7, fontWeight: '800' },
-  followersButton: { backgroundColor: '#1E293B60', padding: 15, borderRadius: 18, marginBottom: 20, borderWidth: 1, borderColor: '#1E293B', borderStyle: 'dashed' },
-  followersBtnContent: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  followersLeft: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  iconCircleSmall: { width: 32, height: 32, backgroundColor: '#818CF815', borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
-  followersBtnText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
-  walletContainer: { backgroundColor: '#1E293B40', borderRadius: 20, padding: 15, marginBottom: 25, borderWidth: 1, borderColor: '#1E293B' },
-  balanceMain: { borderBottomWidth: 1, borderBottomColor: '#1E293B', paddingBottom: 12, marginBottom: 10 },
-  walletLabel: { color: '#10B981', fontSize: 10, fontWeight: '900' },
-  walletValue: { color: '#FFF', fontSize: 24, fontWeight: '900', marginTop: 5 },
-  lifetimeBox: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  lifetimeLabel: { color: '#475569', fontSize: 9, fontWeight: '800' },
-  lifetimeValue: { color: '#818CF8', fontSize: 11, fontWeight: '900' },
-  sectionTitle: { color: '#475569', fontSize: 10, fontWeight: '900', marginBottom: 10 },
-  progressWrapper: { marginBottom: 25 },
+  adminIconBtn: { width: 38, height: 38, backgroundColor: 'rgba(16, 185, 129, 0.2)', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#10B98140' },
+  iconCircle: { width: 38, height: 38, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  profileSection: { alignItems: 'center', marginBottom: 25 },
+  avatarWrapper: { position: 'relative', padding: 5 },
+  avatarRing: { width: 140, height: 140, borderRadius: 70, justifyContent: 'center', alignItems: 'center' }, 
+  avatar: { width: 130, height: 130, borderRadius: 65, borderWidth: 4, borderColor: '#020617' },
+  cameraIconBtn: { position: 'absolute', bottom: 5, right: 5, padding: 8, borderRadius: 12, borderWidth: 3, borderColor: '#020617' },
+  nameText: { color: '#FFF', fontSize: 28, fontWeight: '900', marginTop: 15 },
+  
+  fluidIdentityCapsule: { flexDirection: 'row', width: '100%', borderRadius: 40, paddingVertical: 12, marginTop: 20, alignItems: 'center', justifyContent: 'space-evenly' },
+  fluidIdSection: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  fluidDivider: { width: 1, height: '70%' },
+  fluidIdLabel: { color: '#475569', fontSize: 8, fontWeight: '900', marginTop: 5 },
+  fluidIdVal: { color: '#FFF', fontSize: 13, fontWeight: '800', marginTop: 2 },
+  
+  expertActionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20 },
+  fluidActionPill: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 30 },
+  editProfileText: { fontSize: 10, fontWeight: '900' },
+  fluidCrownBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 30, gap: 6 },
+  levelBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900' },
+  
+  fluidStatusCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderRadius: 35, marginBottom: 20 },
+  statusInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  statusDot: { width: 10, height: 10, borderRadius: 5, elevation: 10 },
+  statusLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  statusSubText: { color: '#475569', fontSize: 9, fontWeight: '600' },
+  
+  fluidStatsGrid: { flexDirection: 'row', gap: 12, marginBottom: 20 },
+  fluidStatCard: { flex: 1, paddingVertical: 20, borderRadius: 30, alignItems: 'center' },
+  statValue: { color: '#FFF', fontSize: 16, fontWeight: '900', marginVertical: 4 },
+  statLabel: { color: '#475569', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
+  
+  fluidWalletCard: { padding: 25, borderRadius: 40, marginBottom: 30, elevation: 15 },
+  walletHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  walletTitle: { color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  walletBeansValue: { color: '#FFF', fontSize: 38, fontWeight: '900', marginVertical: 12 },
+  walletFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  walletSubTitle: { fontSize: 9, fontWeight: '800' },
+  lifetimeBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
+  lifetimeText: { fontSize: 10, fontWeight: '800' },
+  
+  cyberProgressBox: { marginBottom: 30, padding: 15 },
   progressTextRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  percentText: { color: '#818CF8', fontSize: 11, fontWeight: '900' },
-  progressBg: { backgroundColor: '#1E293B', height: 40, borderRadius: 12, justifyContent: 'center', paddingHorizontal: 15, overflow: 'hidden', marginTop: 5 },
-  progressFill: { position: 'absolute', left: 0, height: '100%', backgroundColor: '#3B82F620' },
-  progressLabel: { color: '#818CF8', fontSize: 10, fontWeight: '700' },
-  galleryWrapper: { marginBottom: 25 },
-  galleryScroll: { flexDirection: 'row' },
-  galleryImg: { width: 90, height: 90, borderRadius: 12, marginRight: 10, backgroundColor: '#1E293B' },
-  emptyGallery: { width: width - 40, height: 90, borderRadius: 12, backgroundColor: '#1E293B40', justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#475569' },
+  neonBarContainer: { height: 35, justifyContent: 'center', marginVertical: 10 },
+  neonBarBg: { height: 10, backgroundColor: '#0F172A', borderRadius: 5, overflow: 'hidden' },
+  neonBarFill: { height: '100%', borderRadius: 5 },
+  barSegments: { position: 'absolute', flexDirection: 'row', justifyContent: 'space-around', width: '100%' },
+  segmentLine: { width: 2, height: 15, backgroundColor: '#020617' },
+  percentText: { fontSize: 18, fontWeight: '900' },
+  nextLevelText: { color: '#475569', fontSize: 9, fontWeight: '700', textAlign: 'center' },
+  marginSection: { marginBottom: 25 },
+  sectionTitle: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 10 },
+  chipScroll: { gap: 10, paddingBottom: 10 },
+  premiumChip: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  premiumChipText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
+  cyberHobbyChip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, borderLeftWidth: 4 },
+  cyberHobbyText: { color: '#E2E8F0', fontSize: 12, fontWeight: '700' },
+  galleryImg: { width: 100, height: 100, borderRadius: 15, marginRight: 10 },
+  emptyGallery: { width: width - 40, height: 100, borderRadius: 15, backgroundColor: 'rgba(30, 41, 59, 0.4)', justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#334155' },
   emptyText: { color: '#475569', fontSize: 10, fontWeight: '700' },
-  bioWrapper: { width: '100%' },
-  bioBox: { backgroundColor: '#1E293B40', padding: 15, borderRadius: 15 },
-  bioText: { color: '#94A3B8', fontSize: 14, lineHeight: 20 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'center', padding: 25 },
+  
+  bioWrapper: { width: '100%', marginTop: 10 }, 
+  fluidBioBox: { padding: 22, borderRadius: 35, overflow: 'hidden' },
+  bioText: { color: '#94A3B8', fontSize: 14, lineHeight: 22 },
+  
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 20 },
   modalBox: { backgroundColor: '#0F172A', borderRadius: 30, padding: 25 },
+  modalBoxLarge: { backgroundColor: '#0F172A', borderRadius: 30, padding: 20, borderWidth: 1, borderColor: '#1E293B' },
   modalTitle: { color: '#FFF', fontSize: 20, fontWeight: '900' },
-  inputLabel: { color: '#818CF8', fontSize: 10, fontWeight: '800', marginBottom: 5, marginLeft: 5 },
+  inputLabel: { fontSize: 10, fontWeight: '900', marginBottom: 5, letterSpacing: 1 },
   input: { backgroundColor: '#1E293B', borderRadius: 15, padding: 15, color: '#FFF', marginBottom: 15 },
   genderRow: { flexDirection: 'row', gap: 10, marginBottom: 15 },
-  genderBtn: { flex: 1, backgroundColor: '#1E293B', padding: 12, borderRadius: 12, alignItems: 'center' },
-  genderBtnActive: { backgroundColor: '#3B82F6' },
-  genderBtnText: { color: '#475569', fontSize: 12, fontWeight: '800' },
-  saveBtn: { backgroundColor: '#3B82F6', padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 },
+  genderBtn: { flex: 1, backgroundColor: '#1E293B', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
+  genderBtnText: { color: '#94A3B8', fontSize: 12, fontWeight: '800' },
+  tagsWrapper: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  tagChip: { backgroundColor: '#1E293B', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#334155' },
+  tagChipText: { color: '#94A3B8', fontSize: 11, fontWeight: '700' },
+  saveBtn: { padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 },
   saveBtnText: { color: '#FFF', fontWeight: '900' },
-  tabHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
-  tabHeaderText: { color: '#818CF8', fontSize: 10, fontWeight: '900' },
-  requestItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1E293B', padding: 12, borderRadius: 15, marginBottom: 10 },
-  requestAvatar: { width: 40, height: 40, borderRadius: 20 },
-  acceptBtn: { backgroundColor: '#10B981', padding: 8, borderRadius: 10 },
-  rejectBtn: { backgroundColor: '#F43F5E', padding: 8, borderRadius: 10 },
-  removeBtn: { backgroundColor: '#334155', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 },
-  removeBtnText: { color: '#F43F5E', fontSize: 9, fontWeight: '900' },
-  emptyListText: { color: '#475569', textAlign: 'center', marginVertical: 15, fontSize: 11, fontStyle: 'italic' }
+  loaderCenter: { justifyContent: 'center', alignItems: 'center' },
+  homeDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, paddingVertical: 15, borderRadius: 15, backgroundColor: 'rgba(239, 68, 68, 0.08)', borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)', width: '80%', alignSelf: 'center' },
+  homeDeleteText: { color: '#EF4444', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+
+  compactTopBar: {
+    width: 'auto',
+    justifyContent: 'center',
+    paddingVertical: 12, 
+    paddingHorizontal: 12,
+    marginHorizontal: 15,
+    marginTop: 10,
+    marginBottom: 10,
+    borderRadius: 20,
+    overflow: 'hidden',
+  },
+  compactActionGrid: {
+      width: '100%',
+      gap: 10
+  },
+  compactRow: {
+      flexDirection: 'row',
+      width: '100%',
+      gap: 10,
+      justifyContent: 'space-between'
+  },
+  compactBtn: {
+      flex: 1,
+      borderRadius: 12,
+      overflow: 'hidden',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+  },
+  compactGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+      gap: 6
+  },
+  compactBtnText: {
+      color: '#FFF',
+      fontWeight: '900',
+      fontSize: 11,
+      letterSpacing: 1,
+  },
+  liveButtonGlow: {
+      position: 'absolute',
+      top: 0, left: 0, right: 0, bottom: 0,
+      borderRadius: 12,
+      backgroundColor: '#FF0000',
+      opacity: 0.2,
+      zIndex: -1
+  },
+  masterclassBtn: {
+      borderRadius: 12,
+      overflow: 'hidden',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOpacity: 0.3,
+      shadowRadius: 5,
+  },
+  masterclassGradient: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center', 
+      padding: 15, 
+  },
+  masterclassTitle: {
+      fontSize: 14, 
+      fontWeight: '900',
+      letterSpacing: 3, 
+      textTransform: 'uppercase'
+  }
 });
