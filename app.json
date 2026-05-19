@@ -14,17 +14,23 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.talkpe.app"
+      "bundleIdentifier": "com.talkpe.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "TalkPe Pro requires camera access to enable professional one-on-one video consultations and interactive live sessions.",
+        "NSMicrophoneUsageDescription": "TalkPe Pro requires microphone access for seamless audio communication during expert sessions and social gaming."
+      }
     },
     "android": {
       "package": "com.talkpe.app",
       "versionCode": 13,
       "googleServicesFile": "./google-services.json",
       "permissions": [
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECORD_AUDIO"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.INTERNET"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/icon.png",
@@ -40,7 +46,13 @@
       "expo-router",
       "@react-native-google-signin/google-signin",
       "expo-web-browser",
-      "expo-video"
+      "expo-video",
+      [
+        "expo-media-library",
+        {
+          "photosPermission": "Allow TalkPe Pro to access your gallery to update your professional profile picture."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

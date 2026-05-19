@@ -154,7 +154,7 @@ export default function ProfileScreen() {
       let rawTransactions: any[] = [];
       let rawGifts: any[] = [];
       let rawRequests: any[] = []; 
-      let rawGames: any[] = []; // 🔥 Holds Game History directly
+      let rawGames: any[] = []; // 🔥 Holds Pure Reflex Blitz Arena History
 
       const processAllLogs = () => {
           const myGifts = rawGifts.filter(g => 
@@ -162,10 +162,10 @@ export default function ProfileScreen() {
               (g.senderName && userData.name && String(g.senderName).trim().toLowerCase() === String(userData.name).trim().toLowerCase())
           );
 
-          // 🔥 FILTER OUT dummy logs from transactions to avoid UI duplicates
+          // 🔥 FILTER OUT dummy logs from transactions
           const validTransactions = rawTransactions.filter(t => {
               const typeStr = String(t.type).toUpperCase();
-              return typeStr !== 'VOUCHER_REDEEM' && !typeStr.includes('GAME_BET') && !typeStr.includes('WINNER');
+              return typeStr !== 'VOUCHER_REDEEM' && !typeStr.includes('GAME_bet') && !typeStr.includes('WINNER');
           });
 
           // Inject Reward Requests
@@ -179,7 +179,7 @@ export default function ProfileScreen() {
               timestamp: r.requestDate || r.processedDate || r.createdAt
           }));
 
-          // 🔥 INJECT Game History directly into UI logs
+          // 🔥 INJECT Reflex Blitz Arena Activity directly into UI logs
           const mappedGames = rawGames.map(g => ({
               ...g,
               _source: 'game_history',
@@ -210,7 +210,7 @@ export default function ProfileScreen() {
           }, 0);
           setTotalRechargeDiamonds(calcRechargeINR * 100);
 
-          // 2. 🔥 SATTI FIX: Calculate Gifts Accurately from both sources 🔥
+          // 2. 🔥 Calculate Gifts Accurately from both sources 🔥
           const calcGiftsFromNested = myGifts.reduce((sum, log) => sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0), 0);
           const calcGiftsFromTx = rawTransactions.reduce((sum, log) => {
               const typeStr = String(log.type || '').toUpperCase();
@@ -241,19 +241,19 @@ export default function ProfileScreen() {
           }, 0);
           setTotalRedeemed(calcRedeemed);
 
-          // 5. Calculate Game Net Directly from Real Game History
+          // 5. Calculate Activity Net Directly
           const calcGameNet = rawGames.reduce((sum, log) => {
               const isWin = String(log.status || '').toUpperCase() === 'WIN';
               const winVal = Number(log.winAmount) || 0;
-              const lossVal = Number(log.lossAmount) || Number(log.betAmount) || 0;
+              const lossVal = Number(log.lossAmount) || Number(log.entryFee) || 0;
               return isWin ? sum + winVal : sum - lossVal;
           }, 0);
           setGameNetProfit(calcGameNet);
 
-          // 6. 🔥 Calculate Total Spent (Video Calls + Gifts + Redeems + Game Losses - Recharge is omitted!) 🔥
+          // 6. 🔥 Calculate Total Spent (Video Calls + Gifts + Redeems + Participation Losses) 🔥
           const totalGameLosses = rawGames.reduce((sum, log) => {
               const isWin = String(log.status || '').toUpperCase() === 'WIN';
-              return isWin ? sum : sum + (Number(log.lossAmount) || Number(log.betAmount) || 0);
+              return isWin ? sum : sum + (Number(log.lossAmount) || Number(log.entryFee) || 0);
           }, 0);
           const grandTotalSpent = calcVideoCalls + calcGifts + calcRedeemed + totalGameLosses;
           setTotalSpentCalculated(grandTotalSpent);
@@ -280,7 +280,7 @@ export default function ProfileScreen() {
           processAllLogs();
       });
 
-      const qGameHistory = query(collection(db, "users", user.uid, "gameHistory"));
+      const qGameHistory = query(collection(db, "users", user.uid, "activityHistory"));
       const unsubGameHistory = onSnapshot(qGameHistory, (snap) => {
           rawGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           processAllLogs();
@@ -406,19 +406,19 @@ export default function ProfileScreen() {
       );
   };
 
-  // 🔥 NEW: DEDICATED GAME HISTORY RENDERER 🔥
+  // 🔥 NEW: DEDICATED ACTIVITY HISTORY RENDERER 🔥
   const renderGameHistoryItem = (item: any, index: number) => {
       const rawStatus = String(item.status || "COMPLETED").toUpperCase();
       const isWin = rawStatus === "WIN";
       const amountColor = isWin ? '#10B981' : '#EF4444'; 
       
       const winVal = Number(item.winAmount) || 0;
-      const lossVal = Number(item.lossAmount) || Number(item.betAmount) || 0;
+      const lossVal = Number(item.lossAmount) || Number(item.entryFee) || 0;
       const finalAmount = isWin ? winVal : lossVal;
       const displayAmount = isWin ? `+${finalAmount.toLocaleString()}` : `-${finalAmount.toLocaleString()}`;
       
-      const gameIcon = String(item.gameType).toUpperCase() === "RACING" ? "car-sport" : "dice";
-      const gameName = String(item.gameType).toUpperCase() === "RACING" ? "TURBO RACING" : "FORTUNE CLASH";
+      const gameIcon = "dice";
+      const gameName = "REFLEX BLITZ ARENA";
 
       let displayTime = 'JUST NOW';
       if (item.timestamp?.toDate) {
@@ -440,7 +440,7 @@ export default function ProfileScreen() {
                   <Text style={styles.historyTitle} numberOfLines={1}>{gameName}</Text>
                   <Text style={styles.historyDate}>{displayTime}</Text>
                   <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 4, fontWeight: '600' }}>
-                      Round: {item.roundId || 'N/A'} | Pick: {item.pick || 'N/A'} | Result: {item.result || 'N/A'}
+                      Session: {item.sessionId || 'N/A'} | Entry: {item.entryFee || '0'}
                   </Text>
               </View>
               <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>

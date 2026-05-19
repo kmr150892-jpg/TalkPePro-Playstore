@@ -326,7 +326,7 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                                     <BlurView intensity={15} tint="dark" style={[styles.fluidUserCard, cardBorderStyle]}>
                                         <View style={styles.avatarNode}>
                                             <TouchableOpacity onPress={() => router.push({ pathname: '/user-detail', params: { id: item.userId } } as any)}>
-                                                {/* ✅ RING COLOR MATCHES USER'S OWN TIER */}
+                                                {/* ✅ RING COLOR DiscoverES USER'S OWN TIER */}
                                                 <View style={[styles.nodeAvatarRing, { borderColor: userTier.color, shadowColor: userTier.color }]}>
                                                     <Image source={{ uri: item.userImage || `https://ui-avatars.com/api/?name=${item.userName}&background=1E293B&color=fff&bold=true` }} style={styles.nodeAvatarImg} />
                                                 </View>

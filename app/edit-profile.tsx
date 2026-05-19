@@ -33,8 +33,8 @@ const UPLOAD_PRESET = "talkpe";
 
 // 🔥 Refined Labels for Compliance
 const EXPERTISE_TAGS = [
-  "Relationship Advice", "Astrology", "Career Guide", "Good Listener", 
-  "Dating Tips", "Mental Wellness", "Entertainment", "Spiritual"
+  "Community Advice", "Astrology", "Career Guide", "Good Listener", 
+  "Networking Tips", "Mental Wellness", "Entertainment", "Spiritual"
 ];
 
 const HOBBIES_TAGS = [

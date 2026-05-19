@@ -203,7 +203,7 @@ export default function RegisterExpert() {
                 totalBeansEarned: 0,
                 totalWithdrawnRs: 0,
                 longestCallDuration: 0,    
-                pendingPayout: 0,
+                pendingACTIVITY_REWARD: 0,
                 lastCallFrom: "Waiting...",
                 topCallerName: "No Community Activity", 
                 

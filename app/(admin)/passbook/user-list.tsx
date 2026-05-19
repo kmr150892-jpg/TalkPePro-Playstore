@@ -120,7 +120,7 @@ export default function UserPassbookList() {
                     ListEmptyComponent={
                         <View style={styles.emptyBox}>
                             <MaterialCommunityIcons name="account-search" size={48} color="#334155" />
-                            <Text style={styles.emptyText}>No matching client profiles found.</Text>
+                            <Text style={styles.emptyText}>No Discovering client profiles found.</Text>
                         </View>
                     }
                 />

@@ -25,8 +25,8 @@ interface BottomControlsProps {
     isGameVisible: boolean;
     isChatVisible: boolean;
     isMuted: boolean;
-    isBeautyEnabled?: boolean; // 🔥 NEW PROPS FOR BEAUTY FILTER
-    toggleBeauty?: () => void; // 🔥 NEW PROPS FOR BEAUTY FILTER
+    isProEnabled?: boolean; // 🔥 NEW PROPS FOR Pro FILTER
+    togglePro?: () => void; // 🔥 NEW PROPS FOR Pro FILTER
     toggleGameVisibility: () => void;
     toggleChatVisibility: () => void;
     toggleMute: () => void;
@@ -45,8 +45,8 @@ export default function BottomControls({
     isGameVisible,
     isChatVisible,
     isMuted,
-    isBeautyEnabled = false,
-    toggleBeauty,
+    isProEnabled = false,
+    togglePro,
     toggleGameVisibility,
     toggleChatVisibility,
     toggleMute,
@@ -108,10 +108,10 @@ export default function BottomControls({
                     <Ionicons name="game-controller" size={22} color={isGameVisible ? theme.accent : "#FFF"} />
                 </TouchableOpacity>
 
-                {/* ✨ BEAUTY FILTER BUTTON (CONSULTANT ONLY) */}
+                {/* ✨ Pro FILTER BUTTON (CONSULTANT ONLY) */}
                 {isConsultant && (
-                    <TouchableOpacity style={[styles.blurBtn, isBeautyEnabled && activeBorderType]} onPress={toggleBeauty}>
-                        <Ionicons name="sparkles" size={22} color={isBeautyEnabled ? theme.accent : "#FFF"} />
+                    <TouchableOpacity style={[styles.blurBtn, isProEnabled && activeBorderType]} onPress={togglePro}>
+                        <Ionicons name="sparkles" size={22} color={isProEnabled ? theme.accent : "#FFF"} />
                     </TouchableOpacity>
                 )}
 

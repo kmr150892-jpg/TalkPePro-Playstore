@@ -27,7 +27,7 @@ const AdminPanel = () => {
     const [loading, setLoading] = useState(true);
     const [pendingExperts, setPendingExperts] = useState<any[]>([]);
     const [bankRequests, setBankRequests] = useState<any[]>([]); 
-    const [totalPayoutPool, setTotalPayoutPool] = useState(0);
+    const [totalACTIVITY_REWARDPool, setTotalACTIVITY_REWARDPool] = useState(0);
     
     const [isMaintenance, setIsMaintenance] = useState(false);
     const [minVersion, setMinVersion] = useState("1.0.5");
@@ -57,7 +57,7 @@ const AdminPanel = () => {
                 const amt = d.data().amountRupee || d.data().amount || 0;
                 pendingSum += Number(amt); 
             });
-            setTotalPayoutPool(pendingSum);
+            setTotalACTIVITY_REWARDPool(pendingSum);
         });
         unsubs.push(unsubWithdrawals);
 
@@ -101,7 +101,7 @@ const AdminPanel = () => {
 
             // 1. Update User Node - Synchronizing allocated balances
             await updateDoc(userRef, {
-                pendingPayout: increment(-amountToProcess), 
+                pendingACTIVITY_REWARD: increment(-amountToProcess), 
                 totalWithdrawnRs: increment(amountToProcess) 
             });
 
@@ -280,9 +280,9 @@ const AdminPanel = () => {
 
                     {activeTab === 'SETTLEMENTS' && (
                         <View>
-                            <View style={styles.payoutMainCard}>
-                                <Text style={styles.payoutTitle}>TOTAL SETTLEMENT LIABILITIES</Text>
-                                <Text style={styles.payoutAmt}>₹{totalPayoutPool.toLocaleString()}</Text>
+                            <View style={styles.ACTIVITY_REWARDMainCard}>
+                                <Text style={styles.ACTIVITY_REWARDTitle}>TOTAL SETTLEMENT LIABILITIES</Text>
+                                <Text style={styles.ACTIVITY_REWARDAmt}>₹{totalACTIVITY_REWARDPool.toLocaleString()}</Text>
                                 <TouchableOpacity style={styles.withdrawBtn} onPress={() => router.push('/finance/withdrawals' as any)}>
                                     <Text style={styles.withdrawText}>AUDIT DISBURSEMENTS</Text>
                                     <Feather name="arrow-right" size={16} color="#312E81" />
@@ -404,9 +404,9 @@ const styles = StyleSheet.create({
     expertHubIconBox: { backgroundColor: '#6366F1', padding: 10, borderRadius: 15 },
     expertHubTitle: { fontWeight: '900', fontSize: 15, color: '#fff', letterSpacing: 0.5 },
     expertHubSub: { color: '#94A3B8', fontSize: 11, marginTop: 3, fontWeight: '600' },
-    payoutMainCard: { backgroundColor: '#1E1B4B', padding: 35, borderRadius: 40, borderWidth: 1, borderColor: '#312E81' },
-    payoutTitle: { color: '#818CF8', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
-    payoutAmt: { color: '#fff', fontSize: 40, fontWeight: '900', marginVertical: 15 },
+    ACTIVITY_REWARDMainCard: { backgroundColor: '#1E1B4B', padding: 35, borderRadius: 40, borderWidth: 1, borderColor: '#312E81' },
+    ACTIVITY_REWARDTitle: { color: '#818CF8', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+    ACTIVITY_REWARDAmt: { color: '#fff', fontSize: 40, fontWeight: '900', marginVertical: 15 },
     withdrawBtn: { backgroundColor: '#fff', padding: 18, borderRadius: 22, flexDirection: 'row', justifyContent: 'center', alignItems: 'center' },
     withdrawText: { color: '#1E1B4B', fontWeight: '900', marginRight: 10, fontSize: 14 },
     expertCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: '#0F172A', padding: 18, borderRadius: 24, marginBottom: 12, borderWidth: 1, borderColor: '#1E293B' },

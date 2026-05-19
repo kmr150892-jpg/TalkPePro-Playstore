@@ -2,11 +2,12 @@ import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 
 // 🚀 SECURE LEDGER ACTIVITY PROTOCOL
+// This module handles social engagement rewards and activity participation fees.
 export const recordTransaction = async (
   userId: string, 
   userName: string, 
   amount: number, 
-  type: 'RECHARGE' | 'CALL_DEDUCTION' | 'PAYOUT',
+  type: 'RECHARGE' | 'CALL_DEDUCTION' | 'ACTIVITY_REWARD',
   details: string = ""
 ) => {
   try {

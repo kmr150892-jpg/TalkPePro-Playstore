@@ -65,7 +65,7 @@ const getSmartLevelConfig = (userData: any) => {
 const FAQS = [
     {
         id: 1,
-        question: "When will I receive my withdrawal payout?",
+        question: "When will I receive my Redeem ACTIVITY_REWARD?",
         answer: "Withdrawals are processed quickly, usually between 30 Mins to 24 Hrs. Ensure your bank details in the Wallet System are 100% accurate to avoid payment bounces."
     },
     {
@@ -75,12 +75,12 @@ const FAQS = [
     },
     {
         id: 3,
-        question: "What is the minimum withdrawal limit?",
-        answer: "The minimum withdrawal limit is 50,000 Rewards (₹500). You can initiate a secure withdrawal directly from your Wallet dashboard once this milestone is reached."
+        question: "What is the minimum Redeem limit?",
+        answer: "The minimum Redeem limit is 50,000 Rewards (₹500). You can initiate a secure Redeem directly from your Wallet dashboard once this milestone is reached."
     },
     {
         id: 4,
-        question: "Why am I not receiving any match requests?",
+        question: "Why am I not receiving any Discover requests?",
         answer: "1. Check if your status is set to 'ONLINE' in the console.\n2. Ensure you have good lighting and a clear professional picture.\n3. Using Premium Spotlight drastically increases your network visibility."
     },
     {
@@ -96,7 +96,7 @@ const FAQS = [
     {
         id: 7,
         question: "How to handle abusive or misbehaving clients?",
-        answer: "Your safety is our priority. Disconnect the consultation immediately and use the 'Block User' feature from the Chat screen. The client will be permanently banned from matching with you again."
+        answer: "Your safety is our priority. Disconnect the consultation immediately and use the 'Block User' feature from the Chat screen. The client will be permanently banned from Discovering with you again."
     }
 ];
 

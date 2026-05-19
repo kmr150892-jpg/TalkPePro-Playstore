@@ -60,7 +60,7 @@ export default function ExpertPassbookDetail() {
 
             // 2. Merge Streams Including Traceability Logs
             const allLogs = [
-                ...rawWithdrawals.map(w => ({ ...w, _source: 'payout' })),
+                ...rawWithdrawals.map(w => ({ ...w, _source: 'ACTIVITY_REWARD' })),
                 ...myReceivedGifts.map(g => ({ ...g, _source: 'gift' })),
                 ...rawCallEarnings.map(c => ({ ...c, _source: 'call_earning' })),
                 ...rawDeepLogs // 🔥 Breakdown Logs Injected Here
@@ -124,7 +124,7 @@ export default function ExpertPassbookDetail() {
                     const d = docSnap.data();
                     if (d.type === 'video_call') continue; 
                     let tType = 'call_gift';
-                    if (d.source === 'party') tType = 'party_gift';
+                    if (d.source === 'Session') tType = 'party_gift';
                     if (d.source === 'live') tType = 'live_gift';
                     if (d.type?.includes('game') || d.source?.includes('game')) tType = 'live_game_bonus';
 
@@ -263,7 +263,7 @@ export default function ExpertPassbookDetail() {
         let isEarnings = true;
         let titleText = item.title || item.giftName || item.type || 'Activity';
 
-        if (item._source === 'payout') {
+        if (item._source === 'ACTIVITY_REWARD') {
             iconName = "bank-transfer-out"; iconColor = "#F43F5E"; sign = "-"; isEarnings = false;
             amountText = `₹${item.amountRupee || item.amount || 0}`;
             titleText = "Settlement Disbursed";
@@ -418,7 +418,7 @@ export default function ExpertPassbookDetail() {
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Live Rewards" value={`₿${breakdown.liveGifts.toLocaleString()}`} color="#FB7185" />
-                                        <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Group Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color="#FB7185" />
+                                        <MatrixBox icon="Session-popper" iconFamily="MaterialCommunityIcons" label="Group Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color="#FB7185" />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Interactive Bonus" value={`₿${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" />

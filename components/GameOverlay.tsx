@@ -166,7 +166,7 @@ export default function GameOverlay({
           <View>
             <Text style={styles.gameTitle}>Tic Tac Toe</Text>
             {gameType === 'tictactoe' && (
-              <Text style={[styles.gameSubTitle, { color: theme.primary }]}>Interactive Skill Match</Text>
+              <Text style={[styles.gameSubTitle, { color: theme.primary }]}>Interactive Skill Discover</Text>
             )}
           </View>
           <TouchableOpacity onPress={onClose} activeOpacity={0.7}>

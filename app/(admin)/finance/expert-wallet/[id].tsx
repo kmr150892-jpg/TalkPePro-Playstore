@@ -49,7 +49,7 @@ const ExpertWalletDetail = () => {
     );
 
     // 💡 Logic: Calculating Estimated Distribution (Standardized Unit Mapping)
-    const estimatedPayout = (expert?.walletBalance || 0);
+    const estimatedACTIVITY_REWARD = (expert?.walletBalance || 0);
 
     return (
         <View style={styles.container}>
@@ -93,7 +93,7 @@ const ExpertWalletDetail = () => {
 
                         <View style={styles.rupeeEquivalent}>
                             <Text style={styles.eqLabel}>Estimated Distribution:</Text>
-                            <Text style={styles.eqValue}>₹{estimatedPayout.toLocaleString()}</Text>
+                            <Text style={styles.eqValue}>₹{estimatedACTIVITY_REWARD.toLocaleString()}</Text>
                         </View>
 
                         <View style={styles.statsRow}>
@@ -150,14 +150,14 @@ const ExpertWalletDetail = () => {
 
                 {/* ⚡ ACTION INTERFACE */}
                 <TouchableOpacity 
-                    style={styles.payoutBtn} 
+                    style={styles.ACTIVITY_REWARDBtn} 
                     onPress={() => router.push(`/(admin)/withdrawals?expertId=${id}` as any)}
                 >
                     <LinearGradient 
                         colors={['#0F172A', '#1E293B']} 
-                        style={styles.payoutGradient}
+                        style={styles.ACTIVITY_REWARDGradient}
                     >
-                        <Text style={styles.payoutBtnText}>AUDIT DISBURSEMENT REQUESTS</Text>
+                        <Text style={styles.ACTIVITY_REWARDBtnText}>AUDIT DISBURSEMENT REQUESTS</Text>
                         <Feather name="arrow-right" size={18} color="#6366F1" />
                     </LinearGradient>
                 </TouchableOpacity>
@@ -228,9 +228,9 @@ const styles = StyleSheet.create({
     emptyBlur: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     emptyText: { color: '#1E293B', marginTop: 12, fontWeight: '900', fontSize: 12, letterSpacing: 1 },
 
-    payoutBtn: { margin: 25, height: 75, borderRadius: 25, overflow: 'hidden', borderWidth: 1, borderColor: '#6366F130' },
-    payoutGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15 },
-    payoutBtnText: { color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 1.5 }
+    ACTIVITY_REWARDBtn: { margin: 25, height: 75, borderRadius: 25, overflow: 'hidden', borderWidth: 1, borderColor: '#6366F130' },
+    ACTIVITY_REWARDGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 15 },
+    ACTIVITY_REWARDBtnText: { color: '#fff', fontWeight: '900', fontSize: 13, letterSpacing: 1.5 }
 });
 
 export default ExpertWalletDetail;

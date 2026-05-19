@@ -51,7 +51,7 @@ import { recordTransaction } from '../../../utils/finance';
                 return;
             }
 
-            // collectionGroup optimized for decentralized withdrawal nodes
+            // collectionGroup optimized for decentralized Redeem nodes
             const q = query(collectionGroup(db, "withdrawals"));
 
             const unsub = onSnapshot(q, (snap) => {
@@ -107,12 +107,12 @@ import { recordTransaction } from '../../../utils/finance';
                         }
 
                         const expertData = expertSnap.data();
-                        const currentPending = Number(expertData.pendingPayout || 0);
+                        const currentPending = Number(expertData.pendingACTIVITY_REWARD || 0);
                         const currentWithdrawn = Number(expertData.totalWithdrawnRs || 0);
 
                         if (status === 'SUCCESS') {
                             await updateDoc(expertRef, { 
-                                pendingPayout: Math.max(0, currentPending - amountToProcess),
+                                pendingACTIVITY_REWARD: Math.max(0, currentPending - amountToProcess),
                                 totalWithdrawnRs: currentWithdrawn + amountToProcess
                             });
 
@@ -120,14 +120,14 @@ import { recordTransaction } from '../../../utils/finance';
                                 request.userId, 
                                 request.expertName || "Consultant", 
                                 amountToProcess, 
-                                'PAYOUT', 
+                                'ACTIVITY_REWARD', 
                                 `Ref ID: ${request.id}`
                             );
                         } else {
                             // Atomic reversal for declined requests
                             const currentWallet = Number(expertData.walletBalance || 0);
                             await updateDoc(expertRef, { 
-                                pendingPayout: Math.max(0, currentPending - amountToProcess),
+                                pendingACTIVITY_REWARD: Math.max(0, currentPending - amountToProcess),
                                 walletBalance: currentWallet + amountToProcess
                             });
                         }

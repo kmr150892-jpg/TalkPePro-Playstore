@@ -146,7 +146,7 @@ export default function UserPassbookDetail() {
           setTotalMinutes(Math.floor(callMins / 60));
           setTotalVideoCallSpent(callSpent);
 
-          // 2. Calculate Games Net Profit (Win - Loss)
+          // 2. Calculate Games Net Earnings (Win - Loss)
           let tGameWin = 0;
           let tGameLoss = 0;
           rawGames.forEach(g => {
@@ -154,7 +154,7 @@ export default function UserPassbookDetail() {
               if (isWin) {
                   tGameWin += (Number(g.winAmount) || 0);
               } else {
-                  tGameLoss += (Number(g.lossAmount) || Number(g.betAmount) || 0);
+                  tGameLoss += (Number(g.lossAmount) || Number(g.entryFee) || 0);
               }
           });
           setGameNetProfit(tGameWin - tGameLoss);
@@ -202,7 +202,7 @@ export default function UserPassbookDetail() {
               } else {
                   // 🔥 AVOID DOUBLE COUNTING: Ignore types we already calculated above
                   const isCall = typeStr.includes('CALL');
-                  const isGame = typeStr.includes('GAME') || typeStr.includes('WINNER') || typeStr.includes('BET');
+                  const isGame = typeStr.includes('GAME') || typeStr.includes('WINNER') || typeStr.includes('entry');
                   const isVoucher = typeStr.includes('VOUCHER');
                   const isGift = typeStr.includes('GIFT');
                   const isRechargeAny = typeStr.includes('RECHARGE'); 
@@ -220,10 +220,10 @@ export default function UserPassbookDetail() {
           // 7. BUILD UI HISTORY LOGS
           const validTransactions = rawTransactions.filter(t => {
               const ts = String(t.type).toUpperCase();
-              return ts !== 'VOUCHER_REDEEM' && !ts.includes('GAME_BET') && !ts.includes('WINNER') && !ts.includes('CALL');
+              return ts !== 'VOUCHER_REDEEM' && !ts.includes('GAME_bet') && !ts.includes('WINNER') && !ts.includes('CALL');
           });
 
-          // Fallback added for amount matching the screenshot exactly
+          // Fallback added for amount Discovering the screenshot exactly
           const mappedRequests = rawRequests.map(r => ({
               id: r.id,
               _source: 'reward_requests',
@@ -399,7 +399,7 @@ export default function UserPassbookDetail() {
           const isRacing = String(item.gameType).toUpperCase() === "RACING";
           iconName = isRacing ? "car" : "dice-multiple"; 
           
-          const finalAmount = isWin ? (Number(item.winAmount) || 0) : (Number(item.lossAmount) || Number(item.betAmount) || 0);
+          const finalAmount = isWin ? (Number(item.winAmount) || 0) : (Number(item.lossAmount) || Number(item.entryFee) || 0);
           
           titleText = `Activity: ${String(item.gameType).toUpperCase()}`;
           amountValue = finalAmount;
@@ -410,11 +410,11 @@ export default function UserPassbookDetail() {
       else {
           const isRecharge = itemType.includes('RECHARGE');
           const isCall = itemType.includes('CALL');
-          const isBet = itemType === 'GAME_BET';
+          const isbet = itemType === 'GAME_bet';
           const isWinner = itemType.includes('WINNER');
           const isVoucher = itemType === 'VOUCHER_REDEEM' || item._source === 'reward_requests'; 
 
-          const isGiftUI = item._source === 'nested_gifts' || (!isRecharge && !isCall && !isBet && !isWinner && !isVoucher && itemType.includes('GIFT'));
+          const isGiftUI = item._source === 'nested_gifts' || (!isRecharge && !isCall && !isbet && !isWinner && !isVoucher && itemType.includes('GIFT'));
           
           if (isGiftUI) {
               iconName = "gift";
@@ -434,7 +434,7 @@ export default function UserPassbookDetail() {
           else if (isWinner) { 
               iconName = "trophy"; iconColor = "#10B981"; sign = "+"; titleText = "Reward Yield"; statusColor = "#10B981";
           }
-          else if (isBet) { iconName = "gamepad-variant"; iconColor = "#F59E0B"; titleText = "Activity Allocation"; }
+          else if (isbet) { iconName = "gamepad-variant"; iconColor = "#F59E0B"; titleText = "Activity Allocation"; }
           // 🔥 SATTI FIX: Title override for Call Log
           else if (isCall) { iconName = "video-vintage"; iconColor = "#3B82F6"; titleText = item.title || "Platform Session"; }
           else if (isVoucher) {

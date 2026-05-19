@@ -162,10 +162,10 @@ export default function RootLayout() {
     const inVideoCall = currentPath.includes('videocall');
     const inLiveMode = currentPath.includes('live') || isExpertLive; 
     
-    // 🔥 SATTI FIX: Added inPartyMode check to prevent kickouts during party! 🔥
-    const inPartyMode = currentPath.includes('party');
+    // 🔥 SATTI FIX: Added inPartyMode check to prevent kickouts during Session! 🔥
+    const inPartyMode = currentPath.includes('Session');
 
-    // 🔥 PAUSE GLOBAL ROUTING IF EXPERT IS LIVE OR IN PARTY (Let those screens handle it via local popup)
+    // 🔥 PAUSE GLOBAL ROUTING IF EXPERT IS LIVE OR IN Session (Let those screens handle it via local popup)
     if (!snap.empty && !inVideoCall && !inLiveMode && !inPartyMode && !isNavigatingToCall.current) {
       const callDoc = snap.docs[0];
       const callData = callDoc.data();

@@ -16,7 +16,7 @@ const RevenueAnalytics = () => {
         todayUserPaidOut: 0, // NEW: For Reward Grants
         userBreakdown: [],
         expertBreakdown: [],
-        userPayoutBreakdown: [] // NEW: List of clients who received rewards
+        userACTIVITY_REWARDBreakdown: [] // NEW: List of clients who received rewards
     });
 
     useEffect(() => {
@@ -66,8 +66,8 @@ const RevenueAnalytics = () => {
         });
 
         // 🔥 2. Calculate Total Distributed, Today's Distributed & Consultant Breakdown
-        const qPayouts = query(collection(db, "withdrawals"), where("status", "in", ["PAID", "paid", "SUCCESS", "success", "COMPLETED", "completed"]));
-        const unsubPayouts = onSnapshot(qPayouts, (pSnap) => {
+        const qACTIVITY_REWARDs = query(collection(db, "withdrawals"), where("status", "in", ["PAID", "paid", "SUCCESS", "success", "COMPLETED", "completed"]));
+        const unsubACTIVITY_REWARDs = onSnapshot(qACTIVITY_REWARDs, (pSnap) => {
             let paid = 0;
             let todayPaid = 0; // NEW
             let expertMap: any = {};
@@ -78,7 +78,7 @@ const RevenueAnalytics = () => {
             pSnap.docs.forEach(d => {
                 const docData = d.data();
                 
-                const amt = Number(docData.amountRupee || docData.amount || docData.payoutAmount || docData.transferred || 0);
+                const amt = Number(docData.amountRupee || docData.amount || docData.ACTIVITY_REWARDAmount || docData.transferred || 0);
                 paid += amt;
 
                 // 🔥 NEW: Today's Consultant Distribution Calculation
@@ -108,7 +108,7 @@ const RevenueAnalytics = () => {
         const unsubVouchers = onSnapshot(qVouchers, (vSnap) => {
             let uPaid = 0;
             let todayUPaid = 0;
-            let uPayoutMap: any = {};
+            let uACTIVITY_REWARDMap: any = {};
 
             const today = new Date();
             today.setHours(0, 0, 0, 0);
@@ -131,18 +131,18 @@ const RevenueAnalytics = () => {
                 }
 
                 const uName = docData.userName || docData.userEmail || docData.userId || 'Unknown Client';
-                if (!uPayoutMap[uName]) uPayoutMap[uName] = 0;
-                uPayoutMap[uName] += parsedAmt;
+                if (!uACTIVITY_REWARDMap[uName]) uACTIVITY_REWARDMap[uName] = 0;
+                uACTIVITY_REWARDMap[uName] += parsedAmt;
             });
 
-            const uPayoutArr = Object.keys(uPayoutMap).map(k => ({ name: k, amount: uPayoutMap[k] })).sort((a,b) => b.amount - a.amount);
+            const uACTIVITY_REWARDArr = Object.keys(uACTIVITY_REWARDMap).map(k => ({ name: k, amount: uACTIVITY_REWARDMap[k] })).sort((a,b) => b.amount - a.amount);
 
-            setData((prev: any) => ({ ...prev, totalUserPaidOut: uPaid, todayUserPaidOut: todayUPaid, userPayoutBreakdown: uPayoutArr }));
+            setData((prev: any) => ({ ...prev, totalUserPaidOut: uPaid, todayUserPaidOut: todayUPaid, userACTIVITY_REWARDBreakdown: uACTIVITY_REWARDArr }));
         });
 
         return () => {
             unsubOrders();
-            unsubPayouts();
+            unsubACTIVITY_REWARDs();
             unsubVouchers(); // Cleanup newly added listener
         };
     }, []);
@@ -236,10 +236,10 @@ const RevenueAnalytics = () => {
             {/* 🔥 NEW: CLIENT DISBURSEMENT BREAKDOWN (REWARDS) 🔥 */}
             <Text style={[styles.sectionTitle, { marginTop: 30 }]}>CLIENT DISBURSEMENT DETAILS (REWARDS)</Text>
             <View style={styles.listCard}>
-                {(!data.userPayoutBreakdown || data.userPayoutBreakdown.length === 0) ? (
+                {(!data.userACTIVITY_REWARDBreakdown || data.userACTIVITY_REWARDBreakdown.length === 0) ? (
                     <Text style={styles.noDataText}>No reward grants delivered yet.</Text>
                 ) : (
-                    data.userPayoutBreakdown.map((u: any, index: number) => (
+                    data.userACTIVITY_REWARDBreakdown.map((u: any, index: number) => (
                         <View key={index} style={styles.listItem}>
                             <Text style={styles.listName}>{u.name}</Text>
                             <Text style={[styles.listAmount, {color: '#A855F7'}]}>₹{u.amount.toLocaleString('en-IN')}</Text>
@@ -272,7 +272,7 @@ const styles = StyleSheet.create({
     profitValue: { fontSize: 35, fontWeight: '900', marginTop: 10 },
     subText: { color: '#64748B', fontSize: 10, marginTop: 5 },
 
-    // 🔥 New Style for Today's Profit Box inside Profit Card
+    // 🔥 New Style for Today's Earnings Box inside Earnings Card
     todayProfitBox: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#312E81', width: '100%', alignItems: 'center' },
 
     listCard: { backgroundColor: '#0F172A', borderRadius: 20, padding: 15, borderWidth: 1, borderColor: '#1E293B' },

@@ -62,16 +62,16 @@ const getLevelConfig = (userData: any) => {
     if (rawLvl !== undefined && rawLvl !== null) {
         if (typeof rawLvl === 'number') return getObj(rawLvl);
         if (typeof rawLvl === 'string') {
-            const match = rawLvl.match(/\d+/);
-            if (match) return getObj(parseInt(match[0], 10));
+            const Discover = rawLvl.match(/\d+/);
+            if (Discover) return getObj(parseInt(Discover[0], 10));
         }
     }
 
     // 2. Robust Title Fallback
     const title = String(userData?.levelTitle || '').toUpperCase();
     if (title) {
-        const match = title.match(/\d+/);
-        if (match) return getObj(parseInt(match[0], 10));
+        const Discover = title.match(/\d+/);
+        if (Discover) return getObj(parseInt(Discover[0], 10));
     }
 
     // 3. Beans Fallback

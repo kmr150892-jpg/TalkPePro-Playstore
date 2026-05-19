@@ -79,7 +79,7 @@ export default function UserHome() {
 
     const [experts, setExperts] = useState<any[]>([]);
     const [activeLives, setActiveLives] = useState<any[]>([]);
-    const [activeParties, setActiveParties] = useState<any[]>([]); // 🔥 NEW STATE FOR PARTY ROOMS
+    const [activeParties, setActiveParties] = useState<any[]>([]); // 🔥 NEW STATE FOR Session ROOMS
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
@@ -153,8 +153,8 @@ export default function UserHome() {
             setActiveLives(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-        // 🔥 NEW: FETCH ACTIVE PARTY ROOMS
-        const partyQuery = query(collection(db, 'party_rooms'), where('status', '==', 'active'));
+        // 🔥 FIX: FETCH ACTIVE FORUMS FROM 'forum_rooms' COLLECTION 🔥
+        const partyQuery = query(collection(db, 'forum_rooms'), where('status', '==', 'active'));
         const unsubParties = onSnapshot(partyQuery, (snap) => {
             setActiveParties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
@@ -291,23 +291,24 @@ export default function UserHome() {
                     </View>
                 </Animated.View>
 
-                {/* 🔥 QUICK MATCH BUTTON */}
+                {/* 🔥 QUICK Discover BUTTON */}
                 <TouchableOpacity 
                     activeOpacity={0.9} 
-                    onPress={() => router.push('/swipe-match' as any)}
-                    style={[styles.matchTriggerMass, { shadowColor: userRank.color }]}
+                    // 🔥 SATTI FIX: EXPO ROUTER STANDARD NAME FIXED HERE 🔥
+                    onPress={() => router.push('/explore-experts' as any)}
+                    style={[styles.DiscoverTriggerMass, { shadowColor: userRank.color }]}
                 >
                     <LinearGradient 
                         colors={[userRank.color, userRank.secondaryColor]} 
-                        style={styles.matchGradient}
+                        style={styles.DiscoverGradient}
                         start={{x: 0, y: 0}}
                         end={{x: 1, y: 1}}
                     >
                         <MaterialCommunityIcons name="lightning-bolt" size={20} color="#FFF" />
-                        <Text style={styles.matchBtnText}>QUICK CONNECT</Text>
-                        <View style={styles.liveIndicatorMatch}>
-                            <View style={styles.liveDotMatch} />
-                            <Text style={styles.liveCountMatch}>{activeLives.length + experts.length + 42} Online</Text>
+                        <Text style={styles.DiscoverBtnText}>QUICK CONNECT</Text>
+                        <View style={styles.liveIndicatorDiscover}>
+                            <View style={styles.liveDotDiscover} />
+                            <Text style={styles.liveCountDiscover}>{activeLives.length + experts.length + 42} Online</Text>
                         </View>
                     </LinearGradient>
                 </TouchableOpacity>
@@ -352,7 +353,7 @@ export default function UserHome() {
                     </View>
                 )}
 
-                {/* 🔥 NEW: VIP PARTY ARENAS SECTION 🔥 */}
+                {/* 🔥 NEW: VIP Session ARENAS SECTION 🔥 */}
                 {activeParties.length > 0 && (
                     <View style={styles.sectionArea}>
                         <View style={styles.sectionHeaderMass}>
@@ -366,13 +367,13 @@ export default function UserHome() {
                             renderItem={({ item, index }) => {
                                 const partyBorder = index % 2 === 0 ? borderType1 : borderType2;
                                 return (
-                                    // 🔥 FIX 2: THE ULTIMATE ROOT FOLDER PATH FIX 🔥
-                                    <TouchableOpacity activeOpacity={0.9} style={[styles.massPartyCard, partyBorder]} onPress={() => router.push({ pathname: "/party/[roomId]", params: { roomId: item.roomId || item.id } } as any)}>
+                                    // 🔥 FIX 2: THE ULTIMATE ROOT FOLDER PATH FIX (/forum/[roomId]) 🔥
+                                    <TouchableOpacity activeOpacity={0.9} style={[styles.massPartyCard, partyBorder]} onPress={() => router.push({ pathname: "/forum/[roomId]", params: { roomId: item.roomId || item.id } } as any)}>
                                         <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.massPartyThumb} />
                                         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.9)']} style={styles.massLiveOverlay}>
                                             <View style={[styles.liveBadge, {backgroundColor: '#4F46E5'}]}><Text style={styles.liveBadgeText}>FORUM</Text></View>
                                             <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
-                                                <View style={styles.liveDotMatch} />
+                                                <View style={styles.liveDotDiscover} />
                                                 <Text style={{color: '#10B981', fontSize: 10, fontWeight: '900', marginLeft: 4}}>{item.viewerCount || 0} Online</Text>
                                             </View>
                                             <Text style={styles.liveHostNameMass} numberOfLines={1}>{item.roomName}</Text>
@@ -451,7 +452,7 @@ export default function UserHome() {
 const styles = StyleSheet.create({
     mainContainer: { flex: 1, backgroundColor: '#020617' },
     // 🔥 DESIGN: AMBIENT SHIMMER ORBS
-    shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(100px)' },
+    shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15 },
     
     topSection: { paddingBottom: 5 },
     topEliteHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 15 },
@@ -481,13 +482,13 @@ const styles = StyleSheet.create({
     btnBlur: { paddingHorizontal: 15, paddingVertical: 10 },
     btnTxt: { fontWeight: '900', fontSize: 9, letterSpacing: 1 },
 
-    // 🔥 QUICK MATCH BUTTON STYLES
-    matchTriggerMass: { marginHorizontal: 20, marginTop: 25, borderRadius: 30, elevation: 15, shadowOpacity: 0.6, shadowRadius: 12 },
-    matchGradient: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, gap: 15 },
-    matchBtnText: { color: '#FFF', fontSize: 19, fontWeight: '900', letterSpacing: 1.5 },
-    liveIndicatorMatch: { marginLeft: 'auto', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
-    liveDotMatch: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
-    liveCountMatch: { color: '#10B981', fontSize: 10, fontWeight: '800' },
+    // 🔥 QUICK Discover BUTTON STYLES
+    DiscoverTriggerMass: { marginHorizontal: 20, marginTop: 25, borderRadius: 30, elevation: 15, shadowOpacity: 0.6, shadowRadius: 12 },
+    DiscoverGradient: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, gap: 15 },
+    DiscoverBtnText: { color: '#FFF', fontSize: 19, fontWeight: '900', letterSpacing: 1.5 },
+    liveIndicatorDiscover: { marginLeft: 'auto', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
+    liveDotDiscover: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+    liveCountDiscover: { color: '#10B981', fontSize: 10, fontWeight: '800' },
 
     searchSection: { paddingHorizontal: 20, marginTop: 20 },
     searchBarMass: { flexDirection: 'row', borderRadius: 25, paddingHorizontal: 18, height: 50, alignItems: 'center' },
@@ -505,7 +506,7 @@ const styles = StyleSheet.create({
     massLiveCard: { width: 170, height: 230, marginRight: 18, borderRadius: 35, overflow: 'hidden' },
     massLiveThumb: { width: '100%', height: '100%' },
     
-    // 🔥 NEW PARTY CARD STYLES
+    // 🔥 NEW Session CARD STYLES
     massPartyCard: { width: 160, height: 160, marginRight: 18, borderRadius: 25, overflow: 'hidden' },
     massPartyThumb: { width: '100%', height: '100%', opacity: 0.7 },
 

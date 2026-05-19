@@ -132,7 +132,7 @@ export default function LegalScreen() {
                                 icon="database-lock"
                                 color="#EC4899"
                                 title="2. Information Security" 
-                                text="Your profile and identity data are secured within Firebase encrypted clusters. We maintain a strict policy against selling or sharing your personal data with third-party advertisers for marketing purposes." 
+                                text="Your profile and identity data are secured within Firebase encrypted clusters. We maintain a strict policy against selling or sharing your personal data with third-Session advertisers for marketing purposes." 
                             />
                             <ContentSection 
                                 icon="credit-card-chip"

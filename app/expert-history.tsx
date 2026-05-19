@@ -3,26 +3,26 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
-  collection,
-  doc, getDoc, getDocs,
-  onSnapshot,
-  query,
-  where
+    collection,
+    doc, getDoc, getDocs,
+    onSnapshot,
+    query,
+    where
 } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Easing,
-  FlatList,
-  Image,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Easing,
+    FlatList,
+    Image,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
@@ -124,7 +124,7 @@ export default function ExpertHistory() {
             if (d.type === 'video_call') continue; 
             
             let tType = 'call_gift';
-            if (d.source === 'party') tType = 'party_gift';
+            if (d.source === 'Session') tType = 'party_gift';
             if (d.source === 'live') tType = 'live_gift';
 
             let senderName = d.senderName || d.userName || 'Verified Supporter';
@@ -207,7 +207,7 @@ export default function ExpertHistory() {
             }
         }
 
-        // 4. FETCH PARTY ROOMS (Party Gifts)
+        // 4. FETCH Session ROOMS (Session Gifts)
         const partySnap = await getDocs(query(collection(db, "party_rooms"), where("hostId", "==", user.uid)));
         for (const partyDoc of partySnap.docs) {
             const pData = partyDoc.data();
@@ -232,7 +232,7 @@ export default function ExpertHistory() {
                     id: gDoc.id,
                     type: 'party_gift',
                     senderName: gSenderName,
-                    giftName: g.giftName || 'Party Gift',
+                    giftName: g.giftName || 'Session Gift',
                     amount: g.price || g.amount || 0,
                     beans: g.beans || Math.floor((g.price || g.amount || 0) / 2),
                     timestamp: g.timestamp || pData.createdAt || { seconds: 1 },
@@ -357,7 +357,7 @@ export default function ExpertHistory() {
             </View>
           </View>
           <View style={styles.earningsBlock}>
-            <Text style={styles.earnLabel}>PROFIT</Text>
+            <Text style={styles.earnLabel}>Earnings</Text>
             <View style={styles.beansRow}>
               <MaterialCommunityIcons name="seed" size={14} color="#FBBF24" />
               <Text style={styles.eliteBeansValue}>+{earnings}</Text> 
@@ -393,7 +393,7 @@ export default function ExpertHistory() {
         iconType = 'dice-multiple';
         iconColor = '#F59E0B';
     } else if (item.type === 'party_gift') {
-        iconType = 'party-popper';
+        iconType = 'Session-popper';
         iconColor = '#EC4899';
     } else if (item.type === 'live_gift') {
         iconType = 'broadcast';
@@ -443,7 +443,7 @@ export default function ExpertHistory() {
   const TABS = [
       { id: 'video_call', label: 'Voice/Video', icon: 'videocam', iconType: 'Ionicons' },
       { id: 'live_gift', label: 'Live Store', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
-      { id: 'party_gift', label: 'Room Gifts', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
+      { id: 'party_gift', label: 'Room Gifts', icon: 'Session-popper', iconType: 'MaterialCommunityIcons' },
       { id: 'call_gift', label: 'Direct Gifts', icon: 'gift', iconType: 'MaterialCommunityIcons' },
       { id: 'live_game_bonus', label: 'Live Games', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
       { id: 'party_game_bonus', label: 'Room Games', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' }

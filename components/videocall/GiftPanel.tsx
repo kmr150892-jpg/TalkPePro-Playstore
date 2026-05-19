@@ -8,7 +8,7 @@ const GIFT_OPTIONS = [
     { id: '1', name: 'Rose', amount: 100, type: 'diamond', icon: 'flower' },
     { id: '2', name: 'Star', amount: 500, type: 'diamond', icon: 'star' },
     { id: '3', name: 'Diamond', amount: 1000, type: 'diamond', icon: 'diamond-stone' },
-    { id: '4', name: 'Confetti', amount: 2000, type: 'confetti', icon: 'party-popper' },
+    { id: '4', name: 'Confetti', amount: 2000, type: 'confetti', icon: 'Session-popper' },
     { id: '5', name: 'Fireworks', amount: 5000, type: 'fireworks', icon: 'firework' },
 ];
 

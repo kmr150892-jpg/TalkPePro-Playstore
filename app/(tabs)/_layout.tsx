@@ -116,7 +116,7 @@ export default function TabLayout() {
         tabBarShowLabel: true,
         tabBarLabelStyle: { fontSize: 10, fontWeight: '800', marginBottom: 8 },
         tabBarStyle: styles.tabBar,
-        tabBarActiveTintColor: theme.primary, // Make active text match dynamic theme
+        tabBarActiveTintColor: theme.primary, // Make active text Discover dynamic theme
         tabBarInactiveTintColor: '#64748B',
         tabBarHideOnKeyboard: true, 
       }}>
@@ -148,7 +148,7 @@ export default function TabLayout() {
           title: 'DISCOVER', 
           tabBarIcon: ({ focused }) => (
             <Animated.View style={[styles.centerIconContainer, { transform: [{ scale: pulseAnim }] }]}>
-              {/* Dynamic Gradient Background matched with Ultimate Tier Engine */}
+              {/* Dynamic Gradient Background Discovered with Ultimate Tier Engine */}
               <LinearGradient
                   colors={[theme.primary, theme.secondary]}
                   start={{ x: 0, y: 0 }}

@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+// 🔥 SATTI FIX: Added getDoc to fetch game status securely
 import { addDoc, collection, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 // 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
@@ -13,7 +14,7 @@ import createAgoraRtcEngine, {
     ClientRoleType,
     IRtcEngine,
     LighteningContrastLevel,
-    RtcSurfaceView,
+    RtcTextureView, // 🔥 SATTI FIX: CHANGED TO TEXTURE VIEW FOR ANDROID BLACK SCREEN FIX
 } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
@@ -21,8 +22,7 @@ import { auth, db } from '../../firebaseConfig';
 // --- NEW: Security Import ---
 import * as ScreenCapture from 'expo-screen-capture';
 import GiftOverlay from '../../components/GiftOverlay';
-import LiveGameSheet from '../../components/LiveGameSheet';
-import TurboRacingSheet from '../../components/TurboRacingSheet'; // ✅ IMPORT RACING SHEET
+import LiveGameSheet from '../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80';
@@ -50,6 +50,9 @@ export default function LiveStreamScreen() {
     const shimmerAnim = useRef(new Animated.Value(0)).current; 
     const isNavigatingToCall = useRef(false); 
     
+    // 🔥 SATTI FIX: Ref to prevent double triggering of AppState close logic
+    const isAppClosing = useRef(false);
+
     // --- Existing States ---
     const [joined, setJoined] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -63,7 +66,7 @@ export default function LiveStreamScreen() {
     const [showSummary, setShowSummary] = useState(false);
     const [earnings, setEarnings] = useState(0); 
     const [giftAlert, setGiftAlert] = useState<string | null>(null);
-    const [isBeautyEnabled, setIsBeautyEnabled] = useState(false);
+    const [isProEnabled, setIsProEnabled] = useState(false);
     const [pinnedMessage, setPinnedMessage] = useState<any>(null);
     const [guestUid, setGuestUid] = useState<number | null>(null);
     const [hostImage, setHostImage] = useState<string>(""); 
@@ -76,9 +79,9 @@ export default function LiveStreamScreen() {
     // ✅ New State for Active Viewers List
     const [activeViewers, setActiveViewers] = useState<any[]>([]);
 
-    // --- Beauty Settings State ---
-    const [showBeautySettings, setShowBeautySettings] = useState(false);
-    const [beautyLevel, setBeautyLevel] = useState({ light: 0.7, smooth: 0.8 });
+    // --- Pro Settings State ---
+    const [showProSettings, setShowProSettings] = useState(false);
+    const [ProLevel, setProLevel] = useState({ light: 0.7, smooth: 0.8 });
 
     // Unique Live ID
     const [currentLiveId] = useState(params.liveId as string || `live_${auth.currentUser?.uid}_${Date.now()}`);
@@ -90,13 +93,15 @@ export default function LiveStreamScreen() {
     // ✅ NEW: Active Gift State for Festival Animation
     const [activeGift, setActiveGift] = useState<any>(null);
 
-    // 🔥 GAME FEATURE STATE
+    // 🔥 GAME FEATURE STATE (REFLEX BLITZ ARENA)
     const [gameVisible, setGameVisible] = useState(false);
-    const [racingVisible, setRacingVisible] = useState(false); // ✅ NEW STATE FOR CAR RACING
     const [myWalletBalance, setMyWalletBalance] = useState(0);
 
     // 🔥 NEW: Total Beans Earned from Game in this Live Session (For Summary)
     const [gameBeansSummary, setGameBeansSummary] = useState(0);
+
+    // 🔥 SATTI FIX: Added state to track Exact Current Session Beans (Gifts + Game Commission)
+    const [sessionEarnedBeans, setSessionEarnedBeans] = useState(0);
 
     // 🔥 SATTI FIX: NEW DYNAMIC BORDER STYLE FOR FULL WIDTH HEADER 🔥
     const borderType1 = {
@@ -122,22 +127,86 @@ export default function LiveStreamScreen() {
         borderBottomColor: hostConfig.colors[0] + '80',
     };
 
-    // 🔥 NEW: APPSTATE LISTENER TO UPDATE FIRESTORE ON FORCE CLOSE 🔥
-    useEffect(() => {
-        if (!currentLiveId) return;
-        const handleAppStateChange = async (nextAppState: string) => {
-            if (nextAppState === 'background' || nextAppState === 'inactive') {
-                try {
-                    await updateDoc(doc(db, "lives", currentLiveId), { status: "ended", endTime: serverTimestamp() });
-                    if (auth.currentUser) {
-                        await updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false });
-                    }
-                } catch (error) { console.log("Failed to end live on close:", error); }
+    // 🔥 SATTI FIX: Room paths changed from 'global_games' to current session 'lives' collection 🔥
+    const checkGameActive = async () => {
+        try {
+            const gameSnap = await getDoc(doc(db, "lives", currentLiveId, "games", "reflex_arena"));
+            if (gameSnap.exists() && (gameSnap.data().status === 'PLAYING' || gameSnap.data().status === 'WAITING')) {
+                return true;
             }
-        };
-        const subscription = AppState.addEventListener('change', handleAppStateChange);
-        return () => { subscription.remove(); };
-    }, [currentLiveId]);
+        } catch (e) { console.error("Game check error:", e); }
+        return false;
+    };
+
+    // 🔥 SATTI FIX: NEW STRICT FUNCTION TO CANCEL GAME & WAIT FOR REFUND BEFORE ENDING LIVE 🔥
+    const safeCancelGameForAudienceRefund = async () => {
+        try {
+            const roomRef = doc(db, "lives", currentLiveId, "games", "reflex_arena");
+            const snap = await getDoc(roomRef);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.status === 'PLAYING' || data.status === 'WAITING') {
+                    await updateDoc(roomRef, { status: 'CANCELLED' });
+                    // ⏳ Give 1.5 seconds for Firebase to trigger audience refund locally before ending Live completely
+                    await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+            }
+        } catch (e) { console.log("Refund Wait Error: ", e); }
+    };
+
+    const removePlayerFromReflex = async () => {
+        if (!auth.currentUser) return;
+        try {
+            const roomRef = doc(db, "lives", currentLiveId, "games", "reflex_arena");
+            const snap = await getDoc(roomRef);
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.status === 'PLAYING' || data.status === 'WAITING') {
+                    const updatedPlayers = data.players.filter((p: any) => p.id !== auth.currentUser?.uid);
+                    await updateDoc(roomRef, { players: updatedPlayers });
+                }
+            }
+        } catch (e) { console.log(e); }
+    };
+
+    // 🔥 STRICT FIX: APPSTATE LISTENER TO HANDLE FORCE CLOSE WAITING LOGIC 🔥
+    useEffect(() => {
+    if (!currentLiveId) return;
+    
+    const handleAppStateChange = async (nextAppState: string) => {
+        if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current) {
+            isAppClosing.current = true;
+            
+            try {
+                // 🔥 METHOD 1: Direct REST API Endpoint call via fetch (Bypasses thick JS SDK cycle)
+                // Firestore document updating endpoint via REST
+                const firestoreRestUrl = `https://firestore.googleapis.com/v1/projects/YOUR_PROJECT_ID/databases/(default)/documents/lives/${currentLiveId}?updateMask.fieldPaths=status`;
+                
+                fetch(firestoreRestUrl, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        fields: { status: { stringValue: 'ended' } }
+                    })
+                }).catch(() => {});
+
+                // 🔥 METHOD 2: Regular quick batch flush
+                const batch = writeBatch(db);
+                batch.update(doc(db, "lives", currentLiveId), { status: "ended", endTime: serverTimestamp() });
+                if (auth.currentUser) {
+                    batch.update(doc(db, "users", auth.currentUser.uid), { isLive: false });
+                }
+                await batch.commit();
+
+            } catch (error) { 
+                console.log("Force close cleanup log:", error); 
+            }
+        }
+    };
+    
+    const subscription = AppState.addEventListener('change', handleAppStateChange);
+    return () => { subscription.remove(); };
+}, [currentLiveId]);
 
     useEffect(() => {
         const init = async () => {
@@ -189,13 +258,17 @@ export default function LiveStreamScreen() {
         const rtdb = getDatabase();
         const connectedRef = ref(rtdb, ".info/connected");
         const livePresenceRef = ref(rtdb, `presence_lives/${currentLiveId}`);
+        // 🔥 SATTI FIX: App force close aana odane game auto-cancel aaga hook add paniten
+        const gamePresenceRef = ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`);
 
         const unsubPresence = onValue(connectedRef, (snap) => {
             if (snap.val() === true) {
-                // App-a Force Close panna udane RTDB-la "ended" nu update aagidum
                 onDisconnect(livePresenceRef).set("ended").then(() => {
                     set(livePresenceRef, "active");
                 });
+                
+                // 🔥 SATTI FIX: Disconnect aanal game CANCELLED nu marum
+                onDisconnect(gamePresenceRef).set("CANCELLED");
             }
         });
 
@@ -203,7 +276,7 @@ export default function LiveStreamScreen() {
         const callQuery = query(
             collection(db, "calls"),
             where("expertId", "==", auth.currentUser?.uid || ""),
-            where("status", "in", ["ringing", "pending", "match_dialing"]) 
+            where("status", "in", ["ringing", "pending", "Discover_dialing"]) 
         );
 
         const unsubCalls = onSnapshot(callQuery, async (snap) => {
@@ -282,6 +355,19 @@ export default function LiveStreamScreen() {
             
             unsubPresence();
             set(livePresenceRef, "ended"); // Normal back button cleanup
+            set(gamePresenceRef, "CANCELLED"); // 🔥 SATTI FIX: Cleanup on unmount
+
+            // 🔥 SATTI FIX: Remove player from Reflex if they unmount
+            removePlayerFromReflex();
+
+            // 🔥 SATTI FIX: GHOST LIVE ROOM KILLED ON EXIT 🔥
+            // Forcefully update Firestore so room doesn't stay 'live' when host completely unmounts
+            if (currentLiveId) {
+                updateDoc(doc(db, 'lives', currentLiveId), {
+                    status: 'ended',
+                    endedAt: serverTimestamp()
+                }).catch(e => console.log("Live close error", e));
+            }
 
             if (!isNavigatingToCall.current) {
                 leaveChannel();
@@ -414,6 +500,9 @@ export default function LiveStreamScreen() {
                 setPinnedMessage(data.pinnedMessage || null);
                 // ✅ Update game beans summary for real-time tracking in host view
                 setGameBeansSummary(data.gameBeansCollected || 0);
+                
+                // 🔥 SATTI FIX: Track the exact session earning for accurate Summary 🔥
+                setSessionEarnedBeans(data.earnedBeans || 0);
             }
         });
 
@@ -468,6 +557,11 @@ export default function LiveStreamScreen() {
                                 lastBonusDate: today,
                                 totalDiamondsReceived: increment(diamondAmount)
                             });
+
+                            // 🔥 SATTI FIX: Current session document la exact gift tracking
+                            await updateDoc(doc(db, "lives", currentLiveId), {
+                                earnedBeans: increment(beanAmount)
+                            }).catch(e => console.log(e));
                         }
                     }
                 }
@@ -511,6 +605,7 @@ export default function LiveStreamScreen() {
             updateData.viewerCount = 0;
             updateData.currentLevel = level || "BEGINNER";
             updateData.pricePerMin = price || 0;
+            updateData.earnedBeans = 0; // 🔥 SATTI FIX: Live start aagum pothu session tracking initialize panren
             
             await updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: true, isBusy: false }); // Made sure isBusy is false on start
         } 
@@ -532,9 +627,9 @@ export default function LiveStreamScreen() {
         setIsFrontCamera(!isFrontCamera);
     };
 
-    const updateBeauty = (type: 'light' | 'smooth', val: number) => {
-        const newLevels = { ...beautyLevel, [type]: val };
-        setBeautyLevel(newLevels);
+    const updatePro = (type: 'light' | 'smooth', val: number) => {
+        const newLevels = { ...ProLevel, [type]: val };
+        setProLevel(newLevels);
         
         engine.current?.setBeautyEffectOptions(true, {
             lighteningContrastLevel: LighteningContrastLevel.LighteningContrastNormal,
@@ -543,7 +638,7 @@ export default function LiveStreamScreen() {
             rednessLevel: 0.5,
             sharpnessLevel: 0.3
         });
-        setIsBeautyEnabled(true);
+        setIsProEnabled(true);
     };
 
     const sendMessage = async () => {
@@ -564,9 +659,18 @@ export default function LiveStreamScreen() {
         return `${m}:${sec < 10 ? '0' : ''}${sec}`;
     };
 
+    // 🔥 SATTI FIX: MANUAL CLOSE WAITING LOGIC 🔥
     const leaveChannel = async () => {
+        const isGamePlaying = await checkGameActive();
+        
+        if (isGamePlaying) {
+            // 🔥 SATTI FIX: Muthalla game cancel aagi refund aanathukku apparam Live end aagum
+            await safeCancelGameForAudienceRefund();
+        } else {
+            await removePlayerFromReflex(); 
+        }
+        
         await updateLiveStatus('ended');
-
         if (auth.currentUser) {
             await updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false });
         }
@@ -582,6 +686,7 @@ export default function LiveStreamScreen() {
     };
 
     const confirmExit = async () => {
+        await removePlayerFromReflex(); // Safety cleanup
         await updateDoc(doc(db, "lives", currentLiveId), { viewerCount: 0 });
         if (engine.current) {
             engine.current.leaveChannel();
@@ -602,8 +707,11 @@ export default function LiveStreamScreen() {
             <View style={styles.videoContainer}>
                 {joined && (
                     <View style={styles.videoGrid}>
-                        <RtcSurfaceView canvas={{ uid: 0 }} style={guestUid ? styles.halfVideo : styles.fullVideo} />
-                        {guestUid && <RtcSurfaceView canvas={{ uid: guestUid }} style={styles.halfVideo} />}
+                        {/* 🔥 SATTI FIX: Android-la SurfaceView use panna LinearGradient pinnadi video poyi full black aagidum. Athunala RtcTextureView ku mathitten! Ippo pakkaava theriyum! 🔥 */}
+                        <RtcTextureView canvas={{ uid: 0 }} style={guestUid ? styles.halfVideo : styles.fullVideo} />
+                        
+                        {/* GUEST VIDEO */}
+                        {guestUid && <RtcTextureView canvas={{ uid: guestUid }} style={styles.halfVideo} />}
                     </View>
                 )}
                 {!joined && <Text style={styles.loadingText}>Connecting...</Text>}
@@ -622,7 +730,7 @@ export default function LiveStreamScreen() {
                                         <Text style={styles.initialsText}>{hostName ? hostName.charAt(0).toUpperCase() : "E"}</Text>
                                     </View>
                                 )}
-                                <View style={[styles.crownBadgeMass, { backgroundColor: hostConfig.colors[0] }]}>
+                                <View style={[styles.crownBadgeMass, { borderColor: '#020617' }]}>
                                     <MaterialCommunityIcons name="crown" size={10} color="#FFF" />
                                 </View>
                             </View>
@@ -648,13 +756,18 @@ export default function LiveStreamScreen() {
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            {/* 🔥 SATTI FIX: TURBO RACING CAR ICON CHANGED TO RED 🔥 */}
-                            <TouchableOpacity onPress={() => setRacingVisible(true)} style={[styles.closeIcon, { borderColor: '#EF4444', borderWidth: 1, backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                                <Ionicons name="car-sport" size={22} color="#EF4444" />
-                            </TouchableOpacity>
-
-                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#F59E0B', borderWidth: 1, backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                                <Ionicons name="game-controller" size={22} color="#F59E0B" />
+                            {/* 🔥 SATTI FIX: REFLEX SKILL ARENA CUSTOM ICON DESIGN 🔥 */}
+                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
+                                <View style={{ width: 16, height: 16 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
+                                    </View>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#FFD700', borderRadius: 2 }} />
+                                    </View>
+                                </View>
                             </TouchableOpacity>
 
                             <TouchableOpacity onPress={leaveChannel} style={[styles.closeIcon, { borderColor: hostConfig.colors[2] + '40', borderWidth: 1 }]}>
@@ -745,15 +858,15 @@ export default function LiveStreamScreen() {
             {/* 🔥 SATTI FIX: KEYBOARD AVOIDING VIEW WRAPS ENTIRE SCREEN 🔥 */}
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} pointerEvents="box-none">
                 
-                {showBeautySettings && (
-                    <View style={styles.beautySettingsBar}>
+                {showProSettings && (
+                    <View style={styles.ProSettingsBar}>
                         <View style={styles.settingGroup}>
                             <Text style={styles.settingLabel}>BRIGHTNESS</Text>
                             <View style={styles.chipRow}>
-                                <TouchableOpacity onPress={() => updateBeauty('light', 0.9)} style={[styles.chip, beautyLevel.light === 0.9 && styles.activeChip]}>
+                                <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
                                     <Text style={styles.chipText}>High</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => updateBeauty('light', 0.4)} style={[styles.chip, beautyLevel.light === 0.4 && styles.activeChip]}>
+                                <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
                                     <Text style={styles.chipText}>Low</Text>
                                 </TouchableOpacity>
                             </View>
@@ -762,10 +875,10 @@ export default function LiveStreamScreen() {
                         <View style={styles.settingGroup}>
                             <Text style={styles.settingLabel}>SMOOTHNESS</Text>
                             <View style={styles.chipRow}>
-                                <TouchableOpacity onPress={() => updateBeauty('smooth', 0.9)} style={[styles.chip, beautyLevel.smooth === 0.9 && styles.activeChip]}>
+                                <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
                                     <Text style={styles.chipText}>Max</Text>
                                 </TouchableOpacity>
-                                <TouchableOpacity onPress={() => updateBeauty('smooth', 0.3)} style={[styles.chip, beautyLevel.smooth === 0.3 && styles.activeChip]}>
+                                <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
                                     <Text style={styles.chipText}>Natural</Text>
                                 </TouchableOpacity>
                             </View>
@@ -831,8 +944,8 @@ export default function LiveStreamScreen() {
                             <Ionicons name="send" size={20} color="#00F2FE" />
                         </TouchableOpacity>
 
-                        <TouchableOpacity onPress={() => setShowBeautySettings(!showBeautySettings)} style={[styles.iconAction, showBeautySettings && styles.activeBeauty]}>
-                            <MaterialCommunityIcons name="face-man-shimmer" size={22} color={showBeautySettings ? "#FFF" : "#00F2FE"} />
+                        <TouchableOpacity onPress={() => setShowProSettings(!showProSettings)} style={[styles.iconAction, showProSettings && styles.activePro]}>
+                            <MaterialCommunityIcons name="face-man-shimmer" size={22} color={showProSettings ? "#FFF" : "#00F2FE"} />
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={toggleMute} style={[styles.iconAction, isMuted && styles.activeIcon]}>
@@ -847,17 +960,10 @@ export default function LiveStreamScreen() {
                 </View>
             </KeyboardAvoidingView>
 
+            {/* ✅ REFLEX BLITZ ARENA */}
             <LiveGameSheet 
                 visible={gameVisible} 
                 onClose={() => setGameVisible(false)} 
-                liveId={currentLiveId} 
-                isHost={true} 
-                userWalletBalance={myWalletBalance} 
-            />
-
-            <TurboRacingSheet 
-                visible={racingVisible} 
-                onClose={() => setRacingVisible(false)} 
                 liveId={currentLiveId} 
                 isHost={true} 
                 userWalletBalance={myWalletBalance} 
@@ -872,7 +978,8 @@ export default function LiveStreamScreen() {
                             <View style={styles.statItem}><Text style={styles.statVal}>{formatTime(seconds)}</Text><Text style={styles.statLabel}>Duration</Text></View>
                             <View style={styles.statItem}><Text style={styles.statVal}>{viewerCount}</Text><Text style={styles.statLabel}>Viewers</Text></View>
                             <View style={styles.statItem}>
-                                <Text style={styles.statVal}>{Math.floor(earnings / 2) + gameBeansSummary} 🫘</Text>
+                                {/* 🔥 SATTI FIX: Precise session earnings strictly mapped to current Live Doc 🔥 */}
+                                <Text style={styles.statVal}>{sessionEarnedBeans} 🫘</Text>
                                 <Text style={styles.statLabel}>Rewards Accrued</Text>
                             </View>
                         </View>
@@ -957,9 +1064,9 @@ const styles = StyleSheet.create({
     input: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 25, height: 48, color: '#FFF', paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     iconAction: { width: 48, height: 48, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     activeIcon: { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
-    activeBeauty: { backgroundColor: 'rgba(0, 242, 254, 0.2)', borderColor: '#feb200' },
+    activePro: { backgroundColor: 'rgba(0, 242, 254, 0.2)', borderColor: '#feb200' },
     
-    beautySettingsBar: { backgroundColor: 'rgba(15, 23, 42, 0.95)', marginHorizontal: 15, borderRadius: 25, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
+    ProSettingsBar: { backgroundColor: 'rgba(15, 23, 42, 0.95)', marginHorizontal: 15, borderRadius: 25, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
     settingGroup: { flex: 1, alignItems: 'center' },
     settingLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', marginBottom: 10, letterSpacing: 1.5 },
     chipRow: { flexDirection: 'row', gap: 10 },

@@ -122,13 +122,13 @@ export default function WalletSystem({ expertData }: any) {
     const isBankVerified = expertData?.isBankVerified || false; 
     const walletBalanceBeans = expertData?.walletBalance || 0; 
     const availableRupees = Math.floor(walletBalanceBeans / 100); 
-    const pendingPayout = expertData?.pendingPayout || 0;
+    const pendingACTIVITY_REWARD = expertData?.pendingACTIVITY_REWARD || 0;
 
     const uploadToCloudinary = async (imageUri: string) => {
         const data = new FormData();
         const filename = imageUri.split('/').pop();
-        const match = /\.(\w+)$/.exec(filename || '');
-        const type = match ? `image/${match[1]}` : `image`;
+        const Discover = /\.(\w+)$/.exec(filename || '');
+        const type = Discover ? `image/${Discover[1]}` : `image`;
 
         // @ts-ignore
         data.append('file', {
@@ -225,14 +225,14 @@ export default function WalletSystem({ expertData }: any) {
                     totalDeductedRupee: totalDeductionRupee,
                     beansDeducted: requiredBeans,
                     status: 'PENDING', 
-                    type: 'Withdrawal',
+                    type: 'Redeem',
                     createdAt: serverTimestamp(),
                     bankDetails: bankDetails 
                 });
 
                 await updateDoc(doc(db, "users", user.uid), {
                     walletBalance: increment(-requiredBeans),
-                    pendingPayout: increment(numAmtRupee),
+                    pendingACTIVITY_REWARD: increment(numAmtRupee),
                     lastWithdrawalAt: serverTimestamp()
                 });
 
@@ -336,7 +336,7 @@ export default function WalletSystem({ expertData }: any) {
                         <View style={styles.cardGlow} />
                         <View style={styles.cardContentHeader}>
                             <View>
-                                <Text style={styles.cardLabelText}>AVAILABLE FOR PAYOUT</Text>
+                                <Text style={styles.cardLabelText}>AVAILABLE FOR ACTIVITY_REWARD</Text>
                                 <View style={styles.rupeeRow}>
                                     <Text style={styles.symbolText}>₹</Text>
                                     <Text style={styles.mainBalanceText}>{availableRupees.toLocaleString()}</Text>
@@ -347,10 +347,10 @@ export default function WalletSystem({ expertData }: any) {
                             </View>
                         </View>
 
-                        <View style={styles.payoutDetailRow}>
+                        <View style={styles.ACTIVITY_REWARDDetailRow}>
                             <View>
-                                <Text style={styles.payoutLabel}>PENDING CLEARANCE</Text>
-                                <Text style={styles.payoutValue}>₹{pendingPayout.toLocaleString()}</Text>
+                                <Text style={styles.ACTIVITY_REWARDLabel}>PENDING CLEARANCE</Text>
+                                <Text style={styles.ACTIVITY_REWARDValue}>₹{pendingACTIVITY_REWARD.toLocaleString()}</Text>
                             </View>
                             <TouchableOpacity 
                                 // 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN DISABLED CHECK
@@ -359,7 +359,7 @@ export default function WalletSystem({ expertData }: any) {
                                 disabled={availableRupees < 500 || !isBankVerified}
                             >
                                 <View style={styles.whiteActionBtn}>
-                                    <Text style={styles.blackBtnText}>CASHOUT</Text>
+                                    <Text style={styles.blackBtnText}>Claim Reward</Text>
                                 </View>
                             </TouchableOpacity>
                         </View>
@@ -417,7 +417,7 @@ export default function WalletSystem({ expertData }: any) {
                                 />
                             </View>
                             <View style={{ flex: 1, marginLeft: 15 }}>
-                                <Text style={styles.ledgerType}>{tx.type || 'Withdrawal'}</Text>
+                                <Text style={styles.ledgerType}>{tx.type || 'Redeem'}</Text>
                                 <Text style={styles.ledgerDate}>{tx.createdAt?.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) || 'RECENT'}</Text>
                             </View>
                             <View style={{ alignItems: 'flex-end' }}>
@@ -444,7 +444,7 @@ export default function WalletSystem({ expertData }: any) {
                         </View>
                         
                         <View style={styles.inputArea}>
-                            <Text style={styles.currencyLabel}>ENTER WITHDRAWAL AMOUNT</Text>
+                            <Text style={styles.currencyLabel}>ENTER Redeem AMOUNT</Text>
                             <TextInput 
                                 style={styles.giantInput} 
                                 placeholder="0" 
@@ -545,9 +545,9 @@ const styles = StyleSheet.create({
     symbolText: { color: '#FFF', fontSize: 24, fontWeight: '400', marginRight: 5 },
     mainBalanceText: { color: '#FFF', fontSize: 44, fontWeight: '900' },
     chipWrapper: { padding: 5, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12 },
-    payoutDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 30, paddingTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
-    payoutLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '800' },
-    payoutValue: { color: '#FFF', fontSize: 18, fontWeight: '900', marginTop: 2 },
+    ACTIVITY_REWARDDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 30, paddingTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
+    ACTIVITY_REWARDLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '800' },
+    ACTIVITY_REWARDValue: { color: '#FFF', fontSize: 18, fontWeight: '900', marginTop: 2 },
     massWithdrawBtn: { borderRadius: 18, overflow: 'hidden', elevation: 12, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
     whiteActionBtn: { backgroundColor: '#FFFFFF', paddingHorizontal: 22, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
     blackBtnText: { color: '#020617', fontWeight: '900', fontSize: 12, letterSpacing: 1.5 },

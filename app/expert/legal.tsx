@@ -68,21 +68,21 @@ const LEGAL_DOCS = [
         title: 'TERMS OF SERVICE',
         icon: 'file-document-outline',
         color: '#3B82F6',
-        content: `1. ACCEPTANCE OF TERMS\nBy accessing TalkPe Pro, you agree to be bound by these Terms. You must be at least 18 years old to use this platform.\n\n2. PLATFORM ROLE\nTalkPe Pro acts solely as an intermediary connecting Clients and Consultants. We do not guarantee the accuracy, reliability, or success of any advice or consultation provided.\n\n3. PROHIBITED CONDUCT\nClients and Consultants are strictly prohibited from:\n- Sharing explicit, nude, or pornographic content.\n- Engaging in financial fraud, extortion, or blackmail.\n- Sharing personal contact information (Phone numbers, Social Media, UPI IDs) to bypass app protocols.\n\nViolation leads to immediate permanent ban and potential legal action.`
+        content: `1. ACCEPTANCE OF TERMS\nBy accessing TalkPe Pro, you agree to be bound by these Terms. You must be at least 18 years old to use this platform.\n\n2. PLATFORM ROLE\nTalkPe Pro acts solely as an intermediary connecting Clients and Consultants. We do not guarantee the accuracy, reliability, or success of any advice or consultation provided.\n\n3. PROHIBITED CONDUCT\nClients and Consultants are strictly prohibited from:\n- Sharing explicit, Policy Violation, or pornographic content.\n- Engaging in financial fraud, extortion, or blackmail.\n- Sharing personal contact information (Phone numbers, Social Media, UPI IDs) to bypass app protocols.\n\nViolation leads to immediate permanent ban and potential legal action.`
     },
     {
         id: 'privacy',
         title: 'PRIVACY POLICY',
         icon: 'shield-account-outline',
         color: '#10B981',
-        content: `1. DATA COLLECTION\nWe collect essential data (Name, Phone/Email, App Usage) to provide seamless matchmaking and secure transactions.\n\n2. COMMUNICATION SECURITY\nFor safety and quality assurance, TalkPe Pro reserves the right to monitor, log, or record audio/video calls and chat messages through our secure servers.\n\n3. THIRD-PARTY SHARING\nYour payment and streaming data are processed securely via our trusted partners (e.g., Razorpay, Agora). We never sell your personal data to advertisers.\n\n4. DATA DELETION\nYou reserve the right to request account deletion. Upon request, all personal data will be wiped from our servers within 30 days.`
+        content: `1. DATA COLLECTION\nWe collect essential data (Name, Phone/Email, App Usage) to provide seamless Discovermaking and secure transactions.\n\n2. COMMUNICATION SECURITY\nFor safety and quality assurance, TalkPe Pro reserves the right to monitor, log, or record audio/video calls and chat messages through our secure servers.\n\n3. THIRD-Session SHARING\nYour payment and streaming data are processed securely via our trusted partners (e.g., Razorpay, Agora). We never sell your personal data to advertisers.\n\n4. DATA DELETION\nYou reserve the right to request account deletion. Upon request, all personal data will be wiped from our servers within 30 days.`
     },
     {
         id: 'expert_safety',
         title: 'CONSULTANT PROTECTION PROTOCOL',
         icon: 'security',
         color: '#F59E0B',
-        content: `1. ZERO TOLERANCE FOR ABUSE\nTalkPe Pro ensures a safe working environment for all Consultants. Any user found harassing, stalking, or using abusive language will face an instant IP & Device Ban.\n\n2. FINANCIAL SECURITY\nConsultants are guaranteed their payouts for successfully completed calls. In cases of user chargebacks or disputes, TalkPe Pro will independently investigate to protect the Consultant's legitimate earnings.\n\n3. ANONYMITY & BLOCKING\nConsultants have full rights to disconnect calls immediately if they feel uncomfortable and can use the 'Block' feature to permanently prevent specific users from matching with them.`
+        content: `1. ZERO TOLERANCE FOR ABUSE\nTalkPe Pro ensures a safe working environment for all Consultants. Any user found harassing, stalking, or using abusive language will face an instant IP & Device Ban.\n\n2. FINANCIAL SECURITY\nConsultants are guaranteed their ACTIVITY_REWARDs for successfully completed calls. In cases of user chargebacks or disputes, TalkPe Pro will independently investigate to protect the Consultant's legitimate earnings.\n\n3. ANONYMITY & BLOCKING\nConsultants have full rights to disconnect calls immediately if they feel uncomfortable and can use the 'Block' feature to permanently prevent specific users from Discovering with them.`
     },
     {
         id: 'user_safety',

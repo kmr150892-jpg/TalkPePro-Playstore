@@ -29,15 +29,15 @@ export default function MasterLedger() {
         // Increased limit to 500 so recharges don't get hidden behind 100s of operational logs
         const qTx = query(collection(db, "transactions"), orderBy("timestamp", "desc"), limit(500));
         const qVouchers = query(collection(db, "reward_requests"), orderBy("requestDate", "desc"), limit(100));
-        const qPayouts = query(collection(db, "withdrawals"), orderBy("createdAt", "desc"), limit(100)); 
+        const qACTIVITY_REWARDs = query(collection(db, "withdrawals"), orderBy("createdAt", "desc"), limit(100)); 
         
         let txList: any[] = [];
         let voucherList: any[] = [];
-        let payoutList: any[] = [];
+        let ACTIVITY_REWARDList: any[] = [];
 
         const updateList = () => {
             // Combine all collections and sort them by time sequence
-            const combined = [...txList, ...voucherList, ...payoutList].sort((a, b) => {
+            const combined = [...txList, ...voucherList, ...ACTIVITY_REWARDList].sort((a, b) => {
                 const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
                 const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
                 return timeB - timeA;
@@ -77,28 +77,28 @@ export default function MasterLedger() {
         });
 
         // 🔥 SYSTEM LOGIC: STRICT DISBURSEMENT DUPLICATE REMOVAL & STATUS VERIFICATION 🔥
-        const unsubPayouts = onSnapshot(qPayouts, (snap) => {
-            const uniquePayouts = new Map();
+        const unsubACTIVITY_REWARDs = onSnapshot(qACTIVITY_REWARDs, (snap) => {
+            const uniqueACTIVITY_REWARDs = new Map();
             snap.docs.forEach(docSnapshot => {
                 const data = docSnapshot.data();
                 const status = (data.status || '').toUpperCase();
                 
                 // Only take fully completed distributions
                 if (status === 'SUCCESS' || status === 'PAID') {
-                    uniquePayouts.set(docSnapshot.id, {
+                    uniqueACTIVITY_REWARDs.set(docSnapshot.id, {
                         id: docSnapshot.id,
-                        type: 'PAYOUT', // Unit mapping to PAYOUT
+                        type: 'ACTIVITY_REWARD', // Unit mapping to ACTIVITY_REWARD
                         userName: data.expertName || data.userName || 'Consultant',
-                        amount: data.amountRupee || data.amount || data.payoutAmount || 0,
+                        amount: data.amountRupee || data.amount || data.ACTIVITY_REWARDAmount || 0,
                         timestamp: data.paidAt || data.createdAt || data.processedAt
                     });
                 }
             });
-            payoutList = Array.from(uniquePayouts.values());
+            ACTIVITY_REWARDList = Array.from(uniqueACTIVITY_REWARDs.values());
             updateList();
         });
 
-        return () => { unsubTx(); unsubVouchers(); unsubPayouts(); };
+        return () => { unsubTx(); unsubVouchers(); unsubACTIVITY_REWARDs(); };
     }, []);
 
     // 🔥 AUTOMATIC FILTER ENGINE: Runs perfectly when data updates or tab changes
@@ -146,7 +146,7 @@ export default function MasterLedger() {
         const upType = type ? type.toUpperCase() : '';
         switch(upType) {
             case 'RECHARGE': return { name: 'plus-circle', color: '#10B981' };
-            case 'PAYOUT': return { name: 'external-link', color: '#6366F1' };
+            case 'ACTIVITY_REWARD': return { name: 'external-link', color: '#6366F1' };
             case 'VOUCHER': return { name: 'gift', color: '#F59E0B' }; 
             default: return { name: 'help-circle', color: '#475569' };
         }
@@ -159,7 +159,7 @@ export default function MasterLedger() {
         let displayName = item.userName || item.user_name || item.callerName || item.expertName || 'System';
         
         // Amount logic (handling exact values from operational ledger)
-        const displayAmount = Number(item.amountRupee || item.amount || item.rechargeAmount || item.payoutAmount || item.costDeducted || 0);
+        const displayAmount = Number(item.amountRupee || item.amount || item.rechargeAmount || item.ACTIVITY_REWARDAmount || item.costDeducted || 0);
 
         // Formatted Operational Timestamp
         let dateString = "Timestamp Unknown";
@@ -212,7 +212,7 @@ export default function MasterLedger() {
             {/* ⚡ ANALYTICS FILTERS */}
             <View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-                    {['TODAY_RECHARGE', 'TOTAL_RECHARGE', 'TODAY_PAYOUT', 'TOTAL_PAYOUT', 'TODAY_VOUCHER', 'TOTAL_VOUCHER'].map((f) => (
+                    {['TODAY_RECHARGE', 'TOTAL_RECHARGE', 'TODAY_ACTIVITY_REWARD', 'TOTAL_ACTIVITY_REWARD', 'TODAY_VOUCHER', 'TOTAL_VOUCHER'].map((f) => (
                         <TouchableOpacity 
                             key={f} 
                             onPress={() => applyFilter(f)}

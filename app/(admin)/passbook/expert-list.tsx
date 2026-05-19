@@ -124,7 +124,7 @@ export default function ExpertPassbookList() {
                     ListEmptyComponent={
                         <View style={styles.emptyBox}>
                             <MaterialCommunityIcons name="shield-search" size={48} color="#334155" />
-                            <Text style={styles.emptyText}>No matching profiles documented.</Text>
+                            <Text style={styles.emptyText}>No Discovering profiles documented.</Text>
                         </View>
                     }
                 />

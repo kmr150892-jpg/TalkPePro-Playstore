@@ -65,7 +65,7 @@ const getExpertTierRate = (beans: number) => {
     return 1000; 
 };
 
-const getQuickMatchTierRate = (beans: number) => {
+const getQuickDiscoverTierRate = (beans: number) => {
     if (beans >= 100000000) return 4400; 
     if (beans >= 50000000) return 4000;  
     if (beans >= 30000000) return 3600;  
@@ -96,15 +96,15 @@ export default function VideoCallScreen() {
     const callId = params.callId as string;
     const channelName = callId; 
     
-    const isQuickMatch = callId?.startsWith('match_');
+    const isQuickDiscover = callId?.startsWith('Discover_');
 
     const engine = useRef<IRtcEngine | null>(null);
     const [joined, setJoined] = useState(false);
     const [remoteUid, setRemoteUid] = useState<number | null>(null);
     const [isMuted, setIsMuted] = useState(false);
     
-    // 🔥 SATTI NEW STATE FOR BEAUTY FILTER
-    const [isBeautyEnabled, setIsBeautyEnabled] = useState(false);
+    // 🔥 SATTI NEW STATE FOR Pro FILTER
+    const [isProEnabled, setIsProEnabled] = useState(false);
 
     const [isCallAccepted, setIsCallAccepted] = useState(role === 'user'); 
     const [isRinging, setIsRinging] = useState(true); 
@@ -375,8 +375,8 @@ export default function VideoCallScreen() {
                         const totalBeans = eData.totalBeansEarned || eData.totalBeans || 0;
                         let finalUserPaymentRate = 0;
 
-                        if (isQuickMatch) {
-                            const qmBaseRate = getQuickMatchTierRate(totalBeans);
+                        if (isQuickDiscover) {
+                            const qmBaseRate = getQuickDiscoverTierRate(totalBeans);
                             finalUserPaymentRate = qmBaseRate * 2; 
                         } else {
                             finalUserPaymentRate = callDocRate || eData.userPrice || eData.pricePerMin || eData.beansPerMin || getExpertTierRate(totalBeans);
@@ -494,7 +494,7 @@ export default function VideoCallScreen() {
                 if (data.expertImage && !expertProfilePic) setExpertProfilePic(data.expertImage);
                 if (data.callerImage && !callerProfilePic) setCallerProfilePic(data.callerImage);
 
-                if (!isQuickMatch && (data.userPrice || data.pricePerMin || data.beansPerMin)) {
+                if (!isQuickDiscover && (data.userPrice || data.pricePerMin || data.beansPerMin)) {
                     const price = data.userPrice || data.pricePerMin || data.beansPerMin;
                     diamondRateRef.current = price;
                 }
@@ -710,9 +710,9 @@ export default function VideoCallScreen() {
         } catch (e) {}
     };
 
-    const toggleBeautyFilter = () => {
+    const toggleProFilter = () => {
         if (!engine.current) return;
-        const nextState = !isBeautyEnabled;
+        const nextState = !isProEnabled;
         try {
             engine.current.setBeautyEffectOptions(nextState, {
                 lighteningContrastLevel: 1, 
@@ -720,9 +720,9 @@ export default function VideoCallScreen() {
                 smoothnessLevel: 0.7, 
                 rednessLevel: 0.1,
             });
-            setIsBeautyEnabled(nextState);
+            setIsProEnabled(nextState);
         } catch (error) {
-            console.log("Beauty engine error:", error);
+            console.log("Pro engine error:", error);
         }
     };
 
@@ -1175,8 +1175,8 @@ export default function VideoCallScreen() {
                             isGameVisible={isGameVisible} 
                             isChatVisible={isChatVisible} 
                             isMuted={isMuted} 
-                            isBeautyEnabled={isBeautyEnabled}
-                            toggleBeauty={toggleBeautyFilter} 
+                            isProEnabled={isProEnabled}
+                            togglePro={toggleProFilter} 
                             toggleGameVisibility={async () => await setDoc(doc(db, "calls", callId, "game", "state"), { isVisible: !isGameVisible }, { merge: true })} 
                             toggleChatVisibility={() => setIsChatVisible(!isChatVisible)} 
                             toggleMute={() => { engine.current?.muteLocalAudioStream(!isMuted); setIsMuted(!isMuted); }} 

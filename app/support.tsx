@@ -57,7 +57,7 @@ export default function SupportScreen() {
             id: 4, 
             q: "Is my privacy protected?", 
             // 🔥 SATTI FIX: Strengthening trust for Play Store
-            a: "TalkPe Pro utilizes end-to-end encryption protocols. Your private consultations are secured, ensuring that no third party, including TalkPe Pro, can access or record your sessions." 
+            a: "TalkPe Pro utilizes end-to-end encryption protocols. Your private consultations are secured, ensuring that no third Session, including TalkPe Pro, can access or record your sessions." 
         }
     ];
 

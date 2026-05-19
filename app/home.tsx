@@ -5,18 +5,18 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  Image,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    Platform,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
@@ -232,20 +232,20 @@ export default function HomeScreen() {
 
           <TouchableOpacity 
               activeOpacity={0.9} 
-             onPress={() => router.push('/swipe-match' as any)}
-              style={[styles.matchTriggerMass, { shadowColor: userTier.color }]}
+             onPress={() => router.push('/Explore-Discover' as any)}
+              style={[styles.DiscoverTriggerMass, { shadowColor: userTier.color }]}
           >
               <LinearGradient 
                   colors={[userTier.color, userTier.secondaryColor]} 
-                  style={styles.matchGradient}
+                  style={styles.DiscoverGradient}
                   start={{x: 0, y: 0}}
                   end={{x: 1, y: 1}}
               >
                   <MaterialCommunityIcons name="lightning-bolt" size={28} color="#FFF" />
-                  <Text style={styles.matchBtnText}>EXPERT CONNECT</Text>
-                  <View style={styles.liveIndicatorMatch}>
-                      <View style={styles.liveDotMatch} />
-                      <Text style={styles.liveCountMatch}>2.4k Online</Text>
+                  <Text style={styles.DiscoverBtnText}>EXPERT CONNECT</Text>
+                  <View style={styles.liveIndicatorDiscover}>
+                      <View style={styles.liveDotDiscover} />
+                      <Text style={styles.liveCountDiscover}>2.4k Online</Text>
                   </View>
               </LinearGradient>
           </TouchableOpacity>
@@ -308,12 +308,12 @@ const styles = StyleSheet.create({
   walletValue: { color: '#FFF', fontSize: 18, fontWeight: '900' },
   rechargeBtn: { paddingVertical: 10, paddingHorizontal: 18, borderRadius: 18, elevation: 5 },
   rechargeText: { color: '#FFF', fontWeight: '900', fontSize: 13, letterSpacing: 1 },
-  matchTriggerMass: { marginVertical: 20, borderRadius: 30, elevation: 20, shadowOpacity: 0.5, shadowRadius: 10 },
-  matchGradient: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, gap: 15 },
-  matchBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 2 },
-  liveIndicatorMatch: { marginLeft: 'auto', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
-  liveDotMatch: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
-  liveCountMatch: { color: '#10B981', fontSize: 10, fontWeight: '800' },
+  DiscoverTriggerMass: { marginVertical: 20, borderRadius: 30, elevation: 20, shadowOpacity: 0.5, shadowRadius: 10 },
+  DiscoverGradient: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, gap: 15 },
+  DiscoverBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 2 },
+  liveIndicatorDiscover: { marginLeft: 'auto', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  liveDotDiscover: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+  liveCountDiscover: { color: '#10B981', fontSize: 10, fontWeight: '800' },
   welcomeCard: { backgroundColor: 'rgba(5, 5, 5, 0.6)', borderRadius: 35, padding: 30, alignItems: 'center' },
   emoji: { fontSize: 50, marginBottom: 15 },
   welcomeTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },

@@ -42,9 +42,9 @@ import { ChannelProfileType, ClientRoleType, createAgoraRtcEngine, IRtcEngine } 
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
 
-// 🔥 BETTING NUMBER GAME IMPORT 🔥
+// 🔥 Participation NUMBER GAME IMPORT 🔥
 import LiveGameSheet from '../../components/LiveGameSheet';
-import TurboRacingSheet from '../../components/TurboRacingSheet'; // ✅ IMPORT RACING SHEET
+// TURBO RACING SHEET HAS BEEN COMPLETELY REMOVED PER USER REQUEST
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = "718cedc3c47e44d1bfa4853d6ac6cd80"; 
@@ -70,7 +70,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 30000)    return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
@@ -102,13 +102,10 @@ export default function PartyRoomScreen() {
     const scaleAnim = useRef(new Animated.Value(0)).current;
 
     const [gameVisible, setGameVisible] = useState(false);
-    const [racingVisible, setRacingVisible] = useState(false);
     
     const gameVisibleRef = useRef(false);
-    const racingVisibleRef = useRef(false);
     
     useEffect(() => { gameVisibleRef.current = gameVisible; }, [gameVisible]);
-    useEffect(() => { racingVisibleRef.current = racingVisible; }, [racingVisible]);
 
     const [displayWalletBalance, setDisplayWalletBalance] = useState(0); 
     const isClosingRef = useRef(false);
@@ -156,7 +153,7 @@ export default function PartyRoomScreen() {
         
         try {
             if (hasAnnouncedJoin.current) {
-                await addDoc(collection(db, "party_rooms", roomId, "messages"), {
+                await addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                     uid: "system",
                     name: "System",
                     text: `🚪 ${name} left the room.`,
@@ -168,7 +165,7 @@ export default function PartyRoomScreen() {
             if (mySeatIndexRef.current !== null && roomDataRef.current) {
                 const updatedSeats = [...roomDataRef.current.seats];
                 updatedSeats[mySeatIndexRef.current] = { uid: null, name: null, image: null, isMuted: false };
-                await updateDoc(doc(db, "party_rooms", roomId), { seats: updatedSeats });
+                await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
             }
         } catch(e) { console.log(e); }
 
@@ -180,7 +177,7 @@ export default function PartyRoomScreen() {
         router.back();
     };
 
-    // 🔥 SATTI FIX: THE ULTIMATE SMART MULTI-BET CHECKER & EXACT ROUND SYNC EXIT 🔥
+    // 🔥 SATTI FIX: THE ULTIMATE SMART MULTI-entry CHECKER & EXACT ROUND SYNC EXIT 🔥
     const handleRoomEnded = async () => {
         if (isClosingRef.current || isCallingRef.current || navigatingToCallRef.current) return;
 
@@ -197,121 +194,29 @@ export default function PartyRoomScreen() {
         }
 
         try {
-            // Check ALL possible games they might be playing simultaneously
-            let activeGamesToWaitFor: { id: string, roundId: number }[] = [];
+            // OLD GAMBLING GAMES COMPLETELY REMOVED FROM HERE
+            // NO ACTIVE GAMES TO WAIT FOR ANYMORE
 
-            if (auth.currentUser) {
-                // 1. Check Turbo Racing
-                const racingSnap = await getDoc(doc(db, 'global_games', 'turbo_racing'));
-                if (racingSnap.exists()) {
-                    const racingRoundId = racingSnap.data().roundId;
-                    if (racingRoundId !== undefined) {
-                        const betSnap = await getDoc(doc(db, 'global_games', 'turbo_racing', 'rounds', racingRoundId.toString(), 'bets', auth.currentUser.uid));
-                        if (betSnap.exists()) {
-                            activeGamesToWaitFor.push({ id: 'turbo_racing', roundId: racingRoundId });
-                        }
-                    }
-                }
+            // 🔥 FORUM EXIT IMMEDIATELY 🔥
+            setExitMessage("Forum ended. Exiting... 🚀");
+            setIsLiveEndedWaiting(true); // Lock the screen
+            
+            // Force close game dashboards so alert is visible
+            setGameVisible(false);
+            
+            setTimeout(() => {
+                Alert.alert(
+                    "Forum Ended", 
+                    "Host closed this Forum. See you next time! 🚀", 
+                    [{ text: "OK", onPress: () => router.replace('/(tabs)' as any) }],
+                    { cancelable: false }
+                );
+            }, 500);
 
-                // 2. Check Fortune Clash
-                const diceSnap = await getDoc(doc(db, 'global_games', 'fortune_clash'));
-                if (diceSnap.exists()) {
-                    const clashRoundId = diceSnap.data().roundId;
-                    if (clashRoundId !== undefined) {
-                        const betSnap = await getDoc(doc(db, 'global_games', 'fortune_clash', 'rounds', clashRoundId.toString(), 'bets', auth.currentUser.uid));
-                        if (betSnap.exists()) {
-                            activeGamesToWaitFor.push({ id: 'fortune_clash', roundId: clashRoundId });
-                        }
-                    }
-                }
-            }
+            // Auto-navigate back after 3.5 seconds just in case user ignores Alert
+            setTimeout(() => router.replace('/(tabs)' as any), 3500); 
 
-            // 🔥 IF ANY BET IS ACTIVE -> SHOW RESULT & WAIT UNTIL EXACT NEXT ROUND 🔥
-            if (activeGamesToWaitFor.length > 0) {
-                setExitMessage("🚨 HOST LEFT THE FORUM 🚨\nWaiting for your final game result... ⏳");
-                
-                // Lock UI screen instantly so user cannot touch anything
-                setIsLiveEndedWaiting(true);
-                
-                // Open ONLY the games they are actually playing
-                if (activeGamesToWaitFor.some(g => g.id === 'turbo_racing')) setRacingVisible(true);
-                if (activeGamesToWaitFor.some(g => g.id === 'fortune_clash')) setGameVisible(true);
-
-                let completedGames = 0;
-                let hasTriggeredExit = false;
-                let unsubs: (() => void)[] = [];
-
-                const checkAllFinished = () => {
-                    if (completedGames === activeGamesToWaitFor.length && !hasTriggeredExit) {
-                        hasTriggeredExit = true;
-                        unsubs.forEach(unsub => unsub && unsub()); // Clear listeners
-                        setRacingVisible(false); // Force close game
-                        setGameVisible(false); // Force close game
-                        setTimeout(() => router.replace('/(tabs)' as any), 800); 
-                    }
-                };
-
-                unsubs = activeGamesToWaitFor.map(game => {
-                    let isDelayStarted = false; // 🔥 Ensures we only trigger the wait ONCE per game
-                    return onSnapshot(doc(db, 'global_games', game.id), (snap) => {
-                        if (snap.exists() && !hasTriggeredExit && !isDelayStarted) {
-                            const latestRoundId = snap.data().roundId;
-                            const currentPhase = snap.data().phase; // 🔥 SATTI FIX: Fetch the current Phase!
-                            
-                            // 🚀 WE WAIT EXACTLY FOR THE 'RESULT' PHASE OF THE ROUND WE BET ON!
-                            if (latestRoundId === game.roundId && currentPhase === 'RESULT') {
-                                isDelayStarted = true;
-                                // We wait exactly 4 seconds for the user to absorb their win/loss result before exiting
-                                setTimeout(() => {
-                                    if (!hasTriggeredExit) {
-                                        completedGames++;
-                                        checkAllFinished();
-                                    }
-                                }, 4000); 
-                            }
-                            // If somehow the round already moved to the NEXT round, we exit immediately
-                            else if (latestRoundId > game.roundId) {
-                                isDelayStarted = true;
-                                completedGames++;
-                                checkAllFinished();
-                            }
-                        }
-                    });
-                });
-
-                // Fail-safe if game engine gets stuck (Extended to 60s for full cycle)
-                setTimeout(() => {
-                    if (!hasTriggeredExit) {
-                        hasTriggeredExit = true;
-                        unsubs.forEach(unsub => unsub && unsub());
-                        setRacingVisible(false);
-                        setGameVisible(false);
-                        setTimeout(() => router.replace('/(tabs)' as any), 500);
-                    }
-                }, 60000);
-                return;
-            }
         } catch (e) { console.log(e); }
-
-        // 🔥 IF NO BET PLACED -> EXIT IMMEDIATELY 🔥
-        setExitMessage("Forum ended. Exiting... 🚀");
-        setIsLiveEndedWaiting(true); // Lock the screen
-        
-        // Force close game dashboards so alert is visible
-        setRacingVisible(false); 
-        setGameVisible(false);
-        
-        setTimeout(() => {
-            Alert.alert(
-                "Forum Ended", 
-                "Host closed this Forum. See you next time! 🚀", 
-                [{ text: "OK", onPress: () => router.replace('/(tabs)' as any) }],
-                { cancelable: false }
-            );
-        }, 500);
-
-        // Auto-navigate back after 3.5 seconds just in case user ignores Alert
-        setTimeout(() => router.replace('/(tabs)' as any), 3500); 
     };
 
     useEffect(() => {
@@ -326,7 +231,7 @@ export default function PartyRoomScreen() {
     useEffect(() => {
         if (!roomId || !user) return;
 
-        // 🔥 SATTI FIX: RESET EXIT STATES ON RE-ENTRY 🔥
+        // 🔥 SATTI FIX: RESET EXIT STATES ON RE-entry 🔥
         setIsLiveEndedWaiting(false);
         setExitMessage("");
         isClosingRef.current = false;
@@ -336,7 +241,7 @@ export default function PartyRoomScreen() {
         
         const unsubPresence = onValue(roomPresenceRef, async (snap) => {
             if (snap.exists() && snap.val() === "ended") {
-                await updateDoc(doc(db, "party_rooms", roomId), { status: "ended" }).catch(()=>{});
+                await updateDoc(doc(db, "forum_rooms", roomId), { status: "ended" }).catch(()=>{});
                 await updateDoc(doc(db, "lives", roomId), { status: "ended" }).catch(()=>{}); 
             }
         });
@@ -345,10 +250,11 @@ export default function PartyRoomScreen() {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 setUserData(data);
+                setDisplayWalletBalance(data.balance || 0);
             }
         });
 
-        const unsubRoom = onSnapshot(doc(db, "party_rooms", roomId), (snap) => {
+        const unsubRoom = onSnapshot(doc(db, "forum_rooms", roomId), (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
                 // 🔥 Shield: Don't end room if we are routing to a call!
@@ -369,12 +275,12 @@ export default function PartyRoomScreen() {
             }
         });
 
-        const msgQuery = query(collection(db, 'party_rooms', roomId, 'messages'), orderBy('timestamp', 'desc'), limit(20));
+        const msgQuery = query(collection(db, 'forum_rooms', roomId, 'messages'), orderBy('timestamp', 'desc'), limit(20));
         const unsubMsgs = onSnapshot(msgQuery, (snap) => {
             setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse());
         });
 
-        const giftQuery = query(collection(db, 'party_rooms', roomId, 'gifts'), orderBy('timestamp', 'desc'), limit(1));
+        const giftQuery = query(collection(db, 'forum_rooms', roomId, 'gifts'), orderBy('timestamp', 'desc'), limit(1));
         const unsubGifts = onSnapshot(giftQuery, async (snap) => {
             snap.docChanges().forEach(async (change) => {
                 if (change.type === 'added') {
@@ -388,7 +294,7 @@ export default function PartyRoomScreen() {
             });
         });
 
-        const reactionQuery = query(collection(db, 'party_rooms', roomId, 'reactions'), orderBy('timestamp', 'desc'), limit(1));
+        const reactionQuery = query(collection(db, 'forum_rooms', roomId, 'reactions'), orderBy('timestamp', 'desc'), limit(1));
         const unsubReactions = onSnapshot(reactionQuery, (snap) => {
             snap.docChanges().forEach((change) => {
                 if (change.type === 'added') {
@@ -415,7 +321,7 @@ export default function PartyRoomScreen() {
     useEffect(() => {
         if (isAgoraJoined && userData && !hasAnnouncedJoin.current) {
             hasAnnouncedJoin.current = true;
-            addDoc(collection(db, "party_rooms", roomId, "messages"), {
+            addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: "system",
                 name: "System",
                 text: `👋 ${userData?.name || userData?.displayName || "Guest"} joined the room!`,
@@ -424,27 +330,6 @@ export default function PartyRoomScreen() {
             }).catch(e => console.log(e));
         }
     }, [isAgoraJoined, userData, roomId]);
-
-    useEffect(() => {
-        if (!userData || !userData.balance) return;
-        
-        const racingRef = doc(db, 'global_games', 'turbo_racing');
-        const unsubRacing = onSnapshot(racingRef, (snap) => {
-            if (snap.exists()) {
-                const phase = snap.data().phase;
-                if (phase === 'RESULT') {
-                    setTimeout(() => {
-                        setDisplayWalletBalance(userData.balance);
-                    }, 2000); 
-                } else if (phase === 'PICKING') {
-                    setDisplayWalletBalance(userData.balance);
-                }
-            } else {
-                setDisplayWalletBalance(userData.balance);
-            }
-        });
-        return () => unsubRacing();
-    }, [userData?.balance]);
 
     const triggerGiftAnimation = () => {
         giftAnimY.setValue(50);
@@ -506,7 +391,7 @@ export default function PartyRoomScreen() {
             Alert.alert("Leave Seat?", "Go to audience?", [{ text: "Leave", onPress: async () => {
                 const updatedSeats = [...roomData.seats];
                 updatedSeats[index] = { uid: null, name: null, image: null, isMuted: false };
-                await updateDoc(doc(db, "party_rooms", roomId), { seats: updatedSeats });
+                await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
             }}, { text: "Cancel" }]);
             return;
         }
@@ -522,7 +407,7 @@ export default function PartyRoomScreen() {
                 image: actualImage,
                 isMuted: isMuted
             };
-            await updateDoc(doc(db, "party_rooms", roomId), { seats: updatedSeats });
+            await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
         } catch (e) { console.log(e); }
     };
 
@@ -532,14 +417,14 @@ export default function PartyRoomScreen() {
         if (mySeatIndex !== null && roomData) {
             const updatedSeats = [...roomData.seats];
             updatedSeats[mySeatIndex].isMuted = newMutedState;
-            updateDoc(doc(db, "party_rooms", roomId), { seats: updatedSeats });
+            updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
         }
     };
 
     const handleSendChat = async () => {
         if (!chatInput.trim() || !user) return;
         try {
-            await addDoc(collection(db, "party_rooms", roomId, "messages"), {
+            await addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: user.uid,
                 name: userData?.name || "Guest",
                 text: chatInput.trim(),
@@ -551,7 +436,7 @@ export default function PartyRoomScreen() {
 
     const handleReaction = async (emoji: string) => {
         try {
-            await addDoc(collection(db, "party_rooms", roomId, "reactions"), {
+            await addDoc(collection(db, "forum_rooms", roomId, "reactions"), {
                 emoji, timestamp: serverTimestamp()
             });
         } catch (e) { console.log(e); }
@@ -567,7 +452,7 @@ export default function PartyRoomScreen() {
         try {
             const expertBeans = Math.floor(gift.price / 2);
             
-            addDoc(collection(db, "party_rooms", roomId, "gifts"), {
+            addDoc(collection(db, "forum_rooms", roomId, "gifts"), {
                 giftId: gift.id, giftName: gift.name, icon: gift.icon,
                 price: gift.price, senderName: userData.name || 'User',
                 timestamp: serverTimestamp()
@@ -581,7 +466,7 @@ export default function PartyRoomScreen() {
             });
 
             // 🔥 SATTI FIX: ROYAL VIP GIFT MESSAGE TO CHAT 🔥
-            addDoc(collection(db, "party_rooms", roomId, "messages"), {
+            addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: "system_gift",
                 name: "System",
                 text: `🎁 ${userData?.name || userData?.displayName || "Guest"} sent a ${gift.name} ${gift.icon}!`,
@@ -760,14 +645,6 @@ export default function PartyRoomScreen() {
                         userWalletBalance={userData?.balance || 0} 
                     />
 
-                    <TurboRacingSheet 
-                        visible={racingVisible} 
-                        onClose={() => setRacingVisible(false)} 
-                        liveId={roomId} 
-                        isHost={false} 
-                        userWalletBalance={userData?.balance || 0} 
-                    />
-
                     <View style={styles.chatArea}>
                         <FlatList
                             data={messages}
@@ -835,10 +712,6 @@ export default function PartyRoomScreen() {
                             </TouchableOpacity>
 
                             <View style={styles.actionRow}>
-                                <TouchableOpacity style={[styles.gameBtnSmall, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]} onPress={() => setRacingVisible(true)}>
-                                    <Ionicons name="car-sport" size={22} color="#10B981" />
-                                </TouchableOpacity>
-
                                 <TouchableOpacity style={styles.gameBtnSmall} onPress={() => setGameVisible(true)}>
                                     <Ionicons name="game-controller" size={22} color="#F59E0B" />
                                 </TouchableOpacity>

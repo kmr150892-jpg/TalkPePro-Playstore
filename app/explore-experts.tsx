@@ -125,7 +125,7 @@ const FloatingNode = ({ imageSource, delay, angle, radius, borderColor }: { imag
     );
 };
 
-export default function SwipeMatchScreen() {
+export default function SwipeDiscoverScreen() {
     const router = useRouter();
     const user = auth.currentUser;
     const [statusText, setStatusText] = useState("Initializing Neural Link...");
@@ -137,7 +137,7 @@ export default function SwipeMatchScreen() {
     const [hasTrialMins, setHasTrialMins] = useState<boolean>(false);
     
     const queueDocRef = useRef<any>(null);
-    const isMatched = useRef(false);
+    const isDiscovered = useRef(false);
     const hasSentRequest = useRef(false);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
     const triedExpertsRef = useRef<string[]>([]);
@@ -149,7 +149,12 @@ export default function SwipeMatchScreen() {
                 permissionChecked.current = true;
                 const hasPermission = await checkAndRequestCallPermissions();
                 if (!hasPermission) {
-                    router.back(); 
+                    // 🔥 SATTI FIX: SAFE ROUTING ADDED 🔥
+                    if (router.canGoBack()) {
+                        router.back(); 
+                    } else {
+                        router.replace('/');
+                    }
                 }
             }
         };
@@ -206,9 +211,9 @@ export default function SwipeMatchScreen() {
         if (!user || searchState !== "searching") return;
         let activeUnsubQueue: any = null;
 
-        const startMatchmaking = async () => {
+        const startDiscovermaking = async () => {
             try {
-                const qRef = await addDoc(collection(db, "match_queue"), {
+                const qRef = await addDoc(collection(db, "Discover_queue"), {
                     userId: user.uid,
                     userName: userName, 
                     userImage: userRealPic || user.photoURL || "",
@@ -219,8 +224,8 @@ export default function SwipeMatchScreen() {
                 queueDocRef.current = qRef;
 
                 timeoutRef.current = setTimeout(async () => {
-                    if (!isMatched.current) {
-                        setSearchState("no_match");
+                    if (!isDiscovered.current) {
+                        setSearchState("no_Discover");
                         if (queueDocRef.current) deleteDoc(queueDocRef.current).catch(e => console.log(e));
                         
                         try {
@@ -235,11 +240,11 @@ export default function SwipeMatchScreen() {
                     }
                 }, 45000); 
 
-                activeUnsubQueue = onSnapshot(doc(db, "match_queue", qRef.id), (snap) => {
+                activeUnsubQueue = onSnapshot(doc(db, "Discover_queue", qRef.id), (snap) => {
                     if (snap.exists()) {
                         const data = snap.data();
                         
-                        if (data.status === "matched") {
+                        if (data.status === "Discovered") {
                             if (timeoutRef.current) {
                                 clearTimeout(timeoutRef.current);
                                 timeoutRef.current = null;
@@ -254,13 +259,13 @@ export default function SwipeMatchScreen() {
                     }
                 });
                 findExpert();
-            } catch (error) { console.log("Match Error:", error); }
+            } catch (error) { console.log("Discover Error:", error); }
         };
 
         const findExpert = async () => {
-            if (isMatched.current || hasSentRequest.current || !queueDocRef.current || searchState !== "searching") return;
+            if (isDiscovered.current || hasSentRequest.current || !queueDocRef.current || searchState !== "searching") return;
             setTimeout(async () => {
-                if (isMatched.current || hasSentRequest.current || !queueDocRef.current || searchState !== "searching") return;
+                if (isDiscovered.current || hasSentRequest.current || !queueDocRef.current || searchState !== "searching") return;
                 try {
                     const expertsQuery = query(
                         collection(db, "users"), 
@@ -281,7 +286,7 @@ export default function SwipeMatchScreen() {
                         triedExpertsRef.current.push(randomExpertDoc.id);
                         sendRequestToExpert(randomExpertDoc.id, randomExpertDoc.data());
                     } else {
-                        setSearchState("no_match");
+                        setSearchState("no_Discover");
                         if (queueDocRef.current) deleteDoc(queueDocRef.current).catch(e => console.log(e));
                     }
                 } catch (e) { console.log(e); }
@@ -289,9 +294,9 @@ export default function SwipeMatchScreen() {
         };
 
         const sendRequestToExpert = async (expertId: string, expertData: any) => {
-            if (isMatched.current || !queueDocRef.current || searchState !== "searching") return;
+            if (isDiscovered.current || !queueDocRef.current || searchState !== "searching") return;
             hasSentRequest.current = true;
-            const callId = `match_${user.uid}_${Date.now()}`;
+            const callId = `Discover_${user.uid}_${Date.now()}`;
             try {
                 const eSnap = await getDoc(doc(db, "users", expertId));
                 let finalExpertName = "Consultant";
@@ -314,14 +319,14 @@ export default function SwipeMatchScreen() {
                     isFreeTrial: hasTrialMins,
                     createdAt: serverTimestamp() 
                 });
-                await updateDoc(queueDocRef.current, { status: "matched", callId: callId, expertId: expertId });
+                await updateDoc(queueDocRef.current, { status: "Discovered", callId: callId, expertId: expertId });
                 setStatusText("Consultant identified. Connecting...");
                 
                 const unsubCall = onSnapshot(doc(db, "calls", callId), (callSnap) => {
                     if (callSnap.exists()) {
                         const callData = callSnap.data();
                         if (callData.status === "connected" || callData.status === "accepted") {
-                            isMatched.current = true;
+                            isDiscovered.current = true;
                             if (timeoutRef.current) clearTimeout(timeoutRef.current);
                             unsubCall();
                             deleteDoc(queueDocRef.current).catch(()=>{});
@@ -347,11 +352,11 @@ export default function SwipeMatchScreen() {
             } catch (e) { hasSentRequest.current = false; }
         };
 
-        startMatchmaking();
+        startDiscovermaking();
         return () => {
             if (activeUnsubQueue) activeUnsubQueue();
             if (timeoutRef.current) clearTimeout(timeoutRef.current);
-            if (queueDocRef.current && !isMatched.current) deleteDoc(queueDocRef.current).catch(e => console.log(e));
+            if (queueDocRef.current && !isDiscovered.current) deleteDoc(queueDocRef.current).catch(e => console.log(e));
         };
     }, [user, searchState, userRealPic, tier, userName, hasTrialMins]);
 
@@ -366,7 +371,7 @@ export default function SwipeMatchScreen() {
             }
         } catch (error) { console.log(error); }
 
-        isMatched.current = false;
+        isDiscovered.current = false;
         hasSentRequest.current = false;
         triedExpertsRef.current = []; 
         setSearchState("searching");
@@ -374,7 +379,7 @@ export default function SwipeMatchScreen() {
     };
 
     const handleCancel = async () => {
-        isMatched.current = true;
+        isDiscovered.current = true;
         if (timeoutRef.current) clearTimeout(timeoutRef.current);
         if (queueDocRef.current) await deleteDoc(queueDocRef.current).catch(e => console.log(e));
         
@@ -388,7 +393,12 @@ export default function SwipeMatchScreen() {
             }
         } catch (error) { console.log(error); }
 
-        router.back();
+        // 🔥 SATTI FIX: SAFE ROUTING ADDED 🔥
+        if (router.canGoBack()) {
+            router.back();
+        } else {
+            router.replace('/');
+        }
     };
 
     return (
@@ -446,10 +456,10 @@ export default function SwipeMatchScreen() {
                         </TouchableOpacity>
                     </>
                 ) : (
-                    <View style={styles.noMatchContainer}>
+                    <View style={styles.noDiscoverContainer}>
                         <View style={[styles.warningRing, {borderColor: tier.color}]}><Ionicons name="warning-outline" size={60} color={tier.color} /></View>
-                        <Text style={styles.noMatchTitle}>NO CONSULTANT FOUND</Text>
-                        <Text style={styles.noMatchSub}>All verified consultants are currently engaged. Please try again in a few moments.</Text>
+                        <Text style={styles.noDiscoverTitle}>NO CONSULTANT FOUND</Text>
+                        <Text style={styles.noDiscoverSub}>All verified consultants are currently engaged. Please try again in a few moments.</Text>
                         <TouchableOpacity style={styles.retryBtn} onPress={handleRetry} activeOpacity={0.8}>
                             <LinearGradient colors={[tier.color, tier.secondaryColor]} style={styles.retryGradient} start={{x:0, y:0}} end={{x:1, y:1}}>
                                 <Ionicons name="refresh" size={24} color="#FFF" /><Text style={styles.retryText}>RE-INITIALIZE</Text>
@@ -483,10 +493,10 @@ const styles = StyleSheet.create({
     cancelBtn: { position: 'absolute', bottom: 50 },
     cancelBlur: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 25, paddingVertical: 15, borderRadius: 30, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     cancelText: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
-    noMatchContainer: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
+    noDiscoverContainer: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
     warningRing: { width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(255, 255, 255, 0.05)', borderWidth: 2, alignItems: 'center', justifyContent: 'center', marginBottom: 30 },
-    noMatchTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: 2, marginBottom: 12 },
-    noMatchSub: { color: '#94A3B8', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 50 },
+    noDiscoverTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: 2, marginBottom: 12 },
+    noDiscoverSub: { color: '#94A3B8', fontSize: 14, textAlign: 'center', lineHeight: 22, marginBottom: 50 },
     retryBtn: { width: width * 0.75, borderRadius: 35, elevation: 20 },
     retryGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 20, borderRadius: 35, gap: 12 },
     retryText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 2 },

@@ -151,7 +151,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     const d = docSnap.data();
                     if (d.type === 'video_call') continue; 
                     let tType = 'call_gift';
-                    if (d.source === 'party') tType = 'party_gift';
+                    if (d.source === 'Session') tType = 'party_gift';
                     if (d.source === 'live') tType = 'live_gift';
                     if (d.type?.includes('game') || d.source?.includes('game')) tType = 'live_game_bonus';
 
@@ -184,7 +184,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     const giftsSnap = await getDocs(collection(db, "party_rooms", partyDoc.id, "gifts"));
                     for (const gDoc of giftsSnap.docs) {
                         const g = gDoc.data();
-                        // 🔥 SATTI FIX: Robust mapping for party gifts 🔥
+                        // 🔥 SATTI FIX: Robust mapping for Session gifts 🔥
                         rawData.push({ id: gDoc.id, type: 'party_gift', beans: g.beans || Math.floor((g.price || g.amount || 0) / 2), timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
                     }
                 }
@@ -587,7 +587,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`₿${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />
-                                        <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
+                                        <MatrixBox icon="Session-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Broadcast Activity" value={`₿${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" borderStyle={borderType2} />

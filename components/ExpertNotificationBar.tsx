@@ -38,7 +38,7 @@ const calculateUserLevel = (totalSpent: number) => {
 };
 
 export default function ExpertNotificationBar() {
-    const [matchRequest, setMatchRequest] = useState<any>(null);
+    const [DiscoverRequest, setDiscoverRequest] = useState<any>(null);
     const [userTier, setUserTier] = useState<any>(calculateUserLevel(0));
     const translateY = useRef(new Animated.Value(-200)).current; 
     const router = useRouter();
@@ -48,9 +48,9 @@ export default function ExpertNotificationBar() {
         if (!consultant) return;
 
         const q = query(
-            collection(db, "match_queue"),
+            collection(db, "Discover_queue"),
             where("expertId", "==", consultant.uid),
-            where("status", "==", "matched")
+            where("status", "==", "Discovered")
         );
 
         const unsub = onSnapshot(q, async (snap) => {
@@ -73,10 +73,10 @@ export default function ExpertNotificationBar() {
                 }
                 data.displayCallerName = finalName;
 
-                setMatchRequest(data);
+                setDiscoverRequest(data);
                 
-                const matchedTier = calculateUserLevel(data.totalSpent || (data.tierLvl ? data.tierLvl * 100000 : 0));
-                setUserTier(matchedTier);
+                const DiscoveredTier = calculateUserLevel(data.totalSpent || (data.tierLvl ? data.tierLvl * 100000 : 0));
+                setUserTier(DiscoveredTier);
 
                 Animated.spring(translateY, { 
                     toValue: 0, 
@@ -97,15 +97,15 @@ export default function ExpertNotificationBar() {
             duration: 500, 
             useNativeDriver: true 
         }).start(() => {
-            setMatchRequest(null);
+            setDiscoverRequest(null);
         });
     };
 
     const handleAccept = async () => {
-        if (!matchRequest) return;
+        if (!DiscoverRequest) return;
         try {
             // 🔥 DOUBLE-RING FIX: Change status to 'accepted' so videocall.tsx skips the ringing overlay!
-            await updateDoc(doc(db, "calls", matchRequest.callId), {
+            await updateDoc(doc(db, "calls", DiscoverRequest.callId), {
                 status: "accepted",
                 acceptedAt: serverTimestamp()
             });
@@ -114,9 +114,9 @@ export default function ExpertNotificationBar() {
             router.push({
                 pathname: "/videocall" as any,
                 params: { 
-                    callId: matchRequest.callId, 
+                    callId: DiscoverRequest.callId, 
                     role: 'expert', 
-                    callerName: matchRequest.displayCallerName 
+                    callerName: DiscoverRequest.displayCallerName 
                 }
             });
 
@@ -125,9 +125,9 @@ export default function ExpertNotificationBar() {
     };
 
     const handleReject = async () => {
-        if (!matchRequest) return;
+        if (!DiscoverRequest) return;
         try {
-            await updateDoc(doc(db, "match_queue", matchRequest.id), {
+            await updateDoc(doc(db, "Discover_queue", DiscoverRequest.id), {
                 status: "searching",
                 expertId: null
             });
@@ -135,7 +135,7 @@ export default function ExpertNotificationBar() {
         } catch (e) { console.log("Reject Error:", e); }
     };
 
-    if (!matchRequest) return null;
+    if (!DiscoverRequest) return null;
 
     return (
         <Animated.View style={[styles.container, { transform: [{ translateY }] }]}>
@@ -146,14 +146,14 @@ export default function ExpertNotificationBar() {
                 />
                 <View style={styles.content}>
                     <Image 
-                        source={{ uri: matchRequest.userImage || `https://ui-avatars.com/api/?name=${matchRequest.displayCallerName}&background=0F172A&color=00F2FE&size=256&bold=true` }} 
+                        source={{ uri: DiscoverRequest.userImage || `https://ui-avatars.com/api/?name=${DiscoverRequest.displayCallerName}&background=0F172A&color=00F2FE&size=256&bold=true` }} 
                         style={[styles.avatar, { borderColor: userTier.color }]} 
                     />
                     <View style={styles.textDetails}>
                         <Text style={[styles.incomingText, { color: userTier.color }]}>
                             {userTier.label} SYNC
                         </Text>
-                        <Text style={styles.userName} numberOfLines={1}>{matchRequest.displayCallerName}</Text>
+                        <Text style={styles.userName} numberOfLines={1}>{DiscoverRequest.displayCallerName}</Text>
                     </View>
 
                     <View style={styles.actions}>

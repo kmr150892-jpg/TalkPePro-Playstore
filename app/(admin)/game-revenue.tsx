@@ -55,22 +55,22 @@ export default function AdminGameRevenue() {
                         for (const docSnap of snap.docs) {
                             const data = docSnap.data();
                             
-                            const bigBet = Number(data.totalBigBet) || 0;
-                            const smallBet = Number(data.totalSmallBet) || 0;
-                            const blueBet = Number(data.totalBlueBet) || 0;
-                            const redBet = Number(data.totalRedBet) || 0;
-                            const greenBet = Number(data.totalGreenBet) || 0;
+                            const bigbet = Number(data.totalBigbet) || 0;
+                            const smallbet = Number(data.totalSmallbet) || 0;
+                            const bluebet = Number(data.totalBluebet) || 0;
+                            const redbet = Number(data.totalRedbet) || 0;
+                            const greenbet = Number(data.totalGreenbet) || 0;
                             
-                            const totalPool = bigBet + smallBet + blueBet + redBet + greenBet;
+                            const totalPool = bigbet + smallbet + bluebet + redbet + greenbet;
 
                             if (totalPool > 0 && data.resultType) {
                                 
-                                let winnerPayout = 0;
-                                if (data.resultType === 'SMALL') winnerPayout = smallBet * 1.9;
-                                else if (data.resultType === 'BIG') winnerPayout = bigBet * 1.9;
-                                else if (data.resultType === 'BLUE') winnerPayout = blueBet * 1.9;
-                                else if (data.resultType === 'RED') winnerPayout = redBet * 1.9;
-                                else if (data.resultType === 'GREEN') winnerPayout = greenBet * 9; 
+                                let winnerACTIVITY_REWARD = 0;
+                                if (data.resultType === 'SMALL') winnerACTIVITY_REWARD = smallbet * 1.9;
+                                else if (data.resultType === 'BIG') winnerACTIVITY_REWARD = bigbet * 1.9;
+                                else if (data.resultType === 'BLUE') winnerACTIVITY_REWARD = bluebet * 1.9;
+                                else if (data.resultType === 'RED') winnerACTIVITY_REWARD = redbet * 1.9;
+                                else if (data.resultType === 'GREEN') winnerACTIVITY_REWARD = greenbet * 9; 
 
                                 let expertBeans = Number(data.gameBeansCollected) || Number(data.expertBeansPaid) || 0;
                                 let expertDiamonds = expertBeans * 2; 
@@ -80,7 +80,7 @@ export default function AdminGameRevenue() {
                                     expertBeans = expertDiamonds / 2; 
                                 }
 
-                                const adminProfit = totalPool - winnerPayout - expertDiamonds;
+                                const adminProfit = totalPool - winnerACTIVITY_REWARD - expertDiamonds;
 
                                 tPool += totalPool;
                                 tAdmin += adminProfit;
@@ -97,7 +97,7 @@ export default function AdminGameRevenue() {
                                 fetchedGames.push({
                                     id: docSnap.id,
                                     totalPool,
-                                    winnerPayout,
+                                    winnerACTIVITY_REWARD,
                                     expertBeans,
                                     expertDiamonds,
                                     adminProfit,
@@ -153,7 +153,7 @@ export default function AdminGameRevenue() {
                     <View style={{ flexDirection: 'row', gap: 8 }}>
                         <View style={styles.roomTypeBadge}>
                             <Ionicons name={isParty ? "headset" : "videocam"} size={12} color="#FFF" />
-                            <Text style={styles.roomTypeText}>{isParty ? "PARTY" : "LIVE"}</Text>
+                            <Text style={styles.roomTypeText}>{isParty ? "Session" : "LIVE"}</Text>
                         </View>
                         <View style={[styles.roomTypeBadge, { backgroundColor: isRacing ? '#EF4444' : '#8B5CF6' }]}>
                             <Ionicons name={isRacing ? "car-sport" : "dice"} size={12} color="#FFF" />
@@ -178,7 +178,7 @@ export default function AdminGameRevenue() {
                     <View style={styles.statBox}>
                         <Text style={styles.statLabel}>USER GRANTS</Text>
                         <Text style={[styles.statValue, { color: '#FBBF24' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-                            -{Math.floor(item.winnerPayout)} 💎
+                            -{Math.floor(item.winnerACTIVITY_REWARD)} 💎
                         </Text>
                     </View>
                     <View style={styles.statBox}>
@@ -231,7 +231,7 @@ export default function AdminGameRevenue() {
             </View>
 
             <View style={styles.overviewContainer}>
-                {/* 🔥 GLOBAL OVERALL PROFIT CARD (WITH INR & AUTO-SHRINK) 🔥 */}
+                {/* 🔥 GLOBAL OVERALL Earnings CARD (WITH INR & AUTO-SHRINK) 🔥 */}
                 <LinearGradient colors={stats.totalAdminProfit >= 0 ? ['#064E3B', '#022C22'] : ['#450a0a', '#290606']} style={[styles.mainProfitCard, { borderColor: overallProfitColor }]}>
                     <MaterialCommunityIcons name="finance" size={32} color={overallProfitColor} style={{ position: 'absolute', top: 15, right: 20, opacity: 0.2 }} />
                     <Text style={[styles.mainProfitLabel, { color: stats.totalAdminProfit >= 0 ? '#A7F3D0' : '#FECACA' }]}>GLOBAL OPERATIONAL MARGIN</Text>

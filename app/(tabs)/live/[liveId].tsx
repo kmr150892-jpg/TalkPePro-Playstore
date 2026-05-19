@@ -5,14 +5,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 // 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
+import { getDatabase, onValue, ref } from 'firebase/database';
 import React, { useEffect, useRef, useState } from 'react';
 // 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, RtcSurfaceView } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GiftOverlay from '../../../components/GiftOverlay';
-import LiveGameSheet from '../../../components/LiveGameSheet';
-import TurboRacingSheet from '../../../components/TurboRacingSheet'; // ✅ RACING SHEET IMPORTED
+import LiveGameSheet from '../../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA IMPORTED
 import { auth, db } from '../../../firebaseConfig';
 import { checkAndRequestCallPermissions } from '../../../utils/permissions';
 
@@ -134,17 +134,14 @@ export default function UserLiveViewScreen() {
         isCallingRef.current = isCalling;
     }, [isCalling]);
 
-    // 🔥 GAME FEATURE STATE
+    // 🔥 GAME FEATURE STATE (NOW INTEGRATED WITH REFLEX BLITZ)
     const [gameVisible, setGameVisible] = useState(false);
-    const [racingVisible, setRacingVisible] = useState(false); 
     const [myWalletBalance, setMyWalletBalance] = useState(0);
 
     // 🔥 FIX: Use refs to avoid stale closure issues during Graceful Exit
     const gameVisibleRef = useRef(false);
-    const racingVisibleRef = useRef(false);
     
     useEffect(() => { gameVisibleRef.current = gameVisible; }, [gameVisible]);
-    useEffect(() => { racingVisibleRef.current = racingVisible; }, [racingVisible]);
 
     // 🔥 Trial Check Reference
     const hasTrialMinsRef = useRef(false);
@@ -152,116 +149,63 @@ export default function UserLiveViewScreen() {
     // 🔥 NEW: Graceful Exit Reference
     const isClosingRef = useRef(false);
 
-    // 🔥 SATTI FIX: THE ULTIMATE SMART MULTI-BET CHECKER & EXACT ROUND SYNC EXIT 🔥
+    // 🔥 SATTI FIX: THE ULTIMATE SMART REFLEX ENGINE SYNC EXIT 🔥
     const handleRoomEnded = async () => {
         if (isClosingRef.current || isCallingRef.current || navigatingToCallRef.current) return;
 
         isClosingRef.current = true;
         leaveChannel(); // Safely disconnect Agora so video/audio stops immediately
 
+        // 🔥 SATTI FIX: FRONTEND AUTO-REFUND LOGIC (CLIENT-SIDE SAFEGUARD) 🔥
+        // Expert app kill pannalum, user screen close aagurathuku munnadi refund adichudum!
         try {
-            // Check ALL possible games they might be playing simultaneously
-            let activeGamesToWaitFor: { id: string, roundId: number }[] = [];
-
             if (auth.currentUser) {
-                // 1. Check Turbo Racing
-                const racingSnap = await getDoc(doc(db, 'global_games', 'turbo_racing'));
-                if (racingSnap.exists()) {
-                    const racingRoundId = racingSnap.data().roundId;
-                    if (racingRoundId !== undefined) {
-                        const betSnap = await getDoc(doc(db, 'global_games', 'turbo_racing', 'rounds', racingRoundId.toString(), 'bets', auth.currentUser.uid));
-                        if (betSnap.exists()) {
-                            activeGamesToWaitFor.push({ id: 'turbo_racing', roundId: racingRoundId });
-                        }
-                    }
-                }
-
-                // 2. Check Fortune Clash
-                const diceSnap = await getDoc(doc(db, 'global_games', 'fortune_clash'));
-                if (diceSnap.exists()) {
-                    const clashRoundId = diceSnap.data().roundId;
-                    if (clashRoundId !== undefined) {
-                        const betSnap = await getDoc(doc(db, 'global_games', 'fortune_clash', 'rounds', clashRoundId.toString(), 'bets', auth.currentUser.uid));
-                        if (betSnap.exists()) {
-                            activeGamesToWaitFor.push({ id: 'fortune_clash', roundId: clashRoundId });
+                const roomRef = doc(db, 'lives', liveId, 'games', 'reflex_arena');
+                const roomSnap = await getDoc(roomRef);
+                
+                if (roomSnap.exists()) {
+                    const roomData = roomSnap.data();
+                    // Check if game was stuck in WAITING or PLAYING state
+                    if (roomData.status === 'WAITING' || roomData.status === 'PLAYING') {
+                        const players = roomData.players || [];
+                        const iAmPlaying = players.some((p: any) => p.id === auth.currentUser?.uid);
+                        
+                        if (iAmPlaying) {
+                            const entryFee = Number(roomData.entryFee) || 0;
+                            if (entryFee > 0) {
+                                const userRef = doc(db, "users", auth.currentUser.uid);
+                                // 1. Instantly refund the wallet
+                                await updateDoc(userRef, { balance: increment(entryFee) });
+                                
+                                // 2. Add to transaction history
+                                await addDoc(collection(db, "users", auth.currentUser.uid, "activityHistory"), {
+                                    type: "GAME_REFUND",
+                                    status: "REFUNDED",
+                                    gameName: "REFLEX BLITZ ARENA",
+                                    sessionId: "reflex_arena",
+                                    entryFee: entryFee,
+                                    winAmount: entryFee,
+                                    lossAmount: 0,
+                                    title: "Host Disconnected Refund",
+                                    timestamp: serverTimestamp()
+                                });
+                                console.log(`✅ Frontend Auto-Refund processed successfully for ${entryFee} diamonds!`);
+                            }
                         }
                     }
                 }
             }
+        } catch (e) {
+            console.log("Frontend Refund Check Error:", e);
+        }
+        // ----------------------------------------------------------------------
 
-            // 🔥 IF ANY BET IS ACTIVE -> SHOW RESULT & WAIT UNTIL EXACT NEXT ROUND 🔥
-            if (activeGamesToWaitFor.length > 0) {
-                setExitMessage("🚨 CONSULTANT LEFT THE BROADCAST 🚨\nWaiting for your final game result... ⏳");
-                
-                // Lock UI screen instantly so user cannot touch anything
-                setIsLiveEndedWaiting(true);
-                
-                // Open ONLY the games they are actually playing
-                if (activeGamesToWaitFor.some(g => g.id === 'turbo_racing')) setRacingVisible(true);
-                if (activeGamesToWaitFor.some(g => g.id === 'fortune_clash')) setGameVisible(true);
-
-                let completedGames = 0;
-                let hasTriggeredExit = false;
-                let unsubs: (() => void)[] = [];
-
-                const checkAllFinished = () => {
-                    if (completedGames === activeGamesToWaitFor.length && !hasTriggeredExit) {
-                        hasTriggeredExit = true;
-                        unsubs.forEach(unsub => unsub && unsub()); // Clear listeners
-                        setRacingVisible(false); // Force close game
-                        setGameVisible(false); // Force close game
-                        setTimeout(() => handleBackNavigation(), 500); 
-                    }
-                };
-
-                unsubs = activeGamesToWaitFor.map(game => {
-                    let isDelayStarted = false; // 🔥 Ensures we only trigger the wait ONCE per game
-                    return onSnapshot(doc(db, 'global_games', game.id), (snap) => {
-                        if (snap.exists() && !hasTriggeredExit && !isDelayStarted) {
-                            const latestRoundId = snap.data().roundId;
-                            const currentPhase = snap.data().phase; // 🔥 SATTI FIX: Fetch the current Phase!
-                            
-                            // 🚀 WE EXIT ONLY IF THE ROUND HAS MOVED FORWARD AND IT IS SHOWING THE RESULT!
-                            if (latestRoundId === game.roundId && currentPhase === 'RESULT') {
-                                isDelayStarted = true;
-                                // We wait exactly 4 seconds for the user to absorb their win/loss result before exiting
-                                setTimeout(() => {
-                                    if (!hasTriggeredExit) {
-                                        completedGames++;
-                                        checkAllFinished();
-                                    }
-                                }, 4000); 
-                            }
-                            else if (latestRoundId > game.roundId) {
-                                isDelayStarted = true;
-                                completedGames++;
-                                checkAllFinished();
-                            }
-                        }
-                    });
-                });
-
-                // Fail-safe if game engine gets stuck
-                setTimeout(() => {
-                    if (!hasTriggeredExit) {
-                        hasTriggeredExit = true;
-                        unsubs.forEach(unsub => unsub && unsub());
-                        setRacingVisible(false);
-                        setGameVisible(false);
-                        setTimeout(() => handleBackNavigation(), 500);
-                    }
-                }, 60000);
-                return;
-            }
-        } catch (e) { console.log(e); }
-
-        // 🔥 IF NO BET PLACED -> EXIT IMMEDIATELY 🔥
+        // 🔥 SATTI FIX: GAME WAITING LOGIC REMOVED! INSTANT EXIT & CLOSE ALL MODALS 🔥
         setExitMessage("Consultant left the broadcast. Exiting... 🚀");
         setIsLiveEndedWaiting(true); // Lock the screen
         
-        // 🔥 SATTI FIX: Force close modals and WAIT 500ms before showing Alert! 🔥
-        setRacingVisible(false); 
-        setGameVisible(false);
+        // 🔥 Force close modals and WAIT 500ms before showing Alert! 🔥
+        setGameVisible(false); // Instantly close the game modal
         setShowGiftModal(false);
         setActiveGrandGift(null);
         setShowBusyStatus(false);
@@ -436,7 +380,7 @@ export default function UserLiveViewScreen() {
         isMounted.current = true;
         
         if (liveId && auth.currentUser && isFocused) { 
-            // 🔥 SATTI FIX: RESET EXIT STATES ON RE-ENTRY 🔥
+            // 🔥 SATTI FIX: RESET EXIT STATES ON RE-entry 🔥
             setIsLiveEndedWaiting(false);
             setExitMessage("");
             isClosingRef.current = false;
@@ -445,6 +389,7 @@ export default function UserLiveViewScreen() {
             const unsubListeners = listenToStreamData();
             const unsubCallRequest = listenToCallRequest();
             const unsubBlockRealtime = listenToBlockRealtime();
+            const unsubPresence = listenToPresence(); // 🔥 NEW: RTDB PRESENCE LISTENER ADDED
             
             // 🌍 GLOBAL SYNC: Wallet Balance Listener
             const unsubWallet = onSnapshot(doc(db, "users", auth.currentUser.uid), (docSnap) => {
@@ -463,6 +408,7 @@ export default function UserLiveViewScreen() {
                 unsubListeners(); 
                 unsubCallRequest();
                 unsubBlockRealtime();
+                unsubPresence(); // 🔥 NEW: CLEANUP RTDB LISTENER
                 unsubWallet();
                 leaveChannel();
             };
@@ -504,6 +450,28 @@ export default function UserLiveViewScreen() {
         };
     };
 
+    // 🔥 SATTI FIX: RTDB PRESENCE LISTENER ADDED HERE 🔥
+    const listenToPresence = () => {
+        if (!liveId) return () => {};
+        
+        const rtdb = getDatabase();
+        const livePresenceRef = ref(rtdb, `presence_lives/${liveId}`);
+
+        const unsubPresence = onValue(livePresenceRef, (snap) => {
+            const status = snap.val();
+            
+            // 🔥 CRITICAL FIX: Firestore miss aanalum, RTDB-la status "ended" nu marunale Host app-a kill pannittar-nu artham!
+            if (status === 'ended') {
+                if (isMounted.current && !isCallingRef.current && !navigatingToCallRef.current && !isClosingRef.current) {
+                    console.log("Host disconnected or app killed! Triggering graceful exit...");
+                    handleRoomEnded();
+                }
+            }
+        });
+
+        return unsubPresence;
+    };
+
     // 🔥 UPDATED AGORA SETUP
     const setupAgora = async () => {
         try {
@@ -521,9 +489,11 @@ export default function UserLiveViewScreen() {
                 onUserJoined: (connection, uid) => { 
                     if (isMounted.current) setHostUid(uid); 
                 },
-                onUserOffline: () => { 
+                onUserOffline: () => {
                     if (isMounted.current && !isCallingRef.current && !navigatingToCallRef.current) {
-                        handleRoomEnded(); 
+                        // 🔥 SATTI FIX: EXPERT NETWORK DROP AANA / APP MINIMIZE PANNA UDANE USER KICK AAGA KOODATHU! 🔥
+                        // Just setHostUid(0) to show reconnecting UI. Firestore status thaan source of truth!
+                        setHostUid(0); 
                     }
                 },
             });
@@ -893,13 +863,9 @@ export default function UserLiveViewScreen() {
                                 </View>
                                 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                    {/* 🔥 SATTI FIX: TURBO RACING CAR ICON CHANGED TO RED 🔥 */}
-                                    <TouchableOpacity onPress={() => setRacingVisible(true)} style={[styles.closeIcon, { borderColor: '#EF4444', borderWidth: 1, backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                                        <Ionicons name="car-sport" size={22} color="#EF4444" />
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#F59E0B', borderWidth: 1, backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                                       <Ionicons name="game-controller" size={22} color="#F59E0B" />
+                                    {/* 🔥 SATTI FIX: REFLEX SKILL ARENA ICON 🔥 */}
+                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
+                                        <Ionicons name="dice" size={22} color="#00F2FE" />
                                     </TouchableOpacity>
 
                                     <TouchableOpacity onPress={handleBackNavigation} style={[styles.closeIcon, { borderColor: userTier.secondaryColor + '40', borderWidth: 1 }]}>
@@ -1070,18 +1036,10 @@ export default function UserLiveViewScreen() {
                 </View>
             </Modal>
 
-            {/* ✅ GAME SHEETS FOR USER COMPONENT */}
+            {/* ✅ REFLEX BLITZ ARENA (Gateway component) */}
             <LiveGameSheet 
                 visible={gameVisible} 
                 onClose={() => setGameVisible(false)} 
-                liveId={liveId} 
-                isHost={false} 
-                userWalletBalance={myWalletBalance} 
-            />
-
-            <TurboRacingSheet 
-                visible={racingVisible} 
-                onClose={() => setRacingVisible(false)} 
                 liveId={liveId} 
                 isHost={false} 
                 userWalletBalance={myWalletBalance} 

@@ -77,7 +77,7 @@ const getLevelConfig = (userData: any) => {
 
 // 🔥 50 STANDARD SKILLS FOR QUICK SELECTION
 const STANDARD_SKILLS = [
-    "Singing", "Dancing", "Astrology", "Tarot Reading", "Relationship Advice", "Career Counseling", "Life Coaching", 
+    "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching", 
     "Mental Wellness", "Fitness & Diet", "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
     "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development", "Stock Trading", 
     "Crypto Investing", "Personal Finance", "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
@@ -378,7 +378,7 @@ export default function MasterClassScreen() {
                                 <MaterialCommunityIcons name="rocket-launch" size={18} color={theme.accent} />
                                 <Text style={[styles.revenueTitle, { color: theme.accent }]}>ALGORITHM BOOST</Text>
                             </View>
-                            <Text style={styles.revenueDesc}>Premium Spotlight activates priority matchmaking across the network.</Text>
+                            <Text style={styles.revenueDesc}>Premium Spotlight activates priority Discovermaking across the network.</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
                                 <MaterialCommunityIcons name="trending-up" size={28} color="#FFF" />
                                 <Text style={styles.revenueAmount}>300% MORE VISIBILITY</Text>
