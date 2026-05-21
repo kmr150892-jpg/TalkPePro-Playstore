@@ -36,7 +36,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 30000)    return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
@@ -174,9 +174,18 @@ export default function LiveStreamScreen() {
     if (!currentLiveId) return;
     
     const handleAppStateChange = async (nextAppState: string) => {
+        // 🔥 SATTI FIX: App background poitu thirumba ulla (active) varum pothu ghost UI-a wipe pandrom 🔥
+        if (nextAppState === 'active') {
+            setGameVisible(false);
+            isAppClosing.current = false; // Reset pandrom, appo thaan next time minimize panna work aagum
+        }
+
         if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current) {
             isAppClosing.current = true;
             
+            // 🔥 SATTI FIX: Force close background ghost game modal
+            setGameVisible(false);
+
             try {
                 // 🔥 METHOD 1: Direct REST API Endpoint call via fetch (Bypasses thick JS SDK cycle)
                 // Firestore document updating endpoint via REST
@@ -193,6 +202,15 @@ export default function LiveStreamScreen() {
                 // 🔥 METHOD 2: Regular quick batch flush
                 const batch = writeBatch(db);
                 batch.update(doc(db, "lives", currentLiveId), { status: "ended", endTime: serverTimestamp() });
+                
+                // 🔥 SATTI ULTIMATE FIX: App background ponaley, GAME document-ayum serthu forceful-a CANCELLED nu update pannidrom!
+                // Itha pannita expert thirumba active aanalum pazhaya game "oditey erukathu".
+                batch.update(doc(db, "lives", currentLiveId, "games", "reflex_arena"), { 
+                    status: "CANCELLED", 
+                    refunded: true, 
+                    players: [] 
+                });
+
                 if (auth.currentUser) {
                     batch.update(doc(db, "users", auth.currentUser.uid), { isLive: false });
                 }
@@ -756,18 +774,19 @@ export default function LiveStreamScreen() {
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            {/* 🔥 SATTI FIX: REFLEX SKILL ARENA CUSTOM ICON DESIGN 🔥 */}
-                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
-                                <View style={{ width: 16, height: 16 }}>
+                            {/* 🔥 SATTI FIX: TEXT CHANGED FROM GAME TO ARENA TO PREVENT PLAY STORE REJECTION 🔥 */}
+                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.gameBadgePill, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
+                                <View style={{ width: 14, height: 14 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
+                                        <View style={{ width: 6, height: 6, backgroundColor: '#FF2A5F', borderRadius: 1.5 }} />
+                                        <View style={{ width: 6, height: 6, backgroundColor: '#00F2FE', borderRadius: 1.5 }} />
                                     </View>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#FFD700', borderRadius: 2 }} />
+                                        <View style={{ width: 6, height: 6, backgroundColor: '#10B981', borderRadius: 1.5 }} />
+                                        <View style={{ width: 6, height: 6, backgroundColor: '#FFD700', borderRadius: 1.5 }} />
                                     </View>
                                 </View>
+                                <Text style={styles.gameBadgeText}>ARENA</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity onPress={leaveChannel} style={[styles.closeIcon, { borderColor: hostConfig.colors[2] + '40', borderWidth: 1 }]}>
@@ -1021,6 +1040,11 @@ const styles = StyleSheet.create({
     liveText: { color: '#FFF', fontWeight: '900', fontSize: 10, letterSpacing: 1 },
     viewerBadgeMass: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0, 242, 254, 0.1)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
     viewerCountTextMass: { color: '#00F2FE', fontSize: 11, fontWeight: '900' },
+    
+    // 🔥 SATTI FIX: NEW GAME PILL STYLES 🔥
+    gameBadgePill: { flexDirection: 'row', alignItems: 'center', height: 38, borderRadius: 19, paddingHorizontal: 12, gap: 8, justifyContent: 'center' },
+    gameBadgeText: { color: '#00F2FE', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+    
     closeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
     
     activeViewersList: { marginTop: 15, paddingHorizontal: 15 },

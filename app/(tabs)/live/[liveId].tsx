@@ -179,14 +179,14 @@ export default function UserLiveViewScreen() {
                                 
                                 // 2. Add to transaction history
                                 await addDoc(collection(db, "users", auth.currentUser.uid, "activityHistory"), {
-                                    type: "GAME_REFUND",
+                                    type: "ARENA_REFUND",
                                     status: "REFUNDED",
                                     gameName: "REFLEX BLITZ ARENA",
                                     sessionId: "reflex_arena",
                                     entryFee: entryFee,
                                     winAmount: entryFee,
                                     lossAmount: 0,
-                                    title: "Host Disconnected Refund",
+                                    title: "Arena Pass Refund (Host Left)",
                                     timestamp: serverTimestamp()
                                 });
                                 console.log(`✅ Frontend Auto-Refund processed successfully for ${entryFee} diamonds!`);
@@ -863,9 +863,18 @@ export default function UserLiveViewScreen() {
                                 </View>
                                 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                    {/* 🔥 SATTI FIX: REFLEX SKILL ARENA ICON 🔥 */}
-                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
-                                        <Ionicons name="dice" size={22} color="#00F2FE" />
+                                    {/* 🔥 SATTI FIX: CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
+                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+                                        <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                                <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
+                                                <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
+                                            </View>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                                <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
+                                                <View style={{ width: 7, height: 4, backgroundColor: '#FFD700', borderRadius: 4 }} />
+                                            </View>
+                                        </View>
                                     </TouchableOpacity>
 
                                     <TouchableOpacity onPress={handleBackNavigation} style={[styles.closeIcon, { borderColor: userTier.secondaryColor + '40', borderWidth: 1 }]}>

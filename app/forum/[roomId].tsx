@@ -20,7 +20,6 @@ import {
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
     Alert,
     Animated,
     BackHandler,
@@ -712,8 +711,18 @@ export default function PartyRoomScreen() {
                             </TouchableOpacity>
 
                             <View style={styles.actionRow}>
-                                <TouchableOpacity style={styles.gameBtnSmall} onPress={() => setGameVisible(true)}>
-                                    <Ionicons name="game-controller" size={22} color="#F59E0B" />
+                                {/* 🔥 CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
+                                <TouchableOpacity style={[styles.gameBtnSmall, { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1 }]} onPress={() => setGameVisible(true)}>
+                                    <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                            <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
+                                            <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
+                                        </View>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
+                                            <View style={{ width: 7, height: 4, backgroundColor: '#FFD700', borderRadius: 4 }} />
+                                        </View>
+                                    </View>
                                 </TouchableOpacity>
 
                                 <TouchableOpacity style={styles.giftBtnSmall} onPress={() => setShowGiftModal(true)}>
@@ -724,15 +733,6 @@ export default function PartyRoomScreen() {
                                         <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#EF4444" : "#10B981"} />
                                     </TouchableOpacity>
                                 )}
-
-                                {/* 🔥 SATTI FIX: ADDED CALL BUTTON TO USER FORUM CONTROLS 🔥 */}
-                                <TouchableOpacity style={[styles.gameBtnSmall, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]} onPress={handleCallButtonPress} disabled={isCallingState}>
-                                    {isCallingState ? (
-                                        <ActivityIndicator size="small" color="#3B82F6" />
-                                    ) : (
-                                        <Ionicons name="call" size={20} color="#3B82F6" />
-                                    )}
-                                </TouchableOpacity>
                             </View>
                         </BlurView>
                     </View>

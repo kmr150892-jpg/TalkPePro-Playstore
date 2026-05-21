@@ -215,7 +215,7 @@ export default function LevelInsights({ expertData }: any) {
 
                         <View style={styles.heroStatsContainer}>
                             <BlurView intensity={20} tint="light" style={styles.heroStatBox}>
-                                <Text style={styles.hStatLabel}>TOTAL REVENUE</Text>
+                                <Text style={styles.hStatLabel}>TOTAL REWARD</Text>
                                 <View style={styles.hValueRow}>
                                     <MaterialCommunityIcons name="seed" size={16} color="#FBBF24" />
                                     <Text style={styles.hStatValue} numberOfLines={1} adjustsFontSizeToFit>{totalBeans.toLocaleString()}</Text>

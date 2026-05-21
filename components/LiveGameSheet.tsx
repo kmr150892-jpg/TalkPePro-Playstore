@@ -8,7 +8,7 @@ import { auth, db } from '../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 
-// 🎨 DYNAMIC ARCADE COLOR CONFIG (🔥 ADDED PURPLE & ORANGE FOR EXTREME DIFFICULTY)
+// 🎨 DYNAMIC ARCADE COLOR CONFIG
 const COLOR_POOL = [
     { name: 'RED', colorCode: '#FF2A5F' },
     { name: 'BLUE', colorCode: '#00F2FE' },
@@ -19,7 +19,6 @@ const COLOR_POOL = [
 ];
 
 const ENTRY_FEES = [500, 1000, 5000, 10000, 25000, 50000];
-// 🔥 UPDATE 1: 10 PLAYERS MAXIMUM
 const MAX_PLAYERS = 10;
 
 interface LiveGameSheetProps {
@@ -28,9 +27,10 @@ interface LiveGameSheetProps {
     liveId: string;
     isHost: boolean;
     userWalletBalance: number;
+    collectionName?: string; 
 }
 
-export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWalletBalance }: LiveGameSheetProps) {
+export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWalletBalance, collectionName = 'lives' }: LiveGameSheetProps) {
     // --- System States ---
     const [gameStatus, setGameStatus] = useState<'WAITING' | 'PLAYING' | 'FINISHED' | 'CANCELLED'>('WAITING');
     const [players, setPlayers] = useState<any[]>([]);
@@ -65,7 +65,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
     const scoreAnim = useRef(new Animated.Value(1)).current;
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     
-    // 🔥 UPDATE 3: FLOATING UI PAN RESPONDER REFS
     const pan = useRef(new Animated.ValueXY()).current;
     const panResponder = useRef(
         PanResponder.create({
@@ -84,14 +83,12 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         })
     ).current;
 
-    // Refs to hold latest values inside the Timer without resetting it!
     const scoreRef = useRef<number>(0);
     const hasSubmittedScoreRef = useRef<boolean>(false);
 
-    // STRICT ISOLATED ROOM PATH
-    const roomRef = doc(db, 'lives', liveId, 'games', 'reflex_arena');
+    const roomRef = doc(db, collectionName, liveId, 'games', 'reflex_arena');
 
-    // 🔥 SATTI FIX: SELF-HEALING AUTO REFUND IF HOST FORCE CLOSES OR DISCONNECTS
+    // 🔥 SATTI FIX: SELF-HEALING AUTO REFUND WITH PROPER WALLET SYNC
     const handleAutoRefundOnCancel = async () => {
         if (!auth.currentUser) return;
         const uid = auth.currentUser.uid;
@@ -104,22 +101,27 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 if (!roomSnap.exists() || !userSnap.exists()) return;
                 const roomData = roomSnap.data();
 
-                // Double check to ensure it's actually cancelled
                 if (roomData.status !== 'CANCELLED') return;
 
                 const currentPlayers = roomData.players || [];
                 const myPlayerObj = currentPlayers.find((p: any) => p.id === uid);
 
-                // If player is not in the list, Host already refunded them via handleHostClose! So skip.
                 if (!myPlayerObj) return; 
 
                 const roomFee = Number(roomData.entryFee) || 0;
-                const newBalance = (Number(userSnap.data().balance) || 0) + roomFee;
                 
-                // Remove user from players list to prevent duplicate logic
+                // 🔥 FIXED: Update both wallet fields safely
+                const uData = userSnap.data();
+                const safeBal = Number(uData.balance) || 0;
+                const safeWalletBal = Number(uData.walletBalance) || 0;
+
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                transaction.set(userRef, { balance: newBalance }, { merge: true });
+                transaction.set(userRef, { 
+                    balance: safeBal + roomFee,
+                    walletBalance: safeWalletBal + roomFee
+                }, { merge: true });
+                
                 transaction.set(roomRef, { players: updatedPlayers }, { merge: true });
 
                 const txRef = doc(db, 'transactions', `${uid}_auto_refund_${Date.now()}`);
@@ -132,7 +134,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         }
     };
 
-    // 🔄 REALTIME SYNC
     useEffect(() => {
         if (!liveId || !visible) return;
 
@@ -146,6 +147,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                         isFeeLocked: false,
                         hostId: auth.currentUser?.uid, 
                         players: [], 
+                        refunded: false, // 🔥 SATTI FIX: Added refunded: false as initial lock state
                         createdAt: serverTimestamp() 
                     });
                     setMatchResults(null);
@@ -184,17 +186,16 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
                 if (data.status === 'CANCELLED') {
                     if (!isHost) {
-                        // 🔥 SATTI FIX: INSTANT BACKGROUND REFUND & CLOSE
                         handleAutoRefundOnCancel();
-                        onClose(); 
                     }
+                    // 🔥 SATTI FIX: If game is cancelled in background, modal should force close for everyone to prevent zombie UI
+                    onClose(); 
                 }
             }
         });
         return () => unsub();
     }, [liveId, visible]);
 
-    // ⏱️ LOBBY TIMER
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
         if (gameStatus === 'WAITING' && isFeeLocked && visible) {
@@ -205,7 +206,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         return () => { if(interval) clearInterval(interval); }
     }, [gameStatus, isFeeLocked, visible]);
 
-    // ⏱️ PERFECT 60 SECONDS SYNC TIMER
     useEffect(() => {
         if (gameStatus === 'PLAYING') {
             if (!isHost && !isPlayingSolo && gameTimeLeft === 60) {
@@ -254,7 +254,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         };
     }, [gameStatus]); 
 
-    // 🔥 MORE DIFFICULT ENGINE🔥
     const generateNewClash = () => {
         let wordIdx = Math.floor(Math.random() * COLOR_POOL.length);
         let colorIdx = Math.floor(Math.random() * COLOR_POOL.length);
@@ -282,7 +281,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         const generatedDecoys = shuffledNames.map((name, index) => ({ name, colorCode: shuffledColors[index] }));
         
         setButtonDecoys(generatedDecoys);
-        // 🔥 FIXED: Safe bounds for text movement & size so it NEVER goes out of the box 🔥
         setWordTilt(`${(Math.random() * 30 - 15).toFixed(1)}deg`);
         setWordFontSize(Math.floor(Math.random() * 14) + 26);
         setWordTranslate({ x: Math.random() * 30 - 15, y: Math.random() * 20 - 10 });
@@ -322,7 +320,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         } else {
             setCombo(0);
             setScore(prev => {
-                // 🔥 HEAVY PENALTY FOR WRONG CLICK (-150 instead of -80)
                 const newScore = Math.max(0, prev - 150);
                 scoreRef.current = newScore;
                 return newScore;
@@ -337,7 +334,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         } catch (e) { console.log("Lock Error", e); }
     };
 
-    // 🔥 UPDATE 2: UNLOCK ROOM FEE IF NO PLAYERS
     const unlockRoomFee = async () => {
         try {
             await setDoc(roomRef, { isFeeLocked: false }, { merge: true });
@@ -356,25 +352,34 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 const userSnap = await transaction.get(userRef);
                 const roomSnap = await transaction.get(roomRef);
 
-                if (!userSnap.exists() || !roomSnap.exists()) throw "Data missing!";
+                if (!userSnap.exists() || !roomSnap.exists()) throw "Data missing! Arena setup might be incomplete.";
                 
-                const currentBalance = Number(userSnap.data().balance) || 0;
+                const uData = userSnap.data();
+                const safeBal = Number(uData.balance) || 0;
+                const safeWalletBal = Number(uData.walletBalance) || 0;
+                
+                const effectiveBalance = Math.max(safeBal, safeWalletBal); 
+                
                 const roomData = roomSnap.data();
                 const roomFee = Number(roomData.entryFee) || 0;
                 const currentPlayers = roomData.players || [];
 
                 if (currentPlayers.find((p: any) => p.id === uid)) throw "Already joined";
-                if (currentPlayers.length >= MAX_PLAYERS) throw "Room Full";
-                if (currentBalance < roomFee) throw "Insufficient Balance";
+                if (currentPlayers.length >= MAX_PLAYERS) throw "Arena Full";
+                if (effectiveBalance < roomFee) throw `Insufficient Balance. You need ${roomFee} 💎 to join.`;
 
-                transaction.set(userRef, { balance: currentBalance - roomFee }, { merge: true });
+                transaction.set(userRef, { 
+                    balance: Math.max(0, safeBal - roomFee),
+                    walletBalance: Math.max(0, safeWalletBal - roomFee)
+                }, { merge: true });
+                
                 transaction.set(roomRef, {
                     players: [...currentPlayers, { id: uid, name: uName, score: 0, hasFinished: false, joinedAt: Date.now() }]
                 }, { merge: true });
 
                 const txRef = doc(db, 'transactions', `${uid}_arena_${Date.now()}`);
                 transaction.set(txRef, {
-                    userId: uid, type: 'GAME_ENTRY', amount: roomFee, status: 'SUCCESS', title: 'Reflex Arena Entry', timestamp: serverTimestamp()
+                    userId: uid, type: 'ARENA_ENTRY', amount: roomFee, status: 'SUCCESS', title: 'Reflex Arena Entry', timestamp: serverTimestamp()
                 });
             });
             Alert.alert("Success!", "You joined the Arena. Waiting for launch.");
@@ -398,23 +403,31 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 if (!roomSnap.exists() || !userSnap.exists()) throw "Data missing";
                 const roomData = roomSnap.data();
 
-                if (roomData.status !== 'WAITING') throw "Game already started! Can't exit now.";
+                if (roomData.status !== 'WAITING') throw "Arena already active! Can't exit now.";
 
                 const currentPlayers = roomData.players || [];
                 const myPlayerObj = currentPlayers.find((p: any) => p.id === uid);
 
-                if (!myPlayerObj) throw "You are not in the room";
+                if (!myPlayerObj) throw "You are not in the arena";
 
                 const roomFee = Number(roomData.entryFee) || 0;
-                const newBalance = (Number(userSnap.data().balance) || 0) + roomFee;
+                
+                const uData = userSnap.data();
+                const safeBal = Number(uData.balance) || 0;
+                const safeWalletBal = Number(uData.walletBalance) || 0;
+                
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                transaction.set(userRef, { balance: newBalance }, { merge: true });
+                transaction.set(userRef, { 
+                    balance: safeBal + roomFee,
+                    walletBalance: safeWalletBal + roomFee
+                }, { merge: true });
+                
                 transaction.set(roomRef, { players: updatedPlayers }, { merge: true });
 
                 const txRef = doc(db, 'transactions', `${uid}_refund_${Date.now()}`);
                 transaction.set(txRef, {
-                    userId: uid, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Reflex Arena Refund', timestamp: serverTimestamp()
+                    userId: uid, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Reflex Arena Refund', timestamp: serverTimestamp()
                 });
             });
             Alert.alert("Refunded 💰", "You left the arena. Entry fee has been refunded to your wallet.");
@@ -427,8 +440,8 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
     const handleHostClose = async () => {
         if (isHost && (gameStatus === 'WAITING' || gameStatus === 'PLAYING') && players.length > 0) {
             Alert.alert(
-                "Cancel Match & Refund?",
-                "Closing now will cancel the match and refund all users.",
+                "Cancel Arena & Refund?",
+                "Closing now will cancel the arena and refund all participants.",
                 [
                     { text: "Cancel", style: "cancel" },
                     { text: "Yes, Refund All", style: "destructive", onPress: async () => {
@@ -438,6 +451,14 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 const roomSnap = await transaction.get(roomRef);
                                 if(!roomSnap.exists()) return;
                                 const data = roomSnap.data();
+
+                                // 🔥 SATTI FIX: DOUBLE REFUND BLOCKER 🔥
+                                // Database level-la check pandrom. Oru thadava 'refunded: true' aagiducha nu paakurom.
+                                // Ithu iruntha kandippa double refund aagathu.
+                                if (data.status === 'CANCELLED' || data.refunded === true) {
+                                    return; 
+                                }
+
                                 const currentPlayers = data.players || [];
                                 const roomFee = Number(data.entryFee) || 0;
 
@@ -447,14 +468,21 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 currentPlayers.forEach((p: any, index: number) => {
                                     const uSnap = userSnaps[index];
                                     if(uSnap.exists()){
-                                        const safeBal = Number(uSnap.data().balance) || 0;
-                                        transaction.set(uSnap.ref, { balance: safeBal + roomFee }, { merge: true });
+                                        const uData = uSnap.data();
+                                        const safeBal = Number(uData.balance) || 0;
+                                        const safeWalletBal = Number(uData.walletBalance) || 0;
+                                        
+                                        transaction.set(uSnap.ref, { 
+                                            balance: safeBal + roomFee,
+                                            walletBalance: safeWalletBal + roomFee
+                                        }, { merge: true });
+                                        
                                         const txRef = doc(db, 'transactions', `${p.id}_host_refund_${Date.now()}`);
-                                        transaction.set(txRef, { userId: p.id, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Host Cancelled Refund', timestamp: serverTimestamp() });
+                                        transaction.set(txRef, { userId: p.id, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Host Cancelled Refund', timestamp: serverTimestamp() });
                                     }
                                 });
-                                // 🔥 SATTI FIX: Clear players array so user won't accidentally double self-refund!
-                                transaction.set(roomRef, { status: 'CANCELLED', players: [] }, { merge: true });
+                                // 🔥 SATTI FIX: Save panrappa 'refunded: true' lock podurom 🔥
+                                transaction.set(roomRef, { status: 'CANCELLED', players: [], refunded: true }, { merge: true });
                             });
                             onClose();
                         } catch (e) {
@@ -480,7 +508,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
     const launchLiveReflexMatch = async () => {
         if (players.length < 2) {
-            Alert.alert("Waiting for Rival ⏳", "Need at least 2 players to split rewards!");
+            Alert.alert("Waiting for Challengers ⏳", "Need at least 2 participants to share rewards!");
             return;
         }
         try {
@@ -526,14 +554,12 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         setTimeout(() => pushScoreToDB(0), Math.random() * 1500);
     };
 
-    // 🔥 SATTI FIX: NEW UPDATED PAYOUT - WRITES TO ALL WALLET VARIABLES 🔥
     const processMasterPayout = async () => {
         if (isProcessing || !isHost) return;
         setIsProcessing(true);
 
         try {
             await runTransaction(db, async (transaction) => {
-                // --- 1. ALL READS FIRST ---
                 const roomSnap = await transaction.get(roomRef);
                 if (!roomSnap.exists()) return;
                 const data = roomSnap.data();
@@ -541,7 +567,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 if (data.status !== 'PLAYING') return; 
 
                 const currentPlayers = data.players || [];
-                if (currentPlayers.length === 0) return; // Fail-safe to avoid 0 player crash
+                if (currentPlayers.length === 0) return; 
 
                 const ranked = [...currentPlayers].sort((a, b) => (b.score || 0) - (a.score || 0));
                 
@@ -556,7 +582,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 const adminCommission = Math.floor(totalPool * 0.15); 
                 const expertBeans = Math.floor(totalPool * 0.10); 
 
-                // 🔥 Fix: Prevents NaN if winners array is somehow empty
                 const rewardPerWinner = winners.length > 0 ? Math.floor(totalWinnerReward / winners.length) : 0;
 
                 const winnerRefs = winners.map(w => doc(db, 'users', w.id));
@@ -574,19 +599,22 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     liveSnap = { snap: await transaction.get(lRef), ref: lRef };
                 }
 
-                // --- 2. ALL WRITES LAST (STRICT NUMBER PARSING) ---
                 winners.forEach((w, index) => {
                     const wSnap = winnerSnaps[index];
                     if(wSnap.exists()){
                         const wData = wSnap.data() || {};
                         const currentSafeBalance = Number(wData.balance) || 0;
+                        const currentSafeWallet = Number(wData.walletBalance) || 0;
                         
-                        transaction.set(wSnap.ref, { balance: currentSafeBalance + rewardPerWinner }, { merge: true });
+                        transaction.set(wSnap.ref, { 
+                            balance: currentSafeBalance + rewardPerWinner,
+                            walletBalance: currentSafeWallet + rewardPerWinner
+                        }, { merge: true });
                         
                         const winTxRef = doc(db, 'transactions', `${w.id}_win_${Date.now()}`);
                         transaction.set(winTxRef, {
                             userId: w.id,
-                            type: 'GAME_WIN',
+                            type: 'ARENA_REWARD',
                             amount: rewardPerWinner,
                             status: 'SUCCESS',
                             title: 'Reflex Arena Reward',
@@ -599,8 +627,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     const eData = expertSnap.snap.data() || {};
                     const safeEBeans = Number(eData.beans) || 0;
                     const safeEBalance = Number(eData.balance) || 0;
-                    
-                    // 🔥 THE REAL FIX FOR EXPERT WALLET UI MAPPING
                     const safeWalletBal = Number(eData.walletBalance) || 0;
                     const safeBeansBal = Number(eData.beansBalance) || 0;
                     const safeTotalEarned = Number(eData.totalBeansEarned) || 0;
@@ -616,11 +642,11 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     const expertTxRef = doc(db, 'transactions', `${actualHostId}_commission_${Date.now()}`);
                     transaction.set(expertTxRef, {
                         userId: actualHostId,
-                        type: 'HOST_COMMISSION',
+                        type: 'HOST_BONUS',
                         amount: expertBeans,
                         currency: 'DIAMONDS', 
                         status: 'SUCCESS',
-                        title: 'Arena Host Commission',
+                        title: 'Arena Host Bonus',
                         timestamp: serverTimestamp()
                     });
                 }
@@ -656,7 +682,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
     const getWinnerText = () => {
         if (!matchResults || !players.length) return "UNKNOWN";
-        if (matchResults.isTie) return "TIE - MULTIPLE WINNERS!";
+        if (matchResults.isTie) return "TIE - MULTIPLE TOP CHALLENGERS!";
         const w = players.find(p => p.id === matchResults.winnerIds?.[0]);
         return w ? w.name.toUpperCase() : "UNKNOWN";
     };
@@ -666,13 +692,11 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
             <View style={styles.sheetOverlay}>
                 <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
                 
-                {/* 🔥 UPDATE 3: FLOATING VIEW WRAPPER 🔥 */}
                 <Animated.View 
                     style={[styles.arcadeContentCard, { transform: [{ translateX: pan.x }, { translateY: pan.y }] }]}
                 >
                     <LinearGradient colors={['#0F172A', '#020617']} style={StyleSheet.absoluteFill} />
                     
-                    {/* DRAG HANDLE TO MOVE THE UI */}
                     <View {...panResponder.panHandlers} style={styles.dragHandleContainer}>
                         <View style={styles.dragPill} />
                     </View>
@@ -690,14 +714,13 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     {/* MATCHMAKING */}
                     {gameStatus === 'WAITING' && (
                         <View style={styles.lobbyStateWrapper}>
-                            <Text style={styles.lobbyHelperText}>{isFeeLocked ? `MATCHMAKING POOL LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR EXPERT TO LOCK FEE...'}</Text>
+                            <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR EXPERT TO LOCK ARENA PASS...'}</Text>
                             
                             <View style={styles.entryFeeContainer}>
-                                <Text style={styles.feeLabel}>ENTRY STAKE:</Text>
+                                <Text style={styles.feeLabel}>ARENA PASS:</Text>
                                 <Text style={styles.feeValueText}>🪙 {entryFee} Diamonds</Text>
                             </View>
 
-                            {/* 🔥 UPDATE 1: SCROLLABLE 10 PLAYERS GRID */}
                             <ScrollView style={{width: '100%', maxHeight: 150}} showsVerticalScrollIndicator={false}>
                                 <View style={styles.playerPoolRow}>
                                     {[...Array(MAX_PLAYERS)].map((_, idx) => {
@@ -725,10 +748,9 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 </View>
                             </ScrollView>
 
-                            {/* EXPERT FEE SELECTION */}
                             {isHost && !isFeeLocked && (
                                 <View style={{ width: '100%', marginBottom: 20 }}>
-                                    <Text style={[styles.feeLabel, { marginBottom: 10 }]}>SELECT MATCH ENTRY FEE</Text>
+                                    <Text style={[styles.feeLabel, { marginBottom: 10 }]}>SELECT ARENA PASS (DIAMONDS)</Text>
                                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 5 }}>
                                         {ENTRY_FEES.map(fee => (
                                             <TouchableOpacity 
@@ -742,38 +764,36 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                     </ScrollView>
                                     <TouchableOpacity onPress={lockRoomFee} style={[styles.arcadeLaunchBtn, { width: '100%', marginTop: 20 }]}>
                                         <LinearGradient colors={['#A855F7', '#7E22CE']} style={StyleSheet.absoluteFill} />
-                                        <Text style={[styles.launchBtnLabel, { color: '#FFF' }]}>🔒 LOCK {entryFee}💎 & OPEN ROOM</Text>
+                                        <Text style={[styles.launchBtnLabel, { color: '#FFF' }]}>🔒 LOCK {entryFee}💎 & OPEN ARENA</Text>
                                     </TouchableOpacity>
                                 </View>
                             )}
                             
                             {isHost && isFeeLocked && (
                                 <View style={{ width: '100%', marginBottom: 20, alignItems: 'center' }}>
-                                    <Text style={[styles.feeLabel, { marginBottom: 10, color: '#F59E0B' }]}>🔒 ENTRY FEE LOCKED</Text>
+                                    <Text style={[styles.feeLabel, { marginBottom: 10, color: '#F59E0B' }]}>🔒 ARENA PASS LOCKED</Text>
                                     <TouchableOpacity onPress={launchLiveReflexMatch} style={styles.arcadeLaunchBtn}>
                                         <LinearGradient colors={['#00F2FE', '#059669']} style={StyleSheet.absoluteFill} />
-                                        <Text style={styles.launchBtnLabel}>LAUNCH 60S MATCH</Text>
+                                        <Text style={styles.launchBtnLabel}>START 60S CHALLENGE</Text>
                                     </TouchableOpacity>
                                     
-                                    {/* 🔥 UPDATE 2: UNLOCK & EDIT FEE IF NO ONE JOINED 🔥 */}
                                     {players.length === 0 && (
                                         <TouchableOpacity onPress={unlockRoomFee} style={{marginTop: 15, padding: 10}}>
-                                            <Text style={{color: '#94A3B8', fontWeight: 'bold', fontSize: 12}}>🔓 UNLOCK & EDIT FEE</Text>
+                                            <Text style={{color: '#94A3B8', fontWeight: 'bold', fontSize: 12}}>🔓 UNLOCK & EDIT PASS</Text>
                                         </TouchableOpacity>
                                     )}
                                 </View>
                             )}
 
-                            {/* AUDIENCE JOIN COMPONENT */}
                             {!isHost && isFeeLocked && !hasJoined && (
                                 <TouchableOpacity onPress={handleJoinArena} disabled={isProcessing} style={styles.arcadeLaunchBtn}>
                                     <LinearGradient colors={['#F59E0B', '#D97706']} style={StyleSheet.absoluteFill} />
-                                    <Text style={styles.launchBtnLabel}>{isProcessing ? 'PROCESSING...' : `JOIN MATCH (${entryFee} 💎)`}</Text>
+                                    <Text style={styles.launchBtnLabel}>{isProcessing ? 'PROCESSING...' : `JOIN ARENA (${entryFee} 💎)`}</Text>
                                 </TouchableOpacity>
                             )}
 
                             {!isHost && !isFeeLocked && (
-                                <Text style={[styles.waitServerSignalText, { color: '#F59E0B' }]}>⏳ Waiting for host to lock entry fee...</Text>
+                                <Text style={[styles.waitServerSignalText, { color: '#F59E0B' }]}>⏳ Waiting for host to lock arena pass...</Text>
                             )}
 
                             {!isHost && hasJoined && (
@@ -797,9 +817,9 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                             {isHost ? (
                                 <View style={styles.expertWaitingView}>
                                     <MaterialCommunityIcons name="timer-sand" size={60} color="#00F2FE" />
-                                    <Text style={styles.expertPlayingTitle}>MATCH IN PROGRESS!</Text>
+                                    <Text style={styles.expertPlayingTitle}>CHALLENGE IN PROGRESS!</Text>
                                     <Text style={styles.expertPlayingTime}>{gameTimeLeft}</Text>
-                                    <Text style={styles.expertPlayingSub}>Players are battling for {entryFee * players.length} 💎</Text>
+                                    <Text style={styles.expertPlayingSub}>Challengers competing for {entryFee * players.length} 💎</Text>
                                     {gameTimeLeft === 0 && (
                                         <Text style={[styles.expertPlayingSub, { color: '#F59E0B', marginTop: 10 }]}>Evaluating final scores...</Text>
                                     )}
@@ -873,9 +893,8 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                             
                             <Text style={styles.terminalTitle}>{getWinnerText()}</Text>
                             
-                            {/* LEADERBOARD SCROLL LIST */}
                             <View style={styles.leaderboardContainer}>
-                                <Text style={styles.leaderboardTitle}>🏆 MATCH LEADERBOARD</Text>
+                                <Text style={styles.leaderboardTitle}>🏆 ARENA LEADERBOARD</Text>
                                 <ScrollView style={{ width: '100%', maxHeight: 100 }} showsVerticalScrollIndicator={false}>
                                     {matchResults.rankedPlayers?.map((p: any, idx: number) => {
                                         const isWinner = matchResults.winnerIds?.includes(p.id);
@@ -892,17 +911,17 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
                             <View style={styles.resultDetailsCard}>
                                 <View style={styles.resultRow}>
-                                    <Text style={styles.resultLabel}>{matchResults.isTie ? 'Split Reward (Per Winner):' : 'Winner Claimed (75%):'}</Text>
+                                    <Text style={styles.resultLabel}>{matchResults.isTie ? 'Shared Reward (Per Winner):' : 'Top Challenger (75%):'}</Text>
                                     <Text style={[styles.resultValue, { color: '#10B981' }]}>+{matchResults.rewardPerWinner} 💎</Text>
                                 </View>
                                 {isHost && (
                                     <View style={styles.resultRow}>
-                                        <Text style={styles.resultLabel}>Host Comission (10%):</Text>
+                                        <Text style={styles.resultLabel}>Host Bonus (10%):</Text>
                                         <Text style={[styles.resultValue, { color: '#A855F7' }]}>+{matchResults.expertBeans} 💎</Text>
                                     </View>
                                 )}
                                 <View style={styles.resultRow}>
-                                    <Text style={styles.resultLabel}>Total Pool:</Text>
+                                    <Text style={styles.resultLabel}>Total Rewards:</Text>
                                     <Text style={styles.resultValue}>{matchResults.totalPool} 💎</Text>
                                 </View>
                             </View>
@@ -921,10 +940,8 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
 const styles = StyleSheet.create({
     sheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2, 6, 23, 0.5)' },
-    // 🔥 FIXED: MODAL HEIGHT ADJUSTED TO 0.72 WITH PADDING TO PREVENT BOTTOM CUT-OFF
     arcadeContentCard: { width: width, height: height * 0.72, borderTopLeftRadius: 40, borderTopRightRadius: 40, borderWidth: 2, borderColor: 'rgba(0, 242, 254, 0.3)', overflow: 'hidden', padding: 25, paddingTop: 10, paddingBottom: 35 },
     
-    // 🔥 DRAG HANDLE STYLES FOR FLOATING UI
     dragHandleContainer: { width: '100%', height: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
     dragPill: { width: 50, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
 
@@ -939,7 +956,6 @@ const styles = StyleSheet.create({
     feeLabel: { color: '#00F2FE', fontSize: 10, fontWeight: '900', textAlign: 'center', marginBottom: 2 },
     feeValueText: { color: '#FFF', fontSize: 18, fontWeight: '900' },
     
-    // 🔥 UPDATED GRID FOR 10 PLAYERS
     playerPoolRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center', alignItems: 'center', marginBottom: 25, width: '100%' },
     profileAuraWrapper: { alignItems: 'center', width: '17%', marginBottom: 10 }, 
     avatarAuraGlow: { width: 42, height: 42, borderRadius: 21, borderWidth: 2, backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center', elevation: 10, shadowRadius: 10, shadowOpacity: 0.3, shadowOffset: { width: 0, height: 4 } },
@@ -961,11 +977,9 @@ const styles = StyleSheet.create({
     ruleBannerContainer: { backgroundColor: 'rgba(15,23,42,0.8)', paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 15, alignItems: 'center' },
     ruleBannerText: { fontSize: 16, fontWeight: '900', letterSpacing: 1.5, textTransform: 'uppercase' },
 
-    // 🔥 FIXED: REDUCED TEXT DISPLAY BOX SIZE
     centralMatrixBox: { flex: 1, justifyContent: 'center', alignItems: 'center', minHeight: 80, backgroundColor: 'rgba(15,23,42,0.4)', borderRadius: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)', marginBottom: 15, padding: 10 },
     matrixWordRenderer: { fontWeight: '900', letterSpacing: 4, textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 4 }, textShadowRadius: 10 },
     
-    // 🔥 FIXED: 6 BUTTON GRID LAYOUT SO IT FITS PERFECTLY (3 BUTTONS PER ROW) 🔥
     quadrantActionGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, justifyContent: 'center' },
     quadrantButton: { width: (width - 100) / 3, height: 60, borderRadius: 16, borderWidth: 2, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', elevation: 5 },
     quadrantButtonLabel: { fontSize: 14, fontWeight: '900', letterSpacing: 1 },
@@ -975,12 +989,10 @@ const styles = StyleSheet.create({
     expertPlayingTime: { color: '#00F2FE', fontSize: 60, fontWeight: '900', marginVertical: 10 },
     expertPlayingSub: { color: '#94A3B8', fontSize: 14, fontWeight: '600' },
 
-    // 🔥 FIXED: MARGINS REDUCED TO PREVENT OVERLAP IN SUMMARY SCREEN 🔥
     terminalStateWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 10, paddingBottom: 15 },
     summaryTrophyIcon: { marginBottom: 5, shadowColor: '#FFD700', shadowOpacity: 0.5, shadowRadius: 15 },
     terminalTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 1, marginBottom: 10, textAlign: 'center', textShadowColor: 'rgba(255,215,0,0.5)', textShadowRadius: 10 },
     
-    // Leaderboard Styles
     leaderboardContainer: { width: '100%', backgroundColor: 'rgba(15,23,42,0.8)', borderRadius: 15, padding: 10, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     leaderboardTitle: { color: '#94A3B8', fontSize: 12, fontWeight: '800', marginBottom: 10, textAlign: 'center', letterSpacing: 1 },
     leaderboardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 8, marginBottom: 5 },

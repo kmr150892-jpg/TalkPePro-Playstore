@@ -600,9 +600,18 @@ export default function ExpertForumRoomScreen() {
                                 <TouchableOpacity style={styles.actionBtnSmall} onPress={toggleMic}>
                                     <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#EF4444" : "#4F46E5"} />
                                 </TouchableOpacity>
-                                {/* 🔥 GAME LAUNCH BUTTON 🔥 */}
-                                <TouchableOpacity style={styles.gameLaunchButton} onPress={() => setIsGameVisible(true)}>
-                                    <Text style={{color: '#FFF', fontWeight: '900', fontSize: 10}}>🎮</Text>
+                                {/* 🔥 CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
+                                <TouchableOpacity style={[styles.gameLaunchButton, { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1 }]} onPress={() => setIsGameVisible(true)}>
+                                    <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                            <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
+                                            <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
+                                        </View>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                                            <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
+                                            <View style={{ width: 7, height: 4, backgroundColor: '#FFD700', borderRadius: 4 }} />
+                                        </View>
+                                    </View>
                                 </TouchableOpacity>
                             </View>
                         </BlurView>
