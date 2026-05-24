@@ -1,9 +1,12 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import * as KeepAwake from 'expo-keep-awake';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { onAuthStateChanged, User } from 'firebase/auth'; // ✅ Added User type
-import { collection, doc, limit, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+// 🔥 SATTI FIX: Added getDoc to fetch accurate user profile pic
+import { collection, doc, getDoc, limit, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, LayoutAnimation, LogBox, Platform, StatusBar, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, LayoutAnimation, LogBox, Modal, Platform, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MaintenanceScreen from '../components/.MaintenanceScreen';
 import UpdateAlert from '../components/UpdateAlert';
 import { auth, db } from '../firebaseConfig';
@@ -41,6 +44,11 @@ export default function RootLayout() {
   // 🔥 SATTI FIX: Prevent infinite alert loops 🔥
   const hasShownLogoutAlert = useRef(false);
 
+  // 🔥 SATTI FIX: GLOBAL INCOMING CALL STATE FOR EXPERT 🔥
+  const [incomingCallData, setIncomingCallData] = useState<any>(null);
+  const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
+  const [incomingTimer, setIncomingTimer] = useState(12); // 🔥 SATTI FIX: 12s Timer State
+
   // 🛠️ 1. VERSION & MAINTENANCE SYNC
   useEffect(() => {
     const unsubSettings = onSnapshot(doc(db, "system", "app_settings"), (snap) => {
@@ -65,7 +73,19 @@ export default function RootLayout() {
     if (Platform.OS !== 'web') {
       KeepAwake.activateKeepAwakeAsync().catch(() => {});
     }
-    return () => { KeepAwake.deactivateKeepAwake(); };
+    return () => { 
+      if (Platform.OS !== 'web') {
+        try {
+          // 🔥 SATTI FIX: Catch the promise rejection silently when activity is destroyed
+          const deactivatePromise = KeepAwake.deactivateKeepAwake();
+          if (deactivatePromise && typeof deactivatePromise.catch === 'function') {
+            deactivatePromise.catch(() => {});
+          }
+        } catch (e) {
+          // Ignore sync errors
+        }
+      }
+    };
   }, []);
 
   // 🔐 3. AUTH & ROLE LISTENER (THE MASTER FIX)
@@ -214,6 +234,127 @@ export default function RootLayout() {
     }
   }, [user?.uid, userRole, isExpertLive, segments.join('/'), initializing]);
 
+  // 🔥 4.8 SATTI FIX: NEW GLOBAL INCOMING CALL LISTENER FOR EXPERT (FROM ANY SCREEN) 🔥
+  useEffect(() => {
+    if (!user?.uid || userRole !== 'expert' || initializing) return;
+
+    const callsRef = collection(db, 'calls');
+    // Listen for 'calling' status exactly matching the screenshot details
+    const q = query(callsRef, where('expertId', '==', user.uid), where('status', '==', 'calling'));
+
+    const unsubIncomingCall = onSnapshot(q, (snapshot) => {
+        snapshot.docChanges().forEach((change) => {
+            if (change.type === 'added') {
+                const callData = change.doc.data();
+                const callId = change.doc.id;
+                
+                // Show global notification modal immediately
+                setIncomingCallData(callData);
+                setIncomingCallId(callId);
+                setIncomingTimer(12); // 🔥 Reset timer on new call
+
+                // 🔥 SATTI FIX: Fetch real profile pic dynamically from User collection (Fixes Profile Pic Issue)
+                if (callData.callerId) {
+                    getDoc(doc(db, 'users', callData.callerId)).then((uDoc) => {
+                        if (uDoc.exists()) {
+                            const uData = uDoc.data();
+                            const actualPic = uData.profilePic || uData.photoURL || callData.callerImage;
+                            const actualName = uData.name || uData.displayName || callData.callerName;
+                            setIncomingCallData((prev: any) => 
+                                prev && prev.callerId === callData.callerId 
+                                ? { ...prev, callerImage: actualPic, callerName: actualName } 
+                                : prev
+                            );
+                        }
+                    }).catch(() => {});
+                }
+            }
+            if (change.type === 'modified') {
+                const callData = change.doc.data();
+                // If caller cancels or misses the call, close the modal instantly to avoid ghost rings
+                if (callData.status === 'cancelled' || callData.status === 'missed') {
+                    setIncomingCallData(null);
+                    setIncomingCallId(null);
+                }
+            }
+            // 🔥 SATTI FIX: When user cancels, it leaves the 'calling' query causing a 'removed' event. (Fixes 1 time show issue)
+            if (change.type === 'removed') {
+                setIncomingCallData(null);
+                setIncomingCallId(null);
+            }
+        });
+    }, (error) => {
+        if (error.code === 'permission-denied') console.log("Incoming call sync detached.");
+    });
+
+    return () => unsubIncomingCall();
+  }, [user?.uid, userRole, initializing]);
+
+  // 🔥 SATTI FIX: 12 SECONDS TIMER ENGINE FOR GLOBAL INCOMING CALL 🔥
+  useEffect(() => {
+    let interval: ReturnType<typeof setInterval>;
+    if (incomingCallId && incomingCallData) {
+        interval = setInterval(() => {
+            setIncomingTimer((prev) => {
+                if (prev <= 1) {
+                    clearInterval(interval);
+                    // Auto miss the call when timer ends
+                    updateDoc(doc(db, 'calls', incomingCallId), {
+                        status: 'missed',
+                        endedAt: serverTimestamp()
+                    }).catch(() => {});
+                    setIncomingCallData(null);
+                    setIncomingCallId(null);
+                    return 0;
+                }
+                return prev - 1;
+            });
+        }, 1000);
+    }
+    return () => {
+        if (interval) clearInterval(interval);
+    };
+  }, [incomingCallId, incomingCallData]);
+
+  // 🔥 ACCEPT / REJECT HANDLERS 🔥
+  const acceptIncomingCall = async () => {
+      if (!incomingCallId) return;
+      try {
+          await updateDoc(doc(db, 'calls', incomingCallId), { 
+              status: 'accepted', 
+              acceptedAt: serverTimestamp(),
+              connectedAt: serverTimestamp() // Added to match your screenshot standard
+          });
+          router.push({
+              pathname: '/videocall',
+              params: { 
+                  expertId: user!.uid, 
+                  expertName: userName,
+                  callId: incomingCallId,
+                  role: 'expert'
+              }
+          });
+      } catch(e) {
+          console.error("Accept call error:", e);
+      }
+      setIncomingCallData(null);
+      setIncomingCallId(null);
+  };
+
+  const rejectIncomingCall = async () => {
+      if (!incomingCallId) return;
+      try {
+          await updateDoc(doc(db, 'calls', incomingCallId), { 
+              status: 'rejected', // 🔥 SATTI FIX: Changed to 'rejected' for instant user side sync
+              endedAt: serverTimestamp() 
+          });
+      } catch(e) {
+          console.error("Reject call error:", e);
+      }
+      setIncomingCallData(null);
+      setIncomingCallId(null);
+  };
+
   // 🗺️ 5. AUTO-NAVIGATION & REDIRECTS (STRICT GATEKEEPER)
   useEffect(() => {
     if (initializing || !rootNavigationState?.key) return;
@@ -306,6 +447,129 @@ export default function RootLayout() {
         <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
         <Stack.Screen name="+not-found" />
       </Stack>
+
+      {/* 🔥 SATTI FIX: GLOBAL INCOMING CALL UI 🔥 */}
+      {incomingCallData && incomingCallId && (
+        <Modal visible={true} transparent animationType="slide">
+            <View style={styles.incomingCallOverlay}>
+                <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                <View style={styles.incomingCallCard}>
+                    <Text style={styles.incomingCallTitle}>📞 INCOMING CALL</Text>
+                    
+                    {/* 🔥 SATTI FIX: Map User's Caller Image 🔥 */}
+                    <Image 
+                        source={{ uri: incomingCallData.callerImage || 'https://ui-avatars.com/api/?name=User&background=0F172A&color=fff' }} 
+                        style={styles.incomingAvatar} 
+                    />
+                    
+                    <Text style={styles.incomingCallerName} numberOfLines={1} adjustsFontSizeToFit>
+                        {incomingCallData.callerName || 'A User'}
+                    </Text>
+                    
+                    <Text style={styles.incomingSubText}>
+                        {incomingCallData.isFreeTrial ? '🎁 Free Trial Call' : '💎 Premium Masterclass'}
+                    </Text>
+
+                    {/* 🔥 SATTI FIX: 12s Countdown Timer Display 🔥 */}
+                    <Text style={styles.incomingTimerText}>
+                        00:{incomingTimer.toString().padStart(2, '0')}
+                    </Text>
+                    
+                    <View style={styles.incomingActionRow}>
+                        <TouchableOpacity style={[styles.incomingBtn, { backgroundColor: '#EF4444' }]} onPress={rejectIncomingCall}>
+                            <MaterialCommunityIcons name="phone-hangup" size={28} color="#FFF" />
+                            <Text style={styles.incomingBtnText}>Decline</Text>
+                        </TouchableOpacity>
+                        
+                        <TouchableOpacity style={[styles.incomingBtn, { backgroundColor: '#10B981' }]} onPress={acceptIncomingCall}>
+                            <MaterialCommunityIcons name="phone" size={28} color="#FFF" />
+                            <Text style={styles.incomingBtnText}>Accept</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </View>
+        </Modal>
+      )}
     </>
   );
 }
+
+// 🔥 SATTI FIX: ADDED STYLES FOR THE INCOMING CALL MODAL 🔥
+const styles = StyleSheet.create({
+    incomingCallOverlay: { 
+        flex: 1, 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        backgroundColor: 'rgba(0,0,0,0.6)',
+        zIndex: 9999 
+    },
+    incomingCallCard: { 
+        width: '85%', 
+        backgroundColor: 'rgba(15,23,42,0.95)', 
+        borderRadius: 25, 
+        padding: 25, 
+        alignItems: 'center', 
+        borderWidth: 2, 
+        borderColor: '#38BDF8', 
+        elevation: 20, 
+        shadowColor: '#38BDF8', 
+        shadowOpacity: 0.5, 
+        shadowRadius: 20 
+    },
+    incomingCallTitle: { 
+        color: '#38BDF8', 
+        fontSize: 18, 
+        fontWeight: '900', 
+        letterSpacing: 2, 
+        marginBottom: 20 
+    },
+    incomingAvatar: { 
+        width: 100, 
+        height: 100, 
+        borderRadius: 50, 
+        borderWidth: 3, 
+        borderColor: '#10B981', 
+        marginBottom: 15 
+    },
+    incomingCallerName: { 
+        color: '#FFF', 
+        fontSize: 24, 
+        fontWeight: 'bold', 
+        marginBottom: 5, 
+        textAlign: 'center' 
+    },
+    incomingSubText: { 
+        color: '#94A3B8', 
+        fontSize: 14, 
+        fontWeight: '600', 
+        marginBottom: 15 
+    },
+    incomingTimerText: {
+        color: '#EF4444',
+        fontSize: 22,
+        fontWeight: '900',
+        letterSpacing: 2,
+        marginBottom: 25
+    },
+    incomingActionRow: { 
+        flexDirection: 'row', 
+        gap: 20, 
+        width: '100%', 
+        justifyContent: 'space-around' 
+    },
+    incomingBtn: { 
+        flex: 1, 
+        paddingVertical: 15, 
+        borderRadius: 15, 
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        justifyContent: 'center', 
+        gap: 10,
+        elevation: 5
+    },
+    incomingBtnText: { 
+        color: '#FFF', 
+        fontSize: 16, 
+        fontWeight: 'bold' 
+    }
+});

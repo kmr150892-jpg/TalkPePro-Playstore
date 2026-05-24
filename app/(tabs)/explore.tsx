@@ -204,12 +204,17 @@ export default function CinematicExploreScreen() {
     const isScreenFocused = useIsFocused();
     const user = auth.currentUser;
 
-    // 🔥 SATTI FIX: RINGING PROTOCOL STATES 🔥
+    // 🔥 SATTI FIX: RINGING PROTOCOL STATES (FOR USER OUTGOING) 🔥
     const [ringModalVisible, setRingModalVisible] = useState(false);
     const [ringTimer, setRingTimer] = useState(12);
     const [currentExpert, setCurrentExpert] = useState<any>(null);
     const [currentCallId, setCurrentCallId] = useState<string | null>(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    // 🔥 SATTI FIX: NEW STATES FOR EXPERT INCOMING CALL MODAL 🔥
+    const [incomingCall, setIncomingCall] = useState<any>(null);
+    const [incomingTimer, setIncomingTimer] = useState(12);
+    const incomingPulse = useRef(new Animated.Value(1)).current;
 
     // 🔥 Check User Trial Status on Load
     useEffect(() => {
@@ -246,7 +251,103 @@ export default function CinematicExploreScreen() {
         return () => unsub();
     }, []);
 
-    // 🔥 SATTI FIX: RINGING ENGINE (12 SECONDS) & FIRESTORE SYNC 🔥
+    // 🔥 SATTI FIX: EXPERT INCOMING CALL GLOBAL LISTENER (enga erunthalum varum) 🔥
+    useEffect(() => {
+        if (!user?.uid) return;
+
+        const callQuery = query(
+            collection(db, "calls"),
+            where("expertId", "==", user.uid),
+            where("status", "in", ["calling", "ringing", "pending", "Discover_dialing"])
+        );
+
+        const unsubCalls = onSnapshot(callQuery, async (snap) => {
+            if (!snap.empty) {
+                let validDocSnap = null;
+                for (const docSnap of snap.docs) {
+                    const data = docSnap.data();
+                    const now = Date.now();
+                    const callTime = data.createdAt?.toMillis ? data.createdAt.toMillis() : now;
+                    if (now - callTime <= 30000) {
+                        validDocSnap = docSnap;
+                        break;
+                    } else {
+                        updateDoc(doc(db, "calls", docSnap.id), { status: 'missed' }).catch(()=>{});
+                    }
+                }
+
+                if (validDocSnap) {
+                    const data = validDocSnap.data();
+                    
+                    // 🔥 FETCH USER IMAGE AND NAME DIRECTLY FROM DOC FIRST
+                    let callerPic = data.callerImage || null;
+                    let fetchedName = data.callerName || data.userName || "CLIENT";
+                    
+                    // Fallback just in case callerImage wasn't saved in the db
+                    if(!callerPic && data.callerId) {
+                        const callerDoc = await getDoc(doc(db, "users", data.callerId));
+                        if(callerDoc.exists()){
+                            const cData = callerDoc.data();
+                            callerPic = cData.profilePic || cData.photoURL || null;
+                            fetchedName = cData.name || cData.userName || cData.displayName || fetchedName;
+                        }
+                    }
+                    
+                    setIncomingCall({ id: validDocSnap.id, ...data, callerImage: callerPic, userName: fetchedName });
+                    setIncomingTimer(12); // Reset to 12 secs when new call pops
+                } else {
+                    setIncomingCall(null);
+                }
+            } else {
+                setIncomingCall(null);
+            }
+        });
+        return () => unsubCalls();
+    }, [user?.uid]);
+
+    // 🔥 SATTI FIX: 12 SEC TIMER FOR EXPERT INCOMING CALL 🔥
+    useEffect(() => {
+        let interval: any;
+        if (incomingCall) {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(incomingPulse, { toValue: 1.05, duration: 1000, useNativeDriver: true }),
+                    Animated.timing(incomingPulse, { toValue: 1, duration: 1000, useNativeDriver: true })
+                ])
+            ).start();
+
+            interval = setInterval(() => {
+                setIncomingTimer((prev) => {
+                    if (prev <= 1) {
+                        clearInterval(interval);
+                        handleIncomingCallAction('missed');
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        } else {
+            incomingPulse.setValue(1);
+        }
+        return () => clearInterval(interval);
+    }, [incomingCall]);
+
+    // 🔥 SATTI FIX: EXPERT ACTION HANDLER (Accept / Reject) 🔥
+    const handleIncomingCallAction = async (action: 'accepted' | 'rejected' | 'missed') => {
+        if (!incomingCall || !user) return;
+        try {
+            if (action === 'accepted') {
+                await updateDoc(doc(db, "calls", incomingCall.id), { status: 'accepted', expertId: user.uid, acceptedAt: serverTimestamp() });
+                router.replace({ pathname: "/videocall" as any, params: { callId: incomingCall.id, expertId: user.uid, callerId: incomingCall.callerId, role: 'expert' } });
+            } else {
+                // If expert rejects, the call status goes to 'rejected' cutting the user's side too!
+                await updateDoc(doc(db, "calls", incomingCall.id), { status: action });
+                setIncomingCall(null);
+            }
+        } catch (e) { console.error(e); }
+    };
+
+    // 🔥 SATTI FIX: RINGING ENGINE (12 SECONDS) & FIRESTORE SYNC (FOR USER) 🔥
     useEffect(() => {
         let interval: ReturnType<typeof setInterval>;
         let unsubscribeCall: () => void;
@@ -292,6 +393,7 @@ export default function CinematicExploreScreen() {
                             }
                         });
                     } else if (status === 'rejected' || status === 'declined' || status === 'ended') {
+                        // 🔥 EXPERT REJECTED! USER GETS ALERT & MODAL CLOSES IMMEDIATELY 🔥
                         clearInterval(interval);
                         setRingModalVisible(false);
                         Alert.alert("Unavailable", "The consultant declined the connection.");
@@ -377,13 +479,19 @@ export default function CinematicExploreScreen() {
             setRingTimer(12);
             setRingModalVisible(true);
 
-            // Create Call Document so the Expert's App Rings
             await setDoc(doc(db, "calls", newCallId), {
-                callerId: user?.uid,
+                callerId: user?.uid || "UNKNOWN_USER",
+                callerImage: user?.photoURL || `https://ui-avatars.com/api/?name=${user?.displayName || 'User'}&background=0F172A&color=fff`,
+                callerName: user?.displayName || "User",
                 expertId: expert.id,
-                status: 'ringing',
+                expertImage: expert.profilePic || expert.photoURL || null,
+                expertName: expert.name || expert.userName || "Consultant",
                 isFreeTrial: hasTrialMins,
+                status: 'calling', // Changed from 'ringing' to 'calling' for global sync
                 createdAt: serverTimestamp(),
+                totalDiamonds: 0,
+                expertEarnings: 0,
+                finalDuration: 0
             });
 
         } catch (error) {
@@ -426,7 +534,52 @@ export default function CinematicExploreScreen() {
                 </TouchableOpacity>
             </View>
 
-            {/* 🔥 SATTI FIX: RINGING UI OVERLAY 🔥 */}
+            {/* 🔥 SATTI FIX: EXPERT INCOMING CALL OVERLAY 🔥 */}
+            {incomingCall && (
+                <Modal visible={!!incomingCall} transparent animationType="fade">
+                    <View style={styles.callOverlayMass}>
+                        <Animated.View style={[styles.callCardWrapper, { transform: [{ scale: incomingPulse }] }]}>
+                            <BlurView intensity={90} tint="dark" style={styles.callCardMass}>
+                                <Text style={styles.callPulseText}>INCOMING CONSULTATION</Text>
+                                
+                                <View style={styles.callerAvatarRing}>
+                                    {incomingCall.callerImage ? (
+                                        <Image source={{ uri: incomingCall.callerImage }} style={styles.callerCallAvatar} />
+                                    ) : (
+                                        <View style={styles.callerCallInitials}>
+                                            <Text style={styles.callerCallInitialsText}>
+                                                {incomingCall.userName ? incomingCall.userName.charAt(0).toUpperCase() : "U"}
+                                            </Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "CLIENT"}</Text>
+                                
+                                <Text style={styles.ringTimerExpert}>00:{incomingTimer.toString().padStart(2, '0')}</Text>
+
+                                <View style={styles.callActionsMass}>
+                                    <TouchableOpacity onPress={() => handleIncomingCallAction('rejected')} activeOpacity={0.8} style={styles.actionBtnHitbox}>
+                                        <LinearGradient colors={['#F43F5E', '#9F1239']} style={styles.callBtnMass}>
+                                            <Ionicons name="close" size={28} color="#FFF" />
+                                        </LinearGradient>
+                                        <Text style={styles.callBtnLabel}>DECLINE</Text>
+                                    </TouchableOpacity>
+                                    
+                                    <TouchableOpacity onPress={() => handleIncomingCallAction('accepted')} activeOpacity={0.8} style={styles.actionBtnHitbox}>
+                                        <LinearGradient colors={['#10B981', '#059669']} style={styles.callBtnMass}>
+                                            <Ionicons name="videocam" size={28} color="#FFF" />
+                                        </LinearGradient>
+                                        <Text style={styles.callBtnLabel}>ACCEPT</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </BlurView>
+                        </Animated.View>
+                    </View>
+                </Modal>
+            )}
+
+            {/* 🔥 SATTI FIX: USER RINGING UI OVERLAY 🔥 */}
             <Modal visible={ringModalVisible} transparent animationType="fade">
                 <BlurView intensity={90} tint="dark" style={styles.ringingOverlay}>
                     <View style={styles.ringingContent}>
@@ -620,7 +773,7 @@ const styles = StyleSheet.create({
         fontWeight: '900',
     },
 
-    // 🔥 SATTI FIX: RINGING UI STYLES 🔥
+    // 🔥 SATTI FIX: RINGING UI STYLES (USER OUTGOING) 🔥
     ringingOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     ringingContent: { alignItems: 'center', justifyContent: 'center' },
     ringConnectingText: { color: '#38BDF8', fontSize: 14, fontWeight: '900', letterSpacing: 4, marginBottom: 50 },
@@ -630,4 +783,20 @@ const styles = StyleSheet.create({
     ringExpertName: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
     ringTimer: { color: '#94A3B8', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 60 },
     cancelCallBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', elevation: 15, shadowColor: '#EF4444', shadowOpacity: 0.6, shadowRadius: 15 },
+
+    // 🔥 SATTI FIX: EXPERT INCOMING CALL STYLES 🔥
+    callOverlayMass: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', zIndex: 99999, backgroundColor: 'rgba(2, 6, 23, 0.8)' },
+    callCardWrapper: { width: '80%', borderRadius: 30, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.4)' },
+    callCardMass: { paddingVertical: 35, paddingHorizontal: 20, alignItems: 'center' },
+    callPulseText: { color: '#00F2FE', fontSize: 11, fontWeight: '900', letterSpacing: 5, marginBottom: 15 },
+    callerAvatarRing: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 20, backgroundColor: '#0F172A', elevation: 20, shadowColor: '#00F2FE', shadowRadius: 20, shadowOpacity: 0.6 },
+    callerCallAvatar: { width: 82, height: 82, borderRadius: 41 },
+    callerCallInitials: { width: 82, height: 82, borderRadius: 41, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' },
+    callerCallInitialsText: { color: '#00F2FE', fontSize: 32, fontWeight: '900' },
+    callInfoTextMass: { color: '#FFF', fontSize: 22, fontWeight: '900', marginBottom: 10 },
+    ringTimerExpert: { color: '#EF4444', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
+    callActionsMass: { flexDirection: 'row', gap: 40, justifyContent: 'center' },
+    actionBtnHitbox: { alignItems: 'center' },
+    callBtnMass: { width: 65, height: 65, borderRadius: 32.5, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' },
+    callBtnLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', marginTop: 10 }
 });

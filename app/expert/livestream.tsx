@@ -22,6 +22,7 @@ import { auth, db } from '../../firebaseConfig';
 // --- NEW: Security Import ---
 import * as ScreenCapture from 'expo-screen-capture';
 import GiftOverlay from '../../components/GiftOverlay';
+import GlassPathSheet from '../../components/GlassPathSheet'; // ✅ GLASS PATH SHEET
 import LiveGameSheet from '../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA
 
 const { width, height } = Dimensions.get('window');
@@ -93,8 +94,10 @@ export default function LiveStreamScreen() {
     // ✅ NEW: Active Gift State for Festival Animation
     const [activeGift, setActiveGift] = useState<any>(null);
 
-    // 🔥 GAME FEATURE STATE (REFLEX BLITZ ARENA)
-    const [gameVisible, setGameVisible] = useState(false);
+    // 🔥 GAME FEATURE STATE
+    const [gameVisible, setGameVisible] = useState(false); // ✅ REFLEX STATE
+    const [glassVisible, setGlassVisible] = useState(false); // ✅ GLASS PATH STATE
+    const [roomData, setRoomData] = useState<any>(null); // ✅ Tracking Room data
     const [myWalletBalance, setMyWalletBalance] = useState(0);
 
     // 🔥 NEW: Total Beans Earned from Game in this Live Session (For Summary)
@@ -177,6 +180,7 @@ export default function LiveStreamScreen() {
         // 🔥 SATTI FIX: App background poitu thirumba ulla (active) varum pothu ghost UI-a wipe pandrom 🔥
         if (nextAppState === 'active') {
             setGameVisible(false);
+            setGlassVisible(false); // ✅ SATTI FIX
             isAppClosing.current = false; // Reset pandrom, appo thaan next time minimize panna work aagum
         }
 
@@ -185,36 +189,39 @@ export default function LiveStreamScreen() {
             
             // 🔥 SATTI FIX: Force close background ghost game modal
             setGameVisible(false);
+            setGlassVisible(false);
+
+            // 🔥 SATTI FIX: INSTANT AGORA KILL 🔥 Viewers side udaney cut aagidum!
+            if (engine.current) {
+                engine.current.leaveChannel();
+            }
+            
+            // UI-aiyu udaney summary-ku mathidrom
+            setJoined(false);
+            setShowSummary(true);
 
             try {
-                // 🔥 METHOD 1: Direct REST API Endpoint call via fetch (Bypasses thick JS SDK cycle)
-                // Firestore document updating endpoint via REST
-                const firestoreRestUrl = `https://firestore.googleapis.com/v1/projects/YOUR_PROJECT_ID/databases/(default)/documents/lives/${currentLiveId}?updateMask.fieldPaths=status`;
-                
-                fetch(firestoreRestUrl, {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                        fields: { status: { stringValue: 'ended' } }
-                    })
-                }).catch(() => {});
+                // 🔥 METHOD 1: Instant RTDB Update (Native WebSocket Level) 🔥
+                const rtdb = getDatabase();
+                set(ref(rtdb, `presence_lives/${currentLiveId}`), "ended").catch(()=>{});
+                set(ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`), "CANCELLED").catch(()=>{});
 
-                // 🔥 METHOD 2: Regular quick batch flush
-                const batch = writeBatch(db);
-                batch.update(doc(db, "lives", currentLiveId), { status: "ended", endTime: serverTimestamp() });
-                
-                // 🔥 SATTI ULTIMATE FIX: App background ponaley, GAME document-ayum serthu forceful-a CANCELLED nu update pannidrom!
-                // Itha pannita expert thirumba active aanalum pazhaya game "oditey erukathu".
-                batch.update(doc(db, "lives", currentLiveId, "games", "reflex_arena"), { 
+                // 🔥 SATTI FIX: DIRECT FIRESTORE UPDATES WITHOUT BATCHING/AWAITING
+                // This ensures the payload is queued instantly to the Native Bridge before JS Thread suspends!
+                updateDoc(doc(db, "lives", currentLiveId), { 
+                    status: "ended", 
+                    endTime: serverTimestamp() 
+                }).catch(()=>{});
+
+                updateDoc(doc(db, "lives", currentLiveId, "games", "reflex_arena"), { 
                     status: "CANCELLED", 
                     refunded: true, 
                     players: [] 
-                });
+                }).catch(()=>{});
 
                 if (auth.currentUser) {
-                    batch.update(doc(db, "users", auth.currentUser.uid), { isLive: false });
+                    updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false }).catch(()=>{});
                 }
-                await batch.commit();
 
             } catch (error) { 
                 console.log("Force close cleanup log:", error); 
@@ -514,12 +521,10 @@ export default function LiveStreamScreen() {
         const unsubDoc = onSnapshot(doc(db, "lives", currentLiveId), (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
+                setRoomData(data); // ✅ Tracking Room data
                 setViewerCount(data.viewerCount || 0);
                 setPinnedMessage(data.pinnedMessage || null);
-                // ✅ Update game beans summary for real-time tracking in host view
                 setGameBeansSummary(data.gameBeansCollected || 0);
-                
-                // 🔥 SATTI FIX: Track the exact session earning for accurate Summary 🔥
                 setSessionEarnedBeans(data.earnedBeans || 0);
             }
         });
@@ -556,7 +561,7 @@ export default function LiveStreamScreen() {
                             let currentTopVip = eData.topVipSupporter || { name: 'None', amount: 0, date: '' };
                             const senderName = gift.senderName || 'Premium Client';
                             if (isNewDay || diamondAmount > currentTopVip.amount) {
-                                 currentTopVip = { name: senderName, amount: diamondAmount, date: today };
+                                   currentTopVip = { name: senderName, amount: diamondAmount, date: today };
                             }
 
                             const updatedTodayBeans = isNewDay ? beanAmount : (Number(eData.todayBeans) || 0) + beanAmount;
@@ -753,7 +758,6 @@ export default function LiveStreamScreen() {
                                 </View>
                             </View>
                             <View style={styles.nameAndStats}>
-                                {/* 🔥 SATTI FIX: Level Badge moved below the name 🔥 */}
                                 <View style={{flexDirection: 'column', alignItems: 'flex-start', gap: 2}}>
                                     <Text style={styles.hostNameHeaderMass} numberOfLines={1}>{hostName || "Consultant"}</Text>
                                     <View style={{ backgroundColor: hostConfig.colors[0] + '30', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: hostConfig.colors[0], alignSelf: 'flex-start' }}>
@@ -773,25 +777,36 @@ export default function LiveStreamScreen() {
                             </View>
                         </View>
 
+                        {/* ✅ TWO COMPACT GAME BUTTONS WITH MASS SYMBOLS */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            {/* 🔥 SATTI FIX: TEXT CHANGED FROM GAME TO ARENA TO PREVENT PLAY STORE REJECTION 🔥 */}
-                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.gameBadgePill, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
-                                <View style={{ width: 14, height: 14 }}>
+                            
+                            {/* Reflex Game Icon - 4 Boxes */}
+                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
+                                <View style={{ width: 16, height: 16 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                        <View style={{ width: 6, height: 6, backgroundColor: '#FF2A5F', borderRadius: 1.5 }} />
-                                        <View style={{ width: 6, height: 6, backgroundColor: '#00F2FE', borderRadius: 1.5 }} />
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
                                     </View>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                        <View style={{ width: 6, height: 6, backgroundColor: '#10B981', borderRadius: 1.5 }} />
-                                        <View style={{ width: 6, height: 6, backgroundColor: '#FFD700', borderRadius: 1.5 }} />
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
+                                        <View style={{ width: 7, height: 7, backgroundColor: '#FFD700', borderRadius: 2 }} />
                                     </View>
                                 </View>
-                                <Text style={styles.gameBadgeText}>ARENA</Text>
                             </TouchableOpacity>
 
+                            {/* Glass Path Game Icon - Stacked Glass Tiles */}
+                            <TouchableOpacity onPress={() => setGlassVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
+                                <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
+                                    <View style={{ width: 12, height: 12, borderWidth: 1.5, borderColor: '#00F2FE', backgroundColor: 'rgba(0, 242, 254, 0.4)', borderRadius: 2, transform: [{ rotate: '45deg' }] }} />
+                                    <View style={{ width: 12, height: 12, borderWidth: 1.5, borderColor: '#FFF', backgroundColor: 'rgba(255, 255, 255, 0.7)', borderRadius: 2, transform: [{ rotate: '45deg' }], position: 'absolute', top: 0, left: 6 }} />
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* Leave Channel */}
                             <TouchableOpacity onPress={leaveChannel} style={[styles.closeIcon, { borderColor: hostConfig.colors[2] + '40', borderWidth: 1 }]}>
                                 <Ionicons name="close" size={22} color="#FFF" />
                             </TouchableOpacity>
+
                         </View>
                     </View>
                 </BlurView>
@@ -877,39 +892,41 @@ export default function LiveStreamScreen() {
             {/* 🔥 SATTI FIX: KEYBOARD AVOIDING VIEW WRAPS ENTIRE SCREEN 🔥 */}
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} pointerEvents="box-none">
                 
-                {showProSettings && (
-                    <View style={styles.ProSettingsBar}>
-                        <View style={styles.settingGroup}>
-                            <Text style={styles.settingLabel}>BRIGHTNESS</Text>
-                            <View style={styles.chipRow}>
-                                <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
-                                    <Text style={styles.chipText}>High</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
-                                    <Text style={styles.chipText}>Low</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                        <View style={styles.settingDivider} />
-                        <View style={styles.settingGroup}>
-                            <Text style={styles.settingLabel}>SMOOTHNESS</Text>
-                            <View style={styles.chipRow}>
-                                <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
-                                    <Text style={styles.chipText}>Max</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
-                                    <Text style={styles.chipText}>Natural</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
-                )}
-
                 {/* SPACER TO PUSH CHAT TO BOTTOM */}
                 <View style={{ flex: 1 }} pointerEvents="none" />
 
                 {/* 🔥 SATTI FIX: FLEX INTERACTION AREA FOR KEYBOARD FIX 🔥 */}
                 <View style={styles.interactionArea} pointerEvents="box-none">
+
+                    {/* 🔥 SATTI FIX: MOVED PRO SETTINGS BAR HERE SO IT DOESN'T HIDE BEHIND HEADER 🔥 */}
+                    {showProSettings && (
+                        <View style={styles.ProSettingsBar}>
+                            <View style={styles.settingGroup}>
+                                <Text style={styles.settingLabel}>BRIGHTNESS</Text>
+                                <View style={styles.chipRow}>
+                                    <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
+                                        <Text style={styles.chipText}>High</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
+                                        <Text style={styles.chipText}>Low</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                            <View style={styles.settingDivider} />
+                            <View style={styles.settingGroup}>
+                                <Text style={styles.settingLabel}>SMOOTHNESS</Text>
+                                <View style={styles.chipRow}>
+                                    <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
+                                        <Text style={styles.chipText}>Max</Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
+                                        <Text style={styles.chipText}>Natural</Text>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
                     <FlatList
                         data={messages}
                         keyExtractor={(item) => item.id}
@@ -960,32 +977,39 @@ export default function LiveStreamScreen() {
                         />
                         
                         <TouchableOpacity onPress={sendMessage} style={styles.iconAction}>
-                            <Ionicons name="send" size={20} color="#00F2FE" />
+                            <Ionicons name="send" size={18} color="#00F2FE" />
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={() => setShowProSettings(!showProSettings)} style={[styles.iconAction, showProSettings && styles.activePro]}>
-                            <MaterialCommunityIcons name="face-man-shimmer" size={22} color={showProSettings ? "#FFF" : "#00F2FE"} />
+                            <MaterialCommunityIcons name="face-man-shimmer" size={20} color={showProSettings ? "#FFF" : "#00F2FE"} />
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={toggleMute} style={[styles.iconAction, isMuted && styles.activeIcon]}>
-                            <Ionicons name={isMuted ? "mic-off" : "mic"} size={20} color={isMuted ? "#FFF" : "#00F2FE"} />
+                            <Ionicons name={isMuted ? "mic-off" : "mic"} size={18} color={isMuted ? "#FFF" : "#00F2FE"} />
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={switchCamera} style={styles.iconAction}>
-                            <Ionicons name="camera-reverse" size={20} color="#00F2FE" />
+                            <Ionicons name="camera-reverse" size={18} color="#00F2FE" />
                         </TouchableOpacity>
-
                     </View>
                 </View>
             </KeyboardAvoidingView>
 
-            {/* ✅ REFLEX BLITZ ARENA */}
+            {/* ✅ DYNAMIC GAME RENDERER */}
             <LiveGameSheet 
                 visible={gameVisible} 
                 onClose={() => setGameVisible(false)} 
                 liveId={currentLiveId} 
                 isHost={true} 
                 userWalletBalance={myWalletBalance} 
+            />
+
+            <GlassPathSheet 
+                visible={glassVisible} 
+                onClose={() => setGlassVisible(false)} 
+                liveId={currentLiveId} 
+                isHost={true} 
+                entryFee={50}
             />
 
             <Modal visible={showSummary} transparent animationType="fade">
@@ -997,8 +1021,8 @@ export default function LiveStreamScreen() {
                             <View style={styles.statItem}><Text style={styles.statVal}>{formatTime(seconds)}</Text><Text style={styles.statLabel}>Duration</Text></View>
                             <View style={styles.statItem}><Text style={styles.statVal}>{viewerCount}</Text><Text style={styles.statLabel}>Viewers</Text></View>
                             <View style={styles.statItem}>
-                                {/* 🔥 SATTI FIX: Precise session earnings strictly mapped to current Live Doc 🔥 */}
-                                <Text style={styles.statVal}>{sessionEarnedBeans} 🫘</Text>
+                                {/* 🔥 SATTI FIX: Bean Symbol removed and /Reward Symbol added 🔥 */}
+                                <Text style={styles.statVal}>{sessionEarnedBeans} 💰</Text>
                                 <Text style={styles.statLabel}>Rewards Accrued</Text>
                             </View>
                         </View>
@@ -1084,13 +1108,14 @@ const styles = StyleSheet.create({
     giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)' },
     giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 11, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 },
 
-    bottomBar: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    input: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 25, height: 48, color: '#FFF', paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-    iconAction: { width: 48, height: 48, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    // 🔥 SATTI FIX: UPDATED SIZES AND SPACING 🔥
+    bottomBar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    input: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 25, height: 44, color: '#FFF', paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    iconAction: { width: 40, height: 40, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     activeIcon: { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
     activePro: { backgroundColor: 'rgba(0, 242, 254, 0.2)', borderColor: '#feb200' },
     
-    ProSettingsBar: { backgroundColor: 'rgba(15, 23, 42, 0.95)', marginHorizontal: 15, borderRadius: 25, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
+    ProSettingsBar: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderRadius: 25, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
     settingGroup: { flex: 1, alignItems: 'center' },
     settingLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', marginBottom: 10, letterSpacing: 1.5 },
     chipRow: { flexDirection: 'row', gap: 10 },

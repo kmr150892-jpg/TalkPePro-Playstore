@@ -12,6 +12,7 @@ import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image
 import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, RtcSurfaceView } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GiftOverlay from '../../../components/GiftOverlay';
+import GlassPathSheet from '../../../components/GlassPathSheet'; // ✅ GLASS PATH IMPORTED
 import LiveGameSheet from '../../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA IMPORTED
 import { auth, db } from '../../../firebaseConfig';
 import { checkAndRequestCallPermissions } from '../../../utils/permissions';
@@ -134,8 +135,9 @@ export default function UserLiveViewScreen() {
         isCallingRef.current = isCalling;
     }, [isCalling]);
 
-    // 🔥 GAME FEATURE STATE (NOW INTEGRATED WITH REFLEX BLITZ)
+    // 🔥 GAME FEATURE STATE
     const [gameVisible, setGameVisible] = useState(false);
+    const [glassPathVisible, setGlassPathVisible] = useState(false); // 🔥 NEW: GLASS PATH STATE
     const [myWalletBalance, setMyWalletBalance] = useState(0);
 
     // 🔥 FIX: Use refs to avoid stale closure issues during Graceful Exit
@@ -206,6 +208,7 @@ export default function UserLiveViewScreen() {
         
         // 🔥 Force close modals and WAIT 500ms before showing Alert! 🔥
         setGameVisible(false); // Instantly close the game modal
+        setGlassPathVisible(false); // 🔥 Close Glass Path modal
         setShowGiftModal(false);
         setActiveGrandGift(null);
         setShowBusyStatus(false);
@@ -863,6 +866,11 @@ export default function UserLiveViewScreen() {
                                 </View>
                                 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                    {/* 🔥 NEW: GLASS PATH ICON 🔥 */}
+                                    <TouchableOpacity onPress={() => setGlassPathVisible(true)} style={[styles.closeIcon, { borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+                                        <Ionicons name="grid" size={16} color="#10B981" />
+                                    </TouchableOpacity>
+
                                     {/* 🔥 SATTI FIX: CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
                                     <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
                                         <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
@@ -1052,6 +1060,16 @@ export default function UserLiveViewScreen() {
                 liveId={liveId} 
                 isHost={false} 
                 userWalletBalance={myWalletBalance} 
+            />
+
+            {/* ✅ GLASS PATH ARENA (Gateway component) */}
+            <GlassPathSheet 
+                visible={glassPathVisible} 
+                onClose={() => setGlassPathVisible(false)} 
+                liveId={liveId} 
+                isHost={false} 
+                userWalletBalance={myWalletBalance}
+                entryFee={0} // 🔥 SATTI FIX: Added entryFee prop to resolve TS Error
             />
         </View>
     );
