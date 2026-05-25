@@ -8,7 +8,7 @@ import { addDoc, collection, doc, getDoc, getDocs, increment, onSnapshot, orderB
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import React, { useEffect, useRef, useState } from 'react';
 // 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
-import { Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
@@ -18,12 +18,13 @@ import createAgoraRtcEngine, {
 } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
+import { checkAndRequestCallPermissions } from '../../utils/permissions';
 
 // --- NEW: Security Import ---
 import * as ScreenCapture from 'expo-screen-capture';
 import GiftOverlay from '../../components/GiftOverlay';
-import GlassPathSheet from '../../components/GlassPathSheet'; // ✅ GLASS PATH SHEET
 import LiveGameSheet from '../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA
+import MemoryMatch from '../../components/MemoryMatch'; // ✅ MEMORY MATCH 
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80';
@@ -37,7 +38,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 30000)    return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
@@ -53,6 +54,9 @@ export default function LiveStreamScreen() {
     
     // 🔥 SATTI FIX: Ref to prevent double triggering of AppState close logic
     const isAppClosing = useRef(false);
+    
+    // 🔥 SATTI FIX: Block summary popping up when OS requests Camera/Mic permissions
+    const isRequestingPermissions = useRef(true); 
 
     // --- Existing States ---
     const [joined, setJoined] = useState(false);
@@ -180,11 +184,12 @@ export default function LiveStreamScreen() {
         // 🔥 SATTI FIX: App background poitu thirumba ulla (active) varum pothu ghost UI-a wipe pandrom 🔥
         if (nextAppState === 'active') {
             setGameVisible(false);
-            setGlassVisible(false); // ✅ SATTI FIX
-            isAppClosing.current = false; // Reset pandrom, appo thaan next time minimize panna work aagum
+            setGlassVisible(false); 
+            isAppClosing.current = false; 
         }
 
-        if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current) {
+        // 🔥 SATTI FIX: Added !isRequestingPermissions.current to stop false triggers during OS Permission Request 🔥
+        if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current && !isRequestingPermissions.current) {
             isAppClosing.current = true;
             
             // 🔥 SATTI FIX: Force close background ghost game modal
@@ -238,6 +243,17 @@ export default function LiveStreamScreen() {
             // --- 🔒 Security Start: Prevent Screen Capture ---
             if (Platform.OS !== 'web') {
                 await ScreenCapture.preventScreenCaptureAsync();
+            }
+
+            // 🔥 SATTI FIX: Camera permission check won't trigger AppState closing logic anymore 🔥
+            isRequestingPermissions.current = true;
+            const hasPermission = await checkAndRequestCallPermissions();
+            isRequestingPermissions.current = false;
+            
+            if (!hasPermission) {
+                Alert.alert("Permission Required", "Camera and Microphone access is needed to start Live.");
+                router.back();
+                return;
             }
 
             const hostData = await fetchHostData(); 
@@ -781,7 +797,7 @@ export default function LiveStreamScreen() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                             
                             {/* Reflex Game Icon - 4 Boxes */}
-                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
+                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00f2ff', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
                                 <View style={{ width: 16, height: 16 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                                         <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
@@ -794,11 +810,29 @@ export default function LiveStreamScreen() {
                                 </View>
                             </TouchableOpacity>
 
-                            {/* Glass Path Game Icon - Stacked Glass Tiles */}
-                            <TouchableOpacity onPress={() => setGlassVisible(true)} style={[styles.closeIcon, { borderColor: '#00F2FE', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
-                                <View style={{ width: 18, height: 18, justifyContent: 'center', alignItems: 'center' }}>
-                                    <View style={{ width: 12, height: 12, borderWidth: 1.5, borderColor: '#00F2FE', backgroundColor: 'rgba(0, 242, 254, 0.4)', borderRadius: 2, transform: [{ rotate: '45deg' }] }} />
-                                    <View style={{ width: 12, height: 12, borderWidth: 1.5, borderColor: '#FFF', backgroundColor: 'rgba(255, 255, 255, 0.7)', borderRadius: 2, transform: [{ rotate: '45deg' }], position: 'absolute', top: 0, left: 6 }} />
+                            {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
+                            <TouchableOpacity 
+                                onPress={() => setGlassVisible(true)} 
+                                style={[styles.closeIcon, { 
+                                    borderColor: '#A855F7', 
+                                    borderWidth: 1.5, 
+                                    backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                                    justifyContent: 'center', 
+                                    alignItems: 'center' 
+                                }]}
+                            >
+                                <View style={{ 
+                                    width: 24, 
+                                    height: 24, 
+                                    flexDirection: 'row', 
+                                    flexWrap: 'wrap', 
+                                    justifyContent: 'center', 
+                                    alignItems: 'center' 
+                                }}>
+                                    <Text style={{ fontSize: 9 }}>🍎</Text>
+                                    <Text style={{ fontSize: 9 }}>🍌</Text>
+                                    <Text style={{ fontSize: 9 }}>🍇</Text>
+                                    <Text style={{ fontSize: 9 }}>🍓</Text>
                                 </View>
                             </TouchableOpacity>
 
@@ -1004,7 +1038,7 @@ export default function LiveStreamScreen() {
                 userWalletBalance={myWalletBalance} 
             />
 
-            <GlassPathSheet 
+            <MemoryMatch 
                 visible={glassVisible} 
                 onClose={() => setGlassVisible(false)} 
                 liveId={currentLiveId} 

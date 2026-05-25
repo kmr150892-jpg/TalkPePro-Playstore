@@ -16,6 +16,7 @@ import { auth, db } from '../../../firebaseConfig';
 
 // 🔥 IMPORT GAME COMPONENT 🔥
 import LiveGameSheet from '../../../components/LiveGameSheet';
+import MemoryMatch from '../../../components/MemoryMatch'; // ✅ MEMORY MATCH IMPORTED
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = "718cedc3c47e44d1bfa4853d6ac6cd80"; 
@@ -48,6 +49,7 @@ export default function ExpertForumRoomScreen() {
     const [mySeatIndex, setMySeatIndex] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isGameVisible, setIsGameVisible] = useState(false); // 🔥 GAME MODAL STATE
+    const [glassVisible, setGlassVisible] = useState(false); // ✅ MEMORY MATCH STATE
 
     const [messages, setMessages] = useState<any[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -601,7 +603,7 @@ export default function ExpertForumRoomScreen() {
                                     <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#EF4444" : "#4F46E5"} />
                                 </TouchableOpacity>
                                 {/* 🔥 CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
-                                <TouchableOpacity style={[styles.gameLaunchButton, { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1 }]} onPress={() => setIsGameVisible(true)}>
+                                <TouchableOpacity style={[styles.gameLaunchButton, { backgroundColor: 'rgb(0, 0, 0)', borderColor: 'rgb(0, 229, 255)', borderWidth: 1 }]} onPress={() => setIsGameVisible(true)}>
                                     <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                             <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
@@ -613,6 +615,31 @@ export default function ExpertForumRoomScreen() {
                                         </View>
                                     </View>
                                 </TouchableOpacity>
+
+                                {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
+                                <TouchableOpacity 
+                                    onPress={() => setGlassVisible(true)} 
+                                    style={[styles.gameLaunchButton, { 
+                                        borderColor: '#A855F7', 
+                                        borderWidth: 1.5, 
+                                        backgroundColor: 'rgba(168, 85, 247, 0.2)' 
+                                    }]}
+                                >
+                                    <View style={{ 
+                                        width: 24, 
+                                        height: 24, 
+                                        flexDirection: 'row', 
+                                        flexWrap: 'wrap', 
+                                        justifyContent: 'center', 
+                                        alignItems: 'center' 
+                                    }}>
+                                        <Text style={{ fontSize: 9 }}>🍎</Text>
+                                        <Text style={{ fontSize: 9 }}>🍌</Text>
+                                        <Text style={{ fontSize: 9 }}>🍇</Text>
+                                        <Text style={{ fontSize: 9 }}>🍓</Text>
+                                    </View>
+                                </TouchableOpacity>
+                                
                             </View>
                         </BlurView>
                     </View>
@@ -652,6 +679,15 @@ export default function ExpertForumRoomScreen() {
                 liveId={roomId}
                 isHost={user?.uid === roomData?.hostId}
                 userWalletBalance={myWalletBalance}
+            />
+
+            {/* 🔥 MEMORY MATCH GAME 🔥 */}
+            <MemoryMatch 
+                visible={glassVisible} 
+                onClose={() => setGlassVisible(false)} 
+                liveId={roomId} 
+                isHost={user?.uid === roomData?.hostId} 
+                entryFee={50}
             />
 
             <Modal visible={ringModalVisible} transparent animationType="fade">

@@ -1017,7 +1017,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 {isHost && (
                                     <View style={styles.resultRow}>
                                         <Text style={[styles.resultLabel, { color: '#F59E0B' }]}>Host Bonus (10%):</Text>
-                                        <Text style={[styles.resultValue, { color: '#F59E0B' }]}>+{matchResults.expertBeans || 0} 💎</Text>
+                                        <Text style={[styles.resultValue, { color: '#F59E0B' }]}>+{matchResults.expertBeans || 0} 💰</Text>
                                     </View>
                                 )}
                             </View>

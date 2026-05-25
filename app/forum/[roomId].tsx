@@ -43,6 +43,8 @@ import { auth, db } from '../../firebaseConfig';
 
 // 🔥 Participation NUMBER GAME IMPORT 🔥
 import LiveGameSheet from '../../components/LiveGameSheet';
+import MemoryMatch from '../../components/MemoryMatch'; // 🔥 ADDED MEMORY MATCH IMPORT 🔥
+
 // TURBO RACING SHEET HAS BEEN COMPLETELY REMOVED PER USER REQUEST
 
 const { width, height } = Dimensions.get('window');
@@ -93,6 +95,7 @@ export default function PartyRoomScreen() {
 
     const agoraEngine = useRef<IRtcEngine | null>(null);
     const [isMuted, setIsMuted] = useState(false);
+    const [isSpeakerMuted, setIsSpeakerMuted] = useState(false); // 🔥 SATTI FIX: SPEAKER MUTE STATE 🔥
     const [isAgoraJoined, setIsAgoraJoined] = useState(false);
 
     const [showGiftModal, setShowGiftModal] = useState(false);
@@ -101,6 +104,7 @@ export default function PartyRoomScreen() {
     const scaleAnim = useRef(new Animated.Value(0)).current;
 
     const [gameVisible, setGameVisible] = useState(false);
+    const [glassPathVisible, setGlassPathVisible] = useState(false); // 🔥 MEMORY MATCH STATE 🔥
     
     const gameVisibleRef = useRef(false);
     
@@ -202,6 +206,7 @@ export default function PartyRoomScreen() {
             
             // Force close game dashboards so alert is visible
             setGameVisible(false);
+            setGlassPathVisible(false); // 🔥 CLOSE MODAL ON EXIT 🔥
             
             setTimeout(() => {
                 Alert.alert(
@@ -420,6 +425,15 @@ export default function PartyRoomScreen() {
         }
     };
 
+    // 🔥 SATTI FIX: MUTE/UNMUTE ROOM SPEAKER 🔥
+    const toggleSpeaker = () => {
+        const newSpeakerMutedState = !isSpeakerMuted;
+        setIsSpeakerMuted(newSpeakerMutedState);
+        if (agoraEngine.current) {
+            agoraEngine.current.muteAllRemoteAudioStreams(newSpeakerMutedState);
+        }
+    };
+
     const handleSendChat = async () => {
         if (!chatInput.trim() || !user) return;
         try {
@@ -611,6 +625,7 @@ export default function PartyRoomScreen() {
                         <TouchableOpacity onPress={handleLeaveParty} style={styles.iconBtn}>
                             <Ionicons name="log-out-outline" size={24} color="#EF4444" />
                         </TouchableOpacity>
+
                         <View style={styles.roomInfo}>
                             <Text style={styles.roomName}>{roomData.roomName || 'Forum Arena'}</Text>
                             <Text style={styles.hostName}>Host: {roomData.hostName} {isAgoraJoined ? '🟢' : '🟠'}</Text>
@@ -642,6 +657,16 @@ export default function PartyRoomScreen() {
                         liveId={roomId} 
                         isHost={false} 
                         userWalletBalance={userData?.balance || 0} 
+                    />
+
+                    {/* ✅ MEMORY MATCH ARENA */}
+                    <MemoryMatch
+                        visible={glassPathVisible}
+                        onClose={() => setGlassPathVisible(false)}
+                        liveId={roomId}
+                        isHost={false}
+                        userWalletBalance={userData?.balance || 0}
+                        entryFee={0}
                     />
 
                     <View style={styles.chatArea}>
@@ -686,6 +711,11 @@ export default function PartyRoomScreen() {
 
                     <View style={styles.bottomArea}>
                         <View style={styles.reactionRow}>
+                            {/* 🔥 SPEAKER MUTE BUTTON POSITIONED HERE 🔥 */}
+                            <TouchableOpacity onPress={toggleSpeaker} style={[styles.reactionBtn, { backgroundColor: isSpeakerMuted ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.15)' }]}>
+                                <Ionicons name={isSpeakerMuted ? "volume-mute" : "volume-medium"} size={20} color={isSpeakerMuted ? "#EF4444" : "#3B82F6"} />
+                            </TouchableOpacity>
+
                             {REACTION_EMOJIS.map(emoji => (
                                 <TouchableOpacity key={emoji} onPress={() => handleReaction(emoji)} style={styles.reactionBtn}>
                                     <Text style={{fontSize: 20}}>{emoji}</Text>
@@ -722,6 +752,30 @@ export default function PartyRoomScreen() {
                                             <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
                                             <View style={{ width: 7, height: 4, backgroundColor: '#FFD700', borderRadius: 4 }} />
                                         </View>
+                                    </View>
+                                </TouchableOpacity>
+
+                                {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
+                                <TouchableOpacity
+                                    onPress={() => setGlassPathVisible(true)}
+                                    style={[styles.gameBtnSmall, {
+                                        borderColor: '#A855F7',
+                                        borderWidth: 1.5,
+                                        backgroundColor: 'rgba(168, 85, 247, 0.2)'
+                                    }]}
+                                >
+                                    <View style={{
+                                        width: 24,
+                                        height: 24,
+                                        flexDirection: 'row',
+                                        flexWrap: 'wrap',
+                                        justifyContent: 'center',
+                                        alignItems: 'center'
+                                    }}>
+                                        <Text style={{ fontSize: 9 }}>🍎</Text>
+                                        <Text style={{ fontSize: 9 }}>🍌</Text>
+                                        <Text style={{ fontSize: 9 }}>🍇</Text>
+                                        <Text style={{ fontSize: 9 }}>🍓</Text>
                                     </View>
                                 </TouchableOpacity>
 

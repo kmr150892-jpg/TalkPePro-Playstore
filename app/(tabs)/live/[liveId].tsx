@@ -12,8 +12,8 @@ import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image
 import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, RtcSurfaceView } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GiftOverlay from '../../../components/GiftOverlay';
-import GlassPathSheet from '../../../components/GlassPathSheet'; // ✅ GLASS PATH IMPORTED
 import LiveGameSheet from '../../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA IMPORTED
+import MemoryMatch from '../../../components/MemoryMatch'; // ✅ GLASS PATH IMPORTED
 import { auth, db } from '../../../firebaseConfig';
 import { checkAndRequestCallPermissions } from '../../../utils/permissions';
 
@@ -866,13 +866,34 @@ export default function UserLiveViewScreen() {
                                 </View>
                                 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                    {/* 🔥 NEW: GLASS PATH ICON 🔥 */}
-                                    <TouchableOpacity onPress={() => setGlassPathVisible(true)} style={[styles.closeIcon, { borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
-                                        <Ionicons name="grid" size={16} color="#10B981" />
-                                    </TouchableOpacity>
+                                    {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
+<TouchableOpacity 
+    onPress={() => setGlassPathVisible(true)} 
+    style={[styles.closeIcon, { 
+        borderColor: '#A855F7', 
+        borderWidth: 1.5, 
+        backgroundColor: 'rgba(168, 85, 247, 0.2)',
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    }]}
+>
+    <View style={{ 
+        width: 24, 
+        height: 24, 
+        flexDirection: 'row', 
+        flexWrap: 'wrap', 
+        justifyContent: 'center', 
+        alignItems: 'center' 
+    }}>
+        <Text style={{ fontSize: 9 }}>🍎</Text>
+        <Text style={{ fontSize: 9 }}>🍌</Text>
+        <Text style={{ fontSize: 9 }}>🍇</Text>
+        <Text style={{ fontSize: 9 }}>🍓</Text>
+    </View>
+</TouchableOpacity>
 
                                     {/* 🔥 SATTI FIX: CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
-                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: 'rgba(255,255,255,0.15)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: 'rgb(0, 234, 255)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
                                         <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
                                             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                                 <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
@@ -1063,7 +1084,7 @@ export default function UserLiveViewScreen() {
             />
 
             {/* ✅ GLASS PATH ARENA (Gateway component) */}
-            <GlassPathSheet 
+            <MemoryMatch 
                 visible={glassPathVisible} 
                 onClose={() => setGlassPathVisible(false)} 
                 liveId={liveId} 
@@ -1100,11 +1121,11 @@ const styles = StyleSheet.create({
     nameContainer: { marginLeft: 15 },
     hostNameText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
     onlineStatus: { fontSize: 11, fontWeight: '600' },
-    closeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
+    closeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(231, 6, 6, 0.89)', justifyContent: 'center', alignItems: 'center' },
     actionRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
     callBtnMass: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 20, gap: 6, flex: 1.5, shadowOpacity: 0.3, shadowRadius: 5 },
     callTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
-    giftBtnMass: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 12, borderRadius: 20, gap: 5, borderWidth: 1 },
+    giftBtnMass: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgb(65, 43, 72)', paddingVertical: 12, borderRadius: 20, gap: 5, borderWidth: 1 },
     giftTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
     levelTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, gap: 5 },
     levelTextTag: { color: '#FFF', fontSize: 12, fontWeight: '900' },
@@ -1122,8 +1143,8 @@ const styles = StyleSheet.create({
     chatText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600' },
     
     // 🔥 SATTI FIX: ROYAL GIFT BUBBLE STYLES 🔥
-    giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)' },
-    giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 11, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 },
+    giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(245, 159, 11, 0.99)' },
+    giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 11, textShadowColor: 'rgb(99, 71, 170)', textShadowRadius: 5 },
 
     inputBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, gap: 12 },
     textInput: { flex: 1, height: 50, backgroundColor: 'rgba(15,23,42,0.85)', borderRadius: 25, paddingHorizontal: 20, color: '#FFF', borderWidth: 1 },

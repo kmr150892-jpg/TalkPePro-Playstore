@@ -479,6 +479,7 @@ export default function CinematicExploreScreen() {
             setRingTimer(12);
             setRingModalVisible(true);
 
+            // 🔥 SATTI FIX: ALL SCREENSHOT DETAILS ADDED AND STATUS SET TO 'calling' 🔥
             await setDoc(doc(db, "calls", newCallId), {
                 callerId: user?.uid || "UNKNOWN_USER",
                 callerImage: user?.photoURL || `https://ui-avatars.com/api/?name=${user?.displayName || 'User'}&background=0F172A&color=fff`,
@@ -528,7 +529,8 @@ export default function CinematicExploreScreen() {
             />
 
             <View style={styles.topHeader}>
-                <Text style={styles.headerTitle}>FEATURED CONSULTANTS</Text>
+                {/* 🔥 SATTI FIX: Header Text Overflow Fix (numberOfLines & adjustsFontSizeToFit) 🔥 */}
+                <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>FEATURED CONSULTANTS</Text>
                 <TouchableOpacity style={styles.searchBtn}>
                     <Ionicons name="search" size={24} color="#FFF" />
                 </TouchableOpacity>
@@ -622,13 +624,15 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 10,
     },
+    // 🔥 SATTI FIX: Reduced fontSize & letterSpacing to avoid overflow 🔥
     headerTitle: {
         color: '#FFF',
-        fontSize: 22,
+        fontSize: 16, // Reduced from 22
         fontWeight: '900',
-        letterSpacing: 2,
+        letterSpacing: 1.5, // Reduced from 2
         textShadowColor: 'rgba(0,0,0,0.8)',
         textShadowRadius: 10,
+        flexShrink: 1, // Ensure it shrinks if needed
     },
     searchBtn: {
         width: 44,
@@ -639,6 +643,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
+        marginLeft: 10, // Adds some space between text and button
     },
     cardContainer: {
         width: width,
@@ -649,15 +654,16 @@ const styles = StyleSheet.create({
     video: {
         ...StyleSheet.absoluteFillObject,
     },
+    // 🔥 SATTI FIX: Added more paddingBottom & height to prevent Connect button clipping 🔥
     bottomGradient: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: height * 0.4, 
+        height: height * 0.55, // Increased height
         justifyContent: 'flex-end',
         paddingHorizontal: 20,
-        paddingBottom: 90, 
+        paddingBottom: 145, // Increased padding to lift the button higher
     },
     contentWrapper: {
         gap: 15,
