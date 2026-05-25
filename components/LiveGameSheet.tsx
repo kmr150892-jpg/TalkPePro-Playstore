@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Dimensions, Easing, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
@@ -86,7 +86,9 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
     const scoreRef = useRef<number>(0);
     const hasSubmittedScoreRef = useRef<boolean>(false);
 
-    const roomRef = doc(db, collectionName, liveId, 'games', 'reflex_arena');
+    // 🔥 SATTI FIX: Auto-detect forum vs live based on ID 🔥
+    const actualCollection = liveId?.startsWith('forum_') ? 'forum_rooms' : collectionName;
+    const roomRef = doc(db, actualCollection, liveId, 'games', 'reflex_arena');
 
     // 🔥 SATTI FIX: SELF-HEALING AUTO REFUND WITH PROPER WALLET SYNC
     const handleAutoRefundOnCancel = async () => {
@@ -117,12 +119,13 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                transaction.set(userRef, { 
+                // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
-                }, { merge: true });
+                });
                 
-                transaction.set(roomRef, { players: updatedPlayers }, { merge: true });
+                transaction.update(roomRef, { players: updatedPlayers });
 
                 const txRef = doc(db, 'transactions', `${uid}_auto_refund_${Date.now()}`);
                 transaction.set(txRef, {
@@ -328,15 +331,23 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         generateNewClash();
     };
 
+    const updateRoomFee = async (fee: number) => {
+        if (isFeeLocked) return; 
+        try {
+            setEntryFee(fee); 
+            await updateDoc(roomRef, { entryFee: fee });
+        } catch (e) { console.log("Fee Update Error: ", e); }
+    };
+
     const lockRoomFee = async () => {
         try {
-            await setDoc(roomRef, { isFeeLocked: true }, { merge: true });
+            await updateDoc(roomRef, { isFeeLocked: true });
         } catch (e) { console.log("Lock Error", e); }
     };
 
     const unlockRoomFee = async () => {
         try {
-            await setDoc(roomRef, { isFeeLocked: false }, { merge: true });
+            await updateDoc(roomRef, { isFeeLocked: false });
         } catch (e) { console.log("Unlock Error", e); }
     };
 
@@ -357,7 +368,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 const uData = userSnap.data();
                 const safeBal = Number(uData.balance) || 0;
                 const safeWalletBal = Number(uData.walletBalance) || 0;
-                
                 const effectiveBalance = Math.max(safeBal, safeWalletBal); 
                 
                 const roomData = roomSnap.data();
@@ -368,14 +378,15 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 if (currentPlayers.length >= MAX_PLAYERS) throw "Arena Full";
                 if (effectiveBalance < roomFee) throw `Insufficient Balance. You need ${roomFee} 💎 to join.`;
 
-                transaction.set(userRef, { 
+                // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                transaction.update(userRef, { 
                     balance: Math.max(0, safeBal - roomFee),
                     walletBalance: Math.max(0, safeWalletBal - roomFee)
-                }, { merge: true });
+                });
                 
-                transaction.set(roomRef, {
+                transaction.update(roomRef, {
                     players: [...currentPlayers, { id: uid, name: uName, score: 0, hasFinished: false, joinedAt: Date.now() }]
-                }, { merge: true });
+                });
 
                 const txRef = doc(db, 'transactions', `${uid}_arena_${Date.now()}`);
                 transaction.set(txRef, {
@@ -418,12 +429,13 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                transaction.set(userRef, { 
+                // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
-                }, { merge: true });
+                });
                 
-                transaction.set(roomRef, { players: updatedPlayers }, { merge: true });
+                transaction.update(roomRef, { players: updatedPlayers });
 
                 const txRef = doc(db, 'transactions', `${uid}_refund_${Date.now()}`);
                 transaction.set(txRef, {
@@ -453,8 +465,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 const data = roomSnap.data();
 
                                 // 🔥 SATTI FIX: DOUBLE REFUND BLOCKER 🔥
-                                // Database level-la check pandrom. Oru thadava 'refunded: true' aagiducha nu paakurom.
-                                // Ithu iruntha kandippa double refund aagathu.
                                 if (data.status === 'CANCELLED' || data.refunded === true) {
                                     return; 
                                 }
@@ -472,17 +482,18 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                         const safeBal = Number(uData.balance) || 0;
                                         const safeWalletBal = Number(uData.walletBalance) || 0;
                                         
-                                        transaction.set(uSnap.ref, { 
+                                        // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                                        transaction.update(uSnap.ref, { 
                                             balance: safeBal + roomFee,
                                             walletBalance: safeWalletBal + roomFee
-                                        }, { merge: true });
+                                        });
                                         
                                         const txRef = doc(db, 'transactions', `${p.id}_host_refund_${Date.now()}`);
                                         transaction.set(txRef, { userId: p.id, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Host Cancelled Refund', timestamp: serverTimestamp() });
                                     }
                                 });
                                 // 🔥 SATTI FIX: Save panrappa 'refunded: true' lock podurom 🔥
-                                transaction.set(roomRef, { status: 'CANCELLED', players: [], refunded: true }, { merge: true });
+                                transaction.update(roomRef, { status: 'CANCELLED', players: [], refunded: true });
                             });
                             onClose();
                         } catch (e) {
@@ -498,25 +509,17 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
         }
     };
 
-    const updateRoomFee = async (fee: number) => {
-        if (isFeeLocked) return; 
-        try {
-            setEntryFee(fee); 
-            await setDoc(roomRef, { entryFee: fee }, { merge: true });
-        } catch (e) { console.log("Fee Update Error: ", e); }
-    };
-
     const launchLiveReflexMatch = async () => {
         if (players.length < 2) {
             Alert.alert("Waiting for Challengers ⏳", "Need at least 2 participants to share rewards!");
             return;
         }
         try {
-            await setDoc(roomRef, {
+            await updateDoc(roomRef, {
                 status: 'PLAYING',
                 gameStartedAt: serverTimestamp(),
                 gameExpiresAt: Date.now() + 75000 
-            }, { merge: true });
+            });
         } catch (e) { console.log(e); }
     };
 
@@ -541,7 +544,8 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                         p.id === uid ? { ...p, score: finalScore, hasFinished: true } : p
                     );
                     
-                    transaction.set(roomRef, { players: updatedPlayers }, { merge: true });
+                    // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                    transaction.update(roomRef, { players: updatedPlayers });
                 });
             } catch (e) {
                 console.error(`Score Submit Retry ${retryCount}:`, e);
@@ -594,8 +598,10 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     const eRef = doc(db, 'users', actualHostId);
                     expertSnap = { snap: await transaction.get(eRef), ref: eRef };
                 }
+                
+                // 🔥 SATTI FIX: Fetching liveRef dynamically using actualCollection 🔥
                 if (liveId && actualHostId) {
-                    const lRef = doc(db, 'lives', liveId);
+                    const lRef = doc(db, actualCollection, liveId);
                     liveSnap = { snap: await transaction.get(lRef), ref: lRef };
                 }
 
@@ -606,10 +612,11 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                         const currentSafeBalance = Number(wData.balance) || 0;
                         const currentSafeWallet = Number(wData.walletBalance) || 0;
                         
-                        transaction.set(wSnap.ref, { 
+                        // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                        transaction.update(wSnap.ref, { 
                             balance: currentSafeBalance + rewardPerWinner,
                             walletBalance: currentSafeWallet + rewardPerWinner
-                        }, { merge: true });
+                        });
                         
                         const winTxRef = doc(db, 'transactions', `${w.id}_win_${Date.now()}`);
                         transaction.set(winTxRef, {
@@ -631,13 +638,14 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     const safeBeansBal = Number(eData.beansBalance) || 0;
                     const safeTotalEarned = Number(eData.totalBeansEarned) || 0;
 
-                    transaction.set(expertSnap.ref, { 
+                    // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                    transaction.update(expertSnap.ref, { 
                         beans: safeEBeans + expertBeans,
                         balance: safeEBalance + expertBeans,
                         walletBalance: safeWalletBal + expertBeans,
                         beansBalance: safeBeansBal + expertBeans,
                         totalBeansEarned: safeTotalEarned + expertBeans
-                    }, { merge: true });
+                    });
                     
                     const expertTxRef = doc(db, 'transactions', `${actualHostId}_commission_${Date.now()}`);
                     transaction.set(expertTxRef, {
@@ -654,10 +662,12 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 if (liveSnap && liveSnap.snap.exists()) {
                     const lData = liveSnap.snap.data() || {};
                     const safeEarned = Number(lData.earnedBeans) || 0;
-                    transaction.set(liveSnap.ref, { earnedBeans: safeEarned + expertBeans }, { merge: true });
+                    // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                    transaction.update(liveSnap.ref, { earnedBeans: safeEarned + expertBeans });
                 }
 
-                transaction.set(roomRef, {
+                // 🔥 SATTI FIX: using update() to fix failed-precondition error
+                transaction.update(roomRef, {
                     status: 'FINISHED',
                     rankedPlayers: ranked, 
                     isTie: isTie,
@@ -666,7 +676,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     rewardPerWinner: rewardPerWinner,
                     expertBeans: expertBeans,
                     adminCommission: adminCommission
-                }, { merge: true });
+                });
             });
         } catch (e) {
             console.error("Payout error:", e);
@@ -697,6 +707,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 >
                     <LinearGradient colors={['#0F172A', '#020617']} style={StyleSheet.absoluteFill} />
                     
+                    {/* Top Drag Handle */}
                     <View {...panResponder.panHandlers} style={styles.dragHandleContainer}>
                         <View style={styles.dragPill} />
                     </View>

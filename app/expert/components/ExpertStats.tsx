@@ -587,7 +587,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`₿${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />
-                                        <MatrixBox icon="Session-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
+                                        <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Broadcast Activity" value={`₿${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" borderStyle={borderType2} />

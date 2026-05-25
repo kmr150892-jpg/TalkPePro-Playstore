@@ -393,7 +393,7 @@ export default function ExpertHistory() {
         iconType = 'dice-multiple';
         iconColor = '#F59E0B';
     } else if (item.type === 'party_gift') {
-        iconType = 'Session-popper';
+        iconType = 'party-popper';
         iconColor = '#EC4899';
     } else if (item.type === 'live_gift') {
         iconType = 'broadcast';
@@ -443,7 +443,7 @@ export default function ExpertHistory() {
   const TABS = [
       { id: 'video_call', label: 'Voice/Video', icon: 'videocam', iconType: 'Ionicons' },
       { id: 'live_gift', label: 'Live Store', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
-      { id: 'party_gift', label: 'Room Gifts', icon: 'Session-popper', iconType: 'MaterialCommunityIcons' },
+      { id: 'party_gift', label: 'Room Gifts', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
       { id: 'call_gift', label: 'Direct Gifts', icon: 'gift', iconType: 'MaterialCommunityIcons' },
       { id: 'live_game_bonus', label: 'Live Games', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
       { id: 'party_game_bonus', label: 'Room Games', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' }

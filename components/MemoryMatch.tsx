@@ -66,7 +66,10 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
     const [timeLeftToCross, setTimeLeftToCross] = useState<number>(60); 
 
     const hasJoined = players.some(p => p.id === auth.currentUser?.uid);
-    const roomRef = doc(db, collectionName, liveId, 'games', 'glass_path');
+
+    // 🔥 SATTI FIX: Auto-detect forum vs live based on ID, and change 'glass_path' to 'memory_match' 🔥
+    const actualCollection = liveId?.startsWith('forum_') ? 'forum_rooms' : collectionName;
+    const roomRef = doc(db, actualCollection, liveId, 'games', 'memory_match');
 
     const pan = useRef(new Animated.ValueXY()).current;
     const panResponder = useRef(
@@ -113,12 +116,13 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                transaction.set(userRef, { 
+                // 🔥 SATTI FIX: use update() instead of set({merge: true}) to fix failed-precondition error
+                transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
-                }, { merge: true });
+                });
                 
-                transaction.set(roomRef, { players: updatedPlayers }, { merge: true });
+                transaction.update(roomRef, { players: updatedPlayers });
 
                 const txRef = doc(db, 'transactions', `${uid}_auto_refund_${Date.now()}`);
                 transaction.set(txRef, {
@@ -306,14 +310,15 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 if (currentPlayers.length >= MAX_PLAYERS) throw "Arena Full";
                 if (effectiveBalance < roomFee) throw `Insufficient Balance. You need ${roomFee} 💎 to join.`;
 
-                transaction.set(userRef, { 
+                // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
+                transaction.update(userRef, { 
                     balance: Math.max(0, safeBal - roomFee),
                     walletBalance: Math.max(0, safeWalletBal - roomFee)
-                }, { merge: true });
+                });
                 
-                transaction.set(roomRef, {
+                transaction.update(roomRef, {
                     players: [...currentPlayers, { id: uid, name: uName, avatar: avatar, status: 'playing', progress: 0, score: 0, joinedAt: Date.now() }]
-                }, { merge: true });
+                });
 
                 const txRef = doc(db, 'transactions', `${uid}_arena_${Date.now()}`);
                 transaction.set(txRef, {
@@ -356,12 +361,13 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                transaction.set(userRef, { 
+                // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
+                transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
-                }, { merge: true });
+                });
                 
-                transaction.set(roomRef, { players: updatedPlayers }, { merge: true });
+                transaction.update(roomRef, { players: updatedPlayers });
 
                 const txRef = doc(db, 'transactions', `${uid}_refund_${Date.now()}`);
                 transaction.set(txRef, {
@@ -405,16 +411,17 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                         const safeBal = Number(uData.balance) || 0;
                                         const safeWalletBal = Number(uData.walletBalance) || 0;
                                         
-                                        transaction.set(uSnap.ref, { 
+                                        // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
+                                        transaction.update(uSnap.ref, { 
                                             balance: safeBal + roomFee,
                                             walletBalance: safeWalletBal + roomFee
-                                        }, { merge: true });
+                                        });
                                         
                                         const txRef = doc(db, 'transactions', `${p.id}_host_refund_${Date.now()}`);
                                         transaction.set(txRef, { userId: p.id, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Host Cancelled Refund', timestamp: serverTimestamp() });
                                     }
                                 });
-                                transaction.set(roomRef, { status: 'CANCELLED', players: [], refunded: true }, { merge: true });
+                                transaction.update(roomRef, { status: 'CANCELLED', players: [], refunded: true });
                             });
                             onClose();
                         } catch (e) {
@@ -456,7 +463,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         if (!auth.currentUser || isHost) return;
         
         try {
-            // 🔥 FIXED: Fetch fresh players list from DB to avoid overriding real scores with stale local zeros 🔥
             const snap = await getDoc(roomRef);
             if (!snap.exists()) return;
             let data = snap.data();
@@ -517,14 +523,12 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 let newCombo = myCombo;
 
                 if (card1 === '💎') {
-                    // 🔥 UPDATE 3: Jackpot set to 300
                     addedScore = 300 * myCombo;
                     newCombo = myCombo + 1;
                     setShowJackpotFlash(true);
                     setTimeout(() => setShowJackpotFlash(false), 1000);
                 } else if (card1 === '☠️') {
                     addedScore = -200;
-                    // Note: Trap does NOT increase combo, it just penalizes
                     setIsBlackout(true);
                     setTimeout(() => setIsBlackout(false), 3000);
                 } else {
@@ -536,7 +540,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 setMyScore(newScore);
                 setMyCombo(newCombo);
 
-                // 🔥 OPTIMISTIC UI UPDATE FOR INSTANT SCORE 🔥
                 setPlayers(prevPlayers => prevPlayers.map(p => 
                     p.id === auth.currentUser?.uid ? { ...p, progress: newMatched.length, score: newScore } : p
                 ));
@@ -551,7 +554,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                             
                             // Win Check
                             if (newMatched.length === 15) {
-                                // Clear Bonus
                                 const finalWinScore = newScore + 1000;
                                 freshPlayers[mIndex].score = finalWinScore;
                                 setMyScore(finalWinScore);
@@ -572,7 +574,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 });
 
             } else {
-                // NO MATCH -> COMBO RESET & LOCK CHECK
                 setMyCombo(1);
                 
                 setConsecutiveMistakes(prev => {
@@ -612,7 +613,9 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                 const winnerRefs = winnerIds.map((id: string) => doc(db, 'users', id));
                 const hostRef = actualHostId ? doc(db, 'users', actualHostId) : null;
-                const liveRef = (liveId && actualHostId) ? doc(db, 'lives', liveId) : null;
+                
+                // 🔥 SATTI FIX: Fetching liveRef dynamically using the actual auto-detected collectionName 🔥
+                const liveRef = (liveId && actualHostId) ? doc(db, actualCollection, liveId) : null;
 
                 const winnerSnaps = await Promise.all(winnerRefs.map((ref: any) => transaction.get(ref)));
                 const hostSnap = hostRef ? await transaction.get(hostRef) : null;
@@ -651,10 +654,11 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                             const currentSafeBalance = Number(wData.balance) || 0;
                             const currentSafeWallet = Number(wData.walletBalance) || 0;
                             
-                            transaction.set(wSnap.ref, { 
+                            // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
+                            transaction.update(wSnap.ref, { 
                                 balance: currentSafeBalance + rewardPerWinner,
                                 walletBalance: currentSafeWallet + rewardPerWinner
-                            }, { merge: true });
+                            });
                             
                             const winTxRef = doc(db, 'transactions', `${wId}_win_${Date.now()}`);
                             transaction.set(winTxRef, { userId: wId, type: 'ARENA_REWARD', amount: rewardPerWinner, status: 'SUCCESS', title: 'Memory Match Arena Winner', timestamp: serverTimestamp() });
@@ -670,13 +674,14 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     const safeBeansBal = Number(eData.beansBalance) || 0;
                     const safeTotalEarned = Number(eData.totalBeansEarned) || 0;
 
-                    transaction.set(hostSnap.ref, { 
+                    // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
+                    transaction.update(hostSnap.ref, { 
                         beans: safeEBeans + expertBeans,
                         balance: safeEBalance + expertBeans,
                         walletBalance: safeWalletBal + expertBeans,
                         beansBalance: safeBeansBal + expertBeans,
                         totalBeansEarned: safeTotalEarned + expertBeans
-                    }, { merge: true });
+                    });
                     
                     const expertTxRef = doc(db, 'transactions', `${actualHostId}_commission_${Date.now()}`);
                     transaction.set(expertTxRef, { userId: actualHostId, type: 'HOST_BONUS', amount: expertBeans, currency: 'DIAMONDS', status: 'SUCCESS', title: 'Arena Host Bonus', timestamp: serverTimestamp() });
@@ -685,10 +690,12 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 if (liveSnap && liveSnap.exists()) {
                     const lData = liveSnap.data() || {};
                     const safeEarned = Number(lData.earnedBeans) || 0;
-                    transaction.set(liveSnap.ref, { earnedBeans: safeEarned + expertBeans }, { merge: true });
+                    // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
+                    transaction.update(liveSnap.ref, { earnedBeans: safeEarned + expertBeans });
                 }
 
-                transaction.set(roomRef, {
+                // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
+                transaction.update(roomRef, {
                     payoutProcessed: true,
                     rankedPlayers: ranked, 
                     isTie: isTie,
@@ -696,7 +703,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     rewardPerWinner: rewardPerWinner,
                     expertBeans: expertBeans,
                     adminCommission: adminCommission 
-                }, { merge: true });
+                });
             });
         } catch (e) {
             console.error("Payout error:", e);
@@ -1096,13 +1103,13 @@ const styles = StyleSheet.create({
     gridContainer: { paddingBottom: 50, alignItems: 'center' },
     columnWrapper: { gap: 8, justifyContent: 'center', marginBottom: 8 },
     card: { 
-        width: Math.floor((width - 80) / 5), 
-        height: Math.floor((width - 80) / 5), 
+        width: Math.floor((width - 80) / 5.7), 
+        height: Math.floor((width - 80) / 5.7), 
         borderRadius: 12, 
         borderWidth: 2, 
-        borderColor: 'rgba(255,255,255,0.15)', 
+        borderColor: 'rgb(253, 178, 3)', 
         overflow: 'hidden',
-        backgroundColor: '#0F172A',
+        backgroundColor: '#000000',
         elevation: 8,
         shadowColor: '#00F2FE',
         shadowOffset: { width: 0, height: 4 },

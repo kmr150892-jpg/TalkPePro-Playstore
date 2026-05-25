@@ -222,7 +222,7 @@ export default function LevelInsights({ expertData }: any) {
                                 </View>
                             </BlurView>
                             <BlurView intensity={20} tint="light" style={styles.heroStatBox}>
-                                <Text style={styles.hStatLabel}>CALL FEE CAP (B/min)</Text>
+                                <Text style={styles.hStatLabel}>CALL FEE CAP (R/min)</Text>
                                 <View style={styles.dualRateContainer}>
                                     <Text style={styles.heroRateText}>CALL: {currentLevelInfo.rate}</Text>
                                     <Text style={styles.heroRateText}>QUICK: {currentLevelInfo.qmRate}</Text>
@@ -279,7 +279,7 @@ export default function LevelInsights({ expertData }: any) {
                                 <TouchableOpacity activeOpacity={0.8} style={[styles.roadmapCard, roadmapBorderStyle, isCurrent && {borderColor: item.color, borderLeftWidth: 4, backgroundColor: 'rgba(255,255,255,0.05)'}, isLocked && {opacity: 0.5}]}>
                                     <View style={{ flex: 1 }}>
                                         <Text style={[styles.rmLabel, {color: isLocked ? '#475569' : '#FFF'}]}>{item.label}</Text>
-                                        <Text style={styles.rmGoal}>{item.goal.toLocaleString()} XP Beans</Text>
+                                        <Text style={styles.rmGoal}>{item.goal.toLocaleString()} XP Rewards</Text>
                                     </View>
                                     
                                     {/* 🔥 DUAL RATE DISPLAY FOR EACH LEVEL */}
@@ -315,8 +315,8 @@ export default function LevelInsights({ expertData }: any) {
                                 <MaterialCommunityIcons name="crown" size={80} color={theme.primary} />
                                 <Text style={[styles.modalLevelName, { color: theme.primary }]}>{currentLevelInfo.label}</Text>
                                 <View style={styles.newBenefitBox}>
-                                    <Text style={styles.benefitText}>NEW CALL RATE: {currentLevelInfo.rate} BEANS</Text>
-                                    <Text style={styles.benefitText}>NEW QUICK RATE: {currentLevelInfo.qmRate} BEANS</Text>
+                                    <Text style={styles.benefitText}>NEW CALL RATE: {currentLevelInfo.rate} REWARDS</Text>
+                                    <Text style={styles.benefitText}>NEW QUICK RATE: {currentLevelInfo.qmRate} REWARDS</Text>
                                 </View>
                             </View>
 

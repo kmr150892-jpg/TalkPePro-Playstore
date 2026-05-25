@@ -418,7 +418,7 @@ export default function ExpertPassbookDetail() {
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Live Rewards" value={`₿${breakdown.liveGifts.toLocaleString()}`} color="#FB7185" />
-                                        <MatrixBox icon="Session-popper" iconFamily="MaterialCommunityIcons" label="Group Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color="#FB7185" />
+                                        <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Group Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color="#FB7185" />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Interactive Bonus" value={`₿${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" />
