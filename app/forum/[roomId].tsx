@@ -71,10 +71,10 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 30000)    return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
-    return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
+    return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
 };
 
 export default function PartyRoomScreen() {
@@ -456,7 +456,7 @@ export default function PartyRoomScreen() {
     };
 
     const handleSendGift = async (gift: any) => {
-        if (!userData || !roomData) return;
+        if (!userData || !roomData || !user) return;
         if ((userData.balance || 0) < gift.price) {
             Alert.alert("Low Diamonds 💎", "Not enough diamonds.");
             return;
@@ -467,11 +467,14 @@ export default function PartyRoomScreen() {
             
             addDoc(collection(db, "forum_rooms", roomId, "gifts"), {
                 giftId: gift.id, giftName: gift.name, icon: gift.icon,
-                price: gift.price, senderName: userData.name || 'User',
+                price: gift.price, 
+                senderName: userData.name || user?.displayName || 'User',
+                senderId: user.uid, // 🔥 SATTI FIX: ADDED SENDER ID 🔥
+                senderImage: userData.profilePic || userData.photoURL || user?.photoURL || null, // 🔥 SATTI FIX: ADDED SENDER IMAGE 🔥
                 timestamp: serverTimestamp()
             });
 
-            updateDoc(doc(db, "users", user!.uid), { balance: increment(-gift.price) });
+            updateDoc(doc(db, "users", user.uid), { balance: increment(-gift.price) });
             updateDoc(doc(db, "users", roomData.hostId), { 
                 totalBeansEarned: increment(expertBeans),
                 walletBalance: increment(expertBeans),
@@ -811,7 +814,13 @@ export default function PartyRoomScreen() {
                         <Animated.View style={[styles.giftAnimationContainer, { transform: [{ translateY: giftAnimY }, { scale: scaleAnim }] }]}>
                             <Text style={styles.giftAnimIcon}>{currentGift.icon || '🎁'}</Text>
                             <LinearGradient colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.5)', 'transparent']} style={styles.giftAnimLabel}>
-                                <Text style={styles.giftAnimSender}>{currentGift.senderName} Sent {currentGift.giftName}</Text>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                                    <Image 
+                                        source={{ uri: currentGift.senderImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentGift.senderName || 'U')}&background=F59E0B&color=fff` }} 
+                                        style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: '#F59E0B' }} 
+                                    />
+                                    <Text style={styles.giftAnimSender}>{currentGift.senderName} Sent {currentGift.giftName}</Text>
+                                </View>
                             </LinearGradient>
                         </Animated.View>
                     </View>

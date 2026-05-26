@@ -433,15 +433,18 @@ export default function VideoCallScreen() {
                 if (callInitRef.current) return; 
                 callInitRef.current = true;
 
-                let currentExpertId = safeExpertId;
                 const callSnap = await getDoc(doc(db, "calls", callId));
+                const existingCallData = callSnap.exists() ? callSnap.data() : {};
                 
+                // 🔥 SATTI FIX: Fetch expert ID safely from DB to prevent "UNKNOWN_EXPERT" overwrite
+                let currentExpertId = safeExpertId !== "UNKNOWN_EXPERT" ? safeExpertId : (existingCallData.expertId || "UNKNOWN_EXPERT");
+
                 if (currentExpertId && callId) {
                     try {
                         const uSnap = await getDoc(doc(db, "users", user!.uid));
                         const uData = uSnap.exists() ? uSnap.data() : {};
-                        const finalName = uData.name || user?.displayName || "Client User";
-                        const finalPic = uData.profilePic || user?.photoURL || null; 
+                        const finalName = uData.name || user?.displayName || existingCallData.callerName || "Client User";
+                        const finalPic = uData.profilePic || user?.photoURL || existingCallData.callerImage || null; 
                         if (finalPic && !callerProfilePic) setCallerProfilePic(finalPic); 
                         
                         const dbMinsRem = uData.freeMinsRemaining || 0;
@@ -449,8 +452,8 @@ export default function VideoCallScreen() {
 
                         const eSnap = await getDoc(doc(db, "users", currentExpertId));
                         const eData = eSnap.exists() ? eSnap.data() : {};
-                        const eFinalName = eData.name || eData.userName || "Consultant";
-                        const eFinalPic = eData.profilePic || eData.photoURL || null;
+                        const eFinalName = eData.name || eData.userName || existingCallData.expertName || "Consultant";
+                        const eFinalPic = eData.profilePic || eData.photoURL || existingCallData.expertImage || null;
                         
                         // 🔥 FIX 1 (Part 2): Instant Ringing Set on Call Creation 🔥
                         await setDoc(doc(db, "calls", callId), {
@@ -459,9 +462,9 @@ export default function VideoCallScreen() {
                             callerImage: finalPic, 
                             expertId: currentExpertId,
                             expertName: params.expertName || eFinalName, 
-                            expertImage: eFinalPic, 
-                            status: 'ringing', 
-                            createdAt: serverTimestamp(),
+                            expertImage: params.expertImage || eFinalPic, 
+                            status: existingCallData.status === 'accepted' || existingCallData.status === 'connected' ? existingCallData.status : 'ringing', 
+                            createdAt: existingCallData.createdAt || serverTimestamp(),
                             isFreeTrial: isDbTrial 
                         }, { merge: true });
                     } catch (err) {

@@ -72,7 +72,7 @@ export default function ProfileScreen() {
   const [friendsCount, setFriendsCount] = useState(0);
 
   // 🔥 LEDGER STATE VARIABLES
-  const [activeTab, setActiveTab] = useState<'COMMANDS' | 'STATS' | 'HISTORY'>('COMMANDS');
+  const [activeTab, setActiveTab] = useState<'COMMANDS' | 'STATS'>('COMMANDS');
   const [historyLogs, setHistoryLogs] = useState<any[]>([]); 
   const [ledgerLoading, setLedgerLoading] = useState(true);
   const [totalRechargeDiamonds, setTotalRechargeDiamonds] = useState<number>(0); 
@@ -315,7 +315,7 @@ export default function ProfileScreen() {
               
               let amountVal = Math.abs(Number(String(log.amount || log.diamonds || log.diamondsAdded || log.winAmount || log.entryFee || log.price || log.fee || 0).replace(/[^0-9.-]+/g, ''))) || 0;
 
-              // 🔥 1. ABSOLUTE STOP FOR ANY REFUND (This fixes the 50000 issue!)
+              // 🔥 1. ABSOLUTE STOP FOR ANY REFUND
               const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
               const isGameRelated = typeStr.includes('ARENA') || typeStr.includes('GAME') || typeStr.includes('ENTRY') || 
                                     titleStr.includes('ARENA') || titleStr.includes('GAME') || titleStr.includes('ENTRY');
@@ -358,11 +358,10 @@ export default function ProfileScreen() {
           }, 0);
 
           // 7. Calculate Total Spent / Asset Utilized
-          // 🔥 ASSET UTILIZED LA REFUND AMOUNT MINUS PANNATHA (Removed - calcRefunds)
           const grandTotalSpent = Math.max(0, calcVideoCalls + calcGifts + calcRedeemed);
           setTotalSpentCalculated(grandTotalSpent);
 
-          // 🔥 TOTAL ARENA ENTRY : Accurately subtract Game Refunds (40000 - 10000 = 30000)
+          // 🔥 TOTAL ARENA ENTRY : Accurately subtract Game Refunds
           setTotalEntryFees(Math.max(0, totalGameEntryFeesAll - totalGameRefundsAll));
 
           setLedgerLoading(false);
@@ -446,198 +445,6 @@ export default function ProfileScreen() {
       backgroundColor: 'rgba(5, 5, 5, 0.85)',
   };
 
-  // 🔥 RENDER STANDARD TRANSACTION LOG 🔥
-  const renderStandardHistoryItem = (item: any, index: number) => {
-      let iconName = "swap-horizontal";
-      let iconColor = "#94A3B8";
-      let sign = "-";
-      let currency = "💎";
-      let amountValue = Math.abs(Number(String(item.amount || item.price || item.diamonds || item.diamondsAdded || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-      let titleText = String(item.title || item.type || 'Transaction');
-      let statusText = String(item.status || 'COMPLETED').toUpperCase();
-      let statusColor = statusText.toLowerCase() === 'success' || statusText.toLowerCase() === 'completed' ? '#10B981' : '#F59E0B';
-
-      const itemType = String(item.type || '').toUpperCase();
-      const itemTitle = String(item.title || '').toUpperCase();
-      
-      const isRecharge = itemType.includes('RECHARGE');
-      const isCall = itemType.includes('CALL');
-      const isVoucher = itemType === 'VOUCHER_REDEEM'; 
-      const isRefund = itemType.includes('REFUND');
-      
-      const isGameReward = itemType.includes('WINNER') || itemType.includes('REWARD') || itemTitle.includes('WINNER') || itemTitle.includes('REWARD') || statusText.includes('WINNER') || statusText.includes('REWARD');
-      const isGameEntry = itemType.includes('ARENA_ENTRY') || itemType.includes('GAME_ENTRY') || itemType.includes('ARENA') || itemType.includes('ENTRY') || itemTitle.includes('ARENA') || itemTitle.includes('ENTRY');
-
-      // 🔥 Make sure call_gifts gets caught by the UI rendering
-      const isGiftUI = item._source === 'nested_gifts' || item._source === 'call_gifts' || (!isRecharge && !isCall && !isVoucher && !isRefund && !isGameReward && !isGameEntry && itemType.includes('GIFT'));
-      
-      // 🔥 EXTRACT RECEIVER / EXPERT NAME HERE ROBUSTLY FOR ALL SOURCES 🔥
-      const receiverName = item._enrichedName || item.expertName || item.receiverName || item.toName || item.receiver || item.targetName || item.hostName || item.creatorName || item.Name || "";
-
-      if (isGiftUI) {
-          iconName = "gift"; iconColor = "#A855F7"; sign = "-"; statusText = 'COMPLETED'; statusColor = '#10B981';
-          
-          let theGiftName = item.giftName || item.name || item.type || 'Virtual Reward';
-          let baseTitle = `Reward Sent: ${item.icon ? item.icon + ' ' : ''}${theGiftName}`;
-          
-          if (item._source === 'call_gifts') {
-              baseTitle = `In-Call Reward Sent`;
-          }
-          if (item.title && item.title.toLowerCase().includes('to ')) {
-              baseTitle = item.title;
-          }
-
-          if (receiverName && !baseTitle.toLowerCase().includes(receiverName.toLowerCase())) {
-              titleText = `${baseTitle} to ${receiverName}`;
-          } else {
-              titleText = baseTitle;
-          }
-      }
-      else if (isRefund) {
-          iconName = "backup-restore"; iconColor = "#10B981"; titleText = item.title || "Refund Received"; sign = "+"; statusText = 'SUCCESS'; statusColor = '#10B981';
-      }
-      else if (isRecharge) { 
-          iconName = "cash-plus"; iconColor = "#10B981"; sign = "+"; currency = "₹"; 
-      }
-      else if (isCall) { 
-          iconName = "video-vintage"; iconColor = "#3B82F6"; sign = "-";
-          let baseTitle = item.title || "Video Consultation";
-          if (receiverName && !baseTitle.toLowerCase().includes(receiverName.toLowerCase())) {
-              titleText = `${baseTitle} with ${receiverName}`;
-          } else {
-              titleText = baseTitle;
-          }
-      }
-      else if (isVoucher) {
-          iconName = "ticket-percent"; iconColor = "#F59E0B"; titleText = item.title || "Reward Voucher Redeemed";
-          const rawStatus = String(item.status || 'pending').toLowerCase();
-          
-          if (rawStatus === 'success' || rawStatus === 'delivered') {
-              statusText = 'DELIVERED'; statusColor = '#10B981'; sign = "-";
-          } else if (rawStatus === 'failed' || rawStatus === 'rejected') {
-              statusText = 'REJECTED (REFUNDED)'; statusColor = '#EF4444'; sign = "+";
-          } else {
-              statusText = 'PENDING'; statusColor = '#F59E0B'; sign = "-";
-          }
-      }
-      else if (isGameReward) {
-          iconName = "gamepad-variant"; 
-          iconColor = "#10B981"; 
-          sign = "+"; 
-          statusColor = '#10B981';
-          if (statusText === 'COMPLETED' || statusText.includes('WIN') || statusText.includes('REWARD')) {
-              statusText = 'REWARD';
-          }
-      }
-      else if (isGameEntry) {
-          iconName = "gamepad-variant"; 
-          iconColor = "#EF4444"; 
-          sign = "-"; 
-          titleText = item.title || "Arena Entry";
-          statusColor = '#EF4444';
-      }
-
-      titleText = titleText.replace(/WINNER/gi, 'REWARD').replace(/GIFT/gi, 'REWARD');
-      if (statusText.includes('WINNER') || statusText === 'WIN' || statusText === 'WON') {
-          statusText = 'REWARD';
-      }
-
-      const timeVal = item.timestamp || item.createdAt;
-      let displayTime = 'Recent';
-      if (timeVal) {
-          const dateObj = timeVal.toDate ? timeVal.toDate() : new Date(timeVal);
-          displayTime = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      }
-
-      const itemBorder = index % 2 === 0 ? borderType2 : borderType1;
-
-      return (
-          <View key={item.id || index} style={[styles.historyCard, itemBorder]}>
-              <View style={[styles.historyIconBox, iconName === 'gift' ? { backgroundColor: 'rgba(168, 85, 247, 0.15)' } : {}]}>
-                  <MaterialCommunityIcons name={iconName as any} size={22} color={iconColor} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 15 }}>
-                  <Text style={styles.historyTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{titleText}</Text>
-                  <Text style={styles.historyDate}>{displayTime}</Text>
-              </View>
-              <View style={{ alignItems: 'flex-end', flexShrink: 1, paddingLeft: 5 }}>
-                  <Text style={[styles.historyAmount, { color: sign === '+' ? '#10B981' : '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
-                      {sign} {currency === '₹' ? currency : ''}{amountValue} {currency === '💎' ? currency : ''}
-                  </Text>
-                  <Text style={[styles.historyStatus, { color: statusColor }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{statusText}</Text>
-              </View>
-          </View>
-      );
-  };
-
-  // 🔥 NEW: DEDICATED ACTIVITY HISTORY RENDERER 🔥
-  const renderGameHistoryItem = (item: any, index: number) => {
-      let rawStatus = String(item.status || "COMPLETED").toUpperCase();
-      const typeStr = String(item.type || "").toUpperCase();
-      const titleStr = String(item.gameName || item.title || item.type || "REFLEX BLITZ ARENA").toUpperCase();
-      
-      const isWin = rawStatus.includes("WIN") || rawStatus === "WON" || rawStatus.includes("REWARD") || 
-                    typeStr.includes("WIN") || typeStr.includes("REWARD") || 
-                    titleStr.includes("WIN") || titleStr.includes("REWARD") || 
-                    Number(String(item.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
-                    
-      let finalAmount = 0;
-      let entryVal = Math.abs(Number(String(item.entryFee || item.entryAmount || 0).replace(/[^0-9.-]+/g, ''))) || 0; 
-
-      if (isWin) {
-          const winVal = Math.abs(Number(String(item.winAmount || item.rewardAmount || item.amount || item.prize || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-          finalAmount = winVal; 
-      } else {
-          if(entryVal === 0) entryVal = Math.abs(Number(String(item.lossAmount || item.amount || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-          finalAmount = -entryVal;
-      }
-      
-      const isPositive = finalAmount >= 0;
-      const amountColor = isPositive ? '#10B981' : '#EF4444'; 
-      const displayAmount = isPositive ? `+${finalAmount.toLocaleString()}` : `${finalAmount.toLocaleString()}`;
-      
-      const gameIcon = "dice";
-      
-      let gameName = item.gameName || item.title || item.type || "REFLEX BLITZ ARENA";
-      gameName = String(gameName).replace(/WINNER/gi, 'REWARD').replace(/GIFT/gi, 'REWARD');
-
-      if (rawStatus.includes("WINNER") || rawStatus === "WIN" || rawStatus === "WON") {
-          rawStatus = "REWARD";
-      }
-
-      let displayTime = 'JUST NOW';
-      if (item.timestamp?.toDate) {
-          displayTime = item.timestamp.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-      } else if (item.timestamp?.seconds) {
-          displayTime = new Date(item.timestamp.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-      } else if (item.timestamp) {
-          displayTime = new Date(item.timestamp).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-      }
-
-      const itemBorder = index % 2 === 0 ? borderType2 : borderType1;
-
-      return (
-          <View key={item.id || index} style={[styles.historyCard, itemBorder]}>
-              <View style={[styles.historyIconBox, { backgroundColor: isPositive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', borderColor: amountColor }]} >
-                  <Ionicons name={gameIcon} size={22} color={amountColor} />
-              </View>
-              <View style={{ flex: 1, marginLeft: 15 }}>
-                  <Text style={styles.historyTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{gameName}</Text>
-                  <Text style={styles.historyDate}>{displayTime}</Text>
-                  <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 4, fontWeight: '600' }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
-                      Session: {item.sessionId || 'N/A'} | Entry: {entryVal || '0'}
-                  </Text>
-              </View>
-              <View style={{ alignItems: 'flex-end', flexShrink: 1, paddingLeft: 5 }}>
-                  <Text style={[styles.historyAmount, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
-                      {displayAmount} 💎
-                  </Text>
-                  <Text style={[styles.historyStatus, { color: amountColor }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{rawStatus}</Text>
-              </View>
-          </View>
-      );
-  };
-
   const renderDynamicProfileCard = () => {
     return (
       <Animated.View style={[styles.cardBase, borderType1, { borderRadius: rank.radius, ...getDynamicStyle() }]}>
@@ -694,16 +501,13 @@ export default function ProfileScreen() {
           <View style={styles.cardContainer}>{renderDynamicProfileCard()}</View>
         </SafeAreaView>
 
-        {/* 🔥 TABS SECTION (3 TABS) 🔥 */}
+        {/* 🔥 TABS SECTION (2 TABS ONLY) 🔥 */}
         <View style={styles.tabsRow}>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'COMMANDS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('COMMANDS')}>
                 <Text style={[styles.tabText, activeTab === 'COMMANDS' && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>COMMANDS</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'STATS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('STATS')}>
                 <Text style={[styles.tabText, activeTab === 'STATS' && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>STATS</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'HISTORY' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('HISTORY')}>
-                <Text style={[styles.tabText, activeTab === 'HISTORY' && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>HISTORY</Text>
             </TouchableOpacity>
         </View>
 
@@ -788,31 +592,6 @@ export default function ProfileScreen() {
                                 <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalRedeemed.toLocaleString()} 💎</Text>
                                 <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>TOTAL REWARDS REDEEMED</Text>
                             </View>
-                        </View>
-                    )}
-                </View>
-            )}
-
-            {/* 🔥 3. UNIFIED HISTORY TAB 🔥 */}
-            {activeTab === 'HISTORY' && (
-                <View>
-                    <View style={styles.talktimeHighlight}>
-                         <Text style={[styles.totalTalkLabel, { color: rank.color, marginBottom: 15 }]}>TOTAL CONSULTATION TIME: {totalMinutes} MINS</Text>
-                    </View>
-
-                    {ledgerLoading ? (
-                        <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
-                    ) : historyLogs.length > 0 ? (
-                        historyLogs.map((item, index) => {
-                            if (item._source === 'game_history') {
-                                return renderGameHistoryItem(item, index);
-                            }
-                            return renderStandardHistoryItem(item, index);
-                        })
-                    ) : (
-                        <View style={styles.emptyBox}>
-                            <MaterialCommunityIcons name="file-document-outline" size={48} color="rgba(255,255,255,0.2)" />
-                            <Text style={styles.emptyText}>No transactions found.</Text>
                         </View>
                     )}
                 </View>

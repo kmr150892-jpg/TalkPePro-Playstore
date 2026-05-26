@@ -462,7 +462,7 @@ const styles = StyleSheet.create({
     
     largeInput: { backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 20, paddingVertical: 20, borderRadius: 20, color: '#FFF', fontWeight: '700', fontSize: 16, borderWidth: 1 },
     
-    // 🔥 AUTO-LOCKED REVENUE CARD (Now converted to Algorithm Boost)
+    // 🔥 AUTO-LOCKED REWARD CARD (Now converted to Algorithm Boost)
     lockedRevenueCard: { marginTop: 25, padding: 20, borderRadius: 20, borderWidth: 1 },
     revenueHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
     revenueTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },

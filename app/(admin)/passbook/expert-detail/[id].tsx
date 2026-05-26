@@ -107,7 +107,7 @@ export default function ExpertPassbookDetail() {
             setTotalEarningsCalculated(lifeEarnings);
         };
 
-        // 🔥 DEEP FETCH ENGINE FOR REVENUE BREAKDOWN 🔥
+        // 🔥 DEEP FETCH ENGINE FOR REWARD BREAKDOWN 🔥
         const fetchRevenueBreakdown = async () => {
             try {
                 let rawData: any[] = [];

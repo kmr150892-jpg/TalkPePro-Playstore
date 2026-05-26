@@ -488,7 +488,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
         if (itemType === 'video_call') {
             iconName = "video-vintage"; iconColor = theme.primary; 
-            titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Revenue";
+            titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Reward";
         } else if (itemType.includes('gift')) {
             iconName = "gift"; iconColor = theme.secondary; 
             let baseTitle = "";
@@ -605,7 +605,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             </View>
 
                             <View style={styles.revenueDisplay}>
-                                <Text style={styles.revenueTitle}>GLOBAL REVENUE STREAM</Text>
+                                <Text style={styles.revenueTitle}>GLOBAL GAINED REWARDS STREAM</Text>
                                 <View style={styles.revenueNumberContainer}>
                                     <Text style={[styles.revenueSymbol, { color: theme.accent }]}>₿</Text>
                                     <Text style={styles.revenueMainValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{stats?.totalBeansEarned?.toLocaleString()}</Text>
@@ -655,7 +655,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     </View>
                                 </View>
 
-                                <Text style={styles.subHeading}>REVENUE BREAKDOWN</Text>
+                                <Text style={styles.subHeading}>REWARD BREAKDOWN</Text>
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="videocam" label="Consultation Earnings" value={`₿${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />

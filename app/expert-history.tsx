@@ -3,26 +3,26 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
-  collection,
-  doc, getDoc, getDocs,
-  onSnapshot,
-  query,
-  where
+    collection,
+    doc, getDoc, getDocs,
+    onSnapshot,
+    query,
+    where
 } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Animated,
-  Dimensions,
-  Easing,
-  FlatList,
-  Image,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Animated,
+    Dimensions,
+    Easing,
+    FlatList,
+    Image,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
@@ -111,6 +111,7 @@ export default function ExpertHistory() {
                 rawData.push({
                     id: docSnap.id,
                     type: 'video_call',
+                    callerId: d.callerId, // 🔥 SATTI FIX: Added ID for routing
                     callerName: callerName,
                     syncPic: callerPic,
                     syncLevel: callerLevel,
@@ -154,6 +155,7 @@ export default function ExpertHistory() {
                 rawData.push({
                     id: docSnap.id,
                     type: tType,
+                    senderId: d.userId, // 🔥 SATTI FIX: Added ID for routing
                     senderName: senderName,
                     syncPic: senderPic,
                     syncLevel: senderLevel,
@@ -175,12 +177,13 @@ export default function ExpertHistory() {
                 rawData.push({
                     id: `game_${liveDoc.id}`,
                     type: isParty ? 'party_game_bonus' : 'live_game_bonus',
-                    senderName: 'System Bonus',
-                    giftName: 'Performance Bonus',
+                    senderId: null, // System reward
+                    senderName: 'System Reward', 
+                    giftName: 'Performance Reward', 
                     amount: liveData.gameBeansCollected * 2,
                     beans: liveData.gameBeansCollected,
                     timestamp: liveData.endedAt || liveData.startedAt || { seconds: Date.now() / 1000 },
-                    syncPic: `https://ui-avatars.com/api/?name=G&background=F59E0B&color=fff`,
+                    syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, 
                     syncLevel: 'Master'
                 });
             }
@@ -209,6 +212,7 @@ export default function ExpertHistory() {
                         rawData.push({
                             id: gDoc.id,
                             type: 'live_gift',
+                            senderId: g.senderId, // 🔥 SATTI FIX: Added ID for routing
                             senderName: gSenderName,
                             giftName: g.giftName || 'Virtual Reward',
                             amount: g.amount || g.price || 0,
@@ -220,7 +224,6 @@ export default function ExpertHistory() {
                     }
                 }
 
-                // 🔥 SATTI FIX: Fetch Subcollection Games perfectly for Broadcast Activity! 🔥
                 try {
                     const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
                     for (const gameDoc of gamesSnap.docs) {
@@ -230,12 +233,13 @@ export default function ExpertHistory() {
                             rawData.push({
                                 id: gameDoc.id,
                                 type: 'live_game_bonus',
+                                senderId: null, // System reward
                                 senderName: "Live Game System",
-                                giftName: "Broadcast Activity Bonus",
+                                giftName: "Broadcast Activity Reward", 
                                 amount: expertBeans * 2,
                                 beans: expertBeans,
                                 timestamp: d.timestamp || d.createdAt || d.endedAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) },
-                                syncPic: `https://ui-avatars.com/api/?name=L&background=10B981&color=fff`,
+                                syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, 
                                 syncLevel: 'Master'
                             });
                         }
@@ -271,6 +275,7 @@ export default function ExpertHistory() {
                     rawData.push({
                         id: gDoc.id,
                         type: 'party_gift',
+                        senderId: g.senderId, // 🔥 SATTI FIX: Added ID for routing
                         senderName: gSenderName,
                         giftName: g.giftName || 'Virtual Reward',
                         amount: g.price || g.amount || 0,
@@ -282,7 +287,6 @@ export default function ExpertHistory() {
                 }
             }
 
-            // 🔥 SATTI FIX: Fetch Subcollection Games perfectly for Forum Activity! 🔥
             try {
                 const gamesSnap = await getDocs(collection(db, "forum_rooms", partyDoc.id, "games"));
                 for (const gameDoc of gamesSnap.docs) {
@@ -292,12 +296,13 @@ export default function ExpertHistory() {
                         rawData.push({
                             id: gameDoc.id,
                             type: 'party_game_bonus',
+                            senderId: null, // System reward
                             senderName: "Forum Game System",
-                            giftName: "Forum Activity Bonus",
+                            giftName: "Forum Activity Reward", 
                             amount: expertBeans * 2,
                             beans: expertBeans,
                             timestamp: d.timestamp || d.createdAt || d.endedAt || pData.createdAt || { seconds: Math.floor(Date.now() / 1000) },
-                            syncPic: `https://ui-avatars.com/api/?name=F&background=EC4899&color=fff`,
+                            syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, 
                             syncLevel: 'Master'
                         });
                     }
@@ -316,12 +321,13 @@ export default function ExpertHistory() {
                     rawData.push({
                         id: gameDoc.id,
                         type: 'live_game_bonus',
+                        senderId: null, // System reward
                         senderName: "Live Game System",
-                        giftName: "Broadcast Activity Bonus",
+                        giftName: "Broadcast Activity Reward", 
                         amount: expertBeans * 2,
                         beans: expertBeans,
                         timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) },
-                        syncPic: `https://ui-avatars.com/api/?name=L&background=10B981&color=fff`,
+                        syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, 
                         syncLevel: 'Master'
                     });
                 }
@@ -338,12 +344,13 @@ export default function ExpertHistory() {
                     rawData.push({
                         id: gameDoc.id,
                         type: 'party_game_bonus',
+                        senderId: null, // System reward
                         senderName: "Forum Game System",
-                        giftName: "Forum Activity Bonus",
+                        giftName: "Forum Activity Reward", 
                         amount: expertBeans * 2,
                         beans: expertBeans,
                         timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) },
-                        syncPic: `https://ui-avatars.com/api/?name=F&background=EC4899&color=fff`,
+                        syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, 
                         syncLevel: 'Master'
                     });
                 }
@@ -445,21 +452,26 @@ export default function ExpertHistory() {
     const dateObj = item.timestamp?.seconds ? new Date(item.timestamp.seconds * 1000) : new Date();
     const earnings = item.expertEarnings || 0; 
     
-    const titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Revenue";
+    const titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Reward";
 
     return (
       <Animated.View style={[styles.eliteCard, index % 2 === 0 ? borderType1 : borderType2, { transform: [{ translateY: floatAnim }] }]}>
         <LinearGradient colors={[theme.primary, 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.statusGlowLine} />
         <View style={styles.cardMain}>
           <View style={styles.userSection}>
-            <View style={styles.avatarWrapper}>
+            {/* 🔥 SATTI FIX: Wrapped Avatar in TouchableOpacity for Profile Navigation 🔥 */}
+            <TouchableOpacity 
+                style={styles.avatarWrapper} 
+                onPress={() => item.callerId ? router.push({ pathname: '/user-detail', params: { id: item.callerId } } as any) : null}
+                disabled={!item.callerId}
+            >
                 <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${item.callerName}&background=3B82F6&color=fff` }} style={styles.eliteAvatar} />
                 <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.levelBadgeMini}>
                   <Text style={styles.levelBadgeText}>{item.syncLevel.toUpperCase()}</Text>
                 </LinearGradient>
-            </View>
+            </TouchableOpacity>
             <View style={styles.userMeta}>
-              <Text style={styles.eliteUserName} numberOfLines={1}>{titleText}</Text>
+              <Text style={styles.eliteUserName} numberOfLines={2} adjustsFontSizeToFit>{titleText}</Text>
               <View style={styles.dateTimeRow}>
                 <Ionicons name="time" size={12} color={theme.primary} />
                 <Text style={styles.eliteDateText}>{dateObj.toLocaleDateString()} • {dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
@@ -467,7 +479,7 @@ export default function ExpertHistory() {
             </View>
           </View>
           <View style={styles.earningsBlock}>
-            <Text style={styles.earnLabel}>Earnings</Text>
+            <Text style={styles.earnLabel}>Rewards</Text>
             <View style={styles.beansRow}>
               <Text style={styles.eliteBeansValue}>+💰{earnings}</Text> 
             </View>
@@ -497,8 +509,8 @@ export default function ExpertHistory() {
     let iconColor = theme.primary;
 
     if (item.type.includes('game')) {
-        displayTitle = item.type === 'live_game_bonus' ? 'Broadcast Activity Bonus' : 'Forum Activity Bonus';
-        displaySub = item.senderName || 'System Bonus';
+        displayTitle = item.type === 'live_game_bonus' ? 'Broadcast Activity Reward' : 'Forum Activity Reward';
+        displaySub = item.senderName || 'System Reward';
         iconType = 'dice-multiple';
         iconColor = '#F59E0B';
     } else {
@@ -526,22 +538,27 @@ export default function ExpertHistory() {
         <LinearGradient colors={[theme.secondary, 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.statusGlowLine} />
         <View style={styles.cardMain}>
           <View style={styles.userSection}>
-            <View style={styles.avatarWrapper}>
+            {/* 🔥 SATTI FIX: Wrapped Avatar in TouchableOpacity for Profile Navigation 🔥 */}
+            <TouchableOpacity 
+                style={styles.avatarWrapper} 
+                onPress={() => item.senderId ? router.push({ pathname: '/user-detail', params: { id: item.senderId } } as any) : null}
+                disabled={!item.senderId}
+            >
                 <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${item.senderName || 'V'}&background=D946EF&color=fff` }} style={styles.eliteAvatar} />
                 <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.levelBadgeMini}>
                   <Text style={styles.levelBadgeText}>{item.syncLevel.toUpperCase()}</Text>
                 </LinearGradient>
-            </View>
+            </TouchableOpacity>
             <View style={styles.userMeta}>
-              <Text style={styles.eliteUserName} numberOfLines={1}>{displayTitle}</Text>
+              <Text style={styles.eliteUserName} numberOfLines={2} adjustsFontSizeToFit>{displayTitle}</Text>
               <View style={styles.giftLabelRow}>
                   <MaterialCommunityIcons name={iconType as any} size={16} color={iconColor} />
-                  <Text style={[styles.giftSubName, { color: iconColor }]} numberOfLines={1}>{displaySub}</Text>
+                  <Text style={[styles.giftSubName, { color: iconColor }]} numberOfLines={2} adjustsFontSizeToFit>{displaySub}</Text>
               </View>
             </View>
           </View>
           <View style={styles.earningsBlock}>
-            <Text style={styles.earnLabel}>CREDIT</Text>
+            <Text style={styles.earnLabel}>REWARD</Text>
             <View style={styles.beansRow}>
               <Text style={styles.eliteBeansValue}>+💰{beansEarned}</Text>
             </View>
@@ -561,7 +578,7 @@ export default function ExpertHistory() {
   const filteredData = allTransactions.filter(t => t.type === activeTab);
 
   const TABS = [
-      { id: 'video_call', label: 'Consultation Revenue', icon: 'videocam', iconType: 'Ionicons' },
+      { id: 'video_call', label: 'Consultation Reward', icon: 'videocam', iconType: 'Ionicons' },
       { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
       { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
       { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
@@ -584,7 +601,7 @@ export default function ExpertHistory() {
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
             <Text style={[styles.headerLabel, { color: theme.primary }]}>SECURE TERMINAL</Text>
-            <Text style={styles.headerMainTitle}>Earnings Hub</Text>
+            <Text style={styles.headerMainTitle}>Reward Hub</Text>
           </View>
           <TouchableOpacity style={styles.headerActionBtn} onPress={fetchAllArchives}>
             <MaterialCommunityIcons name="shield-refresh-outline" size={26} color={theme.accent} />
@@ -672,12 +689,12 @@ const styles = StyleSheet.create({
   eliteAvatar: { width: 55, height: 55, borderRadius: 22, backgroundColor: '#0F172A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   levelBadgeMini: { position: 'absolute', bottom: -6, right: -6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 2, borderColor: '#020617' },
   levelBadgeText: { color: '#FFF', fontSize: 7, fontWeight: '900' },
-  userMeta: { marginLeft: 15, flex: 1, paddingRight: 10 },
+  userMeta: { marginLeft: 15, flex: 1, paddingRight: 10, flexShrink: 1 },
   eliteUserName: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
   dateTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   giftLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   eliteDateText: { color: '#94A3B8', fontSize: 10, fontWeight: '800' },
-  giftSubName: { color: '#FBBF24', fontSize: 11, fontWeight: '900' },
+  giftSubName: { color: '#FBBF24', fontSize: 11, fontWeight: '900', flexShrink: 1 },
   earningsBlock: { alignItems: 'flex-end', minWidth: 60 },
   earnLabel: { color: '#475569', fontSize: 7, fontWeight: '900', letterSpacing: 1.5 },
   beansRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },

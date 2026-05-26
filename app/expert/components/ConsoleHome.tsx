@@ -576,7 +576,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
 
           <View style={[styles.fluidWalletCard, borderType1]}>
               <View style={styles.walletHeader}>
-                <Text style={styles.walletTitle}>NET REVENUE REWARDS</Text>
+                <Text style={styles.walletTitle}>NET GAINED REWARDS</Text>
                 <MaterialCommunityIcons name="integrated-circuit-chip" size={32} color={theme.primary + '60'} />
               </View>
               <Text style={styles.walletBeansValue}>{walletBalance.toLocaleString()}</Text>

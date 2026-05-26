@@ -32,7 +32,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 30000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
@@ -184,7 +184,19 @@ export default function ExpertForumRoomScreen() {
                     const data = change.doc.data();
                     const isRecent = data.timestamp ? (Date.now() - data.timestamp.toMillis() < 5000) : true;
                     if (isRecent) {
-                        setCurrentGift(data);
+                        // 🔥 SATTI FIX: Fetch sender image using senderId 🔥
+                        let fetchedSenderImage = data.senderImage || data.userImage || null;
+                        if (!fetchedSenderImage && data.senderId) {
+                            try {
+                                const senderSnap = await getDoc(doc(db, "users", data.senderId));
+                                if (senderSnap.exists()) {
+                                    const sData = senderSnap.data();
+                                    fetchedSenderImage = sData.profilePic || sData.photoURL || null;
+                                }
+                            } catch (e) { console.log(e); }
+                        }
+
+                        setCurrentGift({ ...data, senderImage: fetchedSenderImage });
                         triggerGiftAnimation();
 
                         if (user) {
@@ -664,7 +676,14 @@ export default function ExpertForumRoomScreen() {
                         <Animated.View style={[styles.giftAnimationContainer, { transform: [{ translateY: giftAnimY }, { scale: scaleAnim }] }]}>
                             <Text style={styles.giftAnimIcon}>{currentGift.icon || '🎁'}</Text>
                             <LinearGradient colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.5)', 'transparent']} style={styles.giftAnimLabel}>
-                                <Text style={styles.giftAnimSender}>{currentGift.senderName} Sent {currentGift.giftName}</Text>
+                                {/* 🔥 SATTI FIX: Sender Avatar added to Gift UI 🔥 */}
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5 }}>
+                                    <Image 
+                                        source={{ uri: currentGift.senderImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentGift.senderName || 'U')}&background=F59E0B&color=fff` }} 
+                                        style={{ width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, borderColor: '#F59E0B' }} 
+                                    />
+                                    <Text style={styles.giftAnimSender}>{currentGift.senderName} Sent {currentGift.giftName}</Text>
+                                </View>
                                 <Text style={styles.giftAnimAmount}>⭐ {Math.floor((currentGift.price || currentGift.amount || 0) / 2)} REWARDS</Text>
                             </LinearGradient>
                         </Animated.View>
