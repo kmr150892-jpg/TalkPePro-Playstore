@@ -28,20 +28,23 @@ const { width, height } = Dimensions.get('window');
 
 // 🔥 Updated Tags for Play Store Compliance (Clean & Professional)
 const EXPERTISE_TAGS = [
-    "Wellness Coach", "Life Guidance", "Soft Skills",
-    "Career Mentor", "Motivational", "Educational", "Social Growth",
-    "Fitness Trainer", "Business Strategy", "Dance & Choreography", 
-    "Singing & Vocals", "Music Production", "Acting & Theatre", 
-    "Instrumental Music", "Art & Illustration", "Photography Expert", 
-    "Video Editing", "Content Creation", "Language Tutor", 
-    "Creative Writing", "Gaming Pro", "Fashion Stylist", 
-    "Culinary Expert", "Tech Consultant"
+        "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching", 
+    "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
+    "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development",  
+    "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
+    "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro", 
+    "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting", 
+    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Tech Gadgets", "Math Tutoring", 
+    "Science Tutoring", "History & Culture", "Storytelling", "Poetry & Writing"
 ];
 
 const HOBBIES_TAGS = [
     "Music Lovers", "Travel Enthusiast", "Cinema", "Reading",
     "Culinary Arts", "Gaming", "Fine Arts", "Photography",
-    "Animal Welfare", "Fashion Design", "Sports", "Performing Arts"
+    "Animal Welfare", "Fashion Design", "Sports", "Performing Arts","Singing", "Dancing", "Writing & Poetry", "DIY & Crafts", 
+    "Sketching & Painting", "Calligraphy", "Origami", "Gardening", "Fitness & Wellness", "Tech Gadgets", "Movie Buff", "Travel & Adventure", "Foodie",
+    "Yoga & Meditation", "Fitness & Gym", "Running", "Cycling", 
+    "Martial Arts", "Swimming", "Healthy Living", "Mindfulness", "Volunteering", "Environmental Activism", "Animal Rescue", "Sustainable Living", "Fashion & Style", "Interior Design", "Home Decor", "Photography", "Videography", "Music & Instruments", "Singing", "Dancing", "Writing & Poetry", "DIY & Crafts",
 ];
 
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2) 🔥

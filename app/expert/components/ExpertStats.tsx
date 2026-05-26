@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { addDoc, arrayUnion, collection, doc, getDocs, increment, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -10,6 +10,7 @@ import {
     Animated,
     Dimensions,
     Easing,
+    Image,
     Modal,
     ScrollView,
     StyleSheet,
@@ -41,7 +42,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
     
-    const [mainTab, setMainTab] = useState<'STATS' | 'MONTHLY' | 'HISTORY'>('STATS'); 
+    // 🔥 SATTI FIX: Added LEADERBOARD tab to the main menu state 🔥
+    const [mainTab, setMainTab] = useState<'STATS' | 'MONTHLY' | 'LEADERBOARD'>('STATS'); 
     const [activeTab, setActiveTab] = useState(0); 
 
     const [breakdown, setBreakdown] = useState({
@@ -49,13 +51,16 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     });
 
     const [historyLogs, setHistoryLogs] = useState<any[]>([]); 
-    // 🔥 SATTI FIX: NEW LOADING STATE FOR HEAVY HISTORY FETCH 🔥
     const [historyLoading, setHistoryLoading] = useState(true);
-    const [monthlyEarnings, setMonthlyEarnings] = useState<{month: string, total: number}[]>([]);
-    const [selectedMonth, setSelectedMonth] = useState<string>('ALL');
+    
+    const [yearlyEarnings, setYearlyEarnings] = useState<{year: string, total: number, months: {month: string, total: number, logs: any[]}[]}[]>([]);
+    const [expandedYear, setExpandedYear] = useState<string | null>(null);
     const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
-    // 🔥 SATTI FIX: Modals are preserved below as requested so lines don't decrease 🔥
+    // 🔥 SATTI FIX: LEADERBOARD STATES 🔥
+    const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
+    const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
+
     const [blockModalVisible, setBlockModalVisible] = useState(false);
     const [selectedUserToBlock, setSelectedUserToBlock] = useState<{id: string, name: string} | null>(null);
     const [isBlocking, setIsBlocking] = useState(false);
@@ -133,6 +138,33 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         }
     };
 
+    // 🔥 SATTI FIX: LEADERBOARD FETCH EFFECT 🔥
+    useEffect(() => {
+        if (mainTab === 'LEADERBOARD' && leaderboardData.length === 0) {
+            fetchLeaderboard();
+        }
+    }, [mainTab]);
+
+    const fetchLeaderboard = async () => {
+        setIsLeaderboardLoading(true);
+        try {
+            const usersRef = collection(db, "users");
+            const q = query(usersRef, orderBy("totalBeansEarned", "desc"), limit(25));
+            const snap = await getDocs(q);
+            
+            let experts = snap.docs
+                .map(doc => ({ id: doc.id, ...doc.data() }))
+                .filter((u: any) => (u.isExpert === true || u.role === 'expert') && (u.totalBeansEarned > 0));
+                
+            experts = experts.slice(0, 10); // Safe Top 10
+            setLeaderboardData(experts);
+        } catch (error) {
+            console.error("Leaderboard fetch error:", error);
+        } finally {
+            setIsLeaderboardLoading(false);
+        }
+    };
+
     useEffect(() => {
         const fetchAllArchives = async () => {
             const user = auth.currentUser;
@@ -140,7 +172,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             try {
                 let rawData: any[] = [];
 
-                // 🔥 1. VIDEO CALLS
+                // 1. VIDEO CALLS
                 try {
                     const callsSnap = await getDocs(query(collection(db, "calls"), where("expertId", "==", user.uid)));
                     for (const docSnap of callsSnap.docs) {
@@ -152,7 +184,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 } catch(e) { console.log('Calls fetch error', e); }
 
-                // 🔥 2. TRANSACTIONS (Fallback)
+                // 2. TRANSACTIONS (Fallback)
                 try {
                     const transSnap = await getDocs(query(collection(db, "transactions"), where("expertId", "==", user.uid)));
                     for (const docSnap of transSnap.docs) {
@@ -172,7 +204,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 } catch(e) { console.log('Transactions fetch error', e); }
 
-                // 🔥 3. LIVE GIFTS & NESTED GAMES
+                // 3. LIVE GIFTS & NESTED GAMES
                 try {
                     const livesSnap = await getDocs(query(collection(db, "lives"), where("hostId", "==", user.uid)));
                     for (const liveDoc of livesSnap.docs) {
@@ -185,7 +217,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 rawData.push({ id: gDoc.id, type: 'live_gift', beans: bns, timestamp: g.timestamp || liveData.startedAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
                             }
                         }
-                        // 🔥 SATTI FIX: Fetch Subcollection Games perfectly!
                         try {
                             const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
                             for (const gameDoc of gamesSnap.docs) {
@@ -199,7 +230,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 } catch(e) { console.log('Live gifts fetch error', e); }
 
-                // 🔥 4. FORUM REWARDS & NESTED GAMES
+                // 4. FORUM REWARDS & NESTED GAMES
                 try {
                     const forumSnap = await getDocs(query(collection(db, "forum_rooms"), where("hostId", "==", user.uid)));
                     for (const forumDoc of forumSnap.docs) {
@@ -212,7 +243,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 rawData.push({ id: gDoc.id, type: 'party_gift', beans: bns, timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
                             }
                         }
-                        // 🔥 SATTI FIX: Fetch Subcollection Games perfectly!
                         try {
                             const gamesSnap = await getDocs(collection(db, "forum_rooms", forumDoc.id, "games"));
                             for (const gameDoc of gamesSnap.docs) {
@@ -226,7 +256,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 } catch(e) { console.log('Forum rewards fetch error', e); }
 
-                // 🔥 5. BROADCAST ACTIVITY (Live Games - Top Level Multi-Query)
+                // 5. BROADCAST ACTIVITY (Live Games)
                 try {
                     const idFields = ["hostId", "expertId", "userId"];
                     for (const field of idFields) {
@@ -234,14 +264,14 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         for (const gameDoc of snap.docs) {
                             const d = gameDoc.data();
                             const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                            if (expertBeans > 0) { // 🔥 SATTI FIX: EXACT EXPERT BEAN FETCH
+                            if (expertBeans > 0) { 
                                 rawData.push({ id: gameDoc.id, type: 'live_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Live Game System" });
                             }
                         }
                     }
                 } catch(e) { console.log('Live games fetch error', e); }
 
-                // 🔥 6. FORUM ACTIVITY (Forum Games - Top Level Multi-Query)
+                // 6. FORUM ACTIVITY (Forum Games)
                 try {
                     const idFields = ["hostId", "expertId", "userId"];
                     for (const field of idFields) {
@@ -249,14 +279,14 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         for (const gameDoc of snap.docs) {
                             const d = gameDoc.data();
                             const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                            if (expertBeans > 0) { // 🔥 SATTI FIX: EXACT EXPERT BEAN FETCH
+                            if (expertBeans > 0) { 
                                 rawData.push({ id: gameDoc.id, type: 'party_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Forum Game System" });
                             }
                         }
                     }
                 } catch(e) { console.log('Forum games fetch error', e); }
 
-                // 🔥 PROCESS UNIQUE DATA & HISTORY
+                // PROCESS UNIQUE DATA
                 const uniqueData: any[] = [];
                 const seen = new Set();
                 for (const item of rawData) {
@@ -301,7 +331,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 
                 setHistoryLogs(uniqueData);
 
-                const monthMap: Record<string, number> = {};
+                const yearMap: Record<string, { total: number, months: Record<string, { total: number, logs: any[] }> }> = {};
+
                 uniqueData.forEach(t => {
                     const rawT = t.timestamp;
                     if (rawT) {
@@ -311,7 +342,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         else if (typeof rawT === 'number') logDate = new Date(rawT < 10000000000 ? rawT * 1000 : rawT);
                         else if (typeof rawT === 'string') logDate = new Date(rawT);
 
-                        const monthKey = logDate.toLocaleString('default', { month: 'short', year: 'numeric' }); 
+                        const yearStr = logDate.getFullYear().toString();
+                        const monthStr = logDate.toLocaleString('default', { month: 'short' }); 
+                        
                         let earned = 0;
                         if (t.type === 'video_call') earned = Number(t.expertEarnings) || 0;
                         else if (t.type === 'live_gift' || t.type === 'party_gift' || t.type === 'call_gift') earned = Number(t.beans) || 0;
@@ -319,21 +352,30 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         else earned = Number(t.expertEarnings) || Number(t.beans) || 0;
 
                         if (earned > 0) { 
-                            if (!monthMap[monthKey]) monthMap[monthKey] = 0;
-                            monthMap[monthKey] += earned;
+                            if (!yearMap[yearStr]) yearMap[yearStr] = { total: 0, months: {} };
+                            if (!yearMap[yearStr].months[monthStr]) yearMap[yearStr].months[monthStr] = { total: 0, logs: [] };
+                            
+                            yearMap[yearStr].total += earned;
+                            yearMap[yearStr].months[monthStr].total += earned;
+                            yearMap[yearStr].months[monthStr].logs.push(t);
                         }
                     }
                 });
 
-                const monthlyArray = Object.keys(monthMap)
-                    .map(key => ({
-                        month: key,
-                        total: monthMap[key]
-                    }))
-                    .filter(m => m.total > 0); 
+                const yearlyArray = Object.keys(yearMap).map(year => ({
+                    year,
+                    total: yearMap[year].total,
+                    months: Object.keys(yearMap[year].months).map(month => ({
+                        month,
+                        total: yearMap[year].months[month].total,
+                        logs: yearMap[year].months[month].logs
+                    })).sort((a, b) => {
+                        const mOrder = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+                        return mOrder.indexOf(b.month) - mOrder.indexOf(a.month);
+                    })
+                })).sort((a, b) => Number(b.year) - Number(a.year));
 
-                monthlyArray.sort((a, b) => new Date(b.month).getTime() - new Date(a.month).getTime());
-                setMonthlyEarnings(monthlyArray);
+                setYearlyEarnings(yearlyArray);
                 setHistoryLoading(false); 
 
             } catch (error) { 
@@ -470,7 +512,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     };
 
     const renderExpertHistoryItem = (item: any, index: number) => {
-        // 🔥 SATTI FIX: Added unique key generation based on item id and index 🔥
         const uniqueKey = item.id ? `${item.id}-${index}-${item.type}` : `log-${index}`;
 
         let iconName = "swap-horizontal";
@@ -501,8 +542,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             titleText = `${baseTitle} (from ${validSender})`;
         } else if (itemType.includes('game')) {
             iconName = "dice-multiple"; iconColor = "#F59E0B";
-            if (itemType === 'live_game_bonus') titleText = "Broadcast Activity Bonus";
-            else if (itemType === 'party_game_bonus') titleText = "Forum Activity Bonus";
+            if (itemType === 'live_game_bonus') titleText = "Broadcast Activity Reward";
+            else if (itemType === 'party_game_bonus') titleText = "Forum Activity Reward";
         }
 
         const timeVal = item.timestamp || item.createdAt;
@@ -523,7 +564,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
         return (
             <TouchableOpacity 
-                key={uniqueKey} // 🔥 SATTI FIX
+                key={uniqueKey} 
                 style={[styles.historyCard, itemBorder]}
                 activeOpacity={targetUserId ? 0.7 : 1}
                 onPress={() => {
@@ -535,17 +576,17 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 <View style={[styles.historyIconBox, { backgroundColor: iconColor + '20', borderColor: iconColor + '40' }]}>
                     <MaterialCommunityIcons name={iconName as any} size={20} color={iconColor} />
                 </View>
-                <View style={{ flex: 1, marginLeft: 12, paddingRight: 5 }}>
-                    <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{titleText}</Text>
+                <View style={{ flex: 1, marginLeft: 12, paddingRight: 8, justifyContent: 'center' }}>
+                    <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{titleText}</Text>
                     <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{displayTime}</Text>
                 </View>
                 
-                <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8, flexShrink: 1 }}>
-                    <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                        <Text style={[styles.historyAmount, { color: statusColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
+                <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8, flexShrink: 0 }}>
+                    <View style={{ alignItems: 'flex-end' }}>
+                        <Text style={[styles.historyAmount, { color: statusColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                             {sign}{amountValue.toLocaleString()} {currency}
                         </Text>
-                        <Text style={[styles.historyStatus, { color: statusColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                        <Text style={[styles.historyStatus, { color: statusColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                             {statusText}
                         </Text>
                     </View>
@@ -565,6 +606,126 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     )}
                 </View>
             </TouchableOpacity>
+        );
+    };
+
+    // 🔥 SATTI FIX: FULLY REDESIGNED LEADERBOARD ITEM WITH OVERLAP FIXES 🔥
+    const renderLeaderboardItem = (user: any, index: number) => {
+        let rankColor = theme.primary;
+        let rankGradient = ['rgba(15, 23, 42, 0.45)', 'rgba(15, 23, 42, 0.45)'];
+        let iconName = "medal-outline";
+        let isTop3 = false;
+
+        if (index === 0) { rankColor = '#F59E0B'; rankGradient = ['rgba(245, 158, 11, 0.25)', 'rgba(245, 158, 11, 0.05)']; iconName = "crown"; isTop3 = true; }
+        else if (index === 1) { rankColor = '#94A3B8'; rankGradient = ['rgba(148, 163, 184, 0.25)', 'rgba(148, 163, 184, 0.05)']; iconName = "crown"; isTop3 = true; }
+        else if (index === 2) { rankColor = '#D97706'; rankGradient = ['rgba(217, 119, 6, 0.25)', 'rgba(217, 119, 6, 0.05)']; iconName = "crown"; isTop3 = true; }
+
+        const isMe = user.id === auth.currentUser?.uid;
+        const uConfig = getLevelConfig(user.totalBeansEarned || 0);
+
+        // 🔥 SATTI FIX: Upgraded Floating & Pulsing Effect perfectly timed to Shimmer Loop [0, 0.5, 1] 🔥
+        const scaleAnim = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.03, 1] }) : 1;
+        const translateYAnim = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -4, 0] }) : 0;
+        const glowOpacity = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 0.8, 0.3] }) : 0;
+
+        return (
+            <Animated.View
+                key={`rank-${user.id}-${index}`}
+                style={{
+                    marginBottom: 16,
+                    transform: [{ scale: scaleAnim }, { translateY: translateYAnim }],
+                    shadowColor: rankColor,
+                    shadowOpacity: glowOpacity,
+                    shadowRadius: isTop3 ? 12 : 0,
+                    elevation: isTop3 ? 8 : 0,
+                }}
+            >
+                <LinearGradient
+                    colors={isMe && !isTop3 ? [theme.primary + '30', theme.primary + '10'] : (rankGradient as any)}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        padding: 12, // Adjusted padding for more inner space
+                        borderRadius: 24,
+                        borderWidth: isTop3 || isMe ? 1.5 : 1,
+                        borderColor: isTop3 ? rankColor : (isMe ? theme.accent : 'rgba(255,255,255,0.1)'),
+                        overflow: 'hidden',
+                        position: 'relative'
+                    }}
+                >
+                    {/* Background Gamified Watermark */}
+                    {isTop3 && (
+                        <View style={{ position: 'absolute', right: -20, bottom: -25, opacity: 0.1 }}>
+                            <MaterialCommunityIcons name={iconName as any} size={110} color={rankColor} style={{ transform: [{ rotate: '15deg' }] }} />
+                        </View>
+                    )}
+
+                    {/* Left Rank Badge Element */}
+                    <View style={{
+                        width: 40, height: 40, borderRadius: 20, // Adjusted dimensions for better text fitting
+                        backgroundColor: isTop3 ? rankColor : 'rgba(255,255,255,0.05)',
+                        justifyContent: 'center', alignItems: 'center',
+                        shadowColor: rankColor, shadowOpacity: isTop3 ? 0.5 : 0, shadowRadius: 6, elevation: 5,
+                        marginRight: 10, // Adjusted margin to prevent squash
+                        position: 'relative',
+                        flexShrink: 0
+                    }}>
+                        {isTop3 ? (
+                            <MaterialCommunityIcons name={iconName as any} size={20} color="#000" style={{ marginTop: -2 }} />
+                        ) : (
+                            <Text style={{ color: '#94A3B8', fontSize: 14, fontWeight: '900' }}>{index + 1}</Text>
+                        )}
+                        {/* Gamified Number Tag for Top 3 */}
+                        {isTop3 && (
+                            <View style={{ position: 'absolute', bottom: -6, backgroundColor: '#000', paddingHorizontal: 6, borderRadius: 6, borderWidth: 1, borderColor: rankColor }}>
+                                <Text style={{ color: rankColor, fontSize: 9, fontWeight: '900' }}>#{index + 1}</Text>
+                            </View>
+                        )}
+                    </View>
+
+                    {/* Avatar Group */}
+                    <View style={{ position: 'relative', flexShrink: 0 }}>
+                        <Image
+                            source={{ uri: user.profilePic || `https://ui-avatars.com/api/?name=${user.name || 'U'}&background=0F172A&color=fff` }}
+                            style={{
+                                width: 48, height: 48, borderRadius: 18, // Slightly reduced to save space
+                                borderWidth: 2, borderColor: isTop3 ? rankColor : 'rgba(255,255,255,0.15)'
+                            }}
+                        />
+                        {isMe && (
+                            <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: theme.primary, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#020617' }} />
+                        )}
+                    </View>
+
+                    {/* Title & Level Details with proper flex bounds to fix overlapping */}
+                    <View style={{ flex: 1, marginLeft: 12, marginRight: 8, justifyContent: 'center' }}>
+                        <Text style={{ color: '#FFF', fontSize: 15, fontWeight: 'bold', letterSpacing: 0.5, lineHeight: 22 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                            {user.name || 'Consultant'} {isMe && <Text style={{ color: theme.accent, fontSize: 12 }}> (You)</Text>}
+                        </Text>
+                        
+                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
+                            <View style={{ backgroundColor: uConfig.colors[0] + '30', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginRight: 6 }}>
+                                <Text style={{ color: uConfig.colors[0], fontSize: 9, fontWeight: '900' }}>L{uConfig.lvl}</Text>
+                            </View>
+                            <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700' }} numberOfLines={1} adjustsFontSizeToFit>
+                                {uConfig.label}
+                            </Text>
+                        </View>
+                    </View>
+
+                    {/* Reward Bag Output safely locked to right */}
+                    <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
+                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 4 }}>REWARDS</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
+                            <Text style={{ fontSize: 12, marginRight: 4 }}>💰</Text>
+                            <Text style={{ color: '#10B981', fontSize: 14, fontWeight: '900' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                                {user.totalBeansEarned?.toLocaleString() || 0}
+                            </Text>
+                        </View>
+                    </View>
+                </LinearGradient>
+            </Animated.View>
         );
     };
 
@@ -627,6 +788,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         </LinearGradient>
                     </View>
 
+                    {/* 🔥 SATTI FIX: Added LEADERBOARD / RANKING Tab 🔥 */}
                     <View style={styles.tabsRow}>
                         <TouchableOpacity style={[styles.tabBtn, mainTab === 'STATS' && styles.tabBtnActive]} onPress={() => setMainTab('STATS')}>
                             <Text style={[styles.tabText, mainTab === 'STATS' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>STATS</Text>
@@ -634,8 +796,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         <TouchableOpacity style={[styles.tabBtn, mainTab === 'MONTHLY' && styles.tabBtnActive]} onPress={() => setMainTab('MONTHLY')}>
                             <Text style={[styles.tabText, mainTab === 'MONTHLY' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>MONTHLY</Text>
                         </TouchableOpacity>
-                        <TouchableOpacity style={[styles.tabBtn, mainTab === 'HISTORY' && styles.tabBtnActive]} onPress={() => setMainTab('HISTORY')}>
-                            <Text style={[styles.tabText, mainTab === 'HISTORY' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>HISTORY</Text>
+                        <TouchableOpacity style={[styles.tabBtn, mainTab === 'LEADERBOARD' && styles.tabBtnActive]} onPress={() => setMainTab('LEADERBOARD')}>
+                            <Text style={[styles.tabText, mainTab === 'LEADERBOARD' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>RANKING</Text>
                         </TouchableOpacity>
                     </View>
 
@@ -792,75 +954,92 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                      </Text>
                                 </View>
 
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 15 }}>
-                                    <TouchableOpacity 
-                                        style={[styles.filterPill, selectedMonth === 'ALL' && { backgroundColor: theme.primary, borderColor: theme.primary }]} 
-                                        onPress={() => setSelectedMonth('ALL')}
-                                    >
-                                        <Text style={[styles.filterPillText, selectedMonth === 'ALL' && { color: '#FFF' }]}>ALL TIME</Text>
-                                    </TouchableOpacity>
-                                    {monthlyEarnings.map((m, i) => (
-                                        <TouchableOpacity 
-                                            key={`filter-${i}`} 
-                                            style={[styles.filterPill, selectedMonth === m.month && { backgroundColor: theme.primary, borderColor: theme.primary }]} 
-                                            onPress={() => setSelectedMonth(m.month)}
-                                        >
-                                            <Text style={[styles.filterPillText, selectedMonth === m.month && { color: '#FFF' }]}>{m.month.toUpperCase()}</Text>
-                                        </TouchableOpacity>
-                                    ))}
-                                </ScrollView>
-
-                                {monthlyEarnings.length > 0 ? monthlyEarnings.filter(m => selectedMonth === 'ALL' || m.month === selectedMonth).map((m, i) => {
-                                    const monthLogs = historyLogs.filter(log => {
-                                        const rawT = log.timestamp || log.createdAt;
-                                        if (!rawT) return false;
-                                        let logDate = new Date();
-                                        if (rawT.toDate) logDate = rawT.toDate();
-                                        else if (rawT.seconds) logDate = new Date(rawT.seconds * 1000);
-                                        else if (typeof rawT === 'number') logDate = new Date(rawT < 10000000000 ? rawT * 1000 : rawT);
-                                        else if (typeof rawT === 'string') logDate = new Date(rawT);
-                                        return logDate.toLocaleString('default', { month: 'short', year: 'numeric' }) === m.month;
-                                    });
-
-                                    const isExpanded = expandedMonth === m.month;
+                                {historyLoading ? (
+                                    <View style={{ paddingVertical: 40, alignItems: 'center' }}>
+                                        <ActivityIndicator size="large" color={theme.primary} />
+                                        <Text style={{ color: theme.primary, marginTop: 15, fontSize: 10, fontWeight: '900', letterSpacing: 2 }}>DECRYPTING ARCHIVES...</Text>
+                                    </View>
+                                ) : yearlyEarnings.length > 0 ? yearlyEarnings.map((y, yIdx) => {
+                                    const isYearExpanded = expandedYear === y.year;
 
                                     return (
-                                        <View key={`month-group-${i}`} style={{ marginBottom: 15 }}>
+                                        <View key={`year-group-${yIdx}`} style={{ marginBottom: 15 }}>
                                             <TouchableOpacity 
                                                 style={[
                                                     styles.historyCard, borderType1, 
                                                     { 
-                                                        borderColor: isExpanded ? theme.accent : theme.primary, 
-                                                        backgroundColor: isExpanded ? theme.primary + '15' : 'rgba(15, 23, 42, 0.45)',
-                                                        marginBottom: isExpanded ? 15 : 0
+                                                        borderColor: isYearExpanded ? theme.accent : theme.primary, 
+                                                        backgroundColor: isYearExpanded ? theme.primary + '15' : 'rgba(15, 23, 42, 0.45)',
+                                                        marginBottom: isYearExpanded ? 15 : 0
                                                     }
                                                 ]}
                                                 activeOpacity={0.8}
-                                                onPress={() => setExpandedMonth(isExpanded ? null : m.month)}
+                                                onPress={() => setExpandedYear(isYearExpanded ? null : y.year)}
                                             >
                                                 <View style={[styles.historyIconBox, { backgroundColor: theme.primary + '30', borderColor: theme.primary + '50' }]}>
-                                                    <MaterialCommunityIcons name="calendar-month" size={24} color={theme.accent} />
+                                                    <MaterialCommunityIcons name="calendar-multiselect" size={24} color={theme.accent} />
                                                 </View>
                                                 <View style={{ flex: 1, marginLeft: 15 }}>
-                                                    <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit>{m.month}</Text>
-                                                    <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{monthLogs.length} Transactions</Text>
+                                                    <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit>{y.year}</Text>
+                                                    <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{y.months.length} Months Active</Text>
                                                 </View>
                                                 <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
                                                     <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                                                        <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{m.total.toLocaleString()} ₿</Text>
-                                                        <Text style={[styles.historyStatus, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>TOTAL</Text>
+                                                        <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{y.total.toLocaleString()} ₿</Text>
+                                                        <Text style={[styles.historyStatus, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>YEAR TOTAL</Text>
                                                     </View>
-                                                    <Ionicons name={isExpanded ? "chevron-up" : "chevron-down"} size={20} color={theme.accent} style={{marginLeft: 5}} />
+                                                    <Ionicons name={isYearExpanded ? "chevron-up" : "chevron-down"} size={20} color={theme.accent} style={{marginLeft: 5}} />
                                                 </View>
                                             </TouchableOpacity>
 
-                                            {isExpanded && (
-                                                <View style={{ paddingLeft: 10, paddingRight: 5 }}>
-                                                    {monthLogs.map((log, logIdx) => renderExpertHistoryItem(log, logIdx))}
+                                            {isYearExpanded && (
+                                                <View style={{ paddingLeft: 15, paddingRight: 0 }}>
+                                                    {y.months.map((m, mIdx) => {
+                                                        const monthUniqueKey = `${y.year}-${m.month}`;
+                                                        const isMonthExpanded = expandedMonth === monthUniqueKey;
+
+                                                        return (
+                                                            <View key={`month-group-${mIdx}`} style={{ marginBottom: 10 }}>
+                                                                <TouchableOpacity 
+                                                                    style={[
+                                                                        styles.historyCard, borderType2, 
+                                                                        { 
+                                                                            borderColor: isMonthExpanded ? theme.accent : theme.secondary, 
+                                                                            backgroundColor: isMonthExpanded ? theme.secondary + '15' : 'rgba(15, 23, 42, 0.45)',
+                                                                            marginBottom: isMonthExpanded ? 10 : 0,
+                                                                            padding: 12
+                                                                        }
+                                                                    ]}
+                                                                    activeOpacity={0.8}
+                                                                    onPress={() => setExpandedMonth(isMonthExpanded ? null : monthUniqueKey)}
+                                                                >
+                                                                    <View style={[styles.historyIconBox, { backgroundColor: theme.secondary + '30', borderColor: theme.secondary + '50', width: 40, height: 40 }]}>
+                                                                        <MaterialCommunityIcons name="calendar-month" size={20} color={theme.accent} />
+                                                                    </View>
+                                                                    <View style={{ flex: 1, marginLeft: 15 }}>
+                                                                        <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit>{m.month} {y.year}</Text>
+                                                                        <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{m.logs.length} Transactions</Text>
+                                                                    </View>
+                                                                    <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
+                                                                        <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
+                                                                            <Text style={[styles.historyAmount, { color: '#10B981', fontSize: 14 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{m.total.toLocaleString()} ₿</Text>
+                                                                        </View>
+                                                                        <Ionicons name={isMonthExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.accent} style={{marginLeft: 5}} />
+                                                                    </View>
+                                                                </TouchableOpacity>
+
+                                                                {isMonthExpanded && (
+                                                                    <View style={{ paddingLeft: 10, paddingRight: 5 }}>
+                                                                        {m.logs.map((log, logIdx) => renderExpertHistoryItem(log, logIdx))}
+                                                                    </View>
+                                                                )}
+                                                            </View>
+                                                        );
+                                                    })}
                                                 </View>
                                             )}
                                         </View>
-                                    )
+                                    );
                                 }) : (
                                     <View style={styles.emptyBox}>
                                         <MaterialCommunityIcons name="calendar-blank" size={48} color="rgba(255,255,255,0.2)" />
@@ -870,34 +1049,34 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             </View>
                         )}
 
-                        {mainTab === 'HISTORY' && (
-                            <View>
-                                <View style={styles.talktimeHighlight}>
-                                     <Text style={[styles.totalTalkLabel, { color: theme.primary, marginBottom: 15 }]}>TOTAL ARCHIVED CONSULTATION TIME: {stats?.displayMins || 0} MINS</Text>
+                        {/* 🔥 SATTI FIX: LEADERBOARD TAB RENDER 🔥 */}
+                        {mainTab === 'LEADERBOARD' && (
+                            <View style={{ marginTop: 10 }}>
+                                <View style={{ alignItems: 'center', marginBottom: 25 }}>
+                                    <Text style={[styles.totalTalkLabel, { color: theme.primary, marginBottom: 5 }]}>GLOBAL TOP PERFORMERS (LIFETIME)</Text>
+                                    {/* 🔥 SATTI FIX: TEXT CHANGED TO LEADERBOARD 🔥 */}
+                                    <Text style={{color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: -0.5}}>LEADERBOARD</Text>
                                 </View>
-
-                                {/* 🔥 SATTI FIX: NEW LOADING STATE LOGIC 🔥 */}
-                                {historyLoading ? (
+                                
+                                {isLeaderboardLoading ? (
                                     <View style={{ paddingVertical: 40, alignItems: 'center' }}>
                                         <ActivityIndicator size="large" color={theme.primary} />
-                                        <Text style={{ color: theme.primary, marginTop: 15, fontSize: 10, fontWeight: '900', letterSpacing: 2 }}>DECRYPTING ARCHIVES...</Text>
+                                        <Text style={{ color: theme.primary, marginTop: 15, fontSize: 10, fontWeight: '900', letterSpacing: 2 }}>SYNCING RANKS...</Text>
                                     </View>
-                                ) : historyLogs.length > 0 ? (
-                                    historyLogs.map((item, index) => renderExpertHistoryItem(item, index))
+                                ) : leaderboardData.length > 0 ? (
+                                    leaderboardData.map((user, index) => renderLeaderboardItem(user, index))
                                 ) : (
                                     <View style={styles.emptyBox}>
-                                        <MaterialCommunityIcons name="file-document-outline" size={48} color="rgba(255,255,255,0.2)" />
-                                        <Text style={styles.emptyText}>No transactions found.</Text>
+                                        <MaterialCommunityIcons name="trophy-broken" size={48} color="rgba(255,255,255,0.2)" />
+                                        <Text style={styles.emptyText}>No rankings available yet.</Text>
                                     </View>
                                 )}
                             </View>
                         )}
-
                     </View>
                 </Animated.View>
             </ScrollView>
 
-            {/* 🔥 SATTI FIX: HIDDEN MODAL TO PRESERVE CODE STRUCTURE 🔥 */}
             <Modal
                 visible={blockModalVisible}
                 transparent={true}
@@ -1049,7 +1228,6 @@ const styles = StyleSheet.create({
     insightTopTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
     insightDescription: { color: '#94A3B8', fontSize: 13, marginTop: 5, lineHeight: 20 },
 
-    // 🔥 TABS SECTION STYLES 🔥
     menuBox: { paddingHorizontal: 0, marginTop: 10 },
     tabsRow: { flexDirection: 'row', marginHorizontal: 0, marginTop: 10, marginBottom: 15, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 15, padding: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', justifyContent: 'space-between' },
     tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'transparent', overflow: 'hidden' }, 
@@ -1061,7 +1239,7 @@ const styles = StyleSheet.create({
     filterPillText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
     historyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.45)', padding: 15, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#1E293B' },
     historyIconBox: { width: 45, height: 45, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-    historyTitle: { color: '#FFF', fontSize: 13, fontWeight: 'bold', marginBottom: 4, letterSpacing: 0.5 },
+    historyTitle: { color: '#FFF', fontSize: 14, fontWeight: 'bold', marginBottom: 4, letterSpacing: 0.5, lineHeight: 20 },
     historyDate: { color: '#64748B', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
     historyAmount: { fontSize: 16, fontWeight: '900', marginBottom: 4 },
     historyStatus: { fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
@@ -1070,7 +1248,6 @@ const styles = StyleSheet.create({
     talktimeHighlight: { alignItems: 'center' },
     totalTalkLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
 
-    // 🔥 MODAL STYLES 🔥
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
     modalContainer: { backgroundColor: '#0F172A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0 },
     modalIconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },

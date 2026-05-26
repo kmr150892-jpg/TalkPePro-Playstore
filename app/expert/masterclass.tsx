@@ -78,9 +78,9 @@ const getLevelConfig = (userData: any) => {
 // 🔥 50 STANDARD SKILLS FOR QUICK SELECTION
 const STANDARD_SKILLS = [
     "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching", 
-    "Mental Wellness", "Fitness & Diet", "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
-    "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development", "Stock Trading", 
-    "Crypto Investing", "Personal Finance", "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
+    "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
+    "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development", 
+    "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
     "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro", 
     "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting", 
     "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Legal Advice", "Math Tutoring", 

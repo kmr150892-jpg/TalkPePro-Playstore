@@ -83,8 +83,19 @@ const getLevelConfig = (userData: any) => {
     return getObj(0);
 };
 
-const EXPERTISE_TAGS = ["Professional Advice", "Career Guide", "Dancing", "Tech Support", "Consulting", "Wellness", "Design", "Entertainment","Management","Singing", "Marketing", "Management", "Education"];
-const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytics 📊", "Public Speaking 🎙️", "Networking 🤝", "Planning 📅", "Strategy 🎯"];
+const EXPERTISE_TAGS = [ "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching", 
+    "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
+    "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development", 
+    "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
+    "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro", 
+    "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting", 
+    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Legal Advice", "Math Tutoring", 
+    "Science Tutoring", "History & Culture", "Storytelling", "Poetry & Writing"];
+const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytics 📊", "Public Speaking 🎙️", "Networking 🤝", "Planning 📅", "Strategy 🎯","Gaming 🎮", "Photography 📸", "Traveling ✈️", "Cooking 🍳", 
+    "Music 🎵", "Fitness & Gym 🏋️‍♂️", "Art & Design 🎨", "Gardening 🌱", 
+    "Movies & Anime 🍿", "Sports & Outdoors ⚽", "Yoga & Meditation 🧘‍♀️", 
+    "DIY Crafts ✂️", "Podcasting 🎧", "Astrology ✨", "Pets & Animals 🐾",
+    "Foodie & Cafe Hopping 🍕", "Vlogging 📹", "Board Games 🎲"];
 
 export default function ConsoleHome({ expertData: initialData, isOnline, setIsOnline }: any) {
   const router = useRouter();
@@ -336,12 +347,16 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     }
   };
 
+  // 🔥 SATTI FIX: Updated toggleTag to automatically replace oldest tag if limit is reached
   const toggleTag = (tag: string, list: string[], setList: any, maxLimit: number) => {
     if (list.includes(tag)) {
         setList(list.filter((t: string) => t !== tag));
     } else {
         if (list.length >= maxLimit) {
-            Alert.alert("Limit Reached", `You can select up to ${maxLimit} tags here.`);
+            // Auto-replace the oldest selected tag with the newly tapped tag
+            const updatedList = [...list];
+            updatedList.shift(); 
+            setList([...updatedList, tag]);
             return;
         }
         setList([...list, tag]);
@@ -581,12 +596,12 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               </View>
               <Text style={styles.walletBeansValue}>{walletBalance.toLocaleString()}</Text>
               <View style={styles.walletFooter}>
-                <Text style={[styles.walletSubTitle, {color: 'rgba(255,255,255,0.6)'}]}>WITHDRAWABLE BALANCE</Text>
+                <Text style={[styles.walletSubTitle, {color: 'rgba(255,255,255,0.6)'}]}>WITHDRAWABLE REWARDS</Text>
                 <View style={[styles.lifetimeBadge, { backgroundColor: theme.primary + '20' }]}>
                     <Text style={[styles.lifetimeText, { color: theme.primary }]}>LIFETIME REWARDS: {totalBeans.toLocaleString()}</Text>
                 </View>
               </View>
-          </View>
+                        </View>
 
           <View style={styles.cyberProgressBox}>
               <View style={styles.progressTextRow}>
