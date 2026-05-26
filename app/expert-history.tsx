@@ -3,26 +3,26 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
-    collection,
-    doc, getDoc, getDocs,
-    onSnapshot,
-    query,
-    where
+  collection,
+  doc, getDoc, getDocs,
+  onSnapshot,
+  query,
+  where
 } from 'firebase/firestore';
 import { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    Easing,
-    FlatList,
-    Image,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
+  Image,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
@@ -91,30 +91,34 @@ export default function ExpertHistory() {
         const callsSnap = await getDocs(query(collection(db, "calls"), where("expertId", "==", user.uid)));
         for (const docSnap of callsSnap.docs) {
             const d = docSnap.data();
-            let callerName = d.callerName || 'Consultation User';
-            let callerPic = d.callerImage || null;
-            let callerLevel = 'Silver';
+            const expertEarnings = Number(d.expertEarnings) || 0;
 
-            if (d.callerId) {
-                const uSnap = await getDoc(doc(db, "users", d.callerId));
-                if (uSnap.exists()) {
-                    const uData = uSnap.data();
-                    callerName = uData.name || uData.displayName || callerName;
-                    callerPic = uData.profilePic || uData.photoURL || callerPic;
-                    callerLevel = calculateLevel(uData.balance || 0);
+            if (expertEarnings > 0) {
+                let callerName = d.callerName || 'Consultation User';
+                let callerPic = d.callerImage || null;
+                let callerLevel = 'Silver';
+
+                if (d.callerId) {
+                    const uSnap = await getDoc(doc(db, "users", d.callerId));
+                    if (uSnap.exists()) {
+                        const uData = uSnap.data();
+                        callerName = uData.name || uData.displayName || callerName;
+                        callerPic = uData.profilePic || uData.photoURL || callerPic;
+                        callerLevel = calculateLevel(uData.balance || 0);
+                    }
                 }
-            }
 
-            rawData.push({
-                id: docSnap.id,
-                type: 'video_call',
-                callerName: callerName,
-                syncPic: callerPic,
-                syncLevel: callerLevel,
-                finalDuration: d.finalDuration || d.duration || 0,
-                expertEarnings: d.expertEarnings || 0,
-                timestamp: d.endedAt || d.createdAt || { seconds: 0 }
-            });
+                rawData.push({
+                    id: docSnap.id,
+                    type: 'video_call',
+                    callerName: callerName,
+                    syncPic: callerPic,
+                    syncLevel: callerLevel,
+                    finalDuration: d.finalDuration || d.duration || 0,
+                    expertEarnings: expertEarnings,
+                    timestamp: d.endedAt || d.createdAt || { seconds: 0 }
+                });
+            }
         }
 
         // 2. FETCH TRANSACTIONS (For Call Gifts Fallback)
@@ -123,35 +127,42 @@ export default function ExpertHistory() {
             const d = docSnap.data();
             if (d.type === 'video_call') continue; 
             
-            let tType = 'call_gift';
-            if (d.source === 'Session') tType = 'party_gift';
-            if (d.source === 'live') tType = 'live_gift';
+            const bns = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Math.floor((Number(d.diamonds) || Number(d.amount) || 0) / 2);
 
-            let senderName = d.senderName || d.userName || 'Verified Supporter';
-            let senderPic = d.userImage || null;
-            let senderLevel = 'Silver';
-
-            if (d.userId && d.userId !== 'unknown') {
-                const uSnap = await getDoc(doc(db, "users", d.userId));
-                if (uSnap.exists()) {
-                    const uData = uSnap.data();
-                    senderName = uData.name || uData.displayName || senderName;
-                    senderPic = uData.profilePic || uData.photoURL || senderPic;
-                    senderLevel = calculateLevel(uData.balance || 0);
+            if (bns > 0) {
+                let tType = 'call_gift';
+                if (d.source === 'Session' || d.source === 'forum') tType = 'party_gift';
+                if (d.source === 'live') tType = 'live_gift';
+                if (d.type?.includes('game') || d.source?.includes('game')) {
+                    tType = (d.source === 'Session' || d.source === 'forum') ? 'party_game_bonus' : 'live_game_bonus';
                 }
-            }
 
-            rawData.push({
-                id: docSnap.id,
-                type: tType,
-                senderName: senderName,
-                syncPic: senderPic,
-                syncLevel: senderLevel,
-                giftName: d.giftName || d.giftType || 'Premium Gift',
-                amount: d.diamonds || d.amount || 0,
-                beans: d.beans || Math.floor((d.diamonds || d.amount || 0) / 2),
-                timestamp: d.timestamp || { seconds: 0 }
-            });
+                let senderName = d.senderName || d.userName || 'Verified Supporter';
+                let senderPic = d.userImage || null;
+                let senderLevel = 'Silver';
+
+                if (d.userId && d.userId !== 'unknown') {
+                    const uSnap = await getDoc(doc(db, "users", d.userId));
+                    if (uSnap.exists()) {
+                        const uData = uSnap.data();
+                        senderName = uData.name || uData.displayName || senderName;
+                        senderPic = uData.profilePic || uData.photoURL || senderPic;
+                        senderLevel = calculateLevel(uData.balance || 0);
+                    }
+                }
+
+                rawData.push({
+                    id: docSnap.id,
+                    type: tType,
+                    senderName: senderName,
+                    syncPic: senderPic,
+                    syncLevel: senderLevel,
+                    giftName: d.giftName || d.giftType || 'Virtual Reward',
+                    amount: d.diamonds || d.amount || 0,
+                    beans: bns,
+                    timestamp: d.timestamp || { seconds: 0 }
+                });
+            }
         }
 
         // 3. FETCH LIVES (Live Gifts & EXACT GAME BEANS)
@@ -164,7 +175,7 @@ export default function ExpertHistory() {
                 rawData.push({
                     id: `game_${liveDoc.id}`,
                     type: isParty ? 'party_game_bonus' : 'live_game_bonus',
-                    senderName: 'Game Participants',
+                    senderName: 'System Bonus',
                     giftName: 'Performance Bonus',
                     amount: liveData.gameBeansCollected * 2,
                     beans: liveData.gameBeansCollected,
@@ -178,8 +189,73 @@ export default function ExpertHistory() {
                 const giftsSnap = await getDocs(collection(db, "lives", liveDoc.id, "gifts"));
                 for (const gDoc of giftsSnap.docs) {
                     const g = gDoc.data();
-                    let gSenderName = g.senderName || 'VIP Supporter';
-                    let gPic = g.senderImage || g.icon || null;
+                    const bns = Number(g.beans) || Math.floor((Number(g.amount) || Number(g.price) || 0) / 2);
+
+                    if (bns > 0) {
+                        let gSenderName = g.senderName || 'VIP Supporter';
+                        let gPic = g.senderImage || g.icon || null;
+                        let gLevel = 'Silver';
+
+                        if (g.senderId) {
+                            const uSnap = await getDoc(doc(db, "users", g.senderId));
+                            if (uSnap.exists()) {
+                                const uData = uSnap.data();
+                                gSenderName = uData.name || uData.displayName || gSenderName;
+                                gPic = uData.profilePic || uData.photoURL || gPic;
+                                gLevel = calculateLevel(uData.balance || 0);
+                            }
+                        }
+
+                        rawData.push({
+                            id: gDoc.id,
+                            type: 'live_gift',
+                            senderName: gSenderName,
+                            giftName: g.giftName || 'Virtual Reward',
+                            amount: g.amount || g.price || 0,
+                            beans: bns,
+                            timestamp: g.timestamp || liveData.startedAt || { seconds: 1 },
+                            syncPic: gPic,
+                            syncLevel: gLevel
+                        });
+                    }
+                }
+
+                // 🔥 SATTI FIX: Fetch Subcollection Games perfectly for Broadcast Activity! 🔥
+                try {
+                    const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
+                    for (const gameDoc of gamesSnap.docs) {
+                        const d = gameDoc.data();
+                        const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                        if (expertBeans > 0) {
+                            rawData.push({
+                                id: gameDoc.id,
+                                type: 'live_game_bonus',
+                                senderName: "Live Game System",
+                                giftName: "Broadcast Activity Bonus",
+                                amount: expertBeans * 2,
+                                beans: expertBeans,
+                                timestamp: d.timestamp || d.createdAt || d.endedAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) },
+                                syncPic: `https://ui-avatars.com/api/?name=L&background=10B981&color=fff`,
+                                syncLevel: 'Master'
+                            });
+                        }
+                    }
+                } catch(e){}
+            }
+        }
+
+        // 4. FETCH Session ROOMS (Forum Rewards & Nested Games) 
+        const partySnap = await getDocs(query(collection(db, "forum_rooms"), where("hostId", "==", user.uid)));
+        for (const partyDoc of partySnap.docs) {
+            const pData = partyDoc.data();
+            const giftsSnap = await getDocs(collection(db, "forum_rooms", partyDoc.id, "gifts"));
+            for (const gDoc of giftsSnap.docs) {
+                const g = gDoc.data();
+                const bns = Number(g.beans) || Math.floor((Number(g.price) || Number(g.amount) || 0) / 2);
+                
+                if (bns > 0) {
+                    let gSenderName = g.senderName || 'Room Member';
+                    let gPic = g.icon || null;
                     let gLevel = 'Silver';
 
                     if (g.senderId) {
@@ -194,51 +270,83 @@ export default function ExpertHistory() {
 
                     rawData.push({
                         id: gDoc.id,
-                        type: 'live_gift',
+                        type: 'party_gift',
                         senderName: gSenderName,
-                        giftName: g.giftName || 'Virtual Gift',
-                        amount: g.amount || g.price || 0,
-                        beans: g.beans || Math.floor((g.amount || g.price || 0) / 2),
-                        timestamp: g.timestamp || liveData.startedAt || { seconds: 1 },
+                        giftName: g.giftName || 'Virtual Reward',
+                        amount: g.price || g.amount || 0,
+                        beans: bns,
+                        timestamp: g.timestamp || pData.createdAt || { seconds: 1 },
                         syncPic: gPic,
                         syncLevel: gLevel
                     });
                 }
             }
-        }
 
-        // 4. FETCH Session ROOMS (Session Gifts)
-        const partySnap = await getDocs(query(collection(db, "party_rooms"), where("hostId", "==", user.uid)));
-        for (const partyDoc of partySnap.docs) {
-            const pData = partyDoc.data();
-            const giftsSnap = await getDocs(collection(db, "party_rooms", partyDoc.id, "gifts"));
-            for (const gDoc of giftsSnap.docs) {
-                const g = gDoc.data();
-                let gSenderName = g.senderName || 'Room Member';
-                let gPic = g.icon || null;
-                let gLevel = 'Silver';
-
-                if (g.senderId) {
-                    const uSnap = await getDoc(doc(db, "users", g.senderId));
-                    if (uSnap.exists()) {
-                        const uData = uSnap.data();
-                        gSenderName = uData.name || uData.displayName || gSenderName;
-                        gPic = uData.profilePic || uData.photoURL || gPic;
-                        gLevel = calculateLevel(uData.balance || 0);
+            // 🔥 SATTI FIX: Fetch Subcollection Games perfectly for Forum Activity! 🔥
+            try {
+                const gamesSnap = await getDocs(collection(db, "forum_rooms", partyDoc.id, "games"));
+                for (const gameDoc of gamesSnap.docs) {
+                    const d = gameDoc.data();
+                    const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                    if (expertBeans > 0) {
+                        rawData.push({
+                            id: gameDoc.id,
+                            type: 'party_game_bonus',
+                            senderName: "Forum Game System",
+                            giftName: "Forum Activity Bonus",
+                            amount: expertBeans * 2,
+                            beans: expertBeans,
+                            timestamp: d.timestamp || d.createdAt || d.endedAt || pData.createdAt || { seconds: Math.floor(Date.now() / 1000) },
+                            syncPic: `https://ui-avatars.com/api/?name=F&background=EC4899&color=fff`,
+                            syncLevel: 'Master'
+                        });
                     }
                 }
+            } catch(e){}
+        }
 
-                rawData.push({
-                    id: gDoc.id,
-                    type: 'party_gift',
-                    senderName: gSenderName,
-                    giftName: g.giftName || 'Session Gift',
-                    amount: g.price || g.amount || 0,
-                    beans: g.beans || Math.floor((g.price || g.amount || 0) / 2),
-                    timestamp: g.timestamp || pData.createdAt || { seconds: 1 },
-                    syncPic: gPic,
-                    syncLevel: gLevel
-                });
+        // 5. BROADCAST ACTIVITY (Live Games - Top Level)
+        const idFields = ["hostId", "expertId", "userId"];
+        for (const field of idFields) {
+            const snap = await getDocs(query(collection(db, "live_games"), where(field, "==", user.uid)));
+            for (const gameDoc of snap.docs) {
+                const d = gameDoc.data();
+                const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                if (expertBeans > 0) {
+                    rawData.push({
+                        id: gameDoc.id,
+                        type: 'live_game_bonus',
+                        senderName: "Live Game System",
+                        giftName: "Broadcast Activity Bonus",
+                        amount: expertBeans * 2,
+                        beans: expertBeans,
+                        timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) },
+                        syncPic: `https://ui-avatars.com/api/?name=L&background=10B981&color=fff`,
+                        syncLevel: 'Master'
+                    });
+                }
+            }
+        }
+
+        // 6. FORUM ACTIVITY (Forum Games - Top Level)
+        for (const field of idFields) {
+            const snap = await getDocs(query(collection(db, "forum_games"), where(field, "==", user.uid)));
+            for (const gameDoc of snap.docs) {
+                const d = gameDoc.data();
+                const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                if (expertBeans > 0) {
+                    rawData.push({
+                        id: gameDoc.id,
+                        type: 'party_game_bonus',
+                        senderName: "Forum Game System",
+                        giftName: "Forum Activity Bonus",
+                        amount: expertBeans * 2,
+                        beans: expertBeans,
+                        timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) },
+                        syncPic: `https://ui-avatars.com/api/?name=F&background=EC4899&color=fff`,
+                        syncLevel: 'Master'
+                    });
+                }
             }
         }
 
@@ -336,6 +444,8 @@ export default function ExpertHistory() {
     const secs = duration % 60;
     const dateObj = item.timestamp?.seconds ? new Date(item.timestamp.seconds * 1000) : new Date();
     const earnings = item.expertEarnings || 0; 
+    
+    const titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Revenue";
 
     return (
       <Animated.View style={[styles.eliteCard, index % 2 === 0 ? borderType1 : borderType2, { transform: [{ translateY: floatAnim }] }]}>
@@ -349,7 +459,7 @@ export default function ExpertHistory() {
                 </LinearGradient>
             </View>
             <View style={styles.userMeta}>
-              <Text style={styles.eliteUserName} numberOfLines={1}>{item.callerName}</Text>
+              <Text style={styles.eliteUserName} numberOfLines={1}>{titleText}</Text>
               <View style={styles.dateTimeRow}>
                 <Ionicons name="time" size={12} color={theme.primary} />
                 <Text style={styles.eliteDateText}>{dateObj.toLocaleDateString()} • {dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</Text>
@@ -359,8 +469,7 @@ export default function ExpertHistory() {
           <View style={styles.earningsBlock}>
             <Text style={styles.earnLabel}>Earnings</Text>
             <View style={styles.beansRow}>
-              <MaterialCommunityIcons name="seed" size={14} color="#FBBF24" />
-              <Text style={styles.eliteBeansValue}>+{earnings}</Text> 
+              <Text style={styles.eliteBeansValue}>+💰{earnings}</Text> 
             </View>
           </View>
         </View>
@@ -382,22 +491,34 @@ export default function ExpertHistory() {
     const dateObj = item.timestamp?.seconds ? new Date(item.timestamp.seconds * 1000) : new Date();
     const beansEarned = item.beans || 0;
     
-    let displayTitle = item.senderName || 'VIP Supporter';
-    let displaySub = item.giftName || 'Premium Gift';
+    let displayTitle = "";
+    let displaySub = item.giftName || 'Virtual Reward';
     let iconType = 'gift';
     let iconColor = theme.primary;
 
     if (item.type.includes('game')) {
-        displayTitle = 'System Bonus';
-        displaySub = item.type === 'party_game_bonus' ? 'Room Game Prize' : 'Live Reward';
+        displayTitle = item.type === 'live_game_bonus' ? 'Broadcast Activity Bonus' : 'Forum Activity Bonus';
+        displaySub = item.senderName || 'System Bonus';
         iconType = 'dice-multiple';
         iconColor = '#F59E0B';
-    } else if (item.type === 'party_gift') {
-        iconType = 'party-popper';
-        iconColor = '#EC4899';
-    } else if (item.type === 'live_gift') {
-        iconType = 'broadcast';
-        iconColor = '#10B981';
+    } else {
+        let baseTitle = "";
+        if (item.type === 'live_gift') {
+            baseTitle = "Broadcast Reward";
+            iconType = 'broadcast';
+            iconColor = '#10B981';
+        } else if (item.type === 'party_gift') {
+            baseTitle = "Forum Reward";
+            iconType = 'party-popper';
+            iconColor = '#EC4899';
+        } else if (item.type === 'call_gift') {
+            baseTitle = "Private Reward";
+            iconType = 'gift';
+            iconColor = theme.primary;
+        }
+        
+        const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "Client";
+        displayTitle = `${baseTitle} (from ${validSender})`;
     }
 
     return (
@@ -406,7 +527,7 @@ export default function ExpertHistory() {
         <View style={styles.cardMain}>
           <View style={styles.userSection}>
             <View style={styles.avatarWrapper}>
-                <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${displayTitle}&background=D946EF&color=fff` }} style={styles.eliteAvatar} />
+                <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${item.senderName || 'V'}&background=D946EF&color=fff` }} style={styles.eliteAvatar} />
                 <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.levelBadgeMini}>
                   <Text style={styles.levelBadgeText}>{item.syncLevel.toUpperCase()}</Text>
                 </LinearGradient>
@@ -422,8 +543,7 @@ export default function ExpertHistory() {
           <View style={styles.earningsBlock}>
             <Text style={styles.earnLabel}>CREDIT</Text>
             <View style={styles.beansRow}>
-              <MaterialCommunityIcons name="seed" size={14} color="#FBBF24" />
-              <Text style={styles.eliteBeansValue}>+{beansEarned}</Text>
+              <Text style={styles.eliteBeansValue}>+💰{beansEarned}</Text>
             </View>
           </View>
         </View>
@@ -441,12 +561,12 @@ export default function ExpertHistory() {
   const filteredData = allTransactions.filter(t => t.type === activeTab);
 
   const TABS = [
-      { id: 'video_call', label: 'Voice/Video', icon: 'videocam', iconType: 'Ionicons' },
-      { id: 'live_gift', label: 'Live Store', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
-      { id: 'party_gift', label: 'Room Gifts', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
-      { id: 'call_gift', label: 'Direct Gifts', icon: 'gift', iconType: 'MaterialCommunityIcons' },
-      { id: 'live_game_bonus', label: 'Live Games', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
-      { id: 'party_game_bonus', label: 'Room Games', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' }
+      { id: 'video_call', label: 'Consultation Revenue', icon: 'videocam', iconType: 'Ionicons' },
+      { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
+      { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
+      { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
+      { id: 'live_game_bonus', label: 'Broadcast Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
+      { id: 'party_game_bonus', label: 'Forum Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' }
   ];
 
   return (
@@ -553,7 +673,7 @@ const styles = StyleSheet.create({
   levelBadgeMini: { position: 'absolute', bottom: -6, right: -6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 2, borderColor: '#020617' },
   levelBadgeText: { color: '#FFF', fontSize: 7, fontWeight: '900' },
   userMeta: { marginLeft: 15, flex: 1, paddingRight: 10 },
-  eliteUserName: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 0.2 },
+  eliteUserName: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
   dateTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
   giftLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
   eliteDateText: { color: '#94A3B8', fontSize: 10, fontWeight: '800' },

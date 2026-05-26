@@ -199,6 +199,7 @@ export default function CinematicExploreScreen() {
     const [experts, setExperts] = useState<any[]>([]);
     const [activeIndex, setActiveIndex] = useState(0);
     const [hasTrialMins, setHasTrialMins] = useState(false); 
+    const [userData, setUserData] = useState<any>(null); // To store local expert data
     const router = useRouter();
     
     const isScreenFocused = useIsFocused();
@@ -224,6 +225,7 @@ export default function CinematicExploreScreen() {
                     const uSnap = await getDoc(doc(db, "users", user.uid));
                     if (uSnap.exists()) {
                         const data = uSnap.data();
+                        setUserData(data); // Save local user/expert data for profilePic fallback
                         if (data.freeMinsRemaining && data.freeMinsRemaining > 0) {
                             setHasTrialMins(true);
                         } else {
@@ -337,7 +339,17 @@ export default function CinematicExploreScreen() {
         if (!incomingCall || !user) return;
         try {
             if (action === 'accepted') {
-                await updateDoc(doc(db, "calls", incomingCall.id), { status: 'accepted', expertId: user.uid, acceptedAt: serverTimestamp() });
+                // 🔥 SATTI FIX: Robust fallback using userData so expert image is never null 🔥
+                const expertPic = userData?.profilePic || user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData?.name || userData?.userName || user?.displayName || 'Expert')}&background=1E293B&color=fff&bold=true`;
+                const expertNameStr = userData?.name || userData?.userName || user?.displayName || "Consultant";
+                
+                await updateDoc(doc(db, "calls", incomingCall.id), { 
+                    status: 'accepted', 
+                    expertId: user.uid, 
+                    expertImage: expertPic,
+                    expertName: expertNameStr,
+                    acceptedAt: serverTimestamp() 
+                });
                 router.replace({ pathname: "/videocall" as any, params: { callId: incomingCall.id, expertId: user.uid, callerId: incomingCall.callerId, role: 'expert' } });
             } else {
                 // If expert rejects, the call status goes to 'rejected' cutting the user's side too!
@@ -380,13 +392,13 @@ export default function CinematicExploreScreen() {
                     if (status === 'accepted' || status === 'connected' || status === 'in-progress') {
                         clearInterval(interval);
                         setRingModalVisible(false);
-                        // 🔥 EXPERT ACCEPTED! NOW Route to Videocall 🔥
+                        // 🔥 EXPERT ACCEPTED! NOW Route to Videocall with Robust Fallbacks 🔥
                         router.push({
                             pathname: "/videocall" as any,
                             params: { 
-                                expertId: currentExpert.id,
-                                expertName: currentExpert.name || currentExpert.userName,
-                                expertImage: currentExpert.profilePic || currentExpert.photoURL,
+                                expertId: currentExpert?.id || "UNKNOWN_EXPERT",
+                                expertName: currentExpert?.name || currentExpert?.userName || "Consultant",
+                                expertImage: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || currentExpert?.userName || 'Consultant')}&background=1E293B&color=fff&bold=true`,
                                 callId: currentCallId,
                                 role: 'user',
                                 isFreeTrial: hasTrialMins ? "true" : "false" 
@@ -479,14 +491,20 @@ export default function CinematicExploreScreen() {
             setRingTimer(12);
             setRingModalVisible(true);
 
-            // 🔥 SATTI FIX: ALL SCREENSHOT DETAILS ADDED AND STATUS SET TO 'calling' 🔥
+            // 🔥 SATTI FIX: Robust caller and expert fallbacks during setDoc 🔥
+            const cImage = userData?.profilePic || user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData?.name || userData?.userName || user?.displayName || 'User')}&background=0F172A&color=fff&bold=true`;
+            const cName = userData?.name || userData?.userName || user?.displayName || "User";
+
+            const eImage = expert?.profilePic || expert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(expert?.name || expert?.userName || "Consultant")}&background=1E293B&color=fff&bold=true`;
+            const eName = expert?.name || expert?.userName || "Consultant";
+
             await setDoc(doc(db, "calls", newCallId), {
                 callerId: user?.uid || "UNKNOWN_USER",
-                callerImage: user?.photoURL || `https://ui-avatars.com/api/?name=${user?.displayName || 'User'}&background=0F172A&color=fff`,
-                callerName: user?.displayName || "User",
-                expertId: expert.id,
-                expertImage: expert.profilePic || expert.photoURL || null,
-                expertName: expert.name || expert.userName || "Consultant",
+                callerImage: cImage,
+                callerName: cName,
+                expertId: expert?.id || "UNKNOWN_EXPERT",
+                expertImage: eImage,
+                expertName: eName,
                 isFreeTrial: hasTrialMins,
                 status: 'calling', // Changed from 'ringing' to 'calling' for global sync
                 createdAt: serverTimestamp(),
@@ -590,7 +608,7 @@ export default function CinematicExploreScreen() {
                         <View style={styles.ringAvatarWrapper}>
                             <Animated.View style={[styles.ringPulseGlow, { transform: [{ scale: pulseAnim }] }]} />
                             <Image 
-                                source={{ uri: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${currentExpert?.name}&background=0F172A&color=fff` }} 
+                                source={{ uri: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || 'Consultant')}&background=0F172A&color=fff` }} 
                                 style={styles.ringAvatar} 
                             />
                         </View>

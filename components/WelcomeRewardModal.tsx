@@ -161,7 +161,7 @@ export default function WelcomeRewardModal() {
                                     start={{x:0, y:0}} end={{x:1, y:0}}
                                     style={styles.spinGradient}
                                 >
-                                    <MaterialCommunityIcons name={isSpinning ? "sync" : "shield-check"} size={24} color="#FFF" />
+                                    <MaterialCommunityIcons name={isSpinning ? "sync" : "shield-check"} size={20} color="#FFF" />
                                     <Text style={styles.spinText}>{isSpinning ? "DECRYPTING BONUS..." : "UNLOCK WELCOME BONUS"}</Text>
                                 </LinearGradient>
                             </TouchableOpacity>

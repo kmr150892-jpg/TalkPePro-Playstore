@@ -5,18 +5,18 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    Image,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
@@ -241,7 +241,7 @@ export default function HomeScreen() {
                   start={{x: 0, y: 0}}
                   end={{x: 1, y: 1}}
               >
-                  <MaterialCommunityIcons name="lightning-bolt" size={28} color="#FFF" />
+                  <MaterialCommunityIcons name="lightning-bolt" size={23} color="#FFF" />
                   <Text style={styles.DiscoverBtnText}>EXPERT CONNECT</Text>
                   <View style={styles.liveIndicatorDiscover}>
                       <View style={styles.liveDotDiscover} />

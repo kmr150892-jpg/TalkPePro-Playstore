@@ -1,7 +1,14 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { collection, collectionGroup, doc, onSnapshot, query, where } from 'firebase/firestore';
+import {
+    collection,
+    collectionGroup,
+    doc,
+    onSnapshot,
+    query,
+    where
+} from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -74,6 +81,7 @@ export default function ProfileScreen() {
   const [totalSpentCalculated, setTotalSpentCalculated] = useState<number>(0); 
   const [gameNetProfit, setGameNetProfit] = useState<number>(0); 
   const [totalRedeemed, setTotalRedeemed] = useState<number>(0); 
+  const [totalEntryFees, setTotalEntryFees] = useState<number>(0); 
   const [totalMinutes, setTotalMinutes] = useState<number>(0);
 
   // 🌀 COMPLEX ANIMATION ENGINE MATRIX
@@ -136,15 +144,7 @@ export default function ProfileScreen() {
       setLoading(false);
     });
 
-    // Calculate Video Call Minutes
-    const qCalls = query(collection(db, "calls"), where("callerId", "==", user.uid));
-    const unsubCalls = onSnapshot(qCalls, (snap) => {
-        const data = snap.docs.map(doc => doc.data());
-        const totalSecs = data.reduce((acc, curr) => acc + (Number(curr.finalDuration) || Number(curr.duration) || 0), 0);
-        setTotalMinutes(Math.floor(totalSecs / 60));
-    });
-
-    return () => { unsub(); unsubCalls(); };
+    return () => { unsub(); };
   }, [user]);
 
   // 🔥 FETCH LEDGER & MERGED HISTORY DATA DYNAMICALLY 🔥
@@ -154,7 +154,8 @@ export default function ProfileScreen() {
       let rawTransactions: any[] = [];
       let rawGifts: any[] = [];
       let rawRequests: any[] = []; 
-      let rawGames: any[] = []; // 🔥 Holds Pure Reflex Blitz Arena History
+      let rawGames: any[] = []; 
+      let rawCalls: any[] = []; // 🔥 Fetching calls globally here to sync everything properly
 
       const processAllLogs = () => {
           const myGifts = rawGifts.filter(g => 
@@ -162,13 +163,26 @@ export default function ProfileScreen() {
               (g.senderName && userData.name && String(g.senderName).trim().toLowerCase() === String(userData.name).trim().toLowerCase())
           );
 
-          // 🔥 FILTER OUT dummy logs from transactions
+          // 🔥 EXTRACT EXPERT NAME FOR GIFTS (LIVE/FORUM)
+          const enrichedGifts = myGifts.map(g => ({
+              ...g,
+              _enrichedName: g.expertName || g.receiverName || g.toName || g.hostName || g.creatorName || g.Name || ''
+          }));
+
+          // 🔥 EXTRACT EXPERT NAME FOR TRANSACTIONS (CONSULTATION)
           const validTransactions = rawTransactions.filter(t => {
               const typeStr = String(t.type).toUpperCase();
-              return typeStr !== 'VOUCHER_REDEEM' && !typeStr.includes('GAME_bet') && !typeStr.includes('WINNER');
+              return typeStr !== 'VOUCHER_REDEEM'; 
+          }).map(t => {
+              let enrichedName = t.expertName || t.receiverName || t.toName || t.hostName || t.creatorName || t.Name || '';
+              // Cross-reference with Calls DB if name is missing
+              if (!enrichedName && t.callId) {
+                  const call = rawCalls.find(c => c.id === t.callId);
+                  if (call) enrichedName = call.expertName || call.receiverName || '';
+              }
+              return { ...t, _enrichedName: enrichedName };
           });
 
-          // Inject Reward Requests
           const mappedRequests = rawRequests.map(r => ({
               id: r.id,
               _source: 'reward_requests',
@@ -179,15 +193,29 @@ export default function ProfileScreen() {
               timestamp: r.requestDate || r.processedDate || r.createdAt
           }));
 
-          // 🔥 INJECT Reflex Blitz Arena Activity directly into UI logs
           const mappedGames = rawGames.map(g => ({
               ...g,
               _source: 'game_history',
               timestamp: g.timestamp || g.createdAt
           }));
 
-          // Unified History List
-          const mergedLogs = [...validTransactions, ...myGifts, ...mappedRequests, ...mappedGames];
+          // 🔥 NEW: Extracting In-Call Gifts directly from Calls Database to push to History Logs (WITH EXPERT NAME)
+          const mappedCallGifts = rawCalls
+              .filter(c => Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))) > 0)
+              .map(c => ({
+                  id: c.id + '_callgift',
+                  _source: 'call_gifts',
+                  type: 'GIFT',
+                  title: 'In-Call Reward',
+                  amount: Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))),
+                  status: 'COMPLETED',
+                  timestamp: c.endTime || c.createdAt || c.timestamp || c.startTime,
+                  expertName: c.expertName || c.receiverName || c.toName || '', // 🔥 Expert Name mapped here
+                  _enrichedName: c.expertName || c.receiverName || c.toName || ''
+              }));
+
+          // Merge everything into history
+          const mergedLogs = [...validTransactions, ...enrichedGifts, ...mappedRequests, ...mappedGames, ...mappedCallGifts];
 
           mergedLogs.sort((a, b) => {
               const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0);
@@ -198,19 +226,25 @@ export default function ProfileScreen() {
           setHistoryLogs(mergedLogs);
 
           // ================= STATS CALCULATION ENGINE =================
+
+          // Calculate Video Call Minutes safely from rawCalls
+          const totalSecs = rawCalls.reduce((acc, curr) => acc + (Number(curr.finalDuration) || Number(curr.duration) || 0), 0);
+          setTotalMinutes(Math.floor(totalSecs / 60));
           
-          // 1. Calculate Recharge
-          const calcRechargeINR = rawTransactions.reduce((sum, log) => {
+          // 1. Calculate Recharge (Asset Added)
+          const calcRecharge = rawTransactions.reduce((sum, log) => {
               const typeStr = String(log.type || '').toUpperCase();
               const itemStatus = String(log.status || '').toLowerCase();
-              if (typeStr.includes('RECHARGE') && itemStatus === 'success') {
-                  return sum + (Number(log.amount) || 0);
+              if (typeStr.includes('RECHARGE') && (itemStatus === 'success' || itemStatus === 'completed')) {
+                  let d = Number(log.diamonds) || Number(log.diamondsAdded) || 0;
+                  if (d === 0) d = (Number(log.amount) || 0) * 100;
+                  return sum + d;
               }
               return sum;
           }, 0);
-          setTotalRechargeDiamonds(calcRechargeINR * 100);
+          setTotalRechargeDiamonds(calcRecharge);
 
-          // 2. 🔥 Calculate Gifts Accurately from both sources 🔥
+          // 2. 🔥 Calculate ALL Gifts (Standalone + In-Call) 🔥
           const calcGiftsFromNested = myGifts.reduce((sum, log) => sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0), 0);
           const calcGiftsFromTx = rawTransactions.reduce((sum, log) => {
               const typeStr = String(log.type || '').toUpperCase();
@@ -219,13 +253,15 @@ export default function ProfileScreen() {
               }
               return sum;
           }, 0);
-          const calcGifts = calcGiftsFromNested + calcGiftsFromTx;
+          const calcCallGifts = mappedCallGifts.reduce((sum, log) => sum + log.amount, 0); // Adding mapped call gifts
+          
+          const calcGifts = calcGiftsFromNested + calcGiftsFromTx + calcCallGifts;
           setTotalGiftsSpent(calcGifts);
 
           // 3. Calculate Video Call Spent
           const calcVideoCalls = rawTransactions.reduce((sum, log) => {
               if (String(log.type || '').toUpperCase().includes('CALL')) { 
-                  return sum + (Number(log.amount) || Number(log.diamonds) || 0);
+                  return sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0);
               }
               return sum;
           }, 0);
@@ -235,33 +271,104 @@ export default function ProfileScreen() {
           const calcRedeemed = rawRequests.reduce((sum, log) => {
               const statusStr = String(log.status || '').toLowerCase();
               if (statusStr !== 'failed' && statusStr !== 'rejected') {
-                  return sum + (Number(log.costDeducted) || Number(log.voucherValue) || 0);
+                  return sum + (Number(log.costDeducted) || Number(log.voucherValue) || Number(log.amount) || 0);
               }
               return sum;
           }, 0);
           setTotalRedeemed(calcRedeemed);
 
-          // 5. Calculate Activity Net Directly
+          // 5. Calculate Activity Rewards & EXCLUSIVE Game Entry Fees Calculation 🔥
+          let totalGameEntryFeesAll = 0; 
+          let totalGameRefundsAll = 0; 
+          
           const calcGameNet = rawGames.reduce((sum, log) => {
-              const isWin = String(log.status || '').toUpperCase() === 'WIN';
-              const winVal = Number(log.winAmount) || 0;
-              const lossVal = Number(log.lossAmount) || Number(log.entryFee) || 0;
-              return isWin ? sum + winVal : sum - lossVal;
-          }, 0);
-          setGameNetProfit(calcGameNet);
+              const rawStatus = String(log.status || '').toUpperCase();
+              const typeStr = String(log.type || '').toUpperCase();
+              const titleStr = String(log.gameName || log.title || '').toUpperCase();
+              
+              const isWin = rawStatus.includes('WIN') || rawStatus === 'WON' || rawStatus.includes('REWARD') || typeStr.includes('WIN') || typeStr.includes('REWARD') || titleStr.includes('WIN') || titleStr.includes('REWARD') || Number(String(log.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
+              
+              // 🔥 If game is Cancelled or Refunded, completely isolate it
+              const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || rawStatus.includes('REFUND');
+              const isFailedOrCancelled = rawStatus.includes('CANCEL') || rawStatus.includes('FAIL');
+              
+              let winVal = 0;
+              let entryVal = Math.abs(Number(String(log.entryFee || log.entryAmount || log.Amount || log.fee || log.cost || 0).replace(/[^0-9.-]+/g, ''))) || 0; 
 
-          // 6. 🔥 Calculate Total Spent (Video Calls + Gifts + Redeems + Participation Losses) 🔥
-          const totalGameLosses = rawGames.reduce((sum, log) => {
-              const isWin = String(log.status || '').toUpperCase() === 'WIN';
-              return isWin ? sum : sum + (Number(log.lossAmount) || Number(log.entryFee) || 0);
+              if (isRefundTx) {
+                  totalGameRefundsAll += entryVal;
+              } else if (!isFailedOrCancelled) {
+                  totalGameEntryFeesAll += entryVal; 
+              }
+
+              if (isWin && !isFailedOrCancelled && !isRefundTx) {
+                  winVal = Math.abs(Number(String(log.winAmount || log.rewardAmount || log.amount || log.prize || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+                  return sum + winVal;
+              }
+              return sum; 
           }, 0);
-          const grandTotalSpent = calcVideoCalls + calcGifts + calcRedeemed + totalGameLosses;
+
+          const calcTxGameNet = rawTransactions.reduce((sum, log) => {
+              const typeStr = String(log.type || '').toUpperCase();
+              const titleStr = String(log.title || '').toUpperCase();
+              const statusStr = String(log.status || '').toUpperCase();
+              
+              let amountVal = Math.abs(Number(String(log.amount || log.diamonds || log.diamondsAdded || log.winAmount || log.entryFee || log.price || log.fee || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+
+              // 🔥 1. ABSOLUTE STOP FOR ANY REFUND (This fixes the 50000 issue!)
+              const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
+              const isGameRelated = typeStr.includes('ARENA') || typeStr.includes('GAME') || typeStr.includes('ENTRY') || 
+                                    titleStr.includes('ARENA') || titleStr.includes('GAME') || titleStr.includes('ENTRY');
+
+              if (isRefundTx) {
+                  if (isGameRelated) {
+                      totalGameRefundsAll += amountVal;
+                  }
+                  return sum; // 🛑 STRICTLY STOP HERE IF IT IS A REFUND
+              }
+
+              // 🔥 2. ONLY PROCEED IF IT IS DEFINITELY NOT A REFUND
+              const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
+              const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
+              const isFailed = statusStr.includes('CANCEL') || statusStr.includes('FAIL');
+
+              if (isGameReward) {
+                  if (!isFailed) return sum + amountVal;
+                  return sum;
+              }
+              
+              if (isGameEntry) {
+                  if (!isFailed) {
+                      totalGameEntryFeesAll += amountVal;
+                  }
+                  return sum;
+              }
+
+              return sum;
+          }, 0);
+
+          setGameNetProfit(calcGameNet + calcTxGameNet);
+
+          // 6. Calculate ALL General Refunds
+          const calcRefunds = rawTransactions.reduce((sum, log) => {
+              if (String(log.type || '').toUpperCase().includes('REFUND')) {
+                  return sum + (Number(log.amount) || Number(log.diamonds) || 0);
+              }
+              return sum;
+          }, 0);
+
+          // 7. Calculate Total Spent / Asset Utilized
+          // 🔥 ASSET UTILIZED LA REFUND AMOUNT MINUS PANNATHA (Removed - calcRefunds)
+          const grandTotalSpent = Math.max(0, calcVideoCalls + calcGifts + calcRedeemed);
           setTotalSpentCalculated(grandTotalSpent);
+
+          // 🔥 TOTAL ARENA ENTRY : Accurately subtract Game Refunds (40000 - 10000 = 30000)
+          setTotalEntryFees(Math.max(0, totalGameEntryFeesAll - totalGameRefundsAll));
 
           setLedgerLoading(false);
       };
 
-      // Fetch Subscriptions
+      // Ensure we listen to all collections
       const qHistory = query(collection(db, 'transactions'), where('userId', '==', user.uid));
       const unsubHistory = onSnapshot(qHistory, (snap) => {
           rawTransactions = snap.docs.map(d => ({ id: d.id, _source: 'transactions', ...(d.data() as any) }));
@@ -286,7 +393,14 @@ export default function ProfileScreen() {
           processAllLogs();
       });
 
-      return () => { unsubHistory(); unsubGifts(); unsubRequests(); unsubGameHistory(); };
+      // 🔥 Calls Snapshot integration
+      const qCalls = query(collection(db, "calls"), where("callerId", "==", user.uid));
+      const unsubCalls = onSnapshot(qCalls, (snap) => {
+          rawCalls = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          processAllLogs();
+      });
+
+      return () => { unsubHistory(); unsubGifts(); unsubRequests(); unsubGameHistory(); unsubCalls(); };
   }, [user, userData]);
 
   const totalSpent = userData?.totalSpentDiamonds || 0;
@@ -317,6 +431,7 @@ export default function ProfileScreen() {
     { id: '4', title: 'Support Center', icon: 'construct', color: rank.color, route: '/support' },
     { id: '5', title: 'Privacy Policy', icon: 'ribbon', color: rank.secondaryColor, route: '/legal' },
   ];
+  
   const borderType1 = {
       borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0.5, borderBottomWidth: 0.5,
       borderLeftColor: rank.color, borderRightColor: rank.color,
@@ -337,33 +452,61 @@ export default function ProfileScreen() {
       let iconColor = "#94A3B8";
       let sign = "-";
       let currency = "💎";
-      let amountValue = item.amount || item.price || item.diamonds || item.diamondsAdded || 0;
-      let titleText = item.title || item.type || 'Transaction';
-      let statusText = item.status || 'COMPLETED';
-      let statusColor = String(item.status).toLowerCase() === 'success' || String(item.status).toLowerCase() === 'completed' ? '#10B981' : '#F59E0B';
+      let amountValue = Math.abs(Number(String(item.amount || item.price || item.diamonds || item.diamondsAdded || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+      let titleText = String(item.title || item.type || 'Transaction');
+      let statusText = String(item.status || 'COMPLETED').toUpperCase();
+      let statusColor = statusText.toLowerCase() === 'success' || statusText.toLowerCase() === 'completed' ? '#10B981' : '#F59E0B';
 
       const itemType = String(item.type || '').toUpperCase();
+      const itemTitle = String(item.title || '').toUpperCase();
+      
       const isRecharge = itemType.includes('RECHARGE');
       const isCall = itemType.includes('CALL');
       const isVoucher = itemType === 'VOUCHER_REDEEM'; 
-
-      const isGiftUI = item._source === 'nested_gifts' || (!isRecharge && !isCall && !isVoucher && itemType.includes('GIFT'));
+      const isRefund = itemType.includes('REFUND');
       
+      const isGameReward = itemType.includes('WINNER') || itemType.includes('REWARD') || itemTitle.includes('WINNER') || itemTitle.includes('REWARD') || statusText.includes('WINNER') || statusText.includes('REWARD');
+      const isGameEntry = itemType.includes('ARENA_ENTRY') || itemType.includes('GAME_ENTRY') || itemType.includes('ARENA') || itemType.includes('ENTRY') || itemTitle.includes('ARENA') || itemTitle.includes('ENTRY');
+
+      // 🔥 Make sure call_gifts gets caught by the UI rendering
+      const isGiftUI = item._source === 'nested_gifts' || item._source === 'call_gifts' || (!isRecharge && !isCall && !isVoucher && !isRefund && !isGameReward && !isGameEntry && itemType.includes('GIFT'));
+      
+      // 🔥 EXTRACT RECEIVER / EXPERT NAME HERE ROBUSTLY FOR ALL SOURCES 🔥
+      const receiverName = item._enrichedName || item.expertName || item.receiverName || item.toName || item.receiver || item.targetName || item.hostName || item.creatorName || item.Name || "";
+
       if (isGiftUI) {
-          iconName = "gift"; iconColor = "#A855F7"; 
-          if (item._source === 'nested_gifts') {
-              const theGiftName = item.giftName || item.name || 'Virtual Reward';
-              titleText = `${item.icon ? item.icon + ' ' : ''}${theGiftName}`;
-          } else {
-              titleText = item.giftName ? `Sent: ${item.giftName}` : (item.type ? `Sent: ${item.type}` : 'Virtual Reward Sent');
+          iconName = "gift"; iconColor = "#A855F7"; sign = "-"; statusText = 'COMPLETED'; statusColor = '#10B981';
+          
+          let theGiftName = item.giftName || item.name || item.type || 'Virtual Reward';
+          let baseTitle = `Reward Sent: ${item.icon ? item.icon + ' ' : ''}${theGiftName}`;
+          
+          if (item._source === 'call_gifts') {
+              baseTitle = `In-Call Reward Sent`;
           }
-          statusText = 'COMPLETED'; statusColor = '#10B981';
+          if (item.title && item.title.toLowerCase().includes('to ')) {
+              baseTitle = item.title;
+          }
+
+          if (receiverName && !baseTitle.toLowerCase().includes(receiverName.toLowerCase())) {
+              titleText = `${baseTitle} to ${receiverName}`;
+          } else {
+              titleText = baseTitle;
+          }
+      }
+      else if (isRefund) {
+          iconName = "backup-restore"; iconColor = "#10B981"; titleText = item.title || "Refund Received"; sign = "+"; statusText = 'SUCCESS'; statusColor = '#10B981';
       }
       else if (isRecharge) { 
-          iconName = "cash-plus"; iconColor = "#10B981"; sign = "+"; currency = "₹"; amountValue = item.amount || 0;
+          iconName = "cash-plus"; iconColor = "#10B981"; sign = "+"; currency = "₹"; 
       }
       else if (isCall) { 
-          iconName = "video-vintage"; iconColor = "#3B82F6"; titleText = "Video Consultation"; 
+          iconName = "video-vintage"; iconColor = "#3B82F6"; sign = "-";
+          let baseTitle = item.title || "Video Consultation";
+          if (receiverName && !baseTitle.toLowerCase().includes(receiverName.toLowerCase())) {
+              titleText = `${baseTitle} with ${receiverName}`;
+          } else {
+              titleText = baseTitle;
+          }
       }
       else if (isVoucher) {
           iconName = "ticket-percent"; iconColor = "#F59E0B"; titleText = item.title || "Reward Voucher Redeemed";
@@ -376,6 +519,27 @@ export default function ProfileScreen() {
           } else {
               statusText = 'PENDING'; statusColor = '#F59E0B'; sign = "-";
           }
+      }
+      else if (isGameReward) {
+          iconName = "gamepad-variant"; 
+          iconColor = "#10B981"; 
+          sign = "+"; 
+          statusColor = '#10B981';
+          if (statusText === 'COMPLETED' || statusText.includes('WIN') || statusText.includes('REWARD')) {
+              statusText = 'REWARD';
+          }
+      }
+      else if (isGameEntry) {
+          iconName = "gamepad-variant"; 
+          iconColor = "#EF4444"; 
+          sign = "-"; 
+          titleText = item.title || "Arena Entry";
+          statusColor = '#EF4444';
+      }
+
+      titleText = titleText.replace(/WINNER/gi, 'REWARD').replace(/GIFT/gi, 'REWARD');
+      if (statusText.includes('WINNER') || statusText === 'WIN' || statusText === 'WON') {
+          statusText = 'REWARD';
       }
 
       const timeVal = item.timestamp || item.createdAt;
@@ -393,14 +557,14 @@ export default function ProfileScreen() {
                   <MaterialCommunityIcons name={iconName as any} size={22} color={iconColor} />
               </View>
               <View style={{ flex: 1, marginLeft: 15 }}>
-                  <Text style={styles.historyTitle} numberOfLines={1}>{titleText}</Text>
+                  <Text style={styles.historyTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{titleText}</Text>
                   <Text style={styles.historyDate}>{displayTime}</Text>
               </View>
-              <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                  <Text style={[styles.historyAmount, { color: sign === '+' ? '#10B981' : '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit>
+              <View style={{ alignItems: 'flex-end', flexShrink: 1, paddingLeft: 5 }}>
+                  <Text style={[styles.historyAmount, { color: sign === '+' ? '#10B981' : '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                       {sign} {currency === '₹' ? currency : ''}{amountValue} {currency === '💎' ? currency : ''}
                   </Text>
-                  <Text style={[styles.historyStatus, { color: statusColor }]}>{statusText}</Text>
+                  <Text style={[styles.historyStatus, { color: statusColor }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{statusText}</Text>
               </View>
           </View>
       );
@@ -408,17 +572,38 @@ export default function ProfileScreen() {
 
   // 🔥 NEW: DEDICATED ACTIVITY HISTORY RENDERER 🔥
   const renderGameHistoryItem = (item: any, index: number) => {
-      const rawStatus = String(item.status || "COMPLETED").toUpperCase();
-      const isWin = rawStatus === "WIN";
-      const amountColor = isWin ? '#10B981' : '#EF4444'; 
+      let rawStatus = String(item.status || "COMPLETED").toUpperCase();
+      const typeStr = String(item.type || "").toUpperCase();
+      const titleStr = String(item.gameName || item.title || item.type || "REFLEX BLITZ ARENA").toUpperCase();
       
-      const winVal = Number(item.winAmount) || 0;
-      const lossVal = Number(item.lossAmount) || Number(item.entryFee) || 0;
-      const finalAmount = isWin ? winVal : lossVal;
-      const displayAmount = isWin ? `+${finalAmount.toLocaleString()}` : `-${finalAmount.toLocaleString()}`;
+      const isWin = rawStatus.includes("WIN") || rawStatus === "WON" || rawStatus.includes("REWARD") || 
+                    typeStr.includes("WIN") || typeStr.includes("REWARD") || 
+                    titleStr.includes("WIN") || titleStr.includes("REWARD") || 
+                    Number(String(item.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
+                    
+      let finalAmount = 0;
+      let entryVal = Math.abs(Number(String(item.entryFee || item.entryAmount || 0).replace(/[^0-9.-]+/g, ''))) || 0; 
+
+      if (isWin) {
+          const winVal = Math.abs(Number(String(item.winAmount || item.rewardAmount || item.amount || item.prize || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+          finalAmount = winVal; 
+      } else {
+          if(entryVal === 0) entryVal = Math.abs(Number(String(item.lossAmount || item.amount || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+          finalAmount = -entryVal;
+      }
+      
+      const isPositive = finalAmount >= 0;
+      const amountColor = isPositive ? '#10B981' : '#EF4444'; 
+      const displayAmount = isPositive ? `+${finalAmount.toLocaleString()}` : `${finalAmount.toLocaleString()}`;
       
       const gameIcon = "dice";
-      const gameName = "REFLEX BLITZ ARENA";
+      
+      let gameName = item.gameName || item.title || item.type || "REFLEX BLITZ ARENA";
+      gameName = String(gameName).replace(/WINNER/gi, 'REWARD').replace(/GIFT/gi, 'REWARD');
+
+      if (rawStatus.includes("WINNER") || rawStatus === "WIN" || rawStatus === "WON") {
+          rawStatus = "REWARD";
+      }
 
       let displayTime = 'JUST NOW';
       if (item.timestamp?.toDate) {
@@ -433,21 +618,21 @@ export default function ProfileScreen() {
 
       return (
           <View key={item.id || index} style={[styles.historyCard, itemBorder]}>
-              <View style={[styles.historyIconBox, { backgroundColor: isWin ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', borderColor: amountColor }]}>
+              <View style={[styles.historyIconBox, { backgroundColor: isPositive ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)', borderColor: amountColor }]} >
                   <Ionicons name={gameIcon} size={22} color={amountColor} />
               </View>
               <View style={{ flex: 1, marginLeft: 15 }}>
-                  <Text style={styles.historyTitle} numberOfLines={1}>{gameName}</Text>
+                  <Text style={styles.historyTitle} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{gameName}</Text>
                   <Text style={styles.historyDate}>{displayTime}</Text>
-                  <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 4, fontWeight: '600' }}>
-                      Session: {item.sessionId || 'N/A'} | Entry: {item.entryFee || '0'}
+                  <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 4, fontWeight: '600' }} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>
+                      Session: {item.sessionId || 'N/A'} | Entry: {entryVal || '0'}
                   </Text>
               </View>
-              <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                  <Text style={[styles.historyAmount, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit>
+              <View style={{ alignItems: 'flex-end', flexShrink: 1, paddingLeft: 5 }}>
+                  <Text style={[styles.historyAmount, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                       {displayAmount} 💎
                   </Text>
-                  <Text style={[styles.historyStatus, { color: amountColor }]}>{rawStatus}</Text>
+                  <Text style={[styles.historyStatus, { color: amountColor }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{rawStatus}</Text>
               </View>
           </View>
       );
@@ -469,17 +654,17 @@ export default function ProfileScreen() {
           <View style={{ marginLeft: 15, flex: 1 }}>
               <View style={[styles.badge, { borderColor: rank.color, backgroundColor: rank.color + '15' }]}>
                 <MaterialCommunityIcons name={rank.icon as any} size={11} color={rank.color} />
-                <Text style={[styles.badgeText, { color: rank.color }]}>{rank.label}</Text>
+                <Text style={[styles.badgeText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rank.label}</Text>
               </View>
-              <Text style={styles.nameRow} numberOfLines={1}>{userData?.name || 'SYNCING...'}</Text>
-              <Text style={[styles.statusText, { color: rank.secondaryColor }]}>{rank.status}</Text>
+              <Text style={styles.nameRow} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{userData?.name || 'SYNCING...'}</Text>
+              <Text style={[styles.statusText, { color: rank.secondaryColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rank.status}</Text>
           </View>
         </View>
 
         <View style={[styles.rowStats, { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
           <View style={styles.stat}><Text style={styles.statV}>{friendsCount}</Text><Text style={styles.statL}>NETWORK</Text></View>
           <View style={[styles.stat, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }]}>
-            <Text style={styles.statV} adjustsFontSizeToFit numberOfLines={1}>{(userData?.balance || 0).toLocaleString()}</Text>
+            <Text style={styles.statV} adjustsFontSizeToFit minimumFontScale={0.4} numberOfLines={1}>{(userData?.balance || 0).toLocaleString()}</Text>
             <Text style={styles.statL}>ASSETS</Text>
           </View>
           <View style={styles.stat}><Text style={[styles.statV, {color: rank.color}]}>L{rank.lvl}</Text><Text style={styles.statL}>LEVEL</Text></View>
@@ -512,13 +697,13 @@ export default function ProfileScreen() {
         {/* 🔥 TABS SECTION (3 TABS) 🔥 */}
         <View style={styles.tabsRow}>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'COMMANDS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('COMMANDS')}>
-                <Text style={[styles.tabText, activeTab === 'COMMANDS' && { color: '#FFF' }]}>COMMANDS</Text>
+                <Text style={[styles.tabText, activeTab === 'COMMANDS' && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>COMMANDS</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'STATS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('STATS')}>
-                <Text style={[styles.tabText, activeTab === 'STATS' && { color: '#FFF' }]}>STATS</Text>
+                <Text style={[styles.tabText, activeTab === 'STATS' && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>STATS</Text>
             </TouchableOpacity>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'HISTORY' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('HISTORY')}>
-                <Text style={[styles.tabText, activeTab === 'HISTORY' && { color: '#FFF' }]}>HISTORY</Text>
+                <Text style={[styles.tabText, activeTab === 'HISTORY' && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>HISTORY</Text>
             </TouchableOpacity>
         </View>
 
@@ -531,11 +716,8 @@ export default function ProfileScreen() {
                         <MaterialCommunityIcons name="gift" size={24} color="#F59E0B" />
                     </View>
                     <View style={{ flex: 1, marginLeft: 18 }}>
-                        <Text style={[styles.neonLabel, { color: '#F59E0B' }]}>REDEMPTION CENTER</Text>
-                        <Text style={styles.neonSub}>Claim Premium Loyalty Vouchers</Text>
-                    </View>
-                    <View style={{ backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, marginRight: 10 }}>
-                        <Text style={{ color: '#FFF', fontSize: 8, fontWeight: '900', letterSpacing: 1 }}>HOT</Text>
+                        <Text style={[styles.neonLabel, { color: '#F59E0B' }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>REDEMPTION CENTER</Text>
+                        <Text style={styles.neonSub} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>Claim Premium Loyalty Vouchers</Text>
                     </View>
                     <Ionicons name="chevron-forward" size={16} color="rgba(245, 158, 11, 0.5)" />
                   </TouchableOpacity>
@@ -545,7 +727,10 @@ export default function ProfileScreen() {
                       return (
                         <TouchableOpacity key={item.id} style={[styles.neonRow, itemBorderStyle, { borderLeftColor: item.color, borderLeftWidth: 4 }]} onPress={() => router.push(item.route as any)} activeOpacity={0.6}>
                           <View style={[styles.neonIcon, { backgroundColor: item.color + '15', borderColor: item.color + '40' }]}><Ionicons name={item.icon as any} size={20} color={item.color} /></View>
-                          <View style={{ flex: 1, marginLeft: 18 }}><Text style={styles.neonLabel}>{item.title.toUpperCase()}</Text><Text style={styles.neonSub}>Status: ACCESS_GRANTED</Text></View>
+                          <View style={{ flex: 1, marginLeft: 18 }}>
+                              <Text style={styles.neonLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>{item.title.toUpperCase()}</Text>
+                              <Text style={styles.neonSub} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>Status: ACCESS_GRANTED</Text>
+                          </View>
                           <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.3)" />
                         </TouchableOpacity>
                       );
@@ -562,39 +747,46 @@ export default function ProfileScreen() {
                         <View style={styles.statsContainer}>
                             <View style={[styles.ledgerBox, borderType1]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#10B98130' }]}><MaterialCommunityIcons name="cash-plus" size={24} color="#10B981" /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit>{totalRechargeDiamonds} 💎</Text>
-                                <Text style={styles.statBoxLabel}>ASSETS ADDED</Text>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalRechargeDiamonds} 💎</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>ASSETS ADDED</Text>
                             </View>
                             <View style={[styles.ledgerBox, borderType2]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#F43F5E30' }]}><MaterialCommunityIcons name="diamond-stone" size={24} color="#F43F5E" /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit>{totalSpentCalculated} 💎</Text>
-                                <Text style={styles.statBoxLabel}>ASSETS UTILIZED</Text>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalSpentCalculated} 💎</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>ASSETS UTILIZED</Text>
                             </View>
                             <View style={[styles.ledgerBox, borderType1]}>
                                 <View style={[styles.iconCircle, { backgroundColor: gameNetProfit >= 0 ? '#10B98130' : '#EF444430' }]}><MaterialCommunityIcons name="gamepad-variant" size={24} color={gameNetProfit >= 0 ? "#10B981" : "#EF4444"} /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit>{gameNetProfit > 0 ? '+' : ''}{gameNetProfit} 💎</Text>
-                                <Text style={styles.statBoxLabel}>ACTIVITY REWARDS</Text>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{gameNetProfit > 0 ? '+' : ''}{gameNetProfit} 💎</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>ACTIVITY REWARDS</Text>
                             </View>
                             <View style={[styles.ledgerBox, borderType2]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#A855F730' }]}><MaterialCommunityIcons name="gift" size={24} color="#A855F7" /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit>{totalGiftsSpent} 💎</Text>
-                                <Text style={styles.statBoxLabel}>REWARDS SENT</Text>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalGiftsSpent} 💎</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>REWARDS SENT</Text>
                             </View>
                             <View style={[styles.ledgerBox, borderType1]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#3B82F630' }]}><MaterialCommunityIcons name="video-vintage" size={24} color="#3B82F6" /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit>{totalVideoCallSpent} 💎</Text>
-                                <Text style={styles.statBoxLabel}>CONSULTATION SPENT</Text>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalVideoCallSpent} 💎</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CONSULTATION SPENT</Text>
                             </View>
                             <View style={[styles.ledgerBox, borderType2]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#F59E0B30' }]}><MaterialCommunityIcons name="clock-outline" size={24} color="#F59E0B" /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit>{totalMinutes}</Text>
-                                <Text style={styles.statBoxLabel}>CONSULTATION MINS</Text>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalMinutes}</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CONSULTATION MINS</Text>
                             </View>
-                            {/* 🔥 NEW STAT BOX: MY REDEEMS (Full Width) 🔥 */}
+                            
+                            {/* 🔥 NEW TOTAL ARENA ENTRY BOX 🔥 */}
+                            <View style={[styles.ledgerBox, borderType2, { width: '100%' }]}>
+                                <View style={[styles.iconCircle, { backgroundColor: '#EF444430' }]}><MaterialCommunityIcons name="sword-cross" size={24} color="#EF4444" /></View>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalEntryFees.toLocaleString()} 💎</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>TOTAL ARENA ENTRY</Text>
+                            </View>
+
                             <View style={[styles.ledgerBox, borderType1, { width: '100%' }]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#F59E0B30' }]}><MaterialCommunityIcons name="ticket-percent" size={24} color="#F59E0B" /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit>{totalRedeemed.toLocaleString()} 💎</Text>
-                                <Text style={styles.statBoxLabel}>TOTAL REWARDS REDEEMED</Text>
+                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalRedeemed.toLocaleString()} 💎</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>TOTAL REWARDS REDEEMED</Text>
                             </View>
                         </View>
                     )}

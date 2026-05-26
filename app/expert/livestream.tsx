@@ -24,7 +24,7 @@ import { checkAndRequestCallPermissions } from '../../utils/permissions';
 import * as ScreenCapture from 'expo-screen-capture';
 import GiftOverlay from '../../components/GiftOverlay';
 import LiveGameSheet from '../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA
-import MemoryMatch from '../../components/MemoryMatch'; // ✅ MEMORY MATCH 
+import MemoryMatch from '../../components/MemoryMatch'; // ✅ MEMORY MATCH
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80';
@@ -38,7 +38,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 30000)    return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
@@ -49,14 +49,14 @@ export default function LiveStreamScreen() {
     const params = useLocalSearchParams();
     const engine = useRef<IRtcEngine | null>(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
-    const shimmerAnim = useRef(new Animated.Value(0)).current; 
-    const isNavigatingToCall = useRef(false); 
+    const shimmerAnim = useRef(new Animated.Value(0)).current;
+    const isNavigatingToCall = useRef(false);
     
     // 🔥 SATTI FIX: Ref to prevent double triggering of AppState close logic
     const isAppClosing = useRef(false);
     
     // 🔥 SATTI FIX: Block summary popping up when OS requests Camera/Mic permissions
-    const isRequestingPermissions = useRef(true); 
+    const isRequestingPermissions = useRef(true);
 
     // --- Existing States ---
     const [joined, setJoined] = useState(false);
@@ -69,12 +69,12 @@ export default function LiveStreamScreen() {
     // --- Feature States ---
     const [seconds, setSeconds] = useState(0);
     const [showSummary, setShowSummary] = useState(false);
-    const [earnings, setEarnings] = useState(0); 
+    const [earnings, setEarnings] = useState(0);
     const [giftAlert, setGiftAlert] = useState<string | null>(null);
     const [isProEnabled, setIsProEnabled] = useState(false);
     const [pinnedMessage, setPinnedMessage] = useState<any>(null);
     const [guestUid, setGuestUid] = useState<number | null>(null);
-    const [hostImage, setHostImage] = useState<string>(""); 
+    const [hostImage, setHostImage] = useState<string>("");
     const [hostName, setHostName] = useState<string>("");
     
     // ✅ Dynamic Level & Theme States
@@ -178,65 +178,65 @@ export default function LiveStreamScreen() {
 
     // 🔥 STRICT FIX: APPSTATE LISTENER TO HANDLE FORCE CLOSE WAITING LOGIC 🔥
     useEffect(() => {
-    if (!currentLiveId) return;
-    
-    const handleAppStateChange = async (nextAppState: string) => {
-        // 🔥 SATTI FIX: App background poitu thirumba ulla (active) varum pothu ghost UI-a wipe pandrom 🔥
-        if (nextAppState === 'active') {
-            setGameVisible(false);
-            setGlassVisible(false); 
-            isAppClosing.current = false; 
-        }
-
-        // 🔥 SATTI FIX: Added !isRequestingPermissions.current to stop false triggers during OS Permission Request 🔥
-        if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current && !isRequestingPermissions.current) {
-            isAppClosing.current = true;
-            
-            // 🔥 SATTI FIX: Force close background ghost game modal
-            setGameVisible(false);
-            setGlassVisible(false);
-
-            // 🔥 SATTI FIX: INSTANT AGORA KILL 🔥 Viewers side udaney cut aagidum!
-            if (engine.current) {
-                engine.current.leaveChannel();
+        if (!currentLiveId) return;
+        
+        const handleAppStateChange = async (nextAppState: string) => {
+            // 🔥 SATTI FIX: App background poitu thirumba ulla (active) varum pothu ghost UI-a wipe pandrom 🔥
+            if (nextAppState === 'active') {
+                setGameVisible(false);
+                setGlassVisible(false);
+                isAppClosing.current = false;
             }
-            
-            // UI-aiyu udaney summary-ku mathidrom
-            setJoined(false);
-            setShowSummary(true);
 
-            try {
-                // 🔥 METHOD 1: Instant RTDB Update (Native WebSocket Level) 🔥
-                const rtdb = getDatabase();
-                set(ref(rtdb, `presence_lives/${currentLiveId}`), "ended").catch(()=>{});
-                set(ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`), "CANCELLED").catch(()=>{});
+            // 🔥 SATTI FIX: Added !isRequestingPermissions.current to stop false triggers during OS Permission Request 🔥
+            if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current && !isRequestingPermissions.current) {
+                isAppClosing.current = true;
+                
+                // 🔥 SATTI FIX: Force close background ghost game modal
+                setGameVisible(false);
+                setGlassVisible(false);
 
-                // 🔥 SATTI FIX: DIRECT FIRESTORE UPDATES WITHOUT BATCHING/AWAITING
-                // This ensures the payload is queued instantly to the Native Bridge before JS Thread suspends!
-                updateDoc(doc(db, "lives", currentLiveId), { 
-                    status: "ended", 
-                    endTime: serverTimestamp() 
-                }).catch(()=>{});
-
-                updateDoc(doc(db, "lives", currentLiveId, "games", "reflex_arena"), { 
-                    status: "CANCELLED", 
-                    refunded: true, 
-                    players: [] 
-                }).catch(()=>{});
-
-                if (auth.currentUser) {
-                    updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false }).catch(()=>{});
+                // 🔥 SATTI FIX: INSTANT AGORA KILL 🔥 Viewers side udaney cut aagidum!
+                if (engine.current) {
+                    engine.current.leaveChannel();
                 }
+                
+                // UI-aiyu udaney summary-ku mathidrom
+                setJoined(false);
+                setShowSummary(true);
 
-            } catch (error) { 
-                console.log("Force close cleanup log:", error); 
+                try {
+                    // 🔥 METHOD 1: Instant RTDB Update (Native WebSocket Level) 🔥
+                    const rtdb = getDatabase();
+                    set(ref(rtdb, `presence_lives/${currentLiveId}`), "ended").catch(()=>{});
+                    set(ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`), "CANCELLED").catch(()=>{});
+
+                    // 🔥 SATTI FIX: DIRECT FIRESTORE UPDATES WITHOUT BATCHING/AWAITING
+                    // This ensures the payload is queued instantly to the Native Bridge before JS Thread suspends!
+                    updateDoc(doc(db, "lives", currentLiveId), {
+                        status: "ended",
+                        endTime: serverTimestamp()
+                    }).catch(()=>{});
+
+                    updateDoc(doc(db, "lives", currentLiveId, "games", "reflex_arena"), {
+                        status: "CANCELLED",
+                        refunded: true,
+                        players: []
+                    }).catch(()=>{});
+
+                    if (auth.currentUser) {
+                        updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false }).catch(()=>{});
+                    }
+
+                } catch (error) {
+                    console.log("Force close cleanup log:", error);
+                }
             }
-        }
-    };
-    
-    const subscription = AppState.addEventListener('change', handleAppStateChange);
-    return () => { subscription.remove(); };
-}, [currentLiveId]);
+        };
+        
+        const subscription = AppState.addEventListener('change', handleAppStateChange);
+        return () => { subscription.remove(); };
+    }, [currentLiveId]);
 
     useEffect(() => {
         const init = async () => {
@@ -256,8 +256,8 @@ export default function LiveStreamScreen() {
                 return;
             }
 
-            const hostData = await fetchHostData(); 
-            setupAgora(hostData); 
+            const hostData = await fetchHostData();
+            setupAgora(hostData);
         };
         init();
         const unsubListeners = listenToStreamData();
@@ -317,7 +317,7 @@ export default function LiveStreamScreen() {
         const callQuery = query(
             collection(db, "calls"),
             where("expertId", "==", auth.currentUser?.uid || ""),
-            where("status", "in", ["ringing", "pending", "Discover_dialing"]) 
+            where("status", "in", ["ringing", "pending", "Discover_dialing"])
         );
 
         const unsubCalls = onSnapshot(callQuery, async (snap) => {
@@ -345,7 +345,7 @@ export default function LiveStreamScreen() {
                 }
 
                 const data = validDocSnap.data() as any;
-                const currentUserId = data.userId || data.callerId; 
+                const currentUserId = data.userId || data.callerId;
 
                 const userRef = doc(db, "users", auth.currentUser?.uid || "");
                 const expertSnap = await getDoc(userRef);
@@ -353,7 +353,7 @@ export default function LiveStreamScreen() {
 
                 if (myBlockedList.includes(currentUserId)) {
                     await updateDoc(doc(db, "calls", validDocSnap.id), { status: 'rejected' });
-                    return; 
+                    return;
                 }
 
                 // ✅ FORCE FETCH ACTUAL NAME & IMAGE FOR ULTRA PREMIUM MODAL
@@ -390,7 +390,7 @@ export default function LiveStreamScreen() {
             }
 
             clearInterval(timer);
-            unsubListeners(); 
+            unsubListeners();
             unsubCalls();
             unsubWallet();
             
@@ -422,17 +422,20 @@ export default function LiveStreamScreen() {
         if (userSnap.exists()) {
             const userData = userSnap.data();
             let name = userData.name || auth.currentUser.displayName || "Consultant";
+            
+            // ✅ THE ARUVI UPDATE CHECK
             if (name === "ARUVI MULTIVERSE") {
                 name = "Aruvi";
             }
-            const img = userData.profilePic || userData.photoURL || ""; 
+            
+            const img = userData.profilePic || userData.photoURL || "";
             const beans = userData.totalBeansEarned || 0;
-            const config = getLevelConfig(beans); 
+            const config = getLevelConfig(beans);
             const price = userData.userPrice || 0;
             
             setHostName(name);
             setHostImage(img);
-            setHostLevel(config.label); 
+            setHostLevel(config.label);
             setHostConfig(config);
             return { name, image: img, levelTitle: config.label, userPrice: price };
         }
@@ -441,7 +444,7 @@ export default function LiveStreamScreen() {
 
     const setupAgora = async (hostData: { name: string, image: string, levelTitle: string, userPrice: number }) => {
         try {
-            if (engine.current) return; 
+            if (engine.current) return;
 
             engine.current = createAgoraRtcEngine();
             const rtcEngine = engine.current;
@@ -452,7 +455,7 @@ export default function LiveStreamScreen() {
             rtcEngine.registerEventHandler({
                 onJoinChannelSuccess: () => {
                     setJoined(true);
-                    updateLiveStatus('live', hostData.name, hostData.image, hostData.levelTitle, hostData.userPrice); 
+                    updateLiveStatus('live', hostData.name, hostData.image, hostData.levelTitle, hostData.userPrice);
                 },
                 onUserJoined: (connection, uid) => {
                     setGuestUid(uid);
@@ -469,23 +472,23 @@ export default function LiveStreamScreen() {
         } catch (e) { console.error(e); }
     };
 
-    // 🔥 CRITICAL FIX: handleCallAction Logic 
+    // 🔥 CRITICAL FIX: handleCallAction Logic
     const handleCallAction = async (action: 'accepted' | 'rejected') => {
-        if (!incomingCall || !auth.currentUser) return; 
+        if (!incomingCall || !auth.currentUser) return;
         
         try {
             if (action === 'accepted') {
                 isNavigatingToCall.current = true; // Prevents Agora from unmounting in useEffect cleanup
                 
-                await updateDoc(doc(db, "lives", currentLiveId), { 
+                await updateDoc(doc(db, "lives", currentLiveId), {
                     status: 'ended',
-                    endTime: serverTimestamp() 
+                    endTime: serverTimestamp()
                 });
 
                 await updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false, isBusy: true });
 
                 const callRef = doc(db, "calls", incomingCall.id);
-                await updateDoc(callRef, { 
+                await updateDoc(callRef, {
                     status: 'accepted',
                     expertName: hostName || "Consultant", // 🔥 SATTI FIX: NAME MAP
                     expertImage: hostImage || "",     // 🔥 SATTI FIX: IMAGE MAP
@@ -508,13 +511,13 @@ export default function LiveStreamScreen() {
 
                 router.replace({
                     pathname: "/videocall",
-                    params: { 
+                    params: {
                         callId: incomingCall.id,
                         expertId: auth.currentUser.uid,
                         expertName: hostName || "Consultant", // 🔥 SATTI FIX: EXPERT PARAMS
                         expertImage: hostImage || "",     // 🔥 SATTI FIX: EXPERT PARAMS
                         callerName: incomingCall.userName || "Client",
-                        callerId: incomingCall.callerId, 
+                        callerId: incomingCall.callerId,
                         role: 'expert'
                     }
                 });
@@ -559,7 +562,7 @@ export default function LiveStreamScreen() {
             snap.docChanges().forEach(async (change) => {
                 if (change.type === "added") {
                     const gift = change.doc.data();
-                    setActiveGift(gift); 
+                    setActiveGift(gift);
                     
                     const diamondAmount = gift.amount || 0;
                     setEarnings(prev => prev + diamondAmount);
@@ -614,7 +617,7 @@ export default function LiveStreamScreen() {
                 return {
                     id: doc.id,
                     ...data,
-                    photoURL: data.photoURL || data.profilePic || null 
+                    photoURL: data.photoURL || data.profilePic || null
                 };
             });
             setActiveViewers(viewers);
@@ -626,20 +629,24 @@ export default function LiveStreamScreen() {
     const updateLiveStatus = async (status: string, manualName?: string, manualImage?: string, level?: string, price?: number) => {
         if (!auth.currentUser) return;
 
-        let finalName = manualName || hostName || "Consultant";
-        if (finalName === "ARUVI MULTIVERSE") {
-            finalName = "Aruvi";
-        }
-
+        // 🔥 SATTI FIX: updateData-va status-ku munnadiye initialize panitom. 
+        // Live 'ended' aagumpothu hostName update aaga kudathu, ilana pazhaya empty string "Consultant" nu overwrite aaidum.
         const updateData: any = {
-            hostId: auth.currentUser.uid,
-            hostName: finalName,
-            hostImage: manualImage || hostImage || "",
             status: status,
             currentLiveId: currentLiveId,
         };
 
         if (status === 'live') {
+            let finalName = manualName || hostName || "Consultant";
+            
+            // ✅ THE ARUVI UPDATE CHECK FOR ROOM CREATION
+            if (finalName === "ARUVI MULTIVERSE") {
+                finalName = "Aruvi";
+            }
+            
+            updateData.hostId = auth.currentUser.uid;
+            updateData.hostName = finalName;
+            updateData.hostImage = manualImage || hostImage || "";
             updateData.startedAt = serverTimestamp();
             updateData.viewerCount = 0;
             updateData.currentLevel = level || "BEGINNER";
@@ -647,7 +654,7 @@ export default function LiveStreamScreen() {
             updateData.earnedBeans = 0; // 🔥 SATTI FIX: Live start aagum pothu session tracking initialize panren
             
             await updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: true, isBusy: false }); // Made sure isBusy is false on start
-        } 
+        }
 
         try {
             await setDoc(doc(db, "lives", currentLiveId), updateData, { merge: true });
@@ -706,7 +713,7 @@ export default function LiveStreamScreen() {
             // 🔥 SATTI FIX: Muthalla game cancel aagi refund aanathukku apparam Live end aagum
             await safeCancelGameForAudienceRefund();
         } else {
-            await removePlayerFromReflex(); 
+            await removePlayerFromReflex();
         }
         
         await updateLiveStatus('ended');
@@ -811,23 +818,23 @@ export default function LiveStreamScreen() {
                             </TouchableOpacity>
 
                             {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
-                            <TouchableOpacity 
-                                onPress={() => setGlassVisible(true)} 
-                                style={[styles.closeIcon, { 
-                                    borderColor: '#A855F7', 
-                                    borderWidth: 1.5, 
+                            <TouchableOpacity
+                                onPress={() => setGlassVisible(true)}
+                                style={[styles.closeIcon, {
+                                    borderColor: '#A855F7',
+                                    borderWidth: 1.5,
                                     backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                                    justifyContent: 'center', 
-                                    alignItems: 'center' 
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
                                 }]}
                             >
-                                <View style={{ 
-                                    width: 24, 
-                                    height: 24, 
-                                    flexDirection: 'row', 
-                                    flexWrap: 'wrap', 
-                                    justifyContent: 'center', 
-                                    alignItems: 'center' 
+                                <View style={{
+                                    width: 24,
+                                    height: 24,
+                                    flexDirection: 'row',
+                                    flexWrap: 'wrap',
+                                    justifyContent: 'center',
+                                    alignItems: 'center'
                                 }}>
                                     <Text style={{ fontSize: 9 }}>🍎</Text>
                                     <Text style={{ fontSize: 9 }}>🍌</Text>
@@ -866,9 +873,9 @@ export default function LiveStreamScreen() {
                 </View>
             </View>
 
-            <GiftOverlay 
-                giftData={activeGift} 
-                onComplete={() => setActiveGift(null)} 
+            <GiftOverlay
+                giftData={activeGift}
+                onComplete={() => setActiveGift(null)}
             />
 
             {pinnedMessage && (
@@ -964,14 +971,14 @@ export default function LiveStreamScreen() {
                     <FlatList
                         data={messages}
                         keyExtractor={(item) => item.id}
-                        inverted={true} 
+                        inverted={true}
                         renderItem={({ item, index }) => {
                             // 🔥 SATTI FIX: ROYAL GIFT MESSAGE RENDER IN CHAT 🔥
                             if (item.isGift) {
                                 return (
-                                    <LinearGradient 
-                                        colors={['rgba(245, 158, 11, 0.2)', 'rgba(236, 72, 153, 0.2)']} 
-                                        start={{x:0, y:0}} end={{x:1, y:1}} 
+                                    <LinearGradient
+                                        colors={['rgba(245, 158, 11, 0.2)', 'rgba(236, 72, 153, 0.2)']}
+                                        start={{x:0, y:0}} end={{x:1, y:1}}
                                         style={styles.giftChatBubble}
                                     >
                                         <Text style={styles.giftChatText}>{item.text}</Text>
@@ -1002,9 +1009,9 @@ export default function LiveStreamScreen() {
                     />
 
                     <View style={styles.bottomBar}>
-                        <TextInput 
-                            style={styles.input} 
-                            placeholder="Connect..." 
+                        <TextInput
+                            style={styles.input}
+                            placeholder="Connect..."
                             placeholderTextColor="#94A3B8"
                             value={inputText}
                             onChangeText={setInputText}
@@ -1030,19 +1037,19 @@ export default function LiveStreamScreen() {
             </KeyboardAvoidingView>
 
             {/* ✅ DYNAMIC GAME RENDERER */}
-            <LiveGameSheet 
-                visible={gameVisible} 
-                onClose={() => setGameVisible(false)} 
-                liveId={currentLiveId} 
-                isHost={true} 
-                userWalletBalance={myWalletBalance} 
+            <LiveGameSheet
+                visible={gameVisible}
+                onClose={() => setGameVisible(false)}
+                liveId={currentLiveId}
+                isHost={true}
+                userWalletBalance={myWalletBalance}
             />
 
-            <MemoryMatch 
-                visible={glassVisible} 
-                onClose={() => setGlassVisible(false)} 
-                liveId={currentLiveId} 
-                isHost={true} 
+            <MemoryMatch
+                visible={glassVisible}
+                onClose={() => setGlassVisible(false)}
+                liveId={currentLiveId}
+                isHost={true}
                 entryFee={50}
             />
 

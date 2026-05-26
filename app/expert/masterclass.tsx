@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 // 🔥 SATTI FIX: Replaced expo-video with expo-av for better compatibility 🔥
-import { ResizeMode, Video } from 'expo-av';
+import { useVideoPlayer, VideoView } from 'expo-video';
 import { doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -103,7 +103,10 @@ export default function MasterClassScreen() {
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [teaserVideo, setTeaserVideo] = useState<string | null>(null);
     const videoRef = useRef<any>(null); // 🔥 SATTI FIX: Added ref for expo-av Video
-
+// Itha MasterclassScreen function-kulla add pannunga
+const player = useVideoPlayer(teaserVideo || null, (player) => {
+    player.loop = true;
+});
     // 🔥 Animations
     const shimmerAnim = useRef(new Animated.Value(0)).current;
 
@@ -411,15 +414,11 @@ export default function MasterClassScreen() {
                     </TouchableOpacity>
                     <View style={[styles.previewVideoContainer, { borderColor: theme.primary }]}>
                         {teaserVideo && (
-                            <Video
-                                ref={videoRef}
-                                style={styles.previewVideo}
-                                source={{ uri: teaserVideo }}
-                                useNativeControls
-                                resizeMode={ResizeMode.COVER}
-                                isLooping
-                                shouldPlay={showPreviewModal}
-                            />
+                           <VideoView 
+    player={player} 
+    style={styles.previewVideo} 
+    contentFit="cover" 
+/>
                         )}
                     </View>
                 </BlurView>

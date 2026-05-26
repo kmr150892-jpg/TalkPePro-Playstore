@@ -140,62 +140,133 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             try {
                 let rawData: any[] = [];
 
-                const callsSnap = await getDocs(query(collection(db, "calls"), where("expertId", "==", user.uid)));
-                for (const docSnap of callsSnap.docs) {
-                    const d = docSnap.data();
-                    rawData.push({ id: docSnap.id, type: 'video_call', expertEarnings: d.expertEarnings || 0, timestamp: d.endedAt || d.createdAt || { seconds: 0 }, callerName: d.callerName, userId: d.callerId });
-                }
-
-                const transSnap = await getDocs(query(collection(db, "transactions"), where("expertId", "==", user.uid)));
-                for (const docSnap of transSnap.docs) {
-                    const d = docSnap.data();
-                    if (d.type === 'video_call') continue; 
-                    let tType = 'call_gift';
-                    if (d.source === 'Session') tType = 'party_gift';
-                    if (d.source === 'live') tType = 'live_gift';
-                    if (d.type?.includes('game') || d.source?.includes('game')) tType = 'live_game_bonus';
-
-                    // 🔥 SATTI FIX: Robust multi-fallback for senderName to fix the missing name bug 🔥
-                    rawData.push({ id: docSnap.id, type: tType, beans: d.beans || Math.floor((d.diamonds || d.amount || 0) / 2), timestamp: d.timestamp || { seconds: 0 }, senderName: d.senderName || d.userName || d.name || "Client", userId: d.userId || d.senderId });
-                }
-
-                const livesSnap = await getDocs(query(collection(db, "lives"), where("hostId", "==", user.uid)));
-                for (const liveDoc of livesSnap.docs) {
-                    const liveData = liveDoc.data();
-                    const isParty = liveData.isPartyRoom === true || liveData.status === "party_hidden";
-
-                    if (liveData.gameBeansCollected && liveData.gameBeansCollected > 0) {
-                        rawData.push({ id: `game_${liveDoc.id}`, type: isParty ? 'party_game_bonus' : 'live_game_bonus', beans: liveData.gameBeansCollected, timestamp: liveData.endedAt || liveData.startedAt || { seconds: Date.now() / 1000 } });
+                // 🔥 1. VIDEO CALLS
+                try {
+                    const callsSnap = await getDocs(query(collection(db, "calls"), where("expertId", "==", user.uid)));
+                    for (const docSnap of callsSnap.docs) {
+                        const d = docSnap.data();
+                        const expertEarnings = Number(d.expertEarnings) || 0;
+                        if (expertEarnings > 0) { 
+                            rawData.push({ id: docSnap.id, type: 'video_call', expertEarnings: expertEarnings, timestamp: d.endedAt || d.createdAt || { seconds: 0 }, callerName: d.callerName, userId: d.callerId });
+                        }
                     }
+                } catch(e) { console.log('Calls fetch error', e); }
 
-                    if (!isParty) {
+                // 🔥 2. TRANSACTIONS (Fallback)
+                try {
+                    const transSnap = await getDocs(query(collection(db, "transactions"), where("expertId", "==", user.uid)));
+                    for (const docSnap of transSnap.docs) {
+                        const d = docSnap.data();
+                        if (d.type === 'video_call') continue; 
+                        let tType = 'call_gift';
+                        if (d.source === 'Session' || d.source === 'forum') tType = 'party_gift';
+                        if (d.source === 'live') tType = 'live_gift';
+                        if (d.type?.includes('game') || d.source?.includes('game')) {
+                            tType = (d.source === 'Session' || d.source === 'forum') ? 'party_game_bonus' : 'live_game_bonus';
+                        }
+
+                        const bns = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Math.floor((Number(d.diamonds) || Number(d.amount) || 0) / 2);
+                        if (bns > 0) { 
+                            rawData.push({ id: docSnap.id, type: tType, beans: bns, timestamp: d.timestamp || { seconds: 0 }, senderName: d.senderName || d.userName || d.name || "Client", userId: d.userId || d.senderId });
+                        }
+                    }
+                } catch(e) { console.log('Transactions fetch error', e); }
+
+                // 🔥 3. LIVE GIFTS & NESTED GAMES
+                try {
+                    const livesSnap = await getDocs(query(collection(db, "lives"), where("hostId", "==", user.uid)));
+                    for (const liveDoc of livesSnap.docs) {
+                        const liveData = liveDoc.data();
                         const giftsSnap = await getDocs(collection(db, "lives", liveDoc.id, "gifts"));
                         for (const gDoc of giftsSnap.docs) {
                             const g = gDoc.data();
-                            // 🔥 SATTI FIX: Robust mapping for live gifts 🔥
-                            rawData.push({ id: gDoc.id, type: 'live_gift', beans: g.beans || Math.floor((g.amount || g.price || 0) / 2), timestamp: g.timestamp || liveData.startedAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
+                            const bns = Number(g.beans) || Math.floor((Number(g.amount) || Number(g.price) || 0) / 2);
+                            if (bns > 0) { 
+                                rawData.push({ id: gDoc.id, type: 'live_gift', beans: bns, timestamp: g.timestamp || liveData.startedAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
+                            }
+                        }
+                        // 🔥 SATTI FIX: Fetch Subcollection Games perfectly!
+                        try {
+                            const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
+                            for (const gameDoc of gamesSnap.docs) {
+                                const d = gameDoc.data();
+                                const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                                if (expertBeans > 0) {
+                                    rawData.push({ id: gameDoc.id, type: 'live_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Live Game System" });
+                                }
+                            }
+                        } catch(e){}
+                    }
+                } catch(e) { console.log('Live gifts fetch error', e); }
+
+                // 🔥 4. FORUM REWARDS & NESTED GAMES
+                try {
+                    const forumSnap = await getDocs(query(collection(db, "forum_rooms"), where("hostId", "==", user.uid)));
+                    for (const forumDoc of forumSnap.docs) {
+                        const pData = forumDoc.data();
+                        const giftsSnap = await getDocs(collection(db, "forum_rooms", forumDoc.id, "gifts"));
+                        for (const gDoc of giftsSnap.docs) {
+                            const g = gDoc.data();
+                            const bns = Number(g.beans) || Math.floor((Number(g.price) || Number(g.amount) || 0) / 2);
+                            if (bns > 0) { 
+                                rawData.push({ id: gDoc.id, type: 'party_gift', beans: bns, timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
+                            }
+                        }
+                        // 🔥 SATTI FIX: Fetch Subcollection Games perfectly!
+                        try {
+                            const gamesSnap = await getDocs(collection(db, "forum_rooms", forumDoc.id, "games"));
+                            for (const gameDoc of gamesSnap.docs) {
+                                const d = gameDoc.data();
+                                const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                                if (expertBeans > 0) {
+                                    rawData.push({ id: gameDoc.id, type: 'party_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || pData.createdAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Forum Game System" });
+                                }
+                            }
+                        } catch(e){}
+                    }
+                } catch(e) { console.log('Forum rewards fetch error', e); }
+
+                // 🔥 5. BROADCAST ACTIVITY (Live Games - Top Level Multi-Query)
+                try {
+                    const idFields = ["hostId", "expertId", "userId"];
+                    for (const field of idFields) {
+                        const snap = await getDocs(query(collection(db, "live_games"), where(field, "==", user.uid)));
+                        for (const gameDoc of snap.docs) {
+                            const d = gameDoc.data();
+                            const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                            if (expertBeans > 0) { // 🔥 SATTI FIX: EXACT EXPERT BEAN FETCH
+                                rawData.push({ id: gameDoc.id, type: 'live_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Live Game System" });
+                            }
                         }
                     }
-                }
+                } catch(e) { console.log('Live games fetch error', e); }
 
-                const partySnap = await getDocs(query(collection(db, "party_rooms"), where("hostId", "==", user.uid)));
-                for (const partyDoc of partySnap.docs) {
-                    const pData = partyDoc.data();
-                    const giftsSnap = await getDocs(collection(db, "party_rooms", partyDoc.id, "gifts"));
-                    for (const gDoc of giftsSnap.docs) {
-                        const g = gDoc.data();
-                        // 🔥 SATTI FIX: Robust mapping for Session gifts 🔥
-                        rawData.push({ id: gDoc.id, type: 'party_gift', beans: g.beans || Math.floor((g.price || g.amount || 0) / 2), timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
+                // 🔥 6. FORUM ACTIVITY (Forum Games - Top Level Multi-Query)
+                try {
+                    const idFields = ["hostId", "expertId", "userId"];
+                    for (const field of idFields) {
+                        const snap = await getDocs(query(collection(db, "forum_games"), where(field, "==", user.uid)));
+                        for (const gameDoc of snap.docs) {
+                            const d = gameDoc.data();
+                            const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
+                            if (expertBeans > 0) { // 🔥 SATTI FIX: EXACT EXPERT BEAN FETCH
+                                rawData.push({ id: gameDoc.id, type: 'party_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Forum Game System" });
+                            }
+                        }
                     }
-                }
+                } catch(e) { console.log('Forum games fetch error', e); }
 
+                // 🔥 PROCESS UNIQUE DATA & HISTORY
                 const uniqueData: any[] = [];
                 const seen = new Set();
                 for (const item of rawData) {
-                    const uniqueKey = `${item.type}_${item.beans || item.expertEarnings}_${item.timestamp?.seconds || 0}`;
-                    if (!seen.has(uniqueKey)) {
-                        seen.add(uniqueKey);
-                        uniqueData.push(item);
+                    const amount = Number(item.beans) || Number(item.expertEarnings) || 0;
+                    if (amount > 0) { 
+                        const uniqueKey = item.id ? `${item.type}_${item.id}` : `${item.type}_${amount}_${item.timestamp?.seconds || Math.random()}`;
+                        if (!seen.has(uniqueKey)) {
+                            seen.add(uniqueKey);
+                            uniqueData.push(item);
+                        }
                     }
                 }
 
@@ -221,7 +292,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         if (t.toMillis) return t.toMillis();
                         if (t.seconds) return t.seconds * 1000;
                         if (t.getTime) return t.getTime();
-                        if (typeof t === 'number') return t;
+                        if (typeof t === 'number') return t < 10000000000 ? t * 1000 : t; 
                         if (typeof t === 'string') return new Date(t).getTime();
                         return 0;
                     };
@@ -234,10 +305,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 uniqueData.forEach(t => {
                     const rawT = t.timestamp;
                     if (rawT) {
-                        let logDate;
+                        let logDate = new Date();
                         if (rawT.toDate) logDate = rawT.toDate();
                         else if (rawT.seconds) logDate = new Date(rawT.seconds * 1000);
-                        else logDate = new Date(rawT);
+                        else if (typeof rawT === 'number') logDate = new Date(rawT < 10000000000 ? rawT * 1000 : rawT);
+                        else if (typeof rawT === 'string') logDate = new Date(rawT);
 
                         const monthKey = logDate.toLocaleString('default', { month: 'short', year: 'numeric' }); 
                         let earned = 0;
@@ -246,25 +318,27 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         else if (t.type === 'live_game_bonus' || t.type === 'party_game_bonus') earned = Number(t.beans) || 0;
                         else earned = Number(t.expertEarnings) || Number(t.beans) || 0;
 
-                        if (earned > 0) {
+                        if (earned > 0) { 
                             if (!monthMap[monthKey]) monthMap[monthKey] = 0;
                             monthMap[monthKey] += earned;
                         }
                     }
                 });
 
-                const monthlyArray = Object.keys(monthMap).map(key => ({
-                    month: key,
-                    total: monthMap[key]
-                }));
+                const monthlyArray = Object.keys(monthMap)
+                    .map(key => ({
+                        month: key,
+                        total: monthMap[key]
+                    }))
+                    .filter(m => m.total > 0); 
 
                 monthlyArray.sort((a, b) => new Date(b.month).getTime() - new Date(a.month).getTime());
                 setMonthlyEarnings(monthlyArray);
-                setHistoryLoading(false); // 🔥 SATTI FIX: REMOVE LOADING ON SUCCESS
+                setHistoryLoading(false); 
 
             } catch (error) { 
                 console.error(error); 
-                setHistoryLoading(false); // 🔥 SATTI FIX: REMOVE LOADING ON ERROR
+                setHistoryLoading(false); 
             }
         };
         fetchAllArchives();
@@ -396,6 +470,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     };
 
     const renderExpertHistoryItem = (item: any, index: number) => {
+        // 🔥 SATTI FIX: Added unique key generation based on item id and index 🔥
+        const uniqueKey = item.id ? `${item.id}-${index}-${item.type}` : `log-${index}`;
+
         let iconName = "swap-horizontal";
         let iconColor = "#94A3B8";
         let sign = "+";
@@ -420,7 +497,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             else if (itemType === 'call_gift') baseTitle = "Private Reward";
             else baseTitle = "Virtual Reward";
             
-            // 🔥 SATTI FIX: Uses the mapped senderName and ensures "User" fallback if unknown
             const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "Client";
             titleText = `${baseTitle} (from ${validSender})`;
         } else if (itemType.includes('game')) {
@@ -436,7 +512,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 displayTime = timeVal.toDate().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
             } else if (timeVal.seconds) {
                 displayTime = new Date(timeVal.seconds * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            } else {
+            } else if (typeof timeVal === 'number') {
+                displayTime = new Date(timeVal < 10000000000 ? timeVal * 1000 : timeVal).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            } else if (typeof timeVal === 'string') {
                 displayTime = new Date(timeVal).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
             }
         }
@@ -445,7 +523,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
         return (
             <TouchableOpacity 
-                key={item.id || `log-${index}`} 
+                key={uniqueKey} // 🔥 SATTI FIX
                 style={[styles.historyCard, itemBorder]}
                 activeOpacity={targetUserId ? 0.7 : 1}
                 onPress={() => {
@@ -457,13 +535,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 <View style={[styles.historyIconBox, { backgroundColor: iconColor + '20', borderColor: iconColor + '40' }]}>
                     <MaterialCommunityIcons name={iconName as any} size={20} color={iconColor} />
                 </View>
-                {/* 🔥 SATTI FIX: Added flexShrink and adjustsFontSizeToFit to prevent layout break 🔥 */}
                 <View style={{ flex: 1, marginLeft: 12, paddingRight: 5 }}>
                     <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{titleText}</Text>
                     <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{displayTime}</Text>
                 </View>
                 
-                {/* 🔥 SATTI FIX: Container shrinks to fit massive numbers perfectly without breaking tab 🔥 */}
                 <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8, flexShrink: 1 }}>
                     <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
                         <Text style={[styles.historyAmount, { color: statusColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
@@ -738,10 +814,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     const monthLogs = historyLogs.filter(log => {
                                         const rawT = log.timestamp || log.createdAt;
                                         if (!rawT) return false;
-                                        let logDate;
+                                        let logDate = new Date();
                                         if (rawT.toDate) logDate = rawT.toDate();
                                         else if (rawT.seconds) logDate = new Date(rawT.seconds * 1000);
-                                        else logDate = new Date(rawT);
+                                        else if (typeof rawT === 'number') logDate = new Date(rawT < 10000000000 ? rawT * 1000 : rawT);
+                                        else if (typeof rawT === 'string') logDate = new Date(rawT);
                                         return logDate.toLocaleString('default', { month: 'short', year: 'numeric' }) === m.month;
                                     });
 
@@ -880,7 +957,6 @@ const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionic
                     <MaterialCommunityIcons name={icon} size={22} color={color} />
                 )}
             </View>
-            {/* 🔥 SATTI FIX: Added flexShrink to prevent tab overflow with huge numbers 🔥 */}
             <View style={{alignItems: 'center', width: '100%', paddingHorizontal: 5, flexShrink: 1}}>
                 <Text style={styles.matrixValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{value}</Text>
                 <Text style={styles.matrixLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
@@ -915,7 +991,7 @@ const styles = StyleSheet.create({
     revenueMainValue: { color: '#FFF', fontSize: 52, fontWeight: '900', letterSpacing: -1, flexShrink: 1 },
     revenueMainUnit: { fontSize: 14, fontWeight: '800', marginLeft: 10 },
     heroSummaryGrid: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.2)', padding: 18, borderRadius: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    summaryItem: { flex: 1, overflow: 'hidden' }, // 🔥 Added overflow hidden
+    summaryItem: { flex: 1, overflow: 'hidden' }, 
     summaryLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 7, fontWeight: '900', marginBottom: 4 },
     summaryValue: { color: '#FFF', fontSize: 13, fontWeight: '800' },
     vLine: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 15 },
@@ -976,7 +1052,7 @@ const styles = StyleSheet.create({
     // 🔥 TABS SECTION STYLES 🔥
     menuBox: { paddingHorizontal: 0, marginTop: 10 },
     tabsRow: { flexDirection: 'row', marginHorizontal: 0, marginTop: 10, marginBottom: 15, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 15, padding: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', justifyContent: 'space-between' },
-    tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'transparent', overflow: 'hidden' }, // 🔥 Added overflow hidden
+    tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'transparent', overflow: 'hidden' }, 
     tabBtnActive: { backgroundColor: 'rgba(255,255,255,0.1)' },
     tabText: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
     tabTextActive: { color: '#FFF' },

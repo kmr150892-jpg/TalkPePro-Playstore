@@ -1,7 +1,8 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { collection, doc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+// 🔥 SATTI FIX: Added getDoc to imports
+import { collection, collectionGroup, doc, getDoc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -43,7 +44,7 @@ export default function HistoryScreen() {
     const [totalMinutes, setTotalMinutes] = useState<number>(0);
     const [totalGames, setTotalGames] = useState<number>(0); 
 
-    const [activeTab, setActiveTab] = useState<'CALLS' | 'GAMES'>('CALLS'); 
+    const [activeTab, setActiveTab] = useState<'CALLS' | 'GAMES' | 'REWARDS'>('CALLS'); 
 
     const scrollY = useRef(new Animated.Value(0)).current;
     const floatAnim = useRef(new Animated.Value(0)).current;
@@ -70,43 +71,176 @@ export default function HistoryScreen() {
             if (docSnap.exists()) setUserData(docSnap.data());
         });
 
-        const qCalls = query(
-            collection(db, "calls"),
-            where("callerId", "==", user.uid),
-            orderBy("endedAt", "desc")
-        );
+        // 🔥 Dynamic Fetching Logic
+        let rawCalls: any[] = [];
+        let rawGifts: any[] = [];
 
-        const unsubscribeHistory = onSnapshot(qCalls, (snapshot) => {
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
-            const totalSecs = data.reduce((acc, curr) => acc + (Number(curr.finalDuration) || Number(curr.duration) || 0), 0);
+        const processConsultationLogs = () => {
+            // 1. Process Standalone Gifts (🔥 SATTI FIX: Added fallback to match senderName if senderId is missing in Forum gifts)
+            const myGifts = rawGifts.filter(g => {
+                const isIdMatch = g.senderId === user.uid || g.userId === user.uid;
+                const isNameMatch = g.senderName && (g.senderName === userData?.name || g.senderName === user.displayName);
+                return isIdMatch || isNameMatch;
+            });
+            
+            const mappedStandaloneGifts = myGifts.map(g => ({
+                ...g,
+                isStandaloneGift: true,
+                mergedTime: g.timestamp?.toMillis ? g.timestamp.toMillis() : (g.createdAt?.toMillis ? g.createdAt.toMillis() : 0)
+            }));
+
+            // 2. Process In-Call Gifts (Extracting them directly from Calls to show independently)
+            const mappedCallGifts = rawCalls
+                .filter(c => Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))) > 0)
+                .map(c => ({
+                    id: c.id + '_callgift',
+                    isCallGift: true,
+                    expertName: c.expertName || c.receiverName || c.hostName || c.toName || 'Network Expert',
+                    expertImage: c.expertImage || '',
+                    amount: Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))),
+                    timestamp: c.endedAt || c.createdAt,
+                    mergedTime: c.endedAt?.toMillis ? c.endedAt.toMillis() : (c.createdAt?.toMillis ? c.createdAt.toMillis() : 0)
+                }));
+
+            // 3. Process Normal Calls
+            const mappedCalls = rawCalls.map(c => ({
+                ...c,
+                isCall: true,
+                mergedTime: c.endedAt?.toMillis ? c.endedAt.toMillis() : (c.createdAt?.toMillis ? c.createdAt.toMillis() : 0)
+            }));
+
+            // Merge everything and sort by time
+            const combined = [...mappedCalls, ...mappedStandaloneGifts, ...mappedCallGifts].sort((a, b) => b.mergedTime - a.mergedTime);
+            
+            // Stats Update
+            const totalSecs = rawCalls.reduce((acc, curr) => acc + (Number(curr.finalDuration) || Number(curr.duration) || 0), 0);
             setTotalMinutes(Math.floor(totalSecs / 60));
-            setHistory(data);
+            
+            setHistory(combined);
             setLoading(false);
+        };
+
+        const qCalls = query(collection(db, "calls"), where("callerId", "==", user.uid), orderBy("endedAt", "desc"));
+        const unsubscribeHistory = onSnapshot(qCalls, (snapshot) => {
+            rawCalls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            processConsultationLogs();
         });
 
-        const qGames = query(
-            collection(db, "users", user.uid, "gameHistory"),
-            orderBy("timestamp", "desc")
-        );
+        // 🔥 SATTI FIX: Query Parent Live Document to get Exact HostName & HostImage for Gifts
+        const qGifts = query(collectionGroup(db, 'gifts'));
+        const unsubscribeGifts = onSnapshot(qGifts, async (snapshot) => {
+            rawGifts = await Promise.all(snapshot.docs.map(async (giftDoc) => {
+                const data = giftDoc.data();
+                let fetchedHostName = data.hostName || data.receiverName || data.toName || '';
+                let fetchedHostImage = data.expertImage || data.receiverImage || data.hostImage || '';
+                
+                // If it's a subcollection (like lives/liveId/gifts/giftId OR forums/roomId/gifts/giftId), fetch parent doc details!
+                if (!fetchedHostName && giftDoc.ref.parent && giftDoc.ref.parent.parent) {
+                    try {
+                        const parentDoc = await getDoc(giftDoc.ref.parent.parent);
+                        if (parentDoc.exists()) {
+                            const pData = parentDoc.data();
+                            // 🔥 SATTI FIX: Added roomName fallback for forum parent documents
+                            fetchedHostName = pData.hostName || pData.expertName || pData.roomName || '';
+                            fetchedHostImage = pData.hostImage || pData.expertImage || '';
+                        }
+                    } catch (e) { console.log("Parent fetch error", e); }
+                }
+                
+                return { id: giftDoc.id, ...data, fetchedHostName, fetchedHostImage };
+            }));
+            processConsultationLogs();
+        });
 
+        // 🔥 SATTI FIX: Corrected collection name to 'activityHistory' instead of 'gameHistory'
+        const qGames = query(collection(db, "users", user.uid, "activityHistory"), orderBy("timestamp", "desc"));
         const unsubscribeGames = onSnapshot(qGames, (snapshot) => {
             const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as any[];
             setTotalGames(data.length);
             setGameHistory(data);
         });
 
-        return () => { unsubUser(); unsubscribeHistory(); unsubscribeGames(); };
-    }, [user]);
+        return () => { unsubUser(); unsubscribeHistory(); unsubscribeGifts(); unsubscribeGames(); };
+    }, [user, userData]);
 
     const totalSpentTotal = userData?.totalSpentDiamonds || 0;
     const userTier = calculateUserLevel(totalSpentTotal);
 
+    // 🔥 SATTI FIX: Splitting History Array into Specific Categories
+    const callsData = history.filter(item => item.isCall);
+    const rewardsData = history.filter(item => item.isCallGift || item.isStandaloneGift);
+
+    // 🔥 CONSULTATION LOGS & REWARDS LOGS 🔥
     const renderHistoryItem = ({ item }: { item: any }) => {
+        // 🎁 Render Gift Item (Standalone or In-Call)
+        if (item.isCallGift || item.isStandaloneGift) {
+            const giftName = item.giftName || item.name || 'Virtual Reward';
+            const amount = item.amount || item.price || item.diamonds || 0;
+            // 🔥 SATTI FIX: Strict multi-level fallback using the fetched details from parent
+            const eName = item.fetchedHostName || item.expertName || item.receiverName || item.toName || item.hostName || item.userName || 'Network Expert';
+            // 🔥 SATTI FIX: Encoded the URL so spaces don't break the React Native Image component
+            const eImage = item.fetchedHostImage || item.expertImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(eName)}&background=1E293B&color=fff&bold=true`;
+            
+            let displayTime = 'JUST NOW';
+            const timeVal = item.timestamp || item.createdAt;
+            if (timeVal?.toDate) {
+                displayTime = timeVal.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            } else if (timeVal?.seconds) {
+                displayTime = new Date(timeVal.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            } else if (typeof timeVal === 'string' || typeof timeVal === 'number') {
+                displayTime = new Date(timeVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            }
+
+            return (
+                <Animated.View style={[styles.cardContainer, { transform: [{ translateY: floatAnim }] }]}>
+                    <View style={styles.stealthHistoryCard}>
+                        <View style={[styles.quadBorder, { borderLeftColor: '#A855F7', borderRightColor: '#A855F7', borderTopColor: 'rgba(168, 85, 247, 0.4)', borderBottomColor: 'rgba(168, 85, 247, 0.4)' }]} />
+                        
+                        <View style={[styles.sessionBadge, { backgroundColor: '#A855F7' }]}>
+                             <MaterialCommunityIcons name="gift" size={10} color="#FFF" />
+                             <Text style={styles.sessionTypeText}>REWARD SENT</Text>
+                        </View>
+                        
+                        <View style={styles.cardHeader}>
+                            <View style={[styles.expertThumbRing, { borderColor: '#A855F7', shadowColor: '#A855F7', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(168, 85, 247, 0.1)' }]}>
+                                {/* 🔥 SATTI FIX: Replaced gift icon fallback with a robust dynamic default Image fallback */}
+                                <Image source={{ uri: eImage }} style={styles.expertThumb} />
+                            </View>
+                            
+                            <View style={styles.expertInfo}>
+                                <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{eName.toUpperCase()}</Text>
+                                <Text style={styles.callDateText} numberOfLines={1}>{displayTime}</Text>
+                            </View>
+
+                            <View style={styles.costContainer}>
+                                 <Text style={[styles.costText, { color: '#A855F7' }]} numberOfLines={1} adjustsFontSizeToFit>-{Number(amount).toLocaleString()}</Text>
+                                 <Ionicons name="diamond" size={12} color="#A855F7" />
+                            </View>
+                        </View>
+
+                        <View style={styles.statsRow}>
+                            <View style={styles.statItem}>
+                                <Ionicons name="sparkles-outline" size={14} color="#A855F7" />
+                                <Text style={[styles.statValueText, { color: '#E2E8F0' }]} numberOfLines={1} adjustsFontSizeToFit>
+                                    Item Sent: {item.isCallGift ? 'In-Call Premium Rewards' : giftName}
+                                </Text>
+                            </View>
+                        </View>
+                    </View>
+                </Animated.View>
+            );
+        }
+
+        // 📞 Render Standard Call Item
         const currentDuration = Number(item.finalDuration) || Number(item.duration) || 0;
         const mins = Math.floor(currentDuration / 60);
         const secs = currentDuration % 60;
         const durationText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-        const totalSpentOnCall = (Number(item.totalDiamonds) || 0) + (Number(item.totalGiftsDiamonds) || 0);
+        const totalSpentOnCall = (Number(item.totalDiamonds) || 0);
+
+        // 🔥 SATTI FIX: Encoded URL string for space handling in React Native Image Component
+        const callEName = item.expertName || item.hostName || 'CONSULTANT NODE';
+        const callEImage = item.expertImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(callEName)}&background=1E293B&color=fff&bold=true`;
 
         return (
             <Animated.View style={[styles.cardContainer, { transform: [{ translateY: floatAnim }] }]}>
@@ -124,13 +258,14 @@ export default function HistoryScreen() {
                     <View style={styles.cardHeader}>
                         <View style={[styles.expertThumbRing, { borderColor: userTier.color, shadowColor: userTier.color }]}>
                             <Image 
-                                source={{ uri: item.expertImage || `https://ui-avatars.com/api/?name=${item.expertName || 'Expert'}&background=1E293B&color=fff&bold=true` }} 
+                                source={{ uri: callEImage }} 
                                 style={styles.expertThumb} 
                             />
                         </View>
                         
                         <View style={styles.expertInfo}>
-                            <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{item.expertName?.toUpperCase() || 'CONSULTANT_NODE'}</Text>
+                            {/* 🔥 SATTI FIX: Avoid Unknown User Fallback */}
+                            <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{callEName.toUpperCase()}</Text>
                             <Text style={styles.callDateText} numberOfLines={1}>
                                 {item.endedAt?.seconds 
                                 ? new Date(item.endedAt.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
@@ -150,16 +285,6 @@ export default function HistoryScreen() {
                             <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>{durationText}</Text>
                         </View>
 
-                        {item.totalGiftsDiamonds > 0 && (
-                            <>
-                                <View style={styles.vDivider} />
-                                <View style={styles.statItem}>
-                                    <Ionicons name="gift-outline" size={14} color="#EC4899" />
-                                    <Text style={[styles.statValueText, { color: '#EC4899' }]} numberOfLines={1} adjustsFontSizeToFit>{item.totalGiftsDiamonds}</Text>
-                                </View>
-                            </>
-                        )}
-
                         <View style={styles.vDivider} />
                         <TouchableOpacity 
                             style={styles.talkAgainBtn}
@@ -174,13 +299,45 @@ export default function HistoryScreen() {
         );
     };
 
+    // 🔥 ACTIVITY LOGS (GAMES) WITH FULL DETAILS 🔥
     const renderGameHistoryItem = ({ item }: { item: any }) => {
-        const isWin = item.status === "WIN";
-        const amountColor = isWin ? '#10B981' : '#EF4444'; 
-        const displayAmount = isWin ? `+${item.winAmount?.toLocaleString() || 0}` : `-${item.lossAmount?.toLocaleString() || 0}`;
-        const gameIcon = item.gameType === "RACING" ? "car-sport" : "dice";
-        const gameName = item.gameType === "RACING" ? "TURBO RACING" : "FORTUNE CLASH";
+        let rawStatus = String(item.status || "COMPLETED").toUpperCase();
+        const typeStr = String(item.type || "").toUpperCase();
+        const titleStr = String(item.gameName || item.title || item.type || "ARENA").toUpperCase();
         
+        const isWin = rawStatus.includes("WIN") || rawStatus === "WON" || rawStatus.includes("REWARD") || 
+                      typeStr.includes("WIN") || typeStr.includes("REWARD") || 
+                      titleStr.includes("WIN") || titleStr.includes("REWARD") || 
+                      Number(String(item.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
+                      
+        let finalAmount = 0;
+        let entryVal = Math.abs(Number(String(item.entryFee || item.entryAmount || item.betAmount || item.fee || item.cost || 0).replace(/[^0-9.-]+/g, ''))) || 0; 
+
+        if (isWin) {
+            const winVal = Math.abs(Number(String(item.winAmount || item.rewardAmount || item.amount || item.prize || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+            finalAmount = winVal; 
+        } else {
+            if(entryVal === 0) entryVal = Math.abs(Number(String(item.lossAmount || item.amount || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+            finalAmount = -entryVal;
+        }
+        
+        const isPositive = finalAmount >= 0;
+        const amountColor = isPositive ? '#10B981' : '#EF4444'; 
+        const displayAmount = isPositive ? `+${finalAmount.toLocaleString()}` : `${finalAmount.toLocaleString()}`;
+        
+        const gameIcon = titleStr.includes("RACING") ? "car-sport" : "dice";
+        const gameName = item.gameName || item.title || item.type || "FORTUNE CLASH";
+
+        let displayTime = 'JUST NOW';
+        const timeVal = item.timestamp || item.createdAt;
+        if (timeVal?.toDate) {
+            displayTime = timeVal.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        } else if (timeVal?.seconds) {
+            displayTime = new Date(timeVal.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        } else if (typeof timeVal === 'string' || typeof timeVal === 'number') {
+            displayTime = new Date(timeVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        }
+
         return (
             <Animated.View style={[styles.cardContainer, { transform: [{ translateY: floatAnim }] }]}>
                 <View style={styles.stealthHistoryCard}>
@@ -191,7 +348,7 @@ export default function HistoryScreen() {
                     
                     <View style={[styles.sessionBadge, { backgroundColor: isWin ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)', borderWidth: 1, borderColor: amountColor }]}>
                          <Ionicons name="game-controller" size={10} color="#FFF" />
-                         <Text style={[styles.sessionTypeText, { color: '#FFF' }]} numberOfLines={1}>{item.status}</Text>
+                         <Text style={[styles.sessionTypeText, { color: '#FFF' }]} numberOfLines={1}>{isWin ? 'REWARDED' : 'ENTRY'}</Text>
                     </View>
                     
                     <View style={styles.cardHeader}>
@@ -200,12 +357,8 @@ export default function HistoryScreen() {
                         </View>
                         
                         <View style={styles.expertInfo}>
-                            <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{gameName}</Text>
-                            <Text style={styles.callDateText} numberOfLines={1}>
-                                {item.timestamp?.seconds 
-                                ? new Date(item.timestamp.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
-                                : 'SYNCHRONIZING...'}
-                            </Text>
+                            <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{gameName.toUpperCase()}</Text>
+                            <Text style={styles.callDateText} numberOfLines={1}>{displayTime}</Text>
                         </View>
 
                         <View style={styles.costContainer}>
@@ -214,22 +367,33 @@ export default function HistoryScreen() {
                         </View>
                     </View>
 
+                    {/* 🔥 ALL GAME DETAILS IN 2 ROWS 🔥 */}
                     <View style={styles.statsRow}>
                         <View style={styles.statItem}>
-                            <Ionicons name="flag-outline" size={13} color="#64748B" />
-                            <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>Round: {item.roundId || 'N/A'}</Text>
+                            <Ionicons name="ticket-outline" size={13} color="#64748B" />
+                            <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>Entry: {entryVal}</Text>
                         </View>
-
+                        <View style={styles.vDivider} />
+                        <View style={styles.statItem}>
+                            <Ionicons name="flag-outline" size={13} color="#64748B" />
+                            <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>Round: {item.roundId || item.sessionId || 'N/A'}</Text>
+                        </View>
                         <View style={styles.vDivider} />
                         <View style={styles.statItem}>
                             <Ionicons name="hand-right-outline" size={13} color="#3B82F6" />
-                            <Text style={[styles.statValueText, { color: '#3B82F6' }]} numberOfLines={1} adjustsFontSizeToFit>Pick: {item.pick}</Text>
+                            <Text style={[styles.statValueText, { color: '#3B82F6' }]} numberOfLines={1} adjustsFontSizeToFit>Pick: {item.pick || item.choice || 'N/A'}</Text>
                         </View>
+                    </View>
 
-                        <View style={styles.vDivider} />
+                    <View style={[styles.statsRow, { marginTop: 6, backgroundColor: 'transparent', padding: 0 }]}>
                         <View style={styles.statItem}>
                             <Ionicons name="trophy-outline" size={13} color="#F59E0B" />
-                            <Text style={[styles.statValueText, { color: '#F59E0B' }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.result}</Text>
+                            <Text style={[styles.statValueText, { color: '#F59E0B' }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.result || item.gameResult || (isWin ? 'WIN' : 'LOSS')}</Text>
+                        </View>
+                        <View style={styles.vDivider} />
+                        <View style={styles.statItem}>
+                            <Ionicons name="cash-outline" size={13} color={amountColor} />
+                            <Text style={[styles.statValueText, { color: amountColor, fontWeight: '900' }]} numberOfLines={1} adjustsFontSizeToFit>Payout: {isWin ? finalAmount : '0'} 💎</Text>
                         </View>
                     </View>
                 </View>
@@ -259,11 +423,15 @@ export default function HistoryScreen() {
 
                     <View style={styles.talktimeHighlight}>
                         <Text style={[styles.totalTalkLabel, { color: userTier.color }]} numberOfLines={1}>
-                            {activeTab === 'CALLS' ? 'TOTAL CONSULTATION TALKTIME' : 'TOTAL ROUNDS COMPLETED'}
+                            {activeTab === 'CALLS' ? 'TOTAL CONSULTATION TALKTIME' : activeTab === 'GAMES' ? 'TOTAL ROUNDS COMPLETED' : 'TOTAL REWARDS SENT'}
                         </Text>
                         <View style={styles.minsDisplay}>
-                            <Text style={styles.bigMins} numberOfLines={1} adjustsFontSizeToFit>{activeTab === 'CALLS' ? totalMinutes.toLocaleString() : totalGames.toLocaleString()}</Text>
-                            <Text style={styles.minSuffix} numberOfLines={1}>{activeTab === 'CALLS' ? 'MINS' : 'ROUNDS'}</Text>
+                            <Text style={styles.bigMins} numberOfLines={1} adjustsFontSizeToFit>
+                                {activeTab === 'CALLS' ? totalMinutes.toLocaleString() : activeTab === 'GAMES' ? totalGames.toLocaleString() : rewardsData.length.toLocaleString()}
+                            </Text>
+                            <Text style={styles.minSuffix} numberOfLines={1}>
+                                {activeTab === 'CALLS' ? 'MINS' : activeTab === 'GAMES' ? 'ROUNDS' : 'GIFTS'}
+                            </Text>
                         </View>
                     </View>
                 </View>
@@ -286,12 +454,16 @@ export default function HistoryScreen() {
                      </View>
                 </View>
 
+                {/* 🔥 SATTI FIX: 3 Tabs implementation strictly keeping existing styles */}
                 <View style={styles.tabsRow}>
                     <TouchableOpacity style={[styles.tabBtn, activeTab === 'CALLS' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('CALLS')}>
-                        <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CONSULTATION LOGS</Text>
+                        <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CONSULT LOG</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.tabBtn, activeTab === 'GAMES' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('GAMES')}>
-                        <Text style={[styles.tabText, activeTab === 'GAMES' && { color: '#FFF' }]} numberOfLines={1}>ACTIVITY LOGS</Text>
+                        <Text style={[styles.tabText, activeTab === 'GAMES' && { color: '#FFF' }]} numberOfLines={1}>ACTIVITY LOG</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={[styles.tabBtn, activeTab === 'REWARDS' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('REWARDS')}>
+                        <Text style={[styles.tabText, activeTab === 'REWARDS' && { color: '#FFF' }]} numberOfLines={1}>REWARD LOG</Text>
                     </TouchableOpacity>
                 </View>
 
@@ -301,20 +473,37 @@ export default function HistoryScreen() {
                         <Text style={[styles.loadingText, { color: userTier.color }]}>Syncing Archives...</Text>
                     </View>
                 ) : activeTab === 'CALLS' ? (
-                    history.length === 0 ? (
+                    callsData.length === 0 ? (
                         <View style={styles.emptyContainer}>
                             <View style={[styles.emptyIconCircle, { borderColor: userTier.color + '20' }]}>
                                  <Ionicons name="videocam-off" size={50} color={userTier.color} style={{ opacity: 0.2 }} />
                             </View>
                             <Text style={styles.emptyTitle}>NO SESSIONS FOUND</Text>
                             <Text style={styles.emptySub}>Your professional session logs will appear here once linked with an expert node.</Text>
-                            <TouchableOpacity style={[styles.exploreBtn, { backgroundColor: userTier.color }]} onPress={() => router.replace('/home')}>
-                                <Text style={styles.exploreText}>LOCATE EXPERTS</Text>
-                            </TouchableOpacity>
+                            {/* 🔥 SATTI FIX: LOCATE EXPERTS Button Removed */}
                         </View>
                     ) : (
                         <Animated.FlatList
-                            data={history}
+                            data={callsData}
+                            keyExtractor={(item) => item.id}
+                            renderItem={renderHistoryItem}
+                            contentContainerStyle={styles.listPadding}
+                            showsVerticalScrollIndicator={false}
+                            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+                        />
+                    )
+                ) : activeTab === 'REWARDS' ? (
+                    rewardsData.length === 0 ? (
+                        <View style={styles.emptyContainer}>
+                            <View style={[styles.emptyIconCircle, { borderColor: userTier.color + '20' }]}>
+                                 <Ionicons name="gift-outline" size={50} color={userTier.color} style={{ opacity: 0.2 }} />
+                            </View>
+                            <Text style={styles.emptyTitle}>NO REWARDS FOUND</Text>
+                            <Text style={styles.emptySub}>Your reward transmission logs will appear here once you send gifts.</Text>
+                        </View>
+                    ) : (
+                        <Animated.FlatList
+                            data={rewardsData}
                             keyExtractor={(item) => item.id}
                             renderItem={renderHistoryItem}
                             contentContainerStyle={styles.listPadding}
@@ -330,9 +519,6 @@ export default function HistoryScreen() {
                             </View>
                             <Text style={styles.emptyTitle}>NO ACTIVITY FOUND</Text>
                             <Text style={styles.emptySub}>Your activity transmission logs will appear here once you complete a round.</Text>
-                            <TouchableOpacity style={[styles.exploreBtn, { backgroundColor: userTier.color }]} onPress={() => router.replace('/home')}>
-                                <Text style={styles.exploreText}>PARTICIPATE NOW</Text>
-                            </TouchableOpacity>
                         </View>
                     ) : (
                         <Animated.FlatList
@@ -400,6 +586,7 @@ const styles = StyleSheet.create({
     emptyIconCircle: { width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.02)', justifyContent: 'center', alignItems: 'center', marginBottom: 20, borderWidth: 1 },
     emptyTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', marginBottom: 10, letterSpacing: 2 },
     emptySub: { color: '#475569', textAlign: 'center', lineHeight: 20, fontSize: 13, fontWeight: '600' },
+    // 🔥 SATTI FIX: exploreBtn styles retained to keep styling file completely untouched
     exploreBtn: { marginTop: 30, paddingHorizontal: 35, paddingVertical: 18, borderRadius: 15, elevation: 15 },
     exploreText: { color: '#FFF', fontWeight: '900', fontSize: 14, letterSpacing: 2 }
 });

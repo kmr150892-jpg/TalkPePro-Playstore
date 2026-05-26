@@ -14,7 +14,6 @@ import {
   Easing,
   Image,
   Modal,
-  Platform,
   ScrollView,
   Share, // 🔥 Added for Share
   StyleSheet,
@@ -22,7 +21,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  UIManager,
   View
 } from 'react-native';
 import { Circle } from 'react-native-svg';
@@ -36,10 +34,6 @@ const ADMIN_UID = "jOQ0LxpaFkhuqIiMtOcYCGb3nEf2";
 
 const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dvwjxeexc/image/upload";
 const UPLOAD_PRESET = "talkpe"; 
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (🔥 SUPER SMART FETCH: EXTRACTS REAL LEVEL FROM ANY STRING 🔥)
 const getLevelConfig = (userData: any) => {

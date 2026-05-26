@@ -928,7 +928,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 {isHost && (
                                     <View style={styles.resultRow}>
                                         <Text style={styles.resultLabel}>Host Bonus (10%):</Text>
-                                        <Text style={[styles.resultValue, { color: '#A855F7' }]}>+{matchResults.expertBeans} 💎</Text>
+                                        <Text style={[styles.resultValue, { color: '#A855F7' }]}>+{matchResults.expertBeans} 💰</Text>
                                     </View>
                                 )}
                                 <View style={styles.resultRow}>
@@ -951,7 +951,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
 const styles = StyleSheet.create({
     sheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2, 6, 23, 0.5)' },
-    arcadeContentCard: { width: width, height: height * 0.72, borderTopLeftRadius: 40, borderTopRightRadius: 40, borderWidth: 2, borderColor: 'rgba(0, 242, 254, 0.3)', overflow: 'hidden', padding: 25, paddingTop: 10, paddingBottom: 35 },
+    arcadeContentCard: { width: width, height: height * 0.72, borderTopLeftRadius: 40, borderTopRightRadius: 40, borderWidth: 2, borderColor: 'rgb(0, 241, 254)', overflow: 'hidden', padding: 25, paddingTop: 10, paddingBottom: 35 },
     
     dragHandleContainer: { width: '100%', height: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
     dragPill: { width: 50, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
@@ -1018,7 +1018,7 @@ const styles = StyleSheet.create({
     resultValue: { color: '#FFF', fontSize: 14, fontWeight: '900' },
 
     feeChip: { backgroundColor: 'rgba(30,41,59,0.5)', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', justifyContent: 'center', alignItems: 'center' },
-    feeChipActive: { backgroundColor: 'rgba(0, 242, 254, 0.15)', borderColor: '#00F2FE' },
-    feeChipText: { color: '#94A3B8', fontSize: 12, fontWeight: '800' },
-    feeChipTextActive: { color: '#00F2FE', fontSize: 14, fontWeight: '900' }
+    feeChipActive: { backgroundColor: 'rgb(254, 135, 0)', borderColor: '#fe00b2' },
+    feeChipText: { color: '#feffff', fontSize: 12, fontWeight: '800' },
+    feeChipTextActive: { color: '#000000', fontSize: 14, fontWeight: '900' }
 });
