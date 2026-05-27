@@ -515,17 +515,6 @@ export default function ProfileScreen() {
             {/* 1. COMMANDS TAB */}
             {activeTab === 'COMMANDS' && (
                 <>
-                  <TouchableOpacity style={[styles.neonRow, borderType1, { borderLeftColor: '#F59E0B', borderLeftWidth: 4 }]} onPress={() => router.push('/gift-store' as any)} activeOpacity={0.8}>
-                    <View style={[styles.neonIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.4)' }]}>
-                        <MaterialCommunityIcons name="gift" size={24} color="#F59E0B" />
-                    </View>
-                    <View style={{ flex: 1, marginLeft: 18 }}>
-                        <Text style={[styles.neonLabel, { color: '#F59E0B' }]} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>REDEMPTION CENTER</Text>
-                        <Text style={styles.neonSub} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.6}>Claim Premium Loyalty Vouchers</Text>
-                    </View>
-                    <Ionicons name="chevron-forward" size={16} color="rgba(245, 158, 11, 0.5)" />
-                  </TouchableOpacity>
-
                   {menuItems.map((item, index) => {
                       const itemBorderStyle = index % 2 === 0 ? borderType2 : borderType1;
                       return (
@@ -585,12 +574,6 @@ export default function ProfileScreen() {
                                 <View style={[styles.iconCircle, { backgroundColor: '#EF444430' }]}><MaterialCommunityIcons name="sword-cross" size={24} color="#EF4444" /></View>
                                 <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalEntryFees.toLocaleString()} 💎</Text>
                                 <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>TOTAL ARENA ENTRY</Text>
-                            </View>
-
-                            <View style={[styles.ledgerBox, borderType1, { width: '100%' }]}>
-                                <View style={[styles.iconCircle, { backgroundColor: '#F59E0B30' }]}><MaterialCommunityIcons name="ticket-percent" size={24} color="#F59E0B" /></View>
-                                <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalRedeemed.toLocaleString()} 💎</Text>
-                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>TOTAL REWARDS REDEEMED</Text>
                             </View>
                         </View>
                     )}

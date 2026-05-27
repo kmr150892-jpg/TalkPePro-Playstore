@@ -89,7 +89,7 @@ const EXPERTISE_TAGS = [ "Singing", "Dancing", "Astrology", "Tarot Reading", "Co
     "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
     "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro", 
     "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting", 
-    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Legal Advice", "Math Tutoring", 
+    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Standup Comedy", "Math Tutoring", 
     "Science Tutoring", "History & Culture", "Storytelling", "Poetry & Writing"];
 const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytics 📊", "Public Speaking 🎙️", "Networking 🤝", "Planning 📅", "Strategy 🎯","Gaming 🎮", "Photography 📸", "Traveling ✈️", "Cooking 🍳", 
     "Music 🎵", "Fitness & Gym 🏋️‍♂️", "Art & Design 🎨", "Gardening 🌱", 
@@ -696,7 +696,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                       style={[styles.compactGradient, { paddingVertical: 15 }]}
                   >
                       <MaterialCommunityIcons name="shield-lock" size={16} color={theme.secondary} />
-                      <Text style={[styles.compactBtnText, { color: theme.secondary }]}>LEGAL</Text>
+                      <Text style={[styles.compactBtnText, { color: theme.secondary }]}>PRIVACY POLICY</Text>
                   </LinearGradient>
               </TouchableOpacity>
           </View>

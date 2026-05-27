@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import LottieView from 'lottie-react-native'; // 🔥 SATTI UPDATE: Lottie Animation Imported
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Dimensions, Easing, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
@@ -900,6 +901,20 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     {/* DETAILED LEADERBOARD & RESULTS SCREEN */}
                     {gameStatus === 'FINISHED' && matchResults && (
                         <View style={styles.terminalStateWrapper}>
+                            
+                            {/* 🔥 SATTI UPDATE: MASS CELEBRATION FOR WINNERS ONLY 🔥 */}
+                            {!isHost && matchResults.winnerIds?.includes(auth.currentUser?.uid) && (
+                                <View style={[StyleSheet.absoluteFill, { zIndex: 999 }]} pointerEvents="none">
+                                    <LottieView
+                                        source={require('../assets/images/fireworks.json')} // Ensure this path matches your downloaded asset!
+                                        autoPlay
+                                        loop={false}
+                                        style={{ width: '100%', height: '100%' }}
+                                        resizeMode="cover"
+                                    />
+                                </View>
+                            )}
+
                             <Ionicons name="trophy" size={42} color="#FFD700" style={styles.summaryTrophyIcon} />
                             
                             <Text style={styles.terminalTitle}>{getWinnerText()}</Text>

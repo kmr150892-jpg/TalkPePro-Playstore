@@ -83,7 +83,7 @@ const STANDARD_SKILLS = [
     "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
     "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro", 
     "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting", 
-    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Legal Advice", "Math Tutoring", 
+    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "standup Comedy", "Math Tutoring", 
     "Science Tutoring", "History & Culture", "Storytelling", "Poetry & Writing"
 ];
 

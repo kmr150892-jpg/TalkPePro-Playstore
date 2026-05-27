@@ -1,4 +1,4 @@
-import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -19,8 +19,6 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
-
-
 
 const { width } = Dimensions.get('window');
 
@@ -56,42 +54,47 @@ const getSmartLevelConfig = (userData: any) => {
     return getObj(0);
 };
 
-// 🔥 MASS FAQ DATABASE FOR CONSULTANTS 🔥
+// 🔥 MASS FAQ DATABASE FOR CONSULTANTS (PLAY STORE COMPLIANT) 🔥
 const FAQS = [
     {
         id: 1,
         question: "When will I receive my Redeem ACTIVITY_REWARD?",
-        answer: "Withdrawals are processed quickly, usually between 30 Mins to 24 Hrs. Ensure your bank details in the Wallet System are 100% accurate to avoid payment bounces."
+        answer: "Withdrawals are processed manually by our admin team within 5-7 working days. Ensure your bank details in the Wallet System are 100% accurate to avoid payment delays."
     },
     {
         id: 2,
         question: "How does the Premium Spotlight (Algorithm Boost) work?",
-        answer: "Activating Premium Spotlight pushes your profile to the top of the client feed. Our algorithm guarantees up to 300% more visibility by prioritizing your profile to active clients."
+        answer: "Activating Premium Spotlight pushes your profile to the top of the client feed. Our algorithm guarantees higher visibility by prioritizing your profile to active clients on the platform."
     },
     {
         id: 3,
         question: "What is the minimum Redeem limit?",
-        answer: "The minimum Redeem limit is 50,000 Rewards (₹500). You can initiate a secure Redeem directly from your Wallet dashboard once this milestone is reached."
+        answer: "The minimum limit is set dynamically based on platform rules (e.g., 50,000 Rewards). You can initiate a secure Redeem directly from your Wallet dashboard once this milestone is reached."
     },
     {
         id: 4,
         question: "Why am I not receiving any Discover requests?",
-        answer: "1. Check if your status is set to 'ONLINE' in the console.\n2. Ensure you have good lighting and a clear professional picture.\n3. Using Premium Spotlight drastically increases your network visibility."
+        answer: "1. Check if your status is set to 'ONLINE' in the console.\n2. Ensure you have good lighting and a clear professional picture.\n3. Keep your app updated to the latest Play Store version."
     },
     {
         id: 5,
         question: "How do Broadcast & Forum Activity commissions work?",
-        answer: "Whenever clients participate in the 'Fortune Clash' activity in your Broadcast or Forum room, you earn an instant 10% commission on the total diamonds they spend, directly credited as Rewards!"
+        answer: "Whenever clients participate in digital activities in your Broadcast or Forum room, you earn a platform-defined commission on the total virtual assets they spend, credited as Rewards."
     },
     {
         id: 6,
         question: "My account is showing as restricted. What do I do?",
-        answer: "Accounts are restricted automatically for policy violations (e.g., nudity, abuse, sharing personal contact details). Contact support immediately via Email or WhatsApp to appeal your restriction."
+        answer: "Accounts are restricted automatically for strict policy violations (e.g., sharing personal contact details, off-platform transactions). Contact support immediately via Email to appeal your restriction. Admins review appeals within 24-48 hours."
     },
     {
         id: 7,
         question: "How to handle abusive or misbehaving clients?",
-        answer: "Your safety is our priority. Disconnect the consultation immediately and use the 'Block User' feature from the Chat screen. The client will be permanently banned from Discovering with you again."
+        answer: "Your safety is our priority. Disconnect the consultation immediately and use the 'Block & Report' feature from the Chat screen. Our Trust & Safety team will permanently ban the user within 24 hours."
+    },
+    {
+        id: 8,
+        question: "Can I change my Consultation Rate?",
+        answer: "Yes! Based on your Tier Level, you have a maximum allowed rate. You can adjust your 'Rewards per Minute' rate from your Command Center once every 30 minutes."
     }
 ];
 
@@ -142,15 +145,13 @@ export default function SupportHubScreen() {
         setExpandedId(expandedId === id ? null : id);
     };
 
+    // 🔥 SUPPORT EMAIL ACTIONS
     const handleEmailSupport = () => {
-        Linking.openURL('mailto:support@talkpepro.com?subject=TalkPe%20Pro%20Consultant%20Support%20Request');
+        Linking.openURL('mailto:support@talkpepro.com?subject=TalkPe%20Pro%20Consultant%20General%20Support');
     };
 
-    const handleWhatsAppSupport = () => {
-        // REPLACE WITH ACTUAL ADMIN WHATSAPP NUMBER INCL COUNTRY CODE (e.g., 91 for India)
-        const adminNumber = "919999999999"; 
-        const message = "Hi TalkPe Pro Admin, I need help with my Consultant Account.";
-        Linking.openURL(`https://wa.me/${adminNumber}?text=${encodeURIComponent(message)}`);
+    const handleTrustSafetyReport = () => {
+        Linking.openURL('mailto:support@talkpepro.com?subject=URGENT:%20Trust%20&%20Safety%20Violation%20Report');
     };
 
     if (loading) {
@@ -181,43 +182,53 @@ export default function SupportHubScreen() {
                 </View>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40, paddingHorizontal: 20 }}>
+            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 60, paddingHorizontal: 20 }}>
                 
-                {/* 🚀 CONTACT CARDS */}
+                {/* 🚀 PREMIUM CONTACT CARDS */}
                 <View style={styles.contactContainer}>
-                    <Text style={[styles.sectionTitle, { color: primaryColor }]}>DIRECT CONTACT CHANNELS</Text>
-                    <Text style={styles.sectionDesc}>Our admin team is available 24/7 to resolve your issues.</Text>
+                    <Text style={[styles.sectionTitle, { color: primaryColor }]}>24/7 COMMAND RESOLUTION</Text>
+                    <Text style={styles.sectionDesc}>Our dedicated administrator team is strictly monitoring platform integrity and is ready to assist you.</Text>
 
-                    <View style={styles.actionRow}>
-                        {/* EMAIL BUTTON */}
+                    <View style={styles.actionColumn}>
+                        
+                        {/* 🌟 BIG GENERAL SUPPORT BUTTON */}
                         <TouchableOpacity style={styles.actionCardWrapper} onPress={handleEmailSupport} activeOpacity={0.8}>
-                            <LinearGradient colors={['rgba(15, 23, 42, 0.8)', 'rgba(2, 6, 23, 0.9)']} style={styles.actionCard}>
-                                <View style={[styles.iconCircle, { backgroundColor: secondaryColor + '20', borderColor: secondaryColor }]}>
-                                    <MaterialCommunityIcons name="email-fast-outline" size={28} color={secondaryColor} />
+                            <LinearGradient colors={['rgba(15, 23, 42, 0.9)', 'rgba(2, 6, 23, 1)']} style={styles.actionCardBig}>
+                                <View style={[styles.iconCircleBig, { backgroundColor: secondaryColor + '20', borderColor: secondaryColor }]}>
+                                    <MaterialCommunityIcons name="email-fast-outline" size={34} color={secondaryColor} />
                                 </View>
-                                <Text style={styles.actionTitle}>Email Admin</Text>
-                                <Text style={styles.actionSub}>talkpe.admin@gmail.com</Text>
+                                <View style={styles.actionTextContent}>
+                                    <Text style={styles.actionTitleBig}>General Support</Text>
+                                    <Text style={styles.actionSubBig}>Payouts, Profile Issues & Guidance</Text>
+                                    <Text style={[styles.actionEmailHighlight, { color: secondaryColor }]}>support@talkpepro.com</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={24} color={secondaryColor} style={styles.forwardIcon} />
                             </LinearGradient>
                         </TouchableOpacity>
 
-                        {/* WHATSAPP BUTTON */}
-                        <TouchableOpacity style={styles.actionCardWrapper} onPress={handleWhatsAppSupport} activeOpacity={0.8}>
-                            <LinearGradient colors={['rgba(15, 23, 42, 0.8)', 'rgba(2, 6, 23, 0.9)']} style={[styles.actionCard, { borderColor: tertiaryColor + '40' }]}>
-                                <View style={[styles.iconCircle, { backgroundColor: tertiaryColor + '20', borderColor: tertiaryColor }]}>
-                                    <FontAwesome5 name="whatsapp" size={28} color={tertiaryColor} />
+                        {/* 🚨 TRUST & SAFETY REPORT BUTTON (Replaced Live Chat) */}
+                        <TouchableOpacity style={styles.actionCardWrapper} onPress={handleTrustSafetyReport} activeOpacity={0.8}>
+                            <LinearGradient colors={['rgba(15, 23, 42, 0.9)', 'rgba(2, 6, 23, 1)']} style={[styles.actionCardBig, { borderColor: '#F43F5E40' }]}>
+                                <View style={[styles.iconCircleBig, { backgroundColor: '#F43F5E20', borderColor: '#F43F5E' }]}>
+                                    <MaterialCommunityIcons name="shield-alert-outline" size={34} color="#F43F5E" />
                                 </View>
-                                <Text style={styles.actionTitle}>Live Chat</Text>
-                                <Text style={styles.actionSub}>Instant Resolution</Text>
+                                <View style={styles.actionTextContent}>
+                                    <Text style={[styles.actionTitleBig, { color: '#FFF' }]}>Trust & Safety Desk</Text>
+                                    <Text style={styles.actionSubBig}>Report abusive users or scams</Text>
+                                    <Text style={[styles.actionEmailHighlight, { color: '#F43F5E' }]}>Strict 24-Hr Action Policy</Text>
+                                </View>
+                                <Ionicons name="chevron-forward" size={24} color="#F43F5E" style={styles.forwardIcon} />
                             </LinearGradient>
                         </TouchableOpacity>
+
                     </View>
                 </View>
 
-                {/* 📖 FAQ SECTION */}
+                {/* 📖 FAQ SECTION - PREMIUM UPGRADE */}
                 <View style={styles.faqContainer}>
                     <View style={styles.faqHeaderRow}>
-                        <MaterialCommunityIcons name="frequently-asked-questions" size={22} color={primaryColor} />
-                        <Text style={[styles.sectionTitle, { color: primaryColor, marginBottom: 0 }]}>FREQUENTLY ASKED QUESTIONS</Text>
+                        <MaterialCommunityIcons name="frequently-asked-questions" size={26} color={primaryColor} />
+                        <Text style={[styles.sectionTitle, { color: primaryColor, marginBottom: 0, fontSize: 14 }]}>KNOWLEDGE BASE</Text>
                     </View>
 
                     {FAQS.map((faq) => {
@@ -225,7 +236,7 @@ export default function SupportHubScreen() {
                         return (
                             <TouchableOpacity 
                                 key={faq.id} 
-                                style={[styles.faqItem, { borderColor: isExpanded ? primaryColor : 'rgba(255,255,255,0.05)' }]} 
+                                style={[styles.faqItem, { borderColor: isExpanded ? primaryColor : 'rgba(255,255,255,0.05)', backgroundColor: isExpanded ? 'rgba(15, 23, 42, 0.9)' : 'rgba(15, 23, 42, 0.5)' }]} 
                                 onPress={() => toggleExpand(faq.id)}
                                 activeOpacity={0.7}
                             >
@@ -233,11 +244,13 @@ export default function SupportHubScreen() {
                                     <Text style={[styles.faqQuestion, { color: isExpanded ? '#FFF' : 'rgba(255,255,255,0.8)' }]}>
                                         {faq.question}
                                     </Text>
-                                    <Ionicons 
-                                        name={isExpanded ? "chevron-up" : "chevron-down"} 
-                                        size={20} 
-                                        color={isExpanded ? primaryColor : '#64748B'} 
-                                    />
+                                    <View style={[styles.faqIconContainer, { backgroundColor: isExpanded ? primaryColor + '20' : 'transparent' }]}>
+                                        <Ionicons 
+                                            name={isExpanded ? "chevron-up" : "add"} 
+                                            size={22} 
+                                            color={isExpanded ? primaryColor : '#64748B'} 
+                                        />
+                                    </View>
                                 </View>
                                 {isExpanded && (
                                     <View style={styles.faqAnswerBox}>
@@ -249,12 +262,12 @@ export default function SupportHubScreen() {
                     })}
                 </View>
 
-                {/* 🔥 SECURITY BADGE */}
+                {/* 🔥 SECURITY BADGE - BIGGER */}
                 <View style={[styles.securityBadge, { borderColor: secondaryColor + '50', backgroundColor: secondaryColor + '10' }]}>
-                    <MaterialCommunityIcons name="shield-lock-outline" size={24} color={secondaryColor} />
-                    <View style={{ marginLeft: 12, flex: 1 }}>
-                        <Text style={[styles.securityTitle, { color: secondaryColor }]}>TALKPE PRO SECURITY PROTOCOL</Text>
-                        <Text style={styles.securityDesc}>Never share your OTP, Passwords, or Banking details with anyone. Admins will never ask for your PIN.</Text>
+                    <MaterialCommunityIcons name="shield-lock-outline" size={32} color={secondaryColor} />
+                    <View style={{ marginLeft: 16, flex: 1 }}>
+                        <Text style={[styles.securityTitle, { color: secondaryColor }]}>PLATFORM SECURITY PROTOCOL</Text>
+                        <Text style={styles.securityDesc}>Never share your OTP, Passwords, or Banking details with anyone. Admins will NEVER ask for your PIN. Avoid all off-platform transactions to prevent permanent bans.</Text>
                     </View>
                 </View>
 
@@ -266,33 +279,39 @@ export default function SupportHubScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#020617' },
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
-    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+    shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(90px)' },
 
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 20, gap: 16, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-    backBtn: { width: 45, height: 45, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 15, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
-    headerTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: 0.5 },
-    headerSub: { fontSize: 12, fontWeight: '700', letterSpacing: 1 },
+    backBtn: { width: 50, height: 50, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+    headerTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: 0.5 },
+    headerSub: { fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 
-    contactContainer: { marginTop: 10 },
-    sectionTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5, marginBottom: 5 },
-    sectionDesc: { color: '#94A3B8', fontSize: 12, fontWeight: '600', marginBottom: 20, lineHeight: 18 },
+    contactContainer: { marginTop: 15, marginBottom: 10 },
+    sectionTitle: { fontSize: 14, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
+    sectionDesc: { color: '#94A3B8', fontSize: 13, fontWeight: '600', marginBottom: 25, lineHeight: 20 },
 
-    actionRow: { flexDirection: 'row', gap: 15, marginBottom: 35 },
-    actionCardWrapper: { flex: 1, borderRadius: 20, overflow: 'hidden', elevation: 10, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
-    actionCard: { padding: 20, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    iconCircle: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', marginBottom: 12, borderWidth: 1 },
-    actionTitle: { color: '#FFF', fontSize: 15, fontWeight: '900', marginBottom: 4, letterSpacing: 0.5 },
-    actionSub: { color: '#94A3B8', fontSize: 10, fontWeight: '700', textAlign: 'center' },
+    actionColumn: { gap: 15, marginBottom: 35 },
+    actionCardWrapper: { borderRadius: 24, overflow: 'hidden', elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12 },
+    
+    // NEW BIGGER CARD DESIGN
+    actionCardBig: { flexDirection: 'row', padding: 22, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    iconCircleBig: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', borderWidth: 1, marginRight: 18 },
+    actionTextContent: { flex: 1, justifyContent: 'center' },
+    actionTitleBig: { color: '#FFF', fontSize: 18, fontWeight: '900', marginBottom: 4, letterSpacing: 0.5 },
+    actionSubBig: { color: '#94A3B8', fontSize: 12, fontWeight: '700', marginBottom: 6 },
+    actionEmailHighlight: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
+    forwardIcon: { marginLeft: 10, opacity: 0.8 },
 
     faqContainer: { marginTop: 10 },
-    faqHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 20 },
-    faqItem: { backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 16, marginBottom: 12, borderWidth: 1, overflow: 'hidden' },
-    faqQuestionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 18 },
-    faqQuestion: { fontSize: 13, fontWeight: '800', flex: 1, paddingRight: 15, lineHeight: 20 },
-    faqAnswerBox: { paddingHorizontal: 18, paddingBottom: 18, paddingTop: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
-    faqAnswer: { color: '#94A3B8', fontSize: 12, fontWeight: '500', lineHeight: 22 },
+    faqHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 25 },
+    faqItem: { borderRadius: 20, marginBottom: 16, borderWidth: 1 },
+    faqQuestionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 22 },
+    faqQuestion: { fontSize: 15, fontWeight: '800', flex: 1, paddingRight: 15, lineHeight: 22 },
+    faqIconContainer: { width: 36, height: 36, borderRadius: 18, justifyContent: 'center', alignItems: 'center' },
+    faqAnswerBox: { paddingHorizontal: 22, paddingBottom: 22, paddingTop: 5, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)' },
+    faqAnswer: { color: '#94A3B8', fontSize: 14, fontWeight: '600', lineHeight: 24 },
 
-    securityBadge: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 20, borderWidth: 1, marginTop: 30 },
-    securityTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
-    securityDesc: { color: 'rgba(255,255,255,0.6)', fontSize: 10, fontWeight: '600', lineHeight: 16 }
+    securityBadge: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 24, borderWidth: 1, marginTop: 40 },
+    securityTitle: { fontSize: 12, fontWeight: '900', letterSpacing: 1.2, marginBottom: 6 },
+    securityDesc: { color: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: '600', lineHeight: 18 }
 });

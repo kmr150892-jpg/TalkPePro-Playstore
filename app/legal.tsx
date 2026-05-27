@@ -104,8 +104,8 @@ export default function LegalScreen() {
                             <ContentSection 
                                 icon="diamond-stone"
                                 color="#0EA5E9"
-                                title="2. Digital Assets & Billing" 
-                                text="Our internal ecosystem utilizes Diamonds for professional consultations. All transactions are securely processed through official payment gateways. Once a consultation begins, assets are non-refundable as they represent the expert's committed time." 
+                                title="2. Digital Assets & No Cashout Policy" 
+                                text="Our internal ecosystem utilizes Diamonds to connect with experts. Diamonds are purely virtual in-app assets with NO real-world monetary value. Under no circumstances can user Diamonds be withdrawn, cashed out, or exchanged for real money. All purchases are securely processed through official payment gateways and are strictly non-refundable." 
                             />
                             <ContentSection 
                                 icon="phone-cancel"
@@ -118,6 +118,12 @@ export default function LegalScreen() {
                                 color="#10B981"
                                 title="4. User Responsibility" 
                                 text="You are responsible for maintaining the confidentiality of your account credentials. TalkPe Pro is not liable for unauthorized access resulting from user negligence or shared sensitive information." 
+                            />
+                            <ContentSection 
+                                icon="gavel"
+                                color="#F59E0B"
+                                title="5. Content Moderation" 
+                                text="We maintain strict User-Generated Content (UGC) policies. Any user found violating community guidelines, engaging in abusive behavior, or attempting off-platform transactions will face immediate account termination without any refund of digital assets." 
                             />
                         </View>
                     ) : (
@@ -132,19 +138,25 @@ export default function LegalScreen() {
                                 icon="database-lock"
                                 color="#EC4899"
                                 title="2. Information Security" 
-                                text="Your profile and identity data are secured within Firebase encrypted clusters. We maintain a strict policy against selling or sharing your personal data with third-Session advertisers for marketing purposes." 
+                                text="Your profile and identity data are secured within Firebase encrypted clusters. We maintain a strict policy against selling or sharing your personal data with third-party advertisers for marketing purposes." 
                             />
                             <ContentSection 
                                 icon="credit-card-chip"
                                 color="#F59E0B"
                                 title="3. Transaction Protection" 
-                                text="Financial details are processed via secure payment vaults. Sensitive information like CVV or banking passwords never pass through or get stored within the TalkPe Pro local system." 
+                                text="Financial details are processed via secure Google Play Billing and payment vaults. Sensitive information like CVV or banking passwords never pass through or get stored within the TalkPe Pro local system." 
                             />
                             <ContentSection 
                                 icon="eye-off"
                                 color="#06B6D4"
                                 title="4. Data Permissions" 
                                 text="Camera and Microphone access is strictly requested for live call durations only. Any media access is limited to profile personalization. You can manage or revoke these permissions via your device settings at any time." 
+                            />
+                            <ContentSection 
+                                icon="delete-sweep"
+                                color="#14B8A6"
+                                title="5. Data Deletion Rights" 
+                                text="In strict compliance with Google Play Developer Policies, users retain full rights over their data. You can request complete deletion of your account and associated data through the app settings at any time, which will wipe your identity from our servers." 
                             />
                         </View>
                     )}

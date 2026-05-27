@@ -56,21 +56,21 @@ const getSmartLevelConfig = (userData: any) => {
     return getObj(0);
 };
 
-// 🔥 MASS LEGAL DATABASE (ZERO LIABILITY FOR TALKPE PRO) 🔥
+// 🔥 MASS LEGAL DATABASE (ZERO LIABILITY FOR TALKPE PRO & PLAY STORE COMPLIANT) 🔥
 const LEGAL_DOCS = [
     {
         id: 'tos',
         title: 'TERMS OF SERVICE',
         icon: 'file-document-outline',
         color: '#3B82F6',
-        content: `1. ACCEPTANCE OF TERMS\nBy accessing TalkPe Pro, you agree to be bound by these Terms. You must be at least 18 years old to use this platform.\n\n2. PLATFORM ROLE\nTalkPe Pro acts solely as an intermediary connecting Clients and Consultants. We do not guarantee the accuracy, reliability, or success of any advice or consultation provided.\n\n3. PROHIBITED CONDUCT\nClients and Consultants are strictly prohibited from:\n- Sharing explicit, Policy Violation, or pornographic content.\n- Engaging in financial fraud, extortion, or blackmail.\n- Sharing personal contact information (Phone numbers, Social Media, UPI IDs) to bypass app protocols.\n\nViolation leads to immediate permanent ban and potential legal action.`
+        content: `1. ACCEPTANCE OF TERMS\nBy accessing TalkPe Pro, you agree to be bound by these Terms. You must be at least 18 years old to use this platform.\n\n2. PLATFORM ROLE\nTalkPe Pro acts solely as an intermediary connecting Clients and Consultants. We do not guarantee the accuracy, reliability, or success of any advice or consultation provided.\n\n3. PROHIBITED CONDUCT\nClients and Consultants are strictly prohibited from:\n- Sharing explicit, Policy Violation, or pornographic content.\n- Engaging in financial fraud, extortion, or blackmail.\n- Sharing personal contact information (Phone numbers, Social Media, UPI IDs) to bypass app protocols.\n\n4. PAYOUTS & WITHDRAWALS\nPayouts are processed manually within 5-7 working days after strict admin verification. Any errors in bank details provided by the Consultant will lead to payment delays or loss; the platform is not responsible. Admin holds the right to verify Consultant's identity and transactions before releasing payments.\n\n5. ADMIN ACTION & ENFORCEMENT\nPlatform administrators actively monitor user reports. Any user or consultant found violating these terms will face manual review and account suspension/ban within 24 hours of a verified report.`
     },
     {
         id: 'privacy',
         title: 'PRIVACY POLICY',
         icon: 'shield-account-outline',
         color: '#10B981',
-        content: `1. DATA COLLECTION\nWe collect essential data (Name, Phone/Email, App Usage) to provide seamless Discovermaking and secure transactions.\n\n2. COMMUNICATION SECURITY\nFor safety and quality assurance, TalkPe Pro reserves the right to monitor, log, or record audio/video calls and chat messages through our secure servers.\n\n3. THIRD-Session SHARING\nYour payment and streaming data are processed securely via our trusted partners (e.g., Razorpay, Agora). We never sell your personal data to advertisers.\n\n4. DATA DELETION\nYou reserve the right to request account deletion. Upon request, all personal data will be wiped from our servers within 30 days.`
+        content: `1. DATA COLLECTION\nWe collect essential data (Name, Phone/Email, App Usage) to provide seamless Discovermaking and secure transactions.\n\n2. COMMUNICATION SECURITY\nFor safety and quality assurance, TalkPe Pro reserves the right to monitor, log, or record audio/video calls and chat messages through our secure servers.\n\n3. THIRD-Session SHARING\nYour payment and streaming data are processed securely via our trusted partners. We never sell your personal data to advertisers.\n\n4. DATA DELETION\nYou reserve the right to request account deletion. Upon request, all personal data will be wiped from our servers within 30 days.\n\n5. FINANCIAL DATA & PAYOUT SECURITY\nWe collect bank account information solely for the purpose of facilitating the payout of earned rewards to Consultants. These details are stored securely and encrypted in our database, accessible only by authorized platform administrators. Your financial data is strictly confidential and is not shared with any third-party marketing services.`
     },
     {
         id: 'expert_safety',
@@ -84,14 +84,14 @@ const LEGAL_DOCS = [
         title: 'CLIENT SAFETY GUIDELINES',
         icon: 'account-hard-hat',
         color: '#8B5CF6',
-        content: `1. SECURE TRANSACTIONS\nAll transactions must happen within the TalkPe Pro app. Never transfer money directly to a Consultant's bank account or UPI. TalkPe Pro is not liable for off-platform scams.\n\n2. REPORTING MECHANISM\nIf a Consultant behaves unprofessionally or demands direct payments, use the 'Report' button immediately. Our moderation team reviews reports within 24 hours.\n\n3. CONTENT WARNING\nConsultations (Astrology, Tarot, Coaching) are for entertainment and guidance purposes only. They do not substitute professional medical, psychological, or legal advice.`
+        content: `1. SECURE TRANSACTIONS\nAll transactions must happen within the TalkPe Pro app. Never transfer money directly to a Consultant's bank account or UPI. TalkPe Pro is not liable for off-platform scams.\n\n2. REPORTING MECHANISM & ADMIN ACTION\nIf a Consultant behaves unprofessionally or demands direct payments, use the 'Report' button immediately. Our moderation team reviews reports and takes definitive admin action (including permanent account suspension or ban) within 24 hours to maintain platform integrity.\n\n3. CONTENT WARNING\nConsultations (Astrology, Tarot, Coaching) are for entertainment and guidance purposes only. They do not substitute professional medical, psychological,financial or legal advice.`
     },
     {
         id: 'disclaimer',
         title: 'LIABILITY DISCLAIMER',
         icon: 'gavel',
         color: '#EF4444',
-        content: `1. NO MEDICAL OR LEGAL ADVICE\nTalkPe Pro and its Consultants do not provide certified medical diagnoses, psychological therapies, or legal counsel. Always seek advice from licensed professionals for serious matters.\n\n2. INDEMNIFICATION\nYou agree to indemnify and hold TalkPe Pro, its founders, and employees harmless from any claims, damages, or losses arising from your use of the app or interactions with other users/consultants.\n\n3. SERVICE AVAILABILITY\nTalkPe Pro reserves the right to modify, suspend, or terminate services at any time without prior notice.`
+        content: `1. NO MEDICAL,FINANCIAL OR LEGAL ADVICE\nTalkPe Pro and its Consultants do not provide certified medical diagnoses, psychological therapies, or legal counsel. Always seek advice from licensed professionals for serious matters.\n\n2. INDEMNIFICATION\nYou agree to indemnify and hold TalkPe Pro, its founders, and employees harmless from any claims, damages, or losses arising from your use of the app or interactions with other users/consultants.\n\n3. SERVICE AVAILABILITY\nTalkPe Pro reserves the right to modify, suspend, or terminate services at any time without prior notice.`
     }
 ];
 
