@@ -11,9 +11,9 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  BackHandler,
   Dimensions,
   Easing,
-  FlatList,
   StatusBar,
   StyleSheet,
   Text,
@@ -57,11 +57,23 @@ export default function LoginScreen() {
   const [showSplash, setShowSplash] = useState(true);
   const [totalSpent, setTotalSpent] = useState(0); 
   
-  // 🔄 NEW STATES FOR INTRO & EARNINGS
   const [showLoginUI, setShowLoginUI] = useState(false);
-  const [selectedHours, setSelectedHours] = useState(4); 
   
   const router = useRouter();
+
+  useEffect(() => {
+    const backAction = () => {
+      BackHandler.exitApp();
+      return true; 
+    };
+
+    const backHandler = BackHandler.addEventListener(
+      'hardwareBackPress',
+      backAction,
+    );
+
+    return () => backHandler.remove();
+  }, []);
 
   // 🔥 CORE ANIMATION REFS
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -77,12 +89,23 @@ export default function LoginScreen() {
   const peOpacity = useRef(new Animated.Value(0)).current;
   const magicFloat = useRef(new Animated.Value(-50)).current; 
 
+  // 🔥 SATTI FIX: NEW ANIMATION REFS FOR ENGAGING CARDS
+  const cardFloat1 = useRef(new Animated.Value(0)).current;
+  const cardFloat2 = useRef(new Animated.Value(0)).current;
+
   // 🔄 FULL SCREEN VIDEO Setup
   const videoSource = require('../assets/images/welcome-girl.mp4');
   const player = useVideoPlayer(videoSource, (player) => {
     player.loop = true;
-    player.play();
   });
+
+  useEffect(() => {
+    if (showLoginUI) {
+      player.play();
+    } else {
+      player.pause();
+    }
+  }, [showLoginUI, player]);
 
   const MY_ADMIN_UID = "9yFRrTeuOCd1twDDpBiNCp4U1yf1"; 
 
@@ -92,14 +115,12 @@ export default function LoginScreen() {
       offlineAccess: true,
     });
 
-    // Ambient Animations
     Animated.parallel([
       Animated.timing(fadeAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
       Animated.spring(scaleAnim, { toValue: 1, friction: 4, useNativeDriver: true }),
       Animated.loop(Animated.timing(rotateAnim, { toValue: 1, duration: 10000, useNativeDriver: true }))
     ]).start();
 
-    // Start Ambient Shimmer
     Animated.loop(
         Animated.sequence([
             Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -107,7 +128,6 @@ export default function LoginScreen() {
         ])
     ).start();
 
-    // 🔥 Slow Breathing Background Animation
     Animated.loop(
       Animated.sequence([
         Animated.timing(bgScaleAnim, { toValue: 1.05, duration: 8000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -115,7 +135,21 @@ export default function LoginScreen() {
       ])
     ).start();
 
-    // 🔥 MAGICAL TEXT ENTRANCE SEQUENCE
+    // 🔥 SATTI FIX: ADDED FLOATING ANIMATIONS FOR PREMIUM CARDS
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(cardFloat1, { toValue: -4, duration: 2500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(cardFloat1, { toValue: 0, duration: 2500, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+      ])
+    ).start();
+    
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(cardFloat2, { toValue: -4, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(cardFloat2, { toValue: 0, duration: 3000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+      ])
+    ).start();
+
     Animated.sequence([
       Animated.delay(200),
       Animated.spring(magicFloat, { toValue: 0, friction: 4, tension: 30, useNativeDriver: true }),
@@ -148,16 +182,6 @@ export default function LoginScreen() {
     inputRange: [0, 1],
     outputRange: [0, -40]
   });
-
-  // 🔄 DYNAMIC REACH CALCULATOR (1 hr = 500 reach, 15 hr = 12.5k reach)
-  const calculateReach = (hours: number) => {
-    const minReach = 100;
-    const maxReach = 5000;
-    const value = minReach + ((hours - 1) / 14) * (maxReach - minReach);
-    return Math.round(value).toLocaleString('en-IN') + '+'; 
-  };
-
-  const hoursArray = Array.from({ length: 15 }, (_, i) => i + 1);
 
   const handleLogin = async (selectedRole: 'user' | 'expert') => {
     setLoading(true);
@@ -207,7 +231,7 @@ export default function LoginScreen() {
         if (uid === MY_ADMIN_UID) finalRole = 'admin';
 
         let isFreeAvailable = true;
-        let freeMins = 2; 
+        let freeMins = 3; 
 
         const hasUsedFree = await AsyncStorage.getItem('talkpe_welcome_used');
         if (hasUsedFree === 'true') {
@@ -280,8 +304,6 @@ export default function LoginScreen() {
     }
   };
 
-  const userTier = calculateUserLevel(totalSpent);
-
   const borderType1 = {
       borderLeftWidth: 2,
       borderRightWidth: 2,
@@ -311,7 +333,7 @@ export default function LoginScreen() {
           <LinearGradient colors={['rgba(255, 42, 133, 0.1)', 'rgba(134, 239, 172, 0.1)']} style={styles.glowInner} />
       </Animated.View>
 
-      {!showSplash && (
+      {!showSplash && showLoginUI && (
         <View style={StyleSheet.absoluteFill}>
           <VideoView
             player={player}
@@ -329,8 +351,8 @@ export default function LoginScreen() {
         <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }, { translateY: magicFloat }], alignItems: 'center' }}>
           {!showSplash && (
               <View style={styles.logoTextContainer}>
-                  <Animated.Text style={[styles.logoTextTalk, { color: '#bf00ff', textShadowColor: 'rgb(0, 0, 0)', transform: [{ scale: talkScale }] }]}>TALK</Animated.Text>
-                  <Animated.Text style={[styles.logoTextPe, { color: '#F97316', textShadowColor: 'rgba(0,0,0,0.8)', opacity: peOpacity, transform: [{ scale: peScale }] }]}>PE</Animated.Text>
+                  <Animated.Text style={[styles.logoTextTalk, { color: '#bf00ff', textShadowColor: 'rgb(0, 0, 0)', transform: [{ scale: talkScale }] }]}>TALKPE</Animated.Text>
+                  <Animated.Text style={[styles.logoTextPe, { color: '#F97316', textShadowColor: 'rgba(0,0,0,0.8)', opacity: peOpacity, transform: [{ scale: peScale }] }]}>PRO</Animated.Text>
               </View>
           )}
         </Animated.View>
@@ -345,41 +367,75 @@ export default function LoginScreen() {
 
       {!showSplash && (
         <Animated.View style={[styles.bottomSection, { transform: [{ translateY: slideAnim }] }]}>
-          <BlurView intensity={30} tint="dark" style={[styles.blurCard, borderType1]}>
+          <BlurView intensity={40} tint="dark" style={[styles.blurCard, borderType1]}>
             
             {!showLoginUI ? (
               <View style={styles.formContainer}>
-                <Text style={styles.instruction}>ESTIMATED GLOBAL VISIBILITY*</Text>
+                <Text style={styles.instruction}>WHY JOIN TALKPE PRO?</Text>
                 
-                <View style={styles.earningDisplayBox}>
-                    <Text style={styles.rupeeSymbol}>month</Text>
-                    <Text style={styles.earningAmount}>{calculateReach(selectedHours)}</Text>
-                    <Text style={styles.perMonthText}>/ visits</Text>
-                </View>
+                {/* 🔥 COMPACT PREMIUM ANIMATED CARDS 🔥 */}
+                <View style={styles.benefitsContainer}>
+                  
+                  {/* CLIENT FEATURES - Floating Glassmorphism Design */}
+                  <Animated.View style={{ transform: [{ translateY: cardFloat1 }] }}>
+                    <LinearGradient 
+                      colors={['rgba(168, 85, 247, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
+                      style={[styles.benefitBox, { borderColor: 'rgba(168, 85, 247, 0.6)' }]}
+                    >
+                      <View style={styles.badgeContainer}>
+                          <LinearGradient colors={['#A855F7', '#7B2FF7']} style={styles.badgeLabel}>
+                              <Text style={styles.badgeText}> WELCOME TIER</Text>
+                          </LinearGradient>
+                      </View>
+                      
+                      <View style={styles.benefitHeader}>
+                          <View style={[styles.iconWrapper, { shadowColor: '#A855F7', backgroundColor: 'rgba(168, 85, 247, 0.2)' }]}>
+                              <Text style={styles.benefitIconTop}>💎</Text>
+                          </View>
+                          <View>
+                              <Text style={[styles.benefitTitle, { color: '#E9D5FF' }]}>CLIENT PORTAL</Text>
+                              <Text style={styles.benefitSubText}>Verified Expert Interactions</Text>
+                          </View>
+                      </View>
+                      <View style={styles.benefitList}>
+                          <Text style={styles.benefitBullet}>💎 <Text style={styles.highlightText}>Up to 3 Mins</Text> Free Consultation</Text>
+                          <Text style={styles.benefitBullet}>💎 Access <Text style={styles.highlightText}>Interactive</Text> Skill Activities</Text>
+                          <Text style={styles.benefitBullet}>💎 100% <Text style={styles.highlightText}>Secure & Private</Text> Network</Text>
+                          <Text style={styles.benefitBullet}>💎 Join <Text style={styles.highlightText}>Free Forums</Text> & Broadcasts</Text>
+                      </View>
+                    </LinearGradient>
+                  </Animated.View>
+                  
+                  {/* CONSULTANT FEATURES - Floating Glassmorphism Design */}
+                  <Animated.View style={{ transform: [{ translateY: cardFloat2 }] }}>
+                    <LinearGradient 
+                      colors={['rgba(249, 115, 22, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
+                      style={[styles.benefitBox, { borderColor: 'rgba(249, 115, 22, 0.6)' }]}
+                    >
+                      <View style={styles.badgeContainer}>
+                          <LinearGradient colors={['#F97316', '#EA580C']} style={styles.badgeLabel}>
+                              <Text style={styles.badgeText}> PREMIUM PARTNER</Text>
+                          </LinearGradient>
+                      </View>
+                      
+                      <View style={styles.benefitHeader}>
+                          <View style={[styles.iconWrapper, { shadowColor: '#F97316', backgroundColor: 'rgba(249, 115, 22, 0.2)' }]}>
+                              <Text style={styles.benefitIconTop}>🌟</Text>
+                          </View>
+                          <View>
+                              <Text style={[styles.benefitTitle, { color: '#FFEDD5' }]}>CONSULTANT HUB</Text>
+                              <Text style={styles.benefitSubText}>Monetize Your Expertise</Text>
+                          </View>
+                      </View>
+                      <View style={styles.benefitList}>
+                          <Text style={styles.benefitBullet}>🌟 Host Premium <Text style={styles.highlightText}>Live Broadcasts</Text></Text>
+                          <Text style={styles.benefitBullet}>🌟 Create Engauge <Text style={styles.highlightText}>Skill Activities</Text></Text>
+                          <Text style={styles.benefitBullet}>🌟 High-Yield <Text style={styles.highlightText}>Consultation Rewards</Text></Text>
+                          <Text style={styles.benefitBullet}>🌟 Verified, <Text style={styles.highlightText}>Safe & Private</Text> Platform</Text>
+                      </View>
+                    </LinearGradient>
+                  </Animated.View>
 
-                <Text style={styles.subInstruction}>DAILY ACTIVE MENTORSHIP HOURS</Text>
-          
-                <View style={styles.sliderOuterWrapper}>
-                  <FlatList
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    data={hoursArray}
-                    keyExtractor={(item) => item.toString()}
-                    contentContainerStyle={styles.sliderContent}
-                    renderItem={({ item }) => {
-                      const isSelected = selectedHours === item;
-                      return (
-                        <TouchableOpacity 
-                          onPress={() => setSelectedHours(item)}
-                          style={[styles.hourBubble, isSelected && styles.hourBubbleSelected]}
-                        >
-                          <Text style={[styles.hourText, isSelected && styles.hourTextSelected]}>
-                            {item}h
-                          </Text>
-                        </TouchableOpacity>
-                      );
-                    }}
-                  />
                 </View>
 
                 <TouchableOpacity onPress={() => setShowLoginUI(true)} activeOpacity={0.8}>
@@ -387,7 +443,7 @@ export default function LoginScreen() {
                     colors={['#f309d0', '#F97316']} 
                     start={{x: 0, y: 0}} 
                     end={{x: 1, y: 1}} 
-                    style={[styles.btnMass, { marginTop: 25, shadowColor: '#f309d0', shadowOpacity: 0.8, shadowRadius: 15 }]}
+                    style={[styles.btnMass, { marginTop: 10, shadowColor: '#f309d0', shadowOpacity: 0.9, shadowRadius: 20 }]}
                   >
                     <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>PROCEED TO SECURE LOGIN</Text>
                   </LinearGradient>
@@ -400,21 +456,21 @@ export default function LoginScreen() {
                 {loading ? (
                   <View style={styles.loadingBox}>
                     <ActivityIndicator size="large" color="#A855F7" />
-                    <Text style={styles.loadingText}>CONNECTING...</Text>
+                    <Text style={styles.loadingText}>AUTHENTICATING...</Text>
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.instruction}>CHOOSE YOUR PROFESSIONAL ROLE</Text>
+                    <Text style={styles.instruction}>SELECT YOUR PROFESSIONAL ROLE</Text>
                     
                     <TouchableOpacity onPress={() => handleLogin('user')} activeOpacity={0.8}>
                       <LinearGradient colors={['#7B2FF7', '#F43F8D', '#F97316']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 15 }]}>
-                          <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>LOGIN AS CLIENT</Text>
+                          <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS CLIENT</Text>
                       </LinearGradient>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => handleLogin('expert')} activeOpacity={0.8}>
                       <LinearGradient colors={['#F97316', '#F43F8D', '#7B2FF7']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 15 }]}>
-                          <Text style={styles.btnTextExpert} adjustsFontSizeToFit numberOfLines={1}>LOGIN AS CONSULTANT</Text>
+                          <Text style={styles.btnTextExpert} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS CONSULTANT</Text>
                       </LinearGradient>
                     </TouchableOpacity>
                   </>
@@ -437,32 +493,43 @@ const styles = StyleSheet.create({
   glowInner: { flex: 1, borderRadius: 150 },
   fullTopVideo: { ...StyleSheet.absoluteFillObject },
   header: { alignItems: 'center', zIndex: 10 }, 
-  headerTop: { marginTop: 60 }, 
+  headerTop: { marginTop: 40 }, 
   headerCentered: { flex: 1, justifyContent: 'center', marginTop: 10 },
   logoTextContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
-  logoTextTalk: { fontSize: 65, fontWeight: '900', letterSpacing: 1, textShadowOffset: {width: 0, height: 10}, textShadowRadius: 15 },
-  logoTextPe: { fontSize: 65, fontWeight: '900', letterSpacing: 1, textShadowOffset: {width: 0, height: 10}, textShadowRadius: 15, marginLeft: 8 },
+  logoTextTalk: { fontSize: 50, fontWeight: '900', letterSpacing: 1, textShadowOffset: {width: 0, height: 10}, textShadowRadius: 15 },
+  logoTextPe: { fontSize: 50, fontWeight: '900', letterSpacing: 1, textShadowOffset: {width: 0, height: 10}, textShadowRadius: 15, marginLeft: 8 },
   splashTextContainer: { alignItems: 'center', marginTop: 30, gap: 10 },
   tagline: { fontSize: 13, color: '#FFFFFF', fontWeight: '900', letterSpacing: 3, textTransform: 'uppercase', opacity: 0.8 },
-  bottomSection: { position: 'absolute', bottom: 0, width: '100%', padding: 20, paddingBottom: 40, zIndex: 10 },
-  blurCard: { padding: 30, borderRadius: 40, overflow: 'hidden', backgroundColor: 'rgba(5, 5, 10, 0.7)' },
+  
+  // 🔥 UPDATED: Moved up significantly to avoid hiding behind phone buttons
+  bottomSection: { position: 'absolute', bottom: 20, width: '100%', padding: 12, paddingBottom: 25, zIndex: 10 }, 
+  
+  // 🔥 UPDATED: Increased padding slightly for larger appearance
+  blurCard: { padding: 20, borderRadius: 35, overflow: 'hidden', backgroundColor: 'rgba(5, 5, 10, 0.7)' }, 
   formContainer: { width: '100%' },
-  earningDisplayBox: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'center', marginVertical: 15 },
-  rupeeSymbol: { fontSize: 25, color: '#F97316', fontWeight: '900', marginRight: 8 },
-  earningAmount: { fontSize: 40, color: '#FFFFFF', fontWeight: '900', letterSpacing: 1, textShadowColor: '#F97316', textShadowRadius: 15 },
-  perMonthText: { fontSize: 14, color: '#CBD5E1', marginLeft: 8, fontWeight: '700' },
-  subInstruction: { textAlign: 'center', color: '#f309d0', fontSize: 11, fontWeight: '900', letterSpacing: 2, marginBottom: 20, textTransform: 'uppercase' },
-  sliderOuterWrapper: { width: '100%', alignItems: 'center', justifyContent: 'center', height: 60 },
-  sliderContent: { paddingHorizontal: 20, alignItems: 'center' },
-  hourBubble: { width: 50, height: 50, borderRadius: 25, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', marginHorizontal: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  hourBubbleSelected: { backgroundColor: 'rgba(249, 115, 22, 0.2)', borderColor: '#F97316', borderWidth: 2, transform: [{ scale: 1.1 }] },
-  hourText: { color: '#64748b', fontSize: 14, fontWeight: '700' },
-  hourTextSelected: { color: '#FFFFFF', fontSize: 18, fontWeight: '900' },
+  
+  // 🔥 UPDATED: Increased gap, margins, paddings, and font sizes (~20%) 🔥
+  benefitsContainer: { width: '100%', gap: 25, marginVertical: 15}, 
+  benefitBox: { padding: 13, paddingTop: 20, borderRadius: 20, borderWidth: 1.5, elevation: 8, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.4, shadowRadius: 8, position: 'relative' },
+  badgeContainer: { position: 'absolute', top: -14, right: 15, zIndex: 10, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 5 },
+  badgeLabel: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' }, 
+  benefitHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', paddingBottom: 12 }, 
+  iconWrapper: { padding: 10, borderRadius: 12, marginRight: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', elevation: 12, shadowOpacity: 0.9, shadowRadius: 10 }, 
+  benefitIconTop: { fontSize: 22 }, 
+  benefitTitle: { fontWeight: '900', fontSize: 15, letterSpacing: 2 }, 
+  benefitSubText: { color: '#94A3B8', fontSize: 11, fontWeight: '700', marginTop: 3, letterSpacing: 0.5 }, 
+  benefitList: { paddingLeft: 5, gap: 8 }, 
+  benefitBullet: { color: '#E2E8F0', fontSize: 13, fontWeight: '600', letterSpacing: 0.5 }, 
+  highlightText: { color: '#FFF', fontWeight: '900' },
+  
   loadingBox: { alignItems: 'center', padding: 30 },
-  loadingText: { marginTop: 15, color: '#f309d0', fontWeight: '900', fontSize: 15, letterSpacing:1.5, textTransform: 'uppercase' },
-  instruction: { textAlign: 'center', color: '#CBD5E1', marginBottom: 10, fontSize: 11, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
-  btnMass: { padding: 20, borderRadius: 25, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
-  btnTextUser: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10 },
-  btnTextExpert: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 10 },
-  footerText: { textAlign: 'center', marginTop: 30, color: 'rgba(249, 249, 250, 0.3)', fontSize: 10, fontWeight: '900', letterSpacing: 2 }
+  loadingText: { marginTop: 1, color: '#f309d0', fontWeight: '900', fontSize: 15, letterSpacing:1.5, textTransform: 'uppercase' },
+  instruction: { textAlign: 'center', color: '#CBD5E1', marginBottom: 5, fontSize: 12, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
+  
+  // 🔥 UPDATED: Made buttons larger to match the 20% scale up
+  btnMass: { padding: 20, borderRadius: 30, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' }, 
+  btnTextUser: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 12 },
+  btnTextExpert: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 12 },
+  footerText: { textAlign: 'center', marginTop: 15, color: 'rgba(249, 249, 250, 0.4)', fontSize: 10, fontWeight: '900', letterSpacing: 2 } 
 });

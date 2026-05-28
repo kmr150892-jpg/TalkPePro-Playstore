@@ -157,7 +157,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
 
   // 🛡️ 1. AUTH OBSERVER (AUTO ONLINE ON LOGIN)
   useEffect(() => {
-    const authUnsub = auth.onAuthStateChanged((u) => {
+    const authUnsub = auth.onAuthStateChanged((u: any) => {
         if (u) {
             setUser(u);
             updateDoc(doc(db, "users", u.uid), { isOnline: true }).catch((err) => {

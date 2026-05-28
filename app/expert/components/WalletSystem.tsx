@@ -74,7 +74,7 @@ export default function WalletSystem({ expertData }: any) {
     };
 
     useEffect(() => {
-        const authUnsub = auth.onAuthStateChanged((u) => setUser(u));
+        const authUnsub = auth.onAuthStateChanged((u:any) => setUser(u));
         // Start Ambient Animation
         Animated.loop(
           Animated.timing(shimmerAnim, {

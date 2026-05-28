@@ -2,11 +2,17 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getApp, getApps, initializeApp } from "firebase/app";
 import {
   browserLocalPersistence,
+  getAuth // 🔥 SATTI FIX: Imported getAuth to handle Fast Refresh Error
+  ,
+
+
+
   // @ts-ignore
   getReactNativePersistence,
   initializeAuth
 } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+// 🔥 SATTI UPDATE: Imported enableNetwork and disableNetwork 🔥
+import { disableNetwork, enableNetwork, getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { Platform } from "react-native";
 
@@ -27,13 +33,28 @@ const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApp();
 
 // ✅ Persistence Logic: Ithu thaan User login-ah maintain pannum
 // 🛡️ SYNCED: Strict persistence handling to prevent session ghosting during logout loops
-export const auth = initializeAuth(app, {
-  persistence: Platform.OS === 'web' 
-    ? browserLocalPersistence 
-    : getReactNativePersistence(AsyncStorage)
-});
+// 🔥 SATTI FIX: Try-catch block added to fix "auth/already-initialized" during Metro Fast Refresh
+let auth: any;
+try {
+  auth = initializeAuth(app, {
+    persistence: Platform.OS === 'web' 
+      ? browserLocalPersistence 
+      : getReactNativePersistence(AsyncStorage)
+  });
+} catch (error: any) {
+  if (error.code === 'auth/already-initialized') {
+    auth = getAuth(app); // App already has auth, so just get the existing instance
+  } else {
+    throw error;
+  }
+}
+
+export { auth };
 
 export const db = getFirestore(app);
 export const storage = getStorage(app); 
+
+// 🔥 SATTI UPDATE: Exporting network control functions for AppState handling 🔥
+export { disableNetwork, enableNetwork };
 
 export default app;

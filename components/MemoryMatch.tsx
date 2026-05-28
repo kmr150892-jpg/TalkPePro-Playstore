@@ -35,6 +35,21 @@ interface GlassPathProps {
     collectionName?: string; 
 }
 
+// 🔥 SATTI UPDATE: Optimized PlayerItem Component outside to fix VirtualizedList Warning 🔥
+const PlayerItem = React.memo(({ item }: { item: any }) => (
+    <View style={{ alignItems: 'center', marginRight: 15 }}>
+        <View style={[styles.playerAvatarWrapper, (item.status === 'eliminated' || item.status === 'time_up') && styles.eliminatedAvatar, { marginRight: 0 }]}>
+            {item.avatar ? (
+                <Image source={{ uri: item.avatar }} style={styles.playerAvatar} />
+            ) : (
+                <View style={styles.playerInitials}><Text style={styles.initialText}>{item.name?.charAt(0)}</Text></View>
+            )}
+            {(item.status === 'eliminated' || item.status === 'time_up') && <View style={styles.crossOverlay}><Ionicons name="close" size={20} color="#EF4444" /></View>}
+        </View>
+        <Text style={styles.scoreText}>{item.score || 0} Pts</Text>
+    </View>
+));
+
 export default function GlassPathSheet({ visible, onClose, liveId, isHost, userWalletBalance = 0, collectionName = 'lives' }: GlassPathProps) {
     const [gameStatus, setGameStatus] = useState<'WAITING' | 'SHUFFLING' | 'PLAYING' | 'FINISHED' | 'CANCELLED'>('WAITING');
     const [players, setPlayers] = useState<any[]>([]);
@@ -880,24 +895,21 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                             <View style={styles.playersContainer}>
                                 <Text style={styles.playersTitle}>SURVIVORS & SCORE ({players.filter(p=>p.status!=='eliminated' && p.status!=='time_up').length}/{players.length})</Text>
+                                {/* 🔥 SATTI UPDATE: Optimized FlatList 🔥 */}
                                 <FlatList
                                     data={players}
                                     horizontal
                                     showsHorizontalScrollIndicator={false}
                                     keyExtractor={(item) => item.id}
-                                    renderItem={({ item }) => (
-                                        <View style={{ alignItems: 'center', marginRight: 15 }}>
-                                            <View style={[styles.playerAvatarWrapper, (item.status === 'eliminated' || item.status === 'time_up') && styles.eliminatedAvatar, { marginRight: 0 }]}>
-                                                {item.avatar ? (
-                                                    <Image source={{ uri: item.avatar }} style={styles.playerAvatar} />
-                                                ) : (
-                                                    <View style={styles.playerInitials}><Text style={styles.initialText}>{item.name?.charAt(0)}</Text></View>
-                                                )}
-                                                {(item.status === 'eliminated' || item.status === 'time_up') && <View style={styles.crossOverlay}><Ionicons name="close" size={20} color="#EF4444" /></View>}
-                                            </View>
-                                            <Text style={styles.scoreText}>{item.score || 0} Pts</Text>
-                                        </View>
-                                    )}
+                                    getItemLayout={(data, index) => ({
+                                        length: 70,
+                                        offset: 70 * index,
+                                        index,
+                                    })}
+                                    initialNumToRender={10}
+                                    maxToRenderPerBatch={5}
+                                    windowSize={5}
+                                    renderItem={({ item }) => <PlayerItem item={item} />}
                                 />
                             </View>
 

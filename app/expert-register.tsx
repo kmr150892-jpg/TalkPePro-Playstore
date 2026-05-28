@@ -1,4 +1,5 @@
 import { Feather, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -13,6 +14,7 @@ import {
     Easing,
     Image,
     KeyboardAvoidingView,
+    LayoutAnimation,
     Platform,
     ScrollView,
     StatusBar,
@@ -20,73 +22,93 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
+    UIManager,
     View
 } from 'react-native';
 import { auth, db } from '../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 
-// 🔥 Updated Tags for Play Store Compliance (Clean & Professional)
+// Enable LayoutAnimation for Android Smooth Steps
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// 🔥 SATTI FIX: Emojis Added to Tags for Premium Look 🔥
 const EXPERTISE_TAGS = [
-        "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching", 
-    "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
-    "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development",  
-    "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
-    "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro", 
-    "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting", 
-    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Tech Gadgets", "Math Tutoring", 
-    "Science Tutoring", "History & Culture", "Storytelling", "Poetry & Writing"
+    "🎤 Singing", "💃 Dancing", "🔮 Astrology", "🎴 Tarot Reading", "🤝 Community Advice", "💼 Career Counseling", "🌱 Life Coaching", 
+    "🧘 Mindfulness & Motivation",  "🧘‍♀️ Yoga", "📿 Meditation", "🍳 Cooking", "🧁 Baking", "📸 Photography", "🎬 Video Editing", 
+    "🎨 Graphic Design", "📈 Digital Marketing", "💻 Programming", "📱 App Development", "🌐 Web Development",  
+    "📊 Business Strategy", "🗣️ Public Speaking", "🌍 Language Tutor", "🗣️ English Fluency", 
+    "📚 Tamil Stories", "😂 Comedy & Mimicry", "🎭 Acting", "💄 Makeup & Styling", "👗 Fashion Advice", "🛋️ Interior Design", "🎮 Gaming Pro", 
+    "♟️ Chess Strategy", "🎩 Magic Tricks", "🎸 Guitar Lessons", "🎹 Keyboard Lessons", "✏️ Drawing & Sketching", "🖌️ Painting", 
+    "✂️ Crafting", "🐾 Pet Care", "✈️ Travel Planning", "🎉 Event Planning", "📱 Tech Gadgets", "➗ Math Tutoring", 
+    "🔬 Science Tutoring", "🏛️ History & Culture", "📖 Storytelling", "✍️ Poetry & Writing"
 ];
 
 const HOBBIES_TAGS = [
-    "Music Lovers", "Travel Enthusiast", "Cinema", "Reading",
-    "Culinary Arts", "Gaming", "Fine Arts", "Photography",
-    "Animal Welfare", "Fashion Design", "Sports", "Performing Arts","Singing", "Dancing", "Writing & Poetry", "DIY & Crafts", 
-    "Sketching & Painting", "Calligraphy", "Origami", "Gardening", "Fitness & Wellness", "Tech Gadgets", "Movie Buff", "Travel & Adventure", "Foodie",
-    "Yoga & Meditation", "Fitness & Gym", "Running", "Cycling", 
-    "Martial Arts", "Swimming", "Healthy Living", "Mindfulness", "Volunteering", "Environmental Activism", "Animal Rescue", "Sustainable Living", "Fashion & Style", "Interior Design", "Home Decor", "Photography", "Videography", "Music & Instruments", "Singing", "Dancing", "Writing & Poetry", "DIY & Crafts",
+  "🎵 Music Lovers", "✈️ Travel Enthusiast", "🎬 Cinema", "📚 Reading",
+  "👨‍🍳 Culinary Arts", "🎮 Gaming", "🎭 Fine Arts",
+  "🐾 Animal Welfare", "👗 Fashion Design", "⚽ Sports", "🎪 Performing Arts",
+  "🎤 Singing", "💃 Dancing", "✍️ Writing & Poetry", "✂️ DIY & Crafts", 
+  "🎨 Sketching & Painting", "🖋️ Calligraphy", "🕊️ Origami", "🌱 Gardening", 
+  "💪 Fitness & Wellness", "📱 Tech Gadgets", "🍿 Movie Buff", 
+  "🗺️ Travel & Adventure", "🍔 Foodie", "🧘 Yoga & Meditation", 
+  "🏋️ Fitness & Gym", "🏃 Running", "🚴 Cycling", "🥋 Martial Arts", 
+  "🏊 Swimming", "🥗 Healthy Living", "🧠 Mindfulness", "🤝 Volunteering", 
+  "🌍 Environmental Activism", "🐕 Animal Rescue", "♻️ Sustainable Living", 
+  "🧥 Fashion & Style", "🛋️ Interior Design", "🏡 Home Decor", 
+  "📸 Photography", "🎥 Videography", "🎸 Music & Instruments"
 ];
 
-// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2) 🔥
+// 🔥 UPDATE 4: 10 Personalities Added
+const PERSONALITY_TAGS = [
+    "😊 Friendly Listener", "🎯 Direct & Honest", "😂 Humorous & Fun", "🧠 Deep Thinker", 
+    "🫂 Empathetic", "🔥 Motivational", "🕊️ Spiritual", "🧩 Logical & Practical", 
+    "😎 Chill & Relaxed", "⚡ High Energy"
+];
+
+// 🔥 UPDATE 5: 10 Connect Reasons Added
+const CONNECT_TAGS = [
+    "🌱 Life Advice", "💼 Career Guidance", "❤️ Relationship Tips", "🗣️ Just Venting", 
+    "✨ Spiritual Growth", "💪 Daily Motivation", "🎭 Entertainment", "📚 Skill Learning", 
+    "🤝 Loneliness Support", "🔮 Astrology & Tarot"
+];
+
+const LANGUAGES = ["English", "Tamil", "Hindi", "Malayalam", "Kannada", "Telugu"];
+
 const calculateUserLevel = (totalSpent: number) => {
-  if (totalSpent >= 500000001) return { 
-      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000']
-  }; 
-  if (totalSpent >= 100000001) return { 
-      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000']
-  }; 
-  if (totalSpent >= 50000000) return { 
-      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000']
-  };
-  if (totalSpent >= 10000000) return { 
-      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000']
-  };
-  if (totalSpent >= 5000000) return { 
-      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000']
-  };
-  if (totalSpent >= 1000000) return { 
-      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000']
-  };
-  if (totalSpent >= 200001) return { 
-      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000']
-  };
-  if (totalSpent >= 1) return { 
-      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000']
-  };
-  return { 
-      lvl: 0, label: 'BEGINNER', status: 'NEW RECRUIT', color: '#94A3B8', secondaryColor: '#475569', anim: 'wave', themeBg: ['#020617', '#000000']
-  };
+  if (totalSpent >= 500000001) return { lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000'] }; 
+  if (totalSpent >= 100000001) return { lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000'] }; 
+  if (totalSpent >= 50000000) return { lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000'] };
+  if (totalSpent >= 10000000) return { lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000'] };
+  if (totalSpent >= 5000000) return { lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000'] };
+  if (totalSpent >= 1000000) return { lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000'] };
+  if (totalSpent >= 200001) return { lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000'] };
+  if (totalSpent >= 1) return { lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000'] };
+  return { lvl: 0, label: 'BEGINNER', status: 'NEW RECRUIT', color: '#94A3B8', secondaryColor: '#475569', anim: 'wave', themeBg: ['#020617', '#000000'] };
 };
 
 export default function RegisterExpert() {
+    // 🔥 AUTO-SAVE INITIALIZATION STATE 🔥
+    const [isRestored, setIsRestored] = useState(false);
+
+    // 🔥 MULTI-STEP STATE (Now 5 Steps) 🔥
+    const [step, setStep] = useState(1);
+
     const [name, setName] = useState('');
     const [age, setAge] = useState('');
     const [gender, setGender] = useState('');
     const [location, setLocation] = useState('');
     
+    // 🔥 SATTI FIX: Arrays for states
+    const [selectedPersonality, setSelectedPersonality] = useState<string[]>([]);
+    const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
     const [bio, setBio] = useState('');
+
     const [selectedExpertise, setSelectedExpertise] = useState<string[]>([]);
     const [selectedHobbies, setSelectedHobbies] = useState<string[]>([]);
+    const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['English']); 
     
     const [image, setImage] = useState<string | null>(null);
     const [uploading, setUploading] = useState(false);
@@ -95,14 +117,57 @@ export default function RegisterExpert() {
     const shimmerAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
+    // 🔥 NEW: LOAD SAVED DRAFT PROGRESS 🔥
+    useEffect(() => {
+        const loadDraft = async () => {
+            try {
+                const savedData = await AsyncStorage.getItem('@expert_draft');
+                if (savedData) {
+                    const parsed = JSON.parse(savedData);
+                    if (parsed.step) setStep(parsed.step);
+                    if (parsed.name) setName(parsed.name);
+                    if (parsed.age) setAge(parsed.age);
+                    if (parsed.gender) setGender(parsed.gender);
+                    if (parsed.location) setLocation(parsed.location);
+                    if (parsed.selectedPersonality) setSelectedPersonality(parsed.selectedPersonality);
+                    if (parsed.selectedConnections) setSelectedConnections(parsed.selectedConnections);
+                    if (parsed.bio) setBio(parsed.bio);
+                    if (parsed.selectedExpertise) setSelectedExpertise(parsed.selectedExpertise);
+                    if (parsed.selectedHobbies) setSelectedHobbies(parsed.selectedHobbies);
+                    if (parsed.selectedLanguages) setSelectedLanguages(parsed.selectedLanguages);
+                    if (parsed.image) setImage(parsed.image);
+                }
+            } catch (error) {
+                console.log("Error loading draft: ", error);
+            } finally {
+                setIsRestored(true);
+            }
+        };
+        loadDraft();
+    }, []);
+
+    // 🔥 NEW: AUTO-SAVE PROGRESS WHEN DATA CHANGES 🔥
+    useEffect(() => {
+        if (!isRestored) return; // Prevent overwriting with initial empty state
+        const saveDraft = async () => {
+            try {
+                const dataToSave = {
+                    step, name, age, gender, location, selectedPersonality, 
+                    selectedConnections, bio, selectedExpertise, 
+                    selectedHobbies, selectedLanguages, image
+                };
+                await AsyncStorage.setItem('@expert_draft', JSON.stringify(dataToSave));
+            } catch (error) {
+                console.log("Error saving draft: ", error);
+            }
+        };
+        saveDraft();
+    }, [step, name, age, gender, location, selectedPersonality, selectedConnections, bio, selectedExpertise, selectedHobbies, selectedLanguages, image, isRestored]);
+
+
     useEffect(() => {
         Animated.loop(
-          Animated.timing(shimmerAnim, {
-            toValue: 1,
-            duration: 8000,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true
-          })
+          Animated.timing(shimmerAnim, { toValue: 1, duration: 8000, easing: Easing.inOut(Easing.linear), useNativeDriver: true })
         ).start();
 
         Animated.loop(
@@ -134,22 +199,41 @@ export default function RegisterExpert() {
 
     const toggleTag = (tag: string, list: string[], setList: any, maxLimit: number = 3) => {
         if (list.includes(tag)) {
-            setList(list.filter(t => t !== tag));
+            setList(list.filter((t: string) => t !== tag));
         } else {
             if (list.length >= maxLimit) {
-                Alert.alert("Maximum Limit", `You can select a maximum of ${maxLimit} tags for your profile.`);
+                Alert.alert("Maximum Limit", `You can select a maximum of ${maxLimit} tags here.`);
                 return;
             }
             setList([...list, tag]);
         }
     };
 
-    const handleRegistration = async () => {
-        if (!name || !age || !gender || !location || !image) {
-            Alert.alert("Incomplete Profile", "Please provide all required information and a profile picture to continue.");
-            return;
+    // 🔥 STEP VALIDATION & NAVIGATION 🔥
+    const nextStep = () => {
+        if (step === 1) {
+            if (!image || !name || !gender) return Alert.alert("Incomplete", "Please add your photo, name, and gender to proceed.");
+        } else if (step === 2) {
+            if (!age || !location) return Alert.alert("Incomplete", "Please provide your age and location.");
+            if (selectedLanguages.length === 0) return Alert.alert("Incomplete", "Please select at least one language you speak.");
+            if (parseInt(age) < 18) return Alert.alert("Age Restriction", "You must be 18 years or older to join as a Verified Profile.");
+        } else if (step === 3) {
+            if (selectedExpertise.length === 0) return Alert.alert("Missing Tags", "Please select at least one core expertise tag.");
+        } else if (step === 4) {
+            if (selectedPersonality.length === 0) return Alert.alert("Incomplete", "Please select at least one personality trait.");
+            if (!bio || bio.length < 10) return Alert.alert("Incomplete Bio", "Please write a short bio about yourself (minimum 10 characters).");
         }
 
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setStep(step + 1);
+    };
+
+    const prevStep = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setStep(step - 1);
+    };
+
+    const handleRegistration = async () => {
         setUploading(true);
         try {
             const user = auth.currentUser;
@@ -182,10 +266,9 @@ export default function RegisterExpert() {
             const cloudResult = await cloudResponse.json();
             const photoURL = cloudResult.secure_url;
 
-            if (!photoURL) {
-                throw new Error("Image upload failed.");
-            }
+            if (!photoURL) throw new Error("Image upload failed.");
 
+            // 🔥 UPDATE 1: Admin Review Ready Firebase Save 
             await setDoc(doc(db, "users", user.uid), {
                 displayName: name,
                 name: name, 
@@ -194,8 +277,12 @@ export default function RegisterExpert() {
                 location: location,
                 photoURL: photoURL, 
                 profilePic: photoURL, 
+                languages: selectedLanguages, 
                 
+                personalityTraits: selectedPersonality,
+                connectWithMeFor: selectedConnections,
                 bio: bio.trim(),
+                
                 expertiseTags: selectedExpertise,
                 hobbies: selectedHobbies,
                 
@@ -212,6 +299,8 @@ export default function RegisterExpert() {
                 
                 pricePerMin: 1000, 
                 userPrice: 2000,
+                
+                // Admin Review Controls
                 status: "Pending",     
                 role: "user",          
                 isApplying: true,      
@@ -222,9 +311,12 @@ export default function RegisterExpert() {
                 levelTitle: "BEGINNER"
             }, { merge: true }); 
 
+            // 🔥 SUCCESS: CLEAR SAVED DRAFT AFTER REGISTRATION 🔥
+            await AsyncStorage.removeItem('@expert_draft');
+
             setUploading(false);
             
-            Alert.alert("Application Received", "Thank you for applying. Our team will review your profile for professional community standards.", [
+            Alert.alert("Application Received", "Thank you! Your profile is under review by our community team.", [
                 { text: "Got it", onPress: () => router.replace('/waiting-approval' as any) } 
             ]);
 
@@ -234,26 +326,36 @@ export default function RegisterExpert() {
         }
     };
 
-    const brandGradient = gender === 'Female' ? ['#FF0080', '#FF8C00'] as const : ['#00F2FE', '#4FACFE'] as const;
-    const fallbackGradient = ['#38BDF8', '#818CF8'] as const; 
+    const brandGradient = gender === 'Female' ? ['#FF0080', '#FF8C00'] as const : ['#0EA5E9', '#3B82F6'] as const;
+    const fallbackGradient = ['#8B5CF6', '#D946EF'] as const; 
     const activeGradient = gender ? brandGradient : fallbackGradient;
-    
     const darkBg = '#030014'; 
 
-    const orbTranslateY = shimmerAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, -60]
-    });
-    
-    const orbTranslateX = shimmerAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, 40]
-    });
+    const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -60] });
+    const orbTranslateX = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
+
+    // 🔥 NEW PREMIUM ROTATION ANIMATIONS FOR AVATAR 🔥
+    const rotateAnim = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const reverseRotateAnim = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+
+    // Show loading screen while restoring auto-save draft
+    if (!isRestored) {
+        return (
+            <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: darkBg }]}>
+                <ActivityIndicator size="large" color="#0EA5E9" />
+            </View>
+        );
+    }
 
     return (
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.container}>
+        <KeyboardAvoidingView 
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
+            style={styles.container}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
+        >
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
             
+            {/* 🔥 Background Layer */}
             <View style={StyleSheet.absoluteFill}>
                 <View style={{ flex: 1, backgroundColor: darkBg }} />
                 <Animated.View style={[styles.glowOrb, { top: -50, right: -50, backgroundColor: activeGradient[0], transform: [{ translateY: orbTranslateY }, { translateX: orbTranslateX }] }]} />
@@ -262,155 +364,317 @@ export default function RegisterExpert() {
                 <View style={styles.noiseOverlay} />
             </View>
 
-            <ScrollView contentContainerStyle={styles.scrollPadding} showsVerticalScrollIndicator={false}>
-                
-                <View style={styles.header}>
-                    <LinearGradient colors={['rgba(251, 191, 36, 0.2)', 'rgba(251, 191, 36, 0.05)']} style={styles.proBadge}>
-                        <MaterialCommunityIcons name="crown" size={16} color="#FBBF24" />
-                        <MaterialCommunityIcons name="star" size={12} color="#FBBF24" style={{marginLeft: 2}} />
-                        <Text style={styles.proBadgeText}>PROFESSIONAL NETWORK</Text>
-                    </LinearGradient>
-                    <Text style={styles.title}>Become a <Text style={{ color: activeGradient[0] }}>Consultant</Text></Text>
-                    <Text style={styles.subtitle}>Complete your profile to join our community of experts</Text>
-                </View>
+            {/* 🔥 Progress Bar (Out of 5 Steps) 🔥 */}
+            <View style={styles.progressContainer}>
+                <View style={[styles.progressBar, { width: `${(step / 5) * 100}%`, backgroundColor: activeGradient[0] }]} />
+            </View>
 
-                <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.9}>
-                    <Animated.View style={[styles.avatarGlowRing, { transform: [{ scale: pulseAnim }], backgroundColor: activeGradient[0] }]} />
-                    <View style={styles.imageWrapper}>
-                        {image ? (
-                            <Image source={{ uri: image }} style={styles.selectedImage} />
-                        ) : (
-                            <View style={styles.placeholderBox}>
-                                <Ionicons name="camera" size={40} color="rgba(255,255,255,0.4)" />
-                                <Text style={styles.placeholderText}>UPLOAD PHOTO</Text>
-                            </View>
-                        )}
-                        <LinearGradient colors={activeGradient} style={styles.editIconBadge}>
-                             <Feather name={image ? "edit-2" : "plus"} size={16} color="#fff" />
+            <ScrollView 
+                contentContainerStyle={styles.scrollPadding} 
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+            >
+                {/* Dynamic Header Section */}
+                {step < 5 && (
+                    <View style={styles.header}>
+                        <LinearGradient colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.02)']} style={styles.stepBadge}>
+                            <Text style={styles.stepBadgeText}>STEP {step} OF 5</Text>
                         </LinearGradient>
+                        
+                        <Text style={styles.title}>
+                            {step === 1 && "Create Your Identity"}
+                            {step === 2 && "Verification"}
+                            {step === 3 && "Choose Your Expertise"}
+                            {step === 4 && "Your Vibe & Connection"}
+                        </Text>
+                        <Text style={styles.subtitle}>
+                            {step === 1 && "Add your best photo and real name."}
+                            {step === 2 && "Ensure you meet our platform policy."}
+                            {step === 3 && "Select the skills that define you."}
+                            {step === 4 && "Let people know who you are and your interests."}
+                        </Text>
                     </View>
-                </TouchableOpacity>
+                )}
 
-                <View style={styles.glassFormContainer}>
-                    <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
-                    <LinearGradient colors={['rgba(255,255,255,0.08)', 'rgba(255,255,255,0.01)']} style={styles.glassBorder} />
+                <View style={styles.formContainer}>
                     
-                    <View style={styles.formInner}>
-                        
-                        <Text style={styles.sectionLabel}>ACCOUNT CATEGORY</Text>
-                        <View style={styles.genderRow}>
-                            {['Female', 'Other'].map((item) => {
-                                const isSelected = gender === item;
-                                return (
-                                    <TouchableOpacity 
-                                        key={item} 
-                                        style={[styles.genderCard, isSelected && { borderColor: 'transparent' }]} 
-                                        onPress={() => setGender(item)}
-                                        activeOpacity={0.8}
-                                    >
-                                        {isSelected && <LinearGradient colors={activeGradient} style={[StyleSheet.absoluteFill, { borderRadius: 18 }]} />}
-                                        <View style={styles.genderContent}>
-                                            <Ionicons name={item === 'Female' ? 'female' : 'options-outline'} size={24} color={isSelected ? '#FFF' : '#A1A1AA'} />
-                                            <Text style={[styles.genderText, isSelected && styles.genderTextActive]}>{item.toUpperCase()}</Text>
+                    {/* 🔥 STEP 1: IDENTITY 🔥 */}
+                    {step === 1 && (
+                        <View style={styles.stepWrapper}>
+                            <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.9}>
+                                <View style={styles.imageContainer}>
+                                    
+                                    {/* 🔥 NEW UNIQUE PREMIUM ROTATING RINGS (NO DASHES) 🔥 */}
+                                    <Animated.View style={[styles.avatarBaseGlow, { transform: [{ scale: pulseAnim }], backgroundColor: activeGradient[0] }]} />
+                                    <Animated.View style={[styles.rotatingSolidRing, { borderColor: activeGradient[1], transform: [{ rotate: rotateAnim }] }]} />
+                                    <Animated.View style={[styles.reverseRotatingThinRing, { borderTopColor: activeGradient[0], borderBottomColor: activeGradient[0], transform: [{ rotate: reverseRotateAnim }] }]} />
+                                    
+                                    <View style={styles.imageWrapper}>
+                                        {image ? (
+                                            <Image source={{ uri: image }} style={styles.selectedImage} />
+                                        ) : (
+                                            <View style={styles.placeholderBox}>
+                                                <Ionicons name="camera" size={40} color="rgba(255,255,255,0.4)" />
+                                                <Text style={styles.placeholderText}>UPLOAD PHOTO</Text>
+                                            </View>
+                                        )}
+                                    </View>
+                                    
+                                    {/* Edit Button Moved Outside of hidden overflow */}
+                                    <LinearGradient colors={activeGradient} style={styles.editIconBadge}>
+                                         <Feather name={image ? "edit-2" : "plus"} size={18} color="#fff" />
+                                    </LinearGradient>
+                                </View>
+                            </TouchableOpacity>
+
+                            <View style={styles.formCard}>
+                                <Text style={styles.sectionTitle}>Account Setup</Text>
+
+                                {/* 🔥 UPDATE 1: Only Male & Female */}
+                                <View style={styles.genderRow}>
+                                    {['Male', 'Female'].map((item) => {
+                                        const isSelected = gender === item;
+                                        return (
+                                            <TouchableOpacity 
+                                                key={item} 
+                                                style={[styles.genderCard, isSelected && styles.genderCardActive]} 
+                                                onPress={() => setGender(item)}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isSelected && <LinearGradient colors={activeGradient} style={StyleSheet.absoluteFill} />}
+                                                <View style={styles.genderContent}>
+                                                    <Ionicons name={item === 'Female' ? 'female' : 'male'} size={20} color={isSelected ? '#FFF' : '#64748B'} />
+                                                    <Text style={[styles.genderText, isSelected && styles.genderTextActive]}>{item}</Text>
+                                                </View>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+
+                                <View style={styles.inputGroup}>
+                                    <Text style={styles.inputLabel}>Display Name</Text>
+                                    <View style={styles.inputField}>
+                                        <Feather name="user" size={18} color={name ? activeGradient[0] : "#64748B"} />
+                                        <TextInput style={styles.input} placeholder="e.g. Sarah Smith" placeholderTextColor="#475569" value={name} onChangeText={setName} />
+                                    </View>
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* 🔥 STEP 2: DEMOGRAPHICS & LANGUAGES 🔥 */}
+                    {step === 2 && (
+                        <View style={styles.stepWrapper}>
+                            <View style={styles.formCard}>
+                                <View style={styles.ageVerificationBox}>
+                                    <View style={[styles.iconWrapperGlow, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                                        <MaterialCommunityIcons name="shield-check" size={24} color="#EF4444" />
+                                    </View>
+                                    <Text style={styles.ageTitle}>18+ Verification Required</Text>
+                                    <Text style={styles.ageDesc}>You must be at least 18 years old to build connections on this platform.</Text>
+                                </View>
+
+                                <View style={styles.rowInputs}>
+                                    <View style={[styles.inputGroup, {flex: 0.35}]}>
+                                        <Text style={styles.inputLabel}>Age</Text>
+                                        <View style={styles.inputField}>
+                                            <TextInput style={[styles.input, {textAlign: 'center'}]} placeholder="25" placeholderTextColor="#475569" keyboardType="numeric" value={age} onChangeText={setAge} maxLength={2} />
                                         </View>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
-
-                        <Text style={styles.sectionLabel}>PROFILE DETAILS</Text>
-                        <View style={styles.inputContainer}>
-                            <Feather name="user" size={18} color={name ? activeGradient[0] : "#71717A"} style={styles.inputIcon} />
-                            <TextInput style={styles.input} placeholder="Display Name" placeholderTextColor="#71717A" value={name} onChangeText={setName} />
-                        </View>
-
-                        <View style={{flexDirection: 'row', gap: 15}}>
-                            <View style={[styles.inputContainer, {flex: 0.35}]}>
-                                <TextInput style={[styles.input, {paddingLeft: 20, textAlign: 'center'}]} placeholder="Age" placeholderTextColor="#71717A" keyboardType="numeric" value={age} onChangeText={setAge} maxLength={2} />
+                                    </View>
+                                    <View style={[styles.inputGroup, {flex: 0.65}]}>
+                                        <Text style={styles.inputLabel}>Location</Text>
+                                        <View style={styles.inputField}>
+                                            <Feather name="map-pin" size={18} color={location ? activeGradient[0] : "#64748B"} />
+                                            <TextInput style={styles.input} placeholder="City, Country" placeholderTextColor="#475569" value={location} onChangeText={setLocation} />
+                                        </View>
+                                    </View>
+                                </View>
                             </View>
-                            <View style={[styles.inputContainer, {flex: 0.65}]}>
-                                <Feather name="globe" size={18} color={location ? activeGradient[0] : "#71717A"} style={styles.inputIcon} />
-                                <TextInput style={styles.input} placeholder="Location" placeholderTextColor="#71717A" value={location} onChangeText={setLocation} />
+
+                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                                <View style={styles.tagSectionHeader}>
+                                    <Text style={styles.sectionTitle}>Languages You Speak</Text>
+                                    <Text style={styles.limitBadge}>{selectedLanguages.length}/3</Text>
+                                </View>
+                                <View style={styles.chipWrap}>
+                                    {LANGUAGES.map((tag) => {
+                                        const isSelected = selectedLanguages.includes(tag);
+                                        return (
+                                            <TouchableOpacity 
+                                                key={tag} 
+                                                style={[styles.chip, isSelected && styles.chipActive]}
+                                                onPress={() => toggleTag(tag, selectedLanguages, setSelectedLanguages, 3)}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
+                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
                             </View>
                         </View>
+                    )}
 
-                        <View style={[styles.inputContainer, styles.bioContainer]}>
-                            <TextInput 
-                                style={styles.bioInput} 
-                                placeholder="Highlight your professional background and how you can assist users..." 
-                                placeholderTextColor="#71717A" 
-                                value={bio} 
-                                onChangeText={setBio} 
-                                multiline 
-                                maxLength={150}
-                            />
+                    {/* 🔥 STEP 3: EXPERTISE ONLY 🔥 */}
+                    {step === 3 && (
+                        <View style={styles.stepWrapper}>
+                            <View style={styles.formCard}>
+                                <View style={styles.tagSectionHeader}>
+                                    <Text style={styles.sectionTitle}>Core Expertise</Text>
+                                    <Text style={styles.limitBadge}>{selectedExpertise.length}/3</Text>
+                                </View>
+                                <View style={styles.chipWrap}>
+                                    {EXPERTISE_TAGS.map((tag) => {
+                                        const isSelected = selectedExpertise.includes(tag);
+                                        return (
+                                            <TouchableOpacity 
+                                                key={tag} 
+                                                style={[styles.chip, isSelected && styles.chipActive]}
+                                                onPress={() => toggleTag(tag, selectedExpertise, setSelectedExpertise, 3)}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
+                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
                         </View>
+                    )}
 
-                        <View style={styles.tagSectionHeader}>
-                            <Text style={styles.sectionLabel}>CONSULTATION TOPICS</Text>
-                            <Text style={styles.limitText}>{selectedExpertise.length}/3</Text>
-                        </View>
-                        <View style={styles.chipWrap}>
-                            {EXPERTISE_TAGS.map((tag) => {
-                                const isSelected = selectedExpertise.includes(tag);
-                                return (
-                                    <TouchableOpacity 
-                                        key={tag} 
-                                        style={[styles.chip, isSelected && { borderColor: 'transparent', elevation: 5 }]}
-                                        onPress={() => toggleTag(tag, selectedExpertise, setSelectedExpertise, 3)}
-                                        activeOpacity={0.8}
-                                    >
-                                        {isSelected && <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />}
-                                        <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+                    {/* 🔥 STEP 4: VIBE & CONNECTION 🔥 */}
+                    {step === 4 && (
+                        <View style={styles.stepWrapper}>
+                            
+                            {/* 🔥 UPDATE 4: My Personality Chips 🔥 */}
+                            <View style={styles.formCard}>
+                                <View style={styles.tagSectionHeader}>
+                                    <Text style={styles.sectionTitle}>My Personality</Text>
+                                    <Text style={styles.limitBadge}>{selectedPersonality.length}/3</Text>
+                                </View>
+                                <View style={styles.chipWrap}>
+                                    {PERSONALITY_TAGS.map((tag) => {
+                                        const isSelected = selectedPersonality.includes(tag);
+                                        return (
+                                            <TouchableOpacity 
+                                                key={tag} 
+                                                style={[styles.chip, isSelected && styles.chipActive]}
+                                                onPress={() => toggleTag(tag, selectedPersonality, setSelectedPersonality, 3)}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
+                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
 
-                        <View style={[styles.tagSectionHeader, { marginTop: 25 }]}>
-                            <Text style={styles.sectionLabel}>PROFESSIONAL INTERESTS</Text>
-                            <Text style={styles.limitText}>{selectedHobbies.length}/5</Text>
-                        </View>
-                        <View style={styles.chipWrap}>
-                            {HOBBIES_TAGS.map((tag) => {
-                                const isSelected = selectedHobbies.includes(tag);
-                                return (
-                                    <TouchableOpacity 
-                                        key={tag} 
-                                        style={[styles.chip, isSelected && { borderColor: 'transparent' }]}
-                                        onPress={() => toggleTag(tag, selectedHobbies, setSelectedHobbies, 5)}
-                                        activeOpacity={0.8}
-                                    >
-                                        {isSelected && <LinearGradient colors={activeGradient} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={[StyleSheet.absoluteFill, { borderRadius: 14 }]} />}
-                                        <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
-                                    </TouchableOpacity>
-                                );
-                            })}
-                        </View>
+                            {/* 🔥 Other Interests (Hobbies) 🔥 */}
+                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                                <View style={styles.tagSectionHeader}>
+                                    <Text style={styles.sectionTitle}>Other Interests</Text>
+                                    <Text style={styles.limitBadge}>{selectedHobbies.length}/5</Text>
+                                </View>
+                                <View style={styles.chipWrap}>
+                                    {HOBBIES_TAGS.map((tag) => {
+                                        const isSelected = selectedHobbies.includes(tag);
+                                        return (
+                                            <TouchableOpacity 
+                                                key={tag} 
+                                                style={[styles.chip, isSelected && styles.chipActive]}
+                                                onPress={() => toggleTag(tag, selectedHobbies, setSelectedHobbies, 5)}
+                                                activeOpacity={0.8}
+                                            >
+                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />}
+                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
+                                            </TouchableOpacity>
+                                        );
+                                    })}
+                                </View>
+                            </View>
 
-                        <TouchableOpacity 
-                            style={styles.submitWrapper} 
-                            onPress={handleRegistration} 
-                            disabled={uploading}
-                            activeOpacity={0.8}
-                        >
-                            <Animated.View style={[styles.submitGlow, { transform: [{ scale: pulseAnim }], backgroundColor: activeGradient[0] }]} />
-                            <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.submitInner}>
-                                {uploading ? (
-                                    <ActivityIndicator color="#fff" size="small" />
-                                ) : (
-                                    <>
-                                        <Text style={styles.submitText}>SUBMIT APPLICATION</Text>
-                                        <Feather name="check-circle" size={22} color="#fff" />
-                                    </>
-                                )}
-                            </LinearGradient>
-                        </TouchableOpacity>
-                        <Text style={styles.termsText}>By proceeding, you agree to our Terms of Use. We value your privacy and maintain a professional environment.</Text>
-                        
-                    </View>
+                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                                <View style={styles.tagSectionHeader}>
+                                    <Text style={styles.sectionTitle}>A Bit About Me</Text>
+                                    <Text style={styles.limitBadge}>{bio.length}/150</Text>
+                                </View>
+                                <View style={[styles.inputField, styles.bioField]}>
+                                    <TextInput 
+                                        style={styles.bioInput} 
+                                        placeholder="Write a small bio about who you are, your vibe, and why people should talk to you..." 
+                                        placeholderTextColor="#475569" 
+                                        value={bio} 
+                                        onChangeText={setBio} 
+                                        multiline 
+                                        maxLength={150}
+                                    />
+                                </View>
+                            </View>
+                        </View>
+                    )}
+
+                    {/* 🔥 NEW STEP 5: FINAL REVIEW & SUBMIT 🔥 */}
+                    {step === 5 && (
+                        <Animated.View style={styles.stepWrapper}>
+                            <View style={[styles.formCard, styles.finalCard]}>
+                                <Animated.View style={[styles.shieldIconWrap, { transform: [{ scale: pulseAnim }] }]}>
+                                    <LinearGradient colors={activeGradient} style={styles.shieldGradient}>
+                                        <MaterialCommunityIcons name="shield-star" size={40} color="#FFF" />
+                                    </LinearGradient>
+                                </Animated.View>
+                                
+                                <Text style={styles.finalTitle}>Welcome to the Elite, {name || 'Creator'}!</Text>
+                                <Text style={styles.finalSub}>Your application to join the <Text style={{color: activeGradient[0], fontWeight:'800'}}>Elite Creators Network</Text> is almost ready.</Text>
+                                
+                                <View style={styles.termsBox}>
+                                    <View style={styles.termsIcon}>
+                                        <Feather name="check-circle" size={18} color={activeGradient[0]} />
+                                    </View>
+                                    <Text style={styles.termsText}>
+                                        By proceeding, you agree to our Terms of Use. We value your privacy and maintain a professional environment. Our team will verify your details to ensure community standards.
+                                    </Text>
+                                </View>
+                            </View>
+                        </Animated.View>
+                    )}
                 </View>
             </ScrollView>
+
+            {/* 🔥 Sticky Bottom Dynamic Footer 🔥 */}
+            <View style={styles.stickyFooter}>
+                <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                
+                <View style={styles.footerRow}>
+                    {step > 1 && (
+                        <TouchableOpacity style={styles.backBtn} onPress={prevStep}>
+                            <Feather name="arrow-left" size={24} color="#F8FAFC" />
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity 
+                        style={[styles.submitBtn, (step === 1 || step === 5) && { width: '100%' }]} 
+                        onPress={step === 5 ? handleRegistration : nextStep} 
+                        disabled={uploading}
+                        activeOpacity={0.9}
+                    >
+                        {step === 5 && <Animated.View style={[styles.submitGlow, { transform: [{ scale: pulseAnim }], backgroundColor: activeGradient[0] }]} />}
+                        <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.submitInner}>
+                            {uploading ? (
+                                <ActivityIndicator color="#fff" size="small" />
+                            ) : (
+                                <>
+                                    <Text style={styles.submitText}>{step === 5 ? "SUBMIT FOR REVIEW" : "CONTINUE"}</Text>
+                                    <Feather name={step === 5 ? "check-circle" : "arrow-right"} size={20} color="#fff" />
+                                </>
+                            )}
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </View>
+            </View>
+
         </KeyboardAvoidingView>
     );
 }
@@ -419,42 +683,90 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#030014' },
     glowOrb: { position: 'absolute', width: width * 1.5, height: width * 1.5, borderRadius: width * 0.75, opacity: 0.18 },
     noiseOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.01)', opacity: 0.5 },
-    scrollPadding: { paddingBottom: 60, paddingTop: 80 },
-    header: { paddingHorizontal: 30, marginBottom: 40, alignItems: 'center' },
-    proBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 25, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(251, 191, 36, 0.4)' },
-    proBadgeText: { color: '#FBBF24', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginLeft: 6 },
-    title: { color: '#FFF', fontSize: 36, fontWeight: '900', letterSpacing: -1, textAlign: 'center' },
-    subtitle: { color: '#A1A1AA', fontSize: 14, fontWeight: '600', marginTop: 8, textAlign: 'center' },
-    imagePicker: { alignSelf: 'center', marginBottom: 45, position: 'relative' },
-    avatarGlowRing: { position: 'absolute', top: -5, left: -5, right: -5, bottom: -5, borderRadius: 75, opacity: 0.4 },
-    imageWrapper: { width: 140, height: 140, borderRadius: 70, padding: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', zIndex: 2 },
+    
+    progressContainer: { width: '100%', height: 4, backgroundColor: 'rgba(255,255,255,0.05)', marginTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight },
+    progressBar: { height: '100%', borderRadius: 2 },
+
+    scrollPadding: { paddingBottom: 150, paddingTop: 20, paddingHorizontal: 20 },
+    
+    header: { alignItems: 'flex-start', marginBottom: 25, marginTop: 15 },
+    stepBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' },
+    stepBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+    title: { color: '#F8FAFC', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+    subtitle: { color: '#94A3B8', fontSize: 14, fontWeight: '600', marginTop: 6, lineHeight: 20 },
+    
+    formContainer: { width: '100%' },
+    stepWrapper: { width: '100%' },
+
+    // Glassmorphism Premium Cards
+    formCard: { backgroundColor: 'rgba(15, 23, 42, 0.45)', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    sectionTitle: { color: '#F8FAFC', fontSize: 15, fontWeight: '800', letterSpacing: 0.5, marginBottom: 18 },
+
+    // 🔥 HIGH-END PREMIUM FINAL CARD STYLES (Step 5) 🔥
+    finalCard: { alignItems: 'center', paddingVertical: 45, paddingHorizontal: 25, backgroundColor: 'rgba(15, 23, 42, 0.65)', borderRadius: 32, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', marginTop: 25 },
+    shieldIconWrap: { padding: 10, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    shieldGradient: { width: 84, height: 84, borderRadius: 42, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 12 },
+    finalTitle: { color: '#FFF', fontSize: 28, fontWeight: '900', marginBottom: 14, textAlign: 'center', letterSpacing: -0.5 },
+    finalSub: { color: '#94A3B8', fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 35, fontWeight: '500', paddingHorizontal: 5 },
+    termsBox: { flexDirection: 'row', padding: 20, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'flex-start', gap: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
+    termsIcon: { marginTop: 2 },
+    termsText: { flex: 1, color: '#94A3B8', fontSize: 12, lineHeight: 20, fontWeight: '500' },
+
+    // 🔥 UNIQUE PREMIUM IMAGE PICKER RINGS 🔥
+    imagePicker: { alignSelf: 'center', marginBottom: 35, marginTop: 20 },
+    imageContainer: { width: 140, height: 140, position: 'relative' },
+    avatarBaseGlow: { position: 'absolute', top: -10, left: -10, right: -10, bottom: -10, borderRadius: 100, opacity: 0.25, shadowColor: '#FFF', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 15 },
+    
+    // 🔥 SATTI FIX: Removed Dashes, made solid and clean
+    rotatingSolidRing: { position: 'absolute', top: -6, left: -6, right: -6, bottom: -6, borderRadius: 100, borderWidth: 2, borderStyle: 'solid', opacity: 0.5 },
+    reverseRotatingThinRing: { position: 'absolute', top: -14, left: -14, right: -14, bottom: -14, borderRadius: 100, borderWidth: 1.5, borderLeftColor: 'transparent', borderRightColor: 'transparent', opacity: 0.9 },
+    
+    imageWrapper: { width: '100%', height: '100%', borderRadius: 70, padding: 4, backgroundColor: 'rgba(0,0,0,0.5)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' },
     placeholderBox: { flex: 1, borderRadius: 66, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
     placeholderText: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '800', marginTop: 5, letterSpacing: 1 },
-    selectedImage: { flex: 1, borderRadius: 66 },
-    editIconBadge: { position: 'absolute', bottom: 5, right: 5, width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#030014' },
-    glassFormContainer: { marginHorizontal: 20, borderRadius: 30, overflow: 'hidden' },
-    glassBorder: { ...StyleSheet.absoluteFillObject, borderRadius: 30, borderWidth: 1.5, borderColor: 'transparent' }, 
-    formInner: { padding: 25, backgroundColor: 'rgba(10, 10, 15, 0.4)' },
-    sectionLabel: { color: '#E2E8F0', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15, marginLeft: 4 },
-    genderRow: { flexDirection: 'row', gap: 15, marginBottom: 30 },
-    genderCard: { flex: 1, height: 85, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
-    genderContent: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-    genderText: { color: '#A1A1AA', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
-    genderTextActive: { color: '#FFF', fontWeight: '900' },
-    inputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 20, height: 62 },
-    inputIcon: { paddingLeft: 20 },
-    input: { flex: 1, height: '100%', color: '#FFF', fontSize: 15, fontWeight: '600', paddingHorizontal: 15 },
-    bioContainer: { height: 120, alignItems: 'flex-start', paddingVertical: 5 },
-    bioInput: { flex: 1, width: '100%', color: '#FFF', fontSize: 14, paddingHorizontal: 20, paddingTop: 18, textAlignVertical: 'top', lineHeight: 22 },
-    tagSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 15, marginLeft: 4 },
-    limitText: { color: '#94A3B8', fontSize: 10, fontWeight: '800' },
-    chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 5 },
-    chip: { backgroundColor: 'rgba(255,255,255,0.06)', paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 4 },
-    chipText: { color: '#94A3B8', fontSize: 11, fontWeight: '700' },
-    chipTextActive: { color: '#FFF', fontWeight: '900' },
-    submitWrapper: { position: 'relative', marginTop: 35, alignSelf: 'center', width: '100%' },
-    submitGlow: { position: 'absolute', top: 5, left: 5, right: 5, bottom: 0, borderRadius: 22, opacity: 0.4 },
-    submitInner: { flexDirection: 'row', height: 62, borderRadius: 22, justifyContent: 'center', alignItems: 'center', gap: 10 },
-    submitText: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5 },
-    termsText: { color: '#71717A', fontSize: 10, textAlign: 'center', marginTop: 20, fontWeight: '600', lineHeight: 16 }
+    selectedImage: { flex: 1, width: '100%', height: '100%' },
+    editIconBadge: { position: 'absolute', bottom: -5, right: 0, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#030014', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 5 },
+
+    // Age Box Warning
+    ageVerificationBox: { flexDirection: 'column', backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: 18, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 25, alignItems: 'center' },
+    iconWrapperGlow: { padding: 12, borderRadius: 20, marginBottom: 5 },
+    ageTitle: { color: '#F8FAFC', fontSize: 16, fontWeight: '800', marginBottom: 5 },
+    ageDesc: { color: '#94A3B8', fontSize: 12, textAlign: 'center', lineHeight: 18 },
+
+    // Inputs
+    inputGroup: { marginBottom: 18 },
+    rowInputs: { flexDirection: 'row', gap: 15 },
+    inputLabel: { color: '#94A3B8', fontSize: 11, fontWeight: '700', marginBottom: 8, marginLeft: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
+    inputField: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', height: 60, paddingHorizontal: 15 },
+    input: { flex: 1, color: '#F8FAFC', fontSize: 15, fontWeight: '600', marginLeft: 10 },
+    
+    // Bio
+    bioField: { height: 130, paddingHorizontal: 0, alignItems: 'flex-start' },
+    bioInput: { flex: 1, width: '100%', color: '#F8FAFC', fontSize: 14, paddingHorizontal: 18, paddingTop: 18, textAlignVertical: 'top', lineHeight: 22 },
+    
+    // Gender Selection
+    genderRow: { flexDirection: 'row', gap: 12, marginBottom: 25 },
+    genderCard: { flex: 1, height: 65, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+    genderCardActive: { borderColor: 'transparent', elevation: 5 },
+    genderContent: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 8 },
+    genderText: { color: '#94A3B8', fontWeight: '700', fontSize: 14 },
+    genderTextActive: { color: '#FFF', fontWeight: '800' },
+    
+    // Tags / Chips
+    tagSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+    limitBadge: { backgroundColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1', fontSize: 10, fontWeight: '800', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
+    chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+    chipActive: { borderColor: 'transparent', elevation: 4 }, 
+    chipText: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
+    chipTextActive: { color: '#FFF', fontWeight: '800' },
+    
+    // Sticky Footer
+    stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 15, paddingBottom: Platform.OS === 'ios' ? 45 : 35, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
+    footerRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
+    backBtn: { width: 62, height: 62, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    submitBtn: { flex: 1, position: 'relative' },
+    submitGlow: { position: 'absolute', top: 5, left: 10, right: 10, bottom: -5, borderRadius: 20, opacity: 0.5, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 1, shadowRadius: 10 },
+    submitInner: { flexDirection: 'row', height: 62, borderRadius: 20, justifyContent: 'center', alignItems: 'center', gap: 10 },
+    submitText: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.2 },
 });

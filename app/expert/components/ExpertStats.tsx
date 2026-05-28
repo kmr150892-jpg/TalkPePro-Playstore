@@ -31,7 +31,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'], glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'], glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'], glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 30000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
@@ -209,6 +209,19 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     const livesSnap = await getDocs(query(collection(db, "lives"), where("hostId", "==", user.uid)));
                     for (const liveDoc of livesSnap.docs) {
                         const liveData = liveDoc.data();
+                        const isParty = liveData.isPartyRoom === true || liveData.status === "party_hidden";
+
+                        // 🔥 SATTI FIX: Added missing gameBeansCollected for EXACT syncing with History 🔥
+                        if (liveData.gameBeansCollected && liveData.gameBeansCollected > 0) {
+                            rawData.push({
+                                id: `game_${liveDoc.id}`,
+                                type: isParty ? 'party_game_bonus' : 'live_game_bonus',
+                                senderName: 'System Reward',
+                                beans: liveData.gameBeansCollected,
+                                timestamp: liveData.endedAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) }
+                            });
+                        }
+
                         const giftsSnap = await getDocs(collection(db, "lives", liveDoc.id, "gifts"));
                         for (const gDoc of giftsSnap.docs) {
                             const g = gDoc.data();
@@ -217,13 +230,21 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 rawData.push({ id: gDoc.id, type: 'live_gift', beans: bns, timestamp: g.timestamp || liveData.startedAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
                             }
                         }
+                        
+                        // 🔥 SATTI FIX: Made nested game IDs strictly unique using liveDoc.id + gameDoc.id 🔥
                         try {
                             const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
                             for (const gameDoc of gamesSnap.docs) {
                                 const d = gameDoc.data();
                                 const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
                                 if (expertBeans > 0) {
-                                    rawData.push({ id: gameDoc.id, type: 'live_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Live Game System" });
+                                    rawData.push({ 
+                                        id: `${liveDoc.id}_${gameDoc.id}`, 
+                                        type: 'live_game_bonus', 
+                                        beans: expertBeans, 
+                                        timestamp: d.timestamp || d.createdAt || d.gameStartedAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) }, 
+                                        senderName: "Live Game System" 
+                                    });
                                 }
                             }
                         } catch(e){}
@@ -243,13 +264,21 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 rawData.push({ id: gDoc.id, type: 'party_gift', beans: bns, timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
                             }
                         }
+
+                        // 🔥 SATTI FIX: Made nested game IDs strictly unique using forumDoc.id + gameDoc.id 🔥
                         try {
                             const gamesSnap = await getDocs(collection(db, "forum_rooms", forumDoc.id, "games"));
                             for (const gameDoc of gamesSnap.docs) {
                                 const d = gameDoc.data();
                                 const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
                                 if (expertBeans > 0) {
-                                    rawData.push({ id: gameDoc.id, type: 'party_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || pData.createdAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Forum Game System" });
+                                    rawData.push({ 
+                                        id: `${forumDoc.id}_${gameDoc.id}`, 
+                                        type: 'party_game_bonus', 
+                                        beans: expertBeans, 
+                                        timestamp: d.timestamp || d.createdAt || d.gameStartedAt || pData.createdAt || { seconds: Math.floor(Date.now() / 1000) }, 
+                                        senderName: "Forum Game System" 
+                                    });
                                 }
                             }
                         } catch(e){}
@@ -517,7 +546,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         let iconName = "swap-horizontal";
         let iconColor = "#94A3B8";
         let sign = "+";
-        let currency = "₿";
+        let currency = "🎖️";
         let amountValue = Number(item.beans) || Number(item.expertEarnings) || 0;
         let titleText = item.title || item.type || 'Transaction';
         let statusText = 'ACQUIRED';
@@ -718,7 +747,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
                         <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 4 }}>REWARDS</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
-                            <Text style={{ fontSize: 12, marginRight: 4 }}>💰</Text>
+                            <Text style={{ fontSize: 12, marginRight: 4 }}>🎖️</Text>
                             <Text style={{ color: '#10B981', fontSize: 14, fontWeight: '900' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                                 {user.totalBeansEarned?.toLocaleString() || 0}
                             </Text>
@@ -768,7 +797,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             <View style={styles.revenueDisplay}>
                                 <Text style={styles.revenueTitle}>GLOBAL GAINED REWARDS STREAM</Text>
                                 <View style={styles.revenueNumberContainer}>
-                                    <Text style={[styles.revenueSymbol, { color: theme.accent }]}>₿</Text>
+                                    <Text style={[styles.revenueSymbol, { color: theme.accent }]}>🎖️</Text>
                                     <Text style={styles.revenueMainValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{stats?.totalBeansEarned?.toLocaleString()}</Text>
                                     <Text style={[styles.revenueMainUnit, { color: theme.accent }]}>REWARDS</Text>
                                 </View>
@@ -820,16 +849,16 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 <Text style={styles.subHeading}>REWARD BREAKDOWN</Text>
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="videocam" label="Consultation Earnings" value={`₿${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="gift" label="Consultation Rewards" value={`₿${breakdown.callGifts.toLocaleString()}`} color={theme.primary} borderStyle={borderType1} />
+                                        <MatrixBox icon="videocam" label="Consultation Earnings" value={`🎖️${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />
+                                        <MatrixBox icon="gift" label="Consultation Rewards" value={`🎖️${breakdown.callGifts.toLocaleString()}`} color={theme.primary} borderStyle={borderType1} />
                                     </View>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`₿${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />
-                                        <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`₿${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
+                                        <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`🎖️${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />
+                                        <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`🎖️${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
                                     </View>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Broadcast Activity" value={`₿${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" borderStyle={borderType2} />
-                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Forum Activity" value={`₿${breakdown.partyGames.toLocaleString()}`} color="#EC4899" borderStyle={borderType1} />
+                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Broadcast Activity" value={`🎖️${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" borderStyle={borderType2} />
+                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Forum Activity" value={`🎖️${breakdown.partyGames.toLocaleString()}`} color="#EC4899" borderStyle={borderType1} />
                                     </View>
                                 </View>
 
@@ -850,7 +879,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                             <View style={styles.flowValueNode}>
                                                 <View style={[styles.flowValueGlow, { backgroundColor: '#F59E0B' }]} />
                                                 <View style={[styles.flowValueBox, { backgroundColor: 'rgba(0,0,0,0.6)', borderColor: 'rgba(245, 158, 11, 0.5)' }]}>
-                                                    <Text style={[styles.flowBeanSymbol, {color: '#F59E0B', marginRight: 4}]}>₿</Text>
+                                                    <Text style={[styles.flowBeanSymbol, {color: '#F59E0B', marginRight: 4}]}>🎖️</Text>
                                                     <Text style={[styles.flowValText, { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                                                         {(breakdown.totalDeepGifts > 0 ? breakdown.totalDeepGifts : Math.floor((Number(stats?.totalDiamondsReceived) || 0) / 2)).toLocaleString()}
                                                     </Text>
@@ -950,7 +979,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 <View style={{ alignItems: 'center', marginBottom: 25, marginTop: 10 }}>
                                      <Text style={[styles.totalTalkLabel, { color: theme.primary, marginBottom: 5 }]}>LIFETIME REWARDS ACCUMULATED</Text>
                                      <Text style={{color: '#FFF', fontSize: 34, fontWeight: '900', letterSpacing: -1}} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
-                                         {stats?.totalBeansEarned?.toLocaleString() || 0} ₿
+                                         {stats?.totalBeansEarned?.toLocaleString() || 0} 🎖️
                                      </Text>
                                 </View>
 
@@ -985,7 +1014,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                 </View>
                                                 <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
                                                     <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                                                        <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{y.total.toLocaleString()} ₿</Text>
+                                                        <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{y.total.toLocaleString()} 🎖️</Text>
                                                         <Text style={[styles.historyStatus, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>YEAR TOTAL</Text>
                                                     </View>
                                                     <Ionicons name={isYearExpanded ? "chevron-up" : "chevron-down"} size={20} color={theme.accent} style={{marginLeft: 5}} />
@@ -1022,7 +1051,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                                     </View>
                                                                     <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
                                                                         <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                                                                            <Text style={[styles.historyAmount, { color: '#10B981', fontSize: 14 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{m.total.toLocaleString()} ₿</Text>
+                                                                            <Text style={[styles.historyAmount, { color: '#10B981', fontSize: 14 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{m.total.toLocaleString()} 🎖️</Text>
                                                                         </View>
                                                                         <Ionicons name={isMonthExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.accent} style={{marginLeft: 5}} />
                                                                     </View>

@@ -684,7 +684,7 @@ export default function ExpertForumRoomScreen() {
                                     />
                                     <Text style={styles.giftAnimSender}>{currentGift.senderName} Sent {currentGift.giftName}</Text>
                                 </View>
-                                <Text style={styles.giftAnimAmount}>⭐ {Math.floor((currentGift.price || currentGift.amount || 0) / 2)} REWARDS</Text>
+                                <Text style={styles.giftAnimAmount}>🎖️ {Math.floor((currentGift.price || currentGift.amount || 0) / 2)} REWARDS</Text>
                             </LinearGradient>
                         </Animated.View>
                     </View>
