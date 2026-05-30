@@ -1,7 +1,7 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { collection, collectionGroup, doc, onSnapshot, query, where } from 'firebase/firestore';
+import { collection, collectionGroup, doc, getDoc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -17,42 +17,42 @@ import {
     View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { auth, db } from '../../../../firebaseConfig';
+import { db } from '../../../../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 
-// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT COLOR PROTOCOL LOCKED)
+// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (ADMIN SPECIFIC WITH USER COLORS)
 const calculateUserLevel = (totalSpent: number) => {
   if (totalSpent >= 500000001) return { 
-      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', grad: ['#ff0000', '#660000'] as const, 
+      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#FF0033', secondaryColor: '#660000', grad: ['#1A0000', '#000000'] as const, 
       themeBg: ['#1A0000', '#000000'], layout: 'stealth', anim: 'titan', radius: 40, avatarSize: 85, icon: 'fire-circle'
   }; 
   if (totalSpent >= 100000001) return { 
-      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', grad: ['#ff0dba', '#a50606'] as const, 
+      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#D946EF', secondaryColor: '#c8040b', grad: ['#15001A', '#000000'] as const, 
       themeBg: ['#15001A', '#000000'], layout: 'stealth', anim: 'mythic', radius: 40, avatarSize: 85, icon: 'lightning-bolt'
   }; 
   if (totalSpent >= 50000000) return { 
-      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', grad: ['#f6f60d', '#02fa0a'] as const, 
+      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#9c77f3', secondaryColor: '#d31515', grad: ['#08001A', '#000000'] as const, 
       themeBg: ['#08001A', '#000000'], layout: 'stealth', anim: 'grandmaster', radius: 40, avatarSize: 85, icon: 'shield-crown'
   };
   if (totalSpent >= 10000000) return { 
-      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', grad: ['#00F2FE', '#f52b6092'] as const, 
+      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#970d50d4', grad: ['#00101A', '#000000'] as const, 
       themeBg: ['#00101A', '#000000'], layout: 'stealth', anim: 'explosion', radius: 40, avatarSize: 85, icon: 'target'
   };
   if (totalSpent >= 5000000) return { 
-      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', grad: ['#d0630a', '#5f0bf0'] as const, 
+      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#DC2626', grad: ['#0A001A', '#000000'] as const, 
       themeBg: ['#0A001A', '#000000'], layout: 'stealth', anim: 'nebula', radius: 40, avatarSize: 80, icon: 'shield-airplane'
   };
   if (totalSpent >= 1000000) return { 
-      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', grad: ['#bcde4a', '#09bbf1fe'] as const, 
+      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#a3de4a', secondaryColor: '#991625', grad: ['#001A0A', '#000000'] as const, 
       themeBg: ['#001A0A', '#000000'], layout: 'stealth', anim: 'diamond', radius: 40, avatarSize: 80, icon: 'diamond-stone'
   };
   if (totalSpent >= 200001) return { 
-      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', grad: ['#ffae00', '#ac4a4a'] as const, 
+      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#801f29', grad: ['#1A0B00', '#000000'] as const, 
       themeBg: ['#1A0B00', '#000000'], layout: 'stealth', anim: 'sparkle', radius: 40, avatarSize: 75, icon: 'trophy'
   };
   return { 
-      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', grad: ['#0f33e7', '#02216b'] as const, 
+      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#f50808', grad: ['#050505', '#000000'] as const, 
       themeBg: ['#050505', '#000000'], layout: 'stealth', anim: 'wave', radius: 40, avatarSize: 70, icon: 'shield-star'
   };
 };
@@ -60,19 +60,27 @@ const calculateUserLevel = (totalSpent: number) => {
 export default function UserPassbookDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
-  const user = auth.currentUser;
   
   const [userData, setUserData] = useState<any>(null);
-  const [historyLogs, setHistoryLogs] = useState<any[]>([]); 
-  const [totalRecharge, setTotalRecharge] = useState<number>(0);
+  const [loading, setLoading] = useState(true);
+  
+  // Tabs: Merged Admin STATS with User Tabs
+  const [activeTab, setActiveTab] = useState<'STATS' | 'CALLS' | 'GAMES' | 'REWARDS'>('STATS'); 
+
+  // 🔥 USER HISTORY STATES
+  const [history, setHistory] = useState<any[]>([]);
+  const [gameHistory, setGameHistory] = useState<any[]>([]); 
+  const [totalGames, setTotalGames] = useState<number>(0); 
+
+  // 🔥 ADMIN EXACT STATS VARIABLES
+  const [totalRechargeDiamonds, setTotalRechargeDiamonds] = useState<number>(0); 
   const [totalGiftsSpent, setTotalGiftsSpent] = useState<number>(0);
-  const [totalVideoCallSpent, setTotalVideoCallSpent] = useState<number>(0); 
+  const [totalVideoCallSpent, setTotalVideoCallSpent] = useState<number>(0);
   const [totalSpentCalculated, setTotalSpentCalculated] = useState<number>(0); 
   const [gameNetProfit, setGameNetProfit] = useState<number>(0); 
   const [totalRedeemed, setTotalRedeemed] = useState<number>(0); 
-  const [totalMinutes, setTotalMinutes] = useState<number>(0); 
-  const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'STATS' | 'HISTORY'>('STATS'); 
+  const [totalEntryFees, setTotalEntryFees] = useState<number>(0); 
+  const [totalMinutes, setTotalMinutes] = useState<number>(0);
 
   // 🌀 COMPLEX ANIMATION ENGINE MATRIX
   const scrollY = useRef(new Animated.Value(0)).current;
@@ -87,15 +95,7 @@ export default function UserPassbookDetail() {
   useEffect(() => {
     Animated.loop(Animated.timing(mainLoop, { toValue: 1, duration: 4500, easing: Easing.linear, useNativeDriver: true })).start();
     Animated.loop(Animated.timing(secondaryLoop, { toValue: 1, duration: 2500, easing: Easing.inOut(Easing.ease), useNativeDriver: true })).start();
-    
-    Animated.loop(
-        Animated.timing(shimmerAnim, {
-          toValue: 1,
-          duration: 4000,
-          easing: Easing.inOut(Easing.sin),
-          useNativeDriver: true
-        })
-    ).start();
+    Animated.loop(Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })).start();
 
     const runTrail = () => {
         trailX.setValue(-width);
@@ -104,8 +104,8 @@ export default function UserPassbookDetail() {
     runTrail();
 
     Animated.loop(Animated.sequence([
-        Animated.timing(floatAnim, { toValue: -10, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(floatAnim, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+        Animated.timing(floatAnim, { toValue: -8, duration: 2500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(floatAnim, { toValue: 0, duration: 2500, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
     ])).start();
 
     Animated.loop(Animated.sequence([
@@ -129,220 +129,301 @@ export default function UserPassbookDetail() {
       let rawTransactions: any[] = [];
       let rawGifts: any[] = [];
       let rawRequests: any[] = []; 
-      let rawGames: any[] = []; 
+      let rawActivityGames: any[] = []; 
+      let rawTxGames: any[] = [];
       let rawCalls: any[] = []; 
 
-      // 🔥 MASTER FUNCTION: Merges and calculates everything accurately!
       const processAllLogs = () => {
           if (!currentUserData) return;
 
-          // 1. Calculate Video Calls Minutes and Spent
-          let callMins = 0;
-          let callSpent = 0;
-          rawCalls.forEach(c => {
-              callMins += (Number(c.finalDuration) || Number(c.duration) || 0);
-              callSpent += (Number(c.totalDiamonds) || 0) + (Number(c.totalGiftsDiamonds) || 0);
+          // ==========================================
+          // 🔥 1. CALLS & GIFTS FETCHING ENGINE (USER LOGIC EXACT MATCH)
+          // ==========================================
+          const myGifts = rawGifts.filter(g => {
+              const isIdMatch = g.senderId === id || g.userId === id;
+              const isNameMatch = g.senderName && (g.senderName === currentUserData.name);
+              return isIdMatch || isNameMatch;
           });
-          setTotalMinutes(Math.floor(callMins / 60));
-          setTotalVideoCallSpent(callSpent);
-
-          // 2. Calculate Games Net Earnings (Win - Loss)
-          let tGameWin = 0;
-          let tGameLoss = 0;
-          rawGames.forEach(g => {
-              const isWin = String(g.status || '').toUpperCase() === 'WIN';
-              if (isWin) {
-                  tGameWin += (Number(g.winAmount) || 0);
-              } else {
-                  tGameLoss += (Number(g.lossAmount) || Number(g.entryFee) || 0);
-              }
-          });
-          setGameNetProfit(tGameWin - tGameLoss);
-
-          // 3. Filter nested gifts & 🔥 SATTI FIX: Fetch ALL Gifts Accurate Math 🔥
-          const myGifts = rawGifts.filter(g => 
-              g.senderId === id || 
-              (g.senderName && currentUserData.name && String(g.senderName).trim().toLowerCase() === String(currentUserData.name).trim().toLowerCase())
-          );
-
-          const calcGiftsFromNested = myGifts.reduce((sum, g) => sum + (Number(g.amount) || Number(g.diamonds) || Number(g.price) || 0), 0);
           
-          const calcGiftsFromTx = rawTransactions.reduce((sum, t) => {
-              const typeStr = String(t.type || '').toUpperCase();
-              if (typeStr === 'GIFT' || typeStr.includes('GIFT')) {
-                  return sum + (Number(t.amount) || Number(t.diamonds) || Number(t.price) || 0);
+          const mappedStandaloneGifts = myGifts.map(g => ({
+              ...g,
+              isStandaloneGift: true,
+              mergedTime: g.timestamp?.toMillis ? g.timestamp.toMillis() : (g.createdAt?.toMillis ? g.createdAt.toMillis() : 0)
+          }));
+
+          const mappedCallGifts = rawCalls
+              .filter(c => Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))) > 0)
+              .map(c => ({
+                  id: c.id + '_callgift',
+                  isCallGift: true,
+                  expertName: c.expertName || c.receiverName || c.hostName || c.toName || 'Network Expert',
+                  expertImage: c.expertImage || '',
+                  amount: Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))),
+                  timestamp: c.endedAt || c.createdAt,
+                  mergedTime: c.endedAt?.toMillis ? c.endedAt.toMillis() : (c.createdAt?.toMillis ? c.createdAt.toMillis() : 0)
+              }));
+
+          const mappedCalls = rawCalls.map(c => ({
+              ...c,
+              isCall: true,
+              mergedTime: c.endedAt?.toMillis ? c.endedAt.toMillis() : (c.createdAt?.toMillis ? c.createdAt.toMillis() : 0)
+          }));
+
+          const combinedHistory = [...mappedCalls, ...mappedStandaloneGifts, ...mappedCallGifts].sort((a, b) => b.mergedTime - a.mergedTime);
+          
+          const totalSecs = rawCalls.reduce((acc, curr) => acc + (Number(curr.finalDuration) || Number(curr.duration) || 0), 0);
+          setTotalMinutes(Math.floor(totalSecs / 60));
+          setHistory(combinedHistory);
+
+          // ==========================================
+          // 🔥 2. GAME HISTORY ENGINE (USER LOGIC EXACT MATCH)
+          // ==========================================
+          const mappedTxGames = rawTxGames.map(d => {
+              const typeStr = String(d.type || '').toUpperCase();
+              const titleStr = String(d.title || '').toUpperCase();
+              const statusStr = String(d.status || '').toUpperCase();
+              
+              const isRefund = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
+              const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
+              const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
+
+              if (isRefund || isGameReward || isGameEntry) {
+                  let amount = Math.abs(Number(String(d.amount || d.diamonds || d.diamondsAdded || d.entryFee || d.winAmount || d.price || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+                  
+                  let isWinner = false;
+                  let isCancelOrRefund = false;
+                  let finalStatus = "LOSS";
+
+                  if (isRefund) {
+                      isCancelOrRefund = true;
+                      finalStatus = "REFUNDED";
+                  } else if (isGameReward) {
+                      isWinner = true;
+                      finalStatus = "REWARD";
+                  } else if (isGameEntry) {
+                      finalStatus = "ENTRY"; 
+                  }
+
+                  return {
+                      id: d.id,
+                      gameName: (d.title || d.type || "ARENA SESSION").replace(/WINNER/gi, 'REWARD').replace(/GIFT/gi, 'REWARD'),
+                      entryFee: isGameEntry || isCancelOrRefund ? amount : 0,
+                      rewardPerWinner: isWinner ? amount : 0,
+                      totalPool: d.pool || d.totalPool || 0,
+                      score: d.score || 0,
+                      status: finalStatus,
+                      isWinner,
+                      isCancelOrRefund,
+                      timestamp: d.timestamp || d.createdAt,
+                      ...d
+                  };
+              }
+              return null;
+          }).filter(Boolean);
+
+          const mappedActivityGames = rawActivityGames.map(d => {
+              let rawStatus = String(d.status || d.gameStatus || 'COMPLETED').toUpperCase();
+              
+              const isCancelOrRefund = rawStatus.includes("CANCEL") || rawStatus.includes("REFUND");
+              const isWinner = rawStatus.includes("WIN") || rawStatus === "WON" || rawStatus.includes("REWARD") || Number(String(d.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
+
+              let finalStatus = "LOSS";
+              if (isCancelOrRefund) finalStatus = "REFUNDED";
+              else if (isWinner) finalStatus = "REWARD";
+
+              return {
+                  id: d.id,
+                  gameName: d.gameName || d.title || "ACTIVITY LOG",
+                  entryFee: Number(d.entryFee || d.entryAmount || d.betAmount || 0),
+                  rewardPerWinner: Number(d.rewardPerWinner || d.winAmount || d.payout || 0),
+                  totalPool: Number(d.totalPool || d.pool || 0),
+                  score: d.score || 0,
+                  status: finalStatus,
+                  isWinner,
+                  isCancelOrRefund,
+                  timestamp: d.timestamp || d.createdAt,
+                  ...d
+              };
+          });
+
+          const combinedGames = [...mappedActivityGames, ...mappedTxGames].sort((a, b) => {
+              const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
+              const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
+              return timeB - timeA;
+          });
+          const uniqueGames = Array.from(new Map(combinedGames.map(item => [item.id, item])).values());
+          setTotalGames(uniqueGames.length);
+          setGameHistory(uniqueGames);
+
+
+          // ================= EXACT ADMIN STATS CALCULATION ENGINE =================
+          const calcRecharge = rawTransactions.reduce((sum, log) => {
+              const typeStr = String(log.type || '').toUpperCase();
+              const itemStatus = String(log.status || '').toLowerCase();
+              if (typeStr.includes('RECHARGE') && (itemStatus === 'success' || itemStatus === 'completed')) {
+                  let d = Number(log.diamonds) || Number(log.diamondsAdded) || 0;
+                  if (d === 0) d = (Number(log.amount) || 0) * 100;
+                  return sum + d;
               }
               return sum;
           }, 0);
-          
-          const tGifts = calcGiftsFromNested + calcGiftsFromTx;
-          setTotalGiftsSpent(tGifts);
+          setTotalRechargeDiamonds(calcRecharge);
 
-          // 4. Redeemed Vouchers
-          let tRedeemed = 0;
-          rawRequests.forEach(r => {
-              const statusStr = String(r.status || '').toLowerCase();
+          const calcGiftsFromNested = myGifts.reduce((sum, log) => sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0), 0); 
+          const calcCallGifts = mappedCallGifts.reduce((sum, log) => sum + log.amount, 0); 
+          setTotalGiftsSpent(calcGiftsFromNested + calcCallGifts);
+
+          const calcVideoCalls = rawTransactions.reduce((sum, log) => {
+              if (String(log.type || '').toUpperCase().includes('CALL')) { 
+                  return sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0);
+              }
+              return sum;
+          }, 0);
+          setTotalVideoCallSpent(calcVideoCalls);
+
+          const calcRedeemed = rawRequests.reduce((sum, log) => {
+              const statusStr = String(log.status || '').toLowerCase();
               if (statusStr !== 'failed' && statusStr !== 'rejected') {
-                  // Accurately fetching value from the structure provided in image
-                  tRedeemed += (Number(r.costDeducted) || Number(r.voucherValue) || Number(r.amount) || 0);
+                  return sum + (Number(log.costDeducted) || Number(log.voucherValue) || Number(log.amount) || 0);
               }
-          });
-          setTotalRedeemed(tRedeemed);
+              return sum;
+          }, 0);
+          setTotalRedeemed(calcRedeemed);
 
-          // 5. Calculate Recharge & Other Unknown Spends
-          let tRecharge = 0;
-          let tOtherSpent = 0;
+          // 5. Calculate Activity Rewards & EXCLUSIVE Game Entry Fees Calculation 🔥 (EXACT MATCH FROM USER PROFILE)
+          let totalGameEntryFeesAll = 0; 
+          let totalGameRefundsAll = 0; 
+          
+          const calcGameNet = rawActivityGames.reduce((sum, log) => {
+              const rawStatus = String(log.status || '').toUpperCase();
+              const typeStr = String(log.type || '').toUpperCase();
+              const titleStr = String(log.gameName || log.title || '').toUpperCase();
+              
+              const isWin = rawStatus.includes('WIN') || rawStatus === 'WON' || rawStatus.includes('REWARD') || typeStr.includes('WIN') || typeStr.includes('REWARD') || titleStr.includes('WIN') || titleStr.includes('REWARD') || Number(String(log.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
+              
+              // 🔥 If game is Cancelled or Refunded, completely isolate it
+              const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || rawStatus.includes('REFUND');
+              const isFailedOrCancelled = rawStatus.includes('CANCEL') || rawStatus.includes('FAIL');
+              
+              let winVal = 0;
+              let entryVal = Math.abs(Number(String(log.entryFee || log.entryAmount || log.Amount || log.fee || log.cost || 0).replace(/[^0-9.-]+/g, ''))) || 0; 
 
-          rawTransactions.forEach(t => {
-              const typeStr = String(t.type || '').toUpperCase();
-              const statusStr = String(t.status || '').toLowerCase();
+              if (isRefundTx) {
+                  totalGameRefundsAll += entryVal;
+              } else if (!isFailedOrCancelled) {
+                  totalGameEntryFeesAll += entryVal; 
+              }
 
-              if (typeStr.includes('RECHARGE') && statusStr === 'success') {
-                  tRecharge += (Number(t.amount) || 0);
-              } else {
-                  // 🔥 AVOID DOUBLE COUNTING: Ignore types we already calculated above
-                  const isCall = typeStr.includes('CALL');
-                  const isGame = typeStr.includes('GAME') || typeStr.includes('WINNER') || typeStr.includes('entry');
-                  const isVoucher = typeStr.includes('VOUCHER');
-                  const isGift = typeStr.includes('GIFT');
-                  const isRechargeAny = typeStr.includes('RECHARGE'); 
+              if (isWin && !isFailedOrCancelled && !isRefundTx) {
+                  winVal = Math.abs(Number(String(log.winAmount || log.rewardAmount || log.amount || log.prize || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+                  return sum + winVal;
+              }
+              return sum; 
+          }, 0);
 
-                  if (!isCall && !isGame && !isVoucher && !isGift && !isRechargeAny) {
-                      tOtherSpent += (Number(t.amount) || Number(t.diamonds) || Number(t.price) || 0);
+          const calcTxGameNet = rawTransactions.reduce((sum, log) => {
+              const typeStr = String(log.type || '').toUpperCase();
+              const titleStr = String(log.title || '').toUpperCase();
+              const statusStr = String(log.status || '').toUpperCase();
+              
+              let amountVal = Math.abs(Number(String(log.amount || log.diamonds || log.diamondsAdded || log.winAmount || log.entryFee || log.price || log.fee || 0).replace(/[^0-9.-]+/g, ''))) || 0;
+
+              // 🔥 1. ABSOLUTE STOP FOR ANY REFUND
+              const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
+              const isGameRelated = typeStr.includes('ARENA') || typeStr.includes('GAME') || typeStr.includes('ENTRY') || 
+                                    titleStr.includes('ARENA') || titleStr.includes('GAME') || titleStr.includes('ENTRY');
+
+              if (isRefundTx) {
+                  if (isGameRelated) {
+                      totalGameRefundsAll += amountVal;
                   }
+                  return sum; // 🛑 STRICTLY STOP HERE IF IT IS A REFUND
               }
-          });
-          setTotalRecharge(tRecharge);
 
-          // 🔥 6. ACCURATE TOTAL SPENT (Excludes Recharge, Includes Gifts) 🔥
-          setTotalSpentCalculated(callSpent + tGifts + tRedeemed + tGameLoss + tOtherSpent);
+              // 🔥 2. ONLY PROCEED IF IT IS DEFINITELY NOT A REFUND
+              const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
+              const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
+              const isFailed = statusStr.includes('CANCEL') || statusStr.includes('FAIL');
 
-          // 7. BUILD UI HISTORY LOGS
-          const validTransactions = rawTransactions.filter(t => {
-              const ts = String(t.type).toUpperCase();
-              return ts !== 'VOUCHER_REDEEM' && !ts.includes('GAME_bet') && !ts.includes('WINNER') && !ts.includes('CALL');
-          });
+              if (isGameReward) {
+                  if (!isFailed) return sum + amountVal;
+                  return sum;
+              }
+              
+              if (isGameEntry) {
+                  if (!isFailed) {
+                      totalGameEntryFeesAll += amountVal;
+                  }
+                  return sum;
+              }
 
-          // Fallback added for amount Discovering the screenshot exactly
-          const mappedRequests = rawRequests.map(r => ({
-              id: r.id,
-              _source: 'reward_requests',
-              type: 'VOUCHER_REDEEM',
-              title: `Authorized Allocation: ${r.voucherName || 'System Voucher'}`,
-              amount: r.costDeducted || r.voucherValue || r.amount || 0,
-              status: r.status || 'Pending',
-              timestamp: r.requestDate || r.processedDate || r.createdAt || new Date()
-          }));
+              return sum;
+          }, 0);
 
-          const mappedGames = rawGames.map(g => ({
-              ...g,
-              _source: 'game_history',
-              timestamp: g.timestamp || g.createdAt || new Date()
-          }));
+          setGameNetProfit(calcGameNet + calcTxGameNet);
+          setTotalEntryFees(Math.max(0, totalGameEntryFeesAll - totalGameRefundsAll));
+          
+          const grandTotalSpent = Math.max(0, calcVideoCalls + (calcGiftsFromNested + calcCallGifts) + calcRedeemed);
+          setTotalSpentCalculated(grandTotalSpent);
 
-          // 🔥 SATTI FIX: Map Calls into History Logs so they show in All Txns 🔥
-          const mappedCalls = rawCalls.map(c => ({
-              id: c.id,
-              _source: 'video_calls',
-              type: 'VIDEO_CALL',
-              title: `Session ${c.expertName ? 'with ' + c.expertName : ''}`,
-              amount: Number(c.totalDiamonds) || 0,
-              status: c.status === 'completed' || c.status === 'user_ended' || c.status === 'ended' ? 'COMPLETED' : c.status,
-              timestamp: c.endedAt || c.createdAt || new Date()
-          }));
-
-          // Merge Streams (Including mappedCalls)
-          const mergedLogs = [...validTransactions, ...myGifts, ...mappedRequests, ...mappedGames, ...mappedCalls];
-
-          // 🔥 BULLETPROOF TIMESTAMP SORTING 🔥
-          mergedLogs.sort((a, b) => {
-              const getT = (val: any) => {
-                  const t = val?.timestamp || val?.createdAt || val?.requestDate;
-                  if (!t) return 0;
-                  if (t.toMillis) return t.toMillis();
-                  if (t.seconds) return t.seconds * 1000;
-                  if (t.getTime) return t.getTime();
-                  if (typeof t === 'number') return t;
-                  if (typeof t === 'string') return new Date(t).getTime();
-                  return 0;
-              };
-              return getT(b) - getT(a);
-          });
-
-          // Optimize list size to avoid hang
-          setHistoryLogs(mergedLogs.slice(0, 100));
           setLoading(false);
       };
 
-      // Fetch Exact User Profile Data
+      // Listeners
       const unsubUser = onSnapshot(doc(db, 'users', id as string), (docSnap) => {
-          if (docSnap.exists()) {
-              currentUserData = { id: docSnap.id, ...(docSnap.data() as any) };
-              setUserData(currentUserData);
-              processAllLogs(); 
-          }
+          if (docSnap.exists()) { currentUserData = { id: docSnap.id, ...(docSnap.data() as any) }; setUserData(currentUserData); processAllLogs(); }
       });
 
-      // Fetch User's Transactions
-      const qHistory = query(
-          collection(db, 'transactions'),
-          where('userId', '==', id)
-      );
+      const qHistory = query(collection(db, 'transactions'), where('userId', '==', id));
       const unsubHistory = onSnapshot(qHistory, (snap) => {
-          rawTransactions = snap.docs.map(d => ({ id: d.id, _source: 'transactions', ...(d.data() as any) }));
+          rawTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          rawTxGames = rawTransactions;
           processAllLogs();
-      }, (error) => console.error("Error fetching transactions: ", error));
+      });
 
-      // Fetch ALL Gifts across DB
       const qGifts = query(collectionGroup(db, 'gifts'));
-      const unsubGifts = onSnapshot(qGifts, (snap) => {
-          rawGifts = snap.docs.map(d => ({ id: d.id, _source: 'nested_gifts', ...(d.data() as any) }));
+      const unsubGifts = onSnapshot(qGifts, async (snapshot) => {
+          rawGifts = await Promise.all(snapshot.docs.map(async (giftDoc) => {
+              const data = giftDoc.data();
+              let fetchedHostName = data.hostName || data.receiverName || data.toName || '';
+              let fetchedHostImage = data.expertImage || data.receiverImage || data.hostImage || '';
+              if (!fetchedHostName && giftDoc.ref.parent && giftDoc.ref.parent.parent) {
+                  try {
+                      const parentDoc = await getDoc(giftDoc.ref.parent.parent);
+                      if (parentDoc.exists()) {
+                          const pData = parentDoc.data();
+                          fetchedHostName = pData.hostName || pData.expertName || pData.roomName || '';
+                          fetchedHostImage = pData.hostImage || pData.expertImage || '';
+                      }
+                  } catch (e) {}
+              }
+              return { id: giftDoc.id, ...data, fetchedHostName, fetchedHostImage };
+          }));
           processAllLogs();
-      }, (error) => console.error("FIREBASE INDEX ERROR: ", error));
+      });
 
-      // Fetch actual reward requests
       const qRequests = query(collection(db, 'reward_requests'), where('userId', '==', id));
       const unsubRequests = onSnapshot(qRequests, (snap) => {
           rawRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           processAllLogs();
       });
 
-      // Fetch Game History
-      const qGameHistory = query(collection(db, "users", id as string, "gameHistory"));
+      const qGameHistory = query(collection(db, "users", id as string, "activityHistory")); 
       const unsubGameHistory = onSnapshot(qGameHistory, (snap) => {
-          rawGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          rawActivityGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           processAllLogs();
       });
 
-      // Fetch Video Calls
-      const qCalls = query(collection(db, "calls"), where("callerId", "==", id));
+      const qCalls = query(collection(db, "calls"), where("callerId", "==", id), orderBy("endedAt", "desc"));
       const unsubCalls = onSnapshot(qCalls, (snap) => {
           rawCalls = snap.docs.map(d => ({ id: d.id, ...d.data() }));
           processAllLogs();
       });
 
-      return () => {
-          unsubUser();
-          unsubHistory();
-          unsubGifts();
-          unsubRequests();
-          unsubGameHistory();
-          unsubCalls();
-      };
+      return () => { unsubUser(); unsubHistory(); unsubGifts(); unsubRequests(); unsubGameHistory(); unsubCalls(); };
   }, [id]);
 
-  if (loading) {
-      return (
-          <View style={styles.loader}>
-              <ActivityIndicator size="large" color="#6366F1" />
-              <Text style={styles.loaderText}>Decrypting Audit Trail...</Text>
-          </View>
-      );
-  }
-
-  if (!userData) {
-      return <View style={styles.loader}><Text style={{color: '#FFF'}}>Account record not found in secure vault.</Text></View>;
-  }
+  if (!userData && !loading) return <View style={styles.loader}><Text style={{color: '#FFF'}}>Account record not found in secure vault.</Text></View>;
 
   const totalSpent = userData?.totalSpentDiamonds || 0;
   const rank = calculateUserLevel(totalSpent);
@@ -371,125 +452,193 @@ export default function UserPassbookDetail() {
       backgroundColor: 'rgba(5, 5, 5, 0.85)',
   };
 
-  const borderType2 = {
-      borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0.5, borderBottomWidth: 0.5,
-      borderLeftColor: rank.secondaryColor, borderRightColor: rank.secondaryColor,
-      borderTopColor: rank.color + '80', borderBottomColor: rank.color + '80',
-      backgroundColor: 'rgba(5, 5, 5, 0.85)',
-  };
+  // 🔥 USER FILE EXACT RENDERERS 🔥
+  const callsData = history.filter(item => item.isCall);
+  const rewardsData = history.filter(item => item.isCallGift || item.isStandaloneGift);
 
-  // 🎨 RENDER LIST ITEMS
-  const renderListItem = ({ item, index }: { item: any, index: number }) => {
-      let iconName = "swap-horizontal";
-      let iconColor = "#94A3B8";
-      let sign = "-";
-      let currency = "💎";
-      let amountValue = item.amount || item.price || item.diamonds || item.diamondsAdded || 0;
-      let titleText = item.title || item.type || 'System Action';
-      let statusText = item.status || 'VERIFIED';
-      let statusColor = String(item.status).toLowerCase() === 'success' || String(item.status).toLowerCase() === 'completed' ? '#10B981' : '#F59E0B';
+  const renderHistoryItem = ({ item }: { item: any }) => {
+      if (item.isCallGift || item.isStandaloneGift) {
+          const giftName = item.giftName || item.name || 'Virtual Reward';
+          const amount = item.amount || item.price || item.diamonds || 0;
+          const eName = item.fetchedHostName || item.expertName || item.receiverName || item.toName || item.hostName || item.userName || 'Network Expert';
+          const eImage = item.fetchedHostImage || item.expertImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(eName)}&background=1E293B&color=fff&bold=true`;
+          
+          let displayTime = 'JUST NOW';
+          const timeVal = item.timestamp || item.createdAt;
+          if (timeVal?.toDate) {
+              displayTime = timeVal.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+          } else if (timeVal?.seconds) {
+              displayTime = new Date(timeVal.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+          } else if (typeof timeVal === 'string' || typeof timeVal === 'number') {
+              displayTime = new Date(timeVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+          }
 
-      const itemType = String(item.type || '').toUpperCase();
-      
-      // 🎮 GAME HISTORY UI LOGIC 🎮
-      if (item._source === 'game_history') {
-          const isWin = String(item.status || "").toUpperCase() === "WIN";
-          iconColor = isWin ? '#10B981' : '#F43F5E';
-          
-          const isRacing = String(item.gameType).toUpperCase() === "RACING";
-          iconName = isRacing ? "car" : "dice-multiple"; 
-          
-          const finalAmount = isWin ? (Number(item.winAmount) || 0) : (Number(item.lossAmount) || Number(item.entryFee) || 0);
-          
-          titleText = `Activity: ${String(item.gameType).toUpperCase()}`;
-          amountValue = finalAmount;
-          sign = isWin ? '+' : '-';
-          statusText = isWin ? 'GRANTED' : 'CONSUMED';
-          statusColor = iconColor;
-      }
-      else {
-          const isRecharge = itemType.includes('RECHARGE');
-          const isCall = itemType.includes('CALL');
-          const isbet = itemType === 'GAME_bet';
-          const isWinner = itemType.includes('WINNER');
-          const isVoucher = itemType === 'VOUCHER_REDEEM' || item._source === 'reward_requests'; 
-
-          const isGiftUI = item._source === 'nested_gifts' || (!isRecharge && !isCall && !isbet && !isWinner && !isVoucher && itemType.includes('GIFT'));
-          
-          if (isGiftUI) {
-              iconName = "gift";
-              iconColor = "#A855F7"; 
-              if (item._source === 'nested_gifts') {
-                  const theGiftName = item.giftName || item.name || 'Virtual Resource';
-                  titleText = `${item.icon ? item.icon + ' ' : ''}${theGiftName}`;
-              } else {
-                  titleText = item.giftName ? `Allocation: ${item.giftName}` : 'Virtual Allocation';
-              }
-              statusText = 'FINALIZED';
-              statusColor = '#10B981';
-          }
-          else if (isRecharge) { 
-              iconName = "cash-plus"; iconColor = "#10B981"; sign = "+"; currency = "₹"; amountValue = item.amount || 0; titleText = "System Refill";
-          }
-          else if (isWinner) { 
-              iconName = "trophy"; iconColor = "#10B981"; sign = "+"; titleText = "Reward Yield"; statusColor = "#10B981";
-          }
-          else if (isbet) { iconName = "gamepad-variant"; iconColor = "#F59E0B"; titleText = "Activity Allocation"; }
-          // 🔥 SATTI FIX: Title override for Call Log
-          else if (isCall) { iconName = "video-vintage"; iconColor = "#3B82F6"; titleText = item.title || "Platform Session"; }
-          else if (isVoucher) {
-              iconName = "ticket-percent"; iconColor = "#F59E0B";
-              const rawStatus = String(item.status || 'pending').toLowerCase();
-              
-              if (rawStatus === 'success' || rawStatus === 'delivered' || rawStatus === 'approved') {
-                  statusText = 'FULFILLED'; statusColor = '#10B981'; sign = "-";
-              } else if (rawStatus === 'failed' || rawStatus === 'rejected') {
-                  statusText = 'REVERSED'; statusColor = '#EF4444'; sign = "+";
-              } else {
-                  statusText = 'QUEUE'; statusColor = '#F59E0B'; sign = "-";
-              }
-          }
+          return (
+              <Animated.View style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
+                  <View style={styles.stealthHistoryCard}>
+                      <View style={[styles.quadBorderUI, { borderLeftColor: '#A855F7', borderRightColor: '#A855F7', borderTopColor: 'rgba(168, 85, 247, 0.4)', borderBottomColor: 'rgba(168, 85, 247, 0.4)' }]} />
+                      <View style={[styles.sessionBadge, { backgroundColor: '#A855F7' }]}>
+                           <MaterialCommunityIcons name="gift" size={10} color="#FFF" />
+                           <Text style={styles.sessionTypeText}>REWARD SENT</Text>
+                      </View>
+                      <View style={styles.cardHeaderUI}>
+                          <View style={[styles.expertThumbRing, { borderColor: '#A855F7', shadowColor: '#A855F7', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(168, 85, 247, 0.1)' }]}>
+                              <Image source={{ uri: eImage }} style={styles.expertThumb} />
+                          </View>
+                          <View style={styles.expertInfo}>
+                              <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{eName.toUpperCase()}</Text>
+                              <Text style={styles.callDateText} numberOfLines={1}>{displayTime}</Text>
+                          </View>
+                          <View style={styles.costContainer}>
+                               <Text style={[styles.costText, { color: '#A855F7' }]} numberOfLines={1} adjustsFontSizeToFit>-{Number(amount).toLocaleString()}</Text>
+                               <Ionicons name="diamond" size={12} color="#A855F7" />
+                          </View>
+                      </View>
+                      <View style={styles.statsRow}>
+                          <View style={styles.statItem}>
+                              <Ionicons name="sparkles-outline" size={14} color="#A855F7" />
+                              <Text style={[styles.statValueText, { color: '#E2E8F0' }]} numberOfLines={1} adjustsFontSizeToFit>
+                                  Item Sent: {item.isCallGift ? 'In-Call Premium Rewards' : giftName}
+                              </Text>
+                          </View>
+                      </View>
+                  </View>
+              </Animated.View>
+          );
       }
 
-      // 🔥 BULLETPROOF DATE RENDERER 🔥
-      const timeVal = item.timestamp || item.createdAt || item.requestDate;
-      let displayTime = 'Synced';
-      if (timeVal) {
-          if (timeVal.toDate) {
-              displayTime = timeVal.toDate().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-          } else if (timeVal.seconds) {
-              displayTime = new Date(timeVal.seconds * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-          } else {
-              displayTime = new Date(timeVal).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-          }
-      }
-
-      const itemBorder = index % 2 === 0 ? borderType2 : borderType1;
+      const currentDuration = Number(item.finalDuration) || Number(item.duration) || 0;
+      const mins = Math.floor(currentDuration / 60);
+      const secs = currentDuration % 60;
+      const durationText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
+      const totalSpentOnCall = (Number(item.totalDiamonds) || 0);
+      const callEName = item.expertName || item.hostName || 'CONSULTANT NODE';
+      const callEImage = item.expertImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(callEName)}&background=1E293B&color=fff&bold=true`;
 
       return (
-          // 🔥 SATTI FIX: Added key prop to the root View returned by renderListItem 🔥
-          <View key={item.id || `log-${index}`} style={[styles.historyCard, itemBorder]}>
-              <View style={[styles.historyIconBox, iconName === 'gift' ? { backgroundColor: 'rgba(168, 85, 247, 0.15)' } : {}]}>
-                  <MaterialCommunityIcons name={iconName as any} size={20} color={iconColor} />
+          <Animated.View style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
+              <View style={styles.stealthHistoryCard}>
+                  <View style={[styles.quadBorderUI, { 
+                      borderLeftColor: rank.color, borderRightColor: rank.color, 
+                      borderTopColor: rank.secondaryColor, borderBottomColor: rank.secondaryColor 
+                  }]} />
+                  <View style={[styles.sessionBadge, { backgroundColor: rank.color }]}>
+                       <Ionicons name="videocam" size={10} color="#FFF" />
+                       <Text style={styles.sessionTypeText}>VERIFIED_LINK</Text>
+                  </View>
+                  <View style={styles.cardHeaderUI}>
+                      <View style={[styles.expertThumbRing, { borderColor: rank.color, shadowColor: rank.color }]}>
+                          <Image source={{ uri: callEImage }} style={styles.expertThumb} />
+                      </View>
+                      <View style={styles.expertInfo}>
+                          <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{callEName.toUpperCase()}</Text>
+                          <Text style={styles.callDateText} numberOfLines={1}>
+                              {item.endedAt?.seconds 
+                              ? new Date(item.endedAt.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
+                              : 'SYNCHRONIZING...'}
+                          </Text>
+                      </View>
+                      <View style={styles.costContainer}>
+                           <Text style={[styles.costText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit>-{totalSpentOnCall.toLocaleString()}</Text>
+                           <Ionicons name="diamond" size={12} color={rank.color} />
+                      </View>
+                  </View>
+                  <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                          <Ionicons name="time-outline" size={14} color="#64748B" />
+                          <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>{durationText}</Text>
+                      </View>
+                      <View style={styles.vDivider} />
+                      <View style={styles.talkAgainBtn}>
+                          <Text style={[styles.talkAgainText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit>SESSION LOG</Text>
+                          <Ionicons name="checkmark-circle" size={12} color={rank.color} />
+                      </View>
+                  </View>
               </View>
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                  <Text style={styles.historyTitle} numberOfLines={1}>{titleText}</Text>
-                  <Text style={styles.historyDate}>{displayTime}</Text>
-                  {item._source === 'game_history' && (
-                      <Text style={{ color: '#94A3B8', fontSize: 10, marginTop: 4, fontWeight: '600' }}>
-                          Session: {item.roundId || 'N/A'} | Pick: {item.pick || 'N/A'} | Outcome: {item.result || 'N/A'}
-                      </Text>
-                  )}
+          </Animated.View>
+      );
+  };
+
+  const renderGameHistoryItem = ({ item }: { item: any }) => {
+      let displayAmount = "";
+      let amountColor = '#F59E0B'; 
+      let badgeLabel = 'ENTRY';
+      let payoutDisplay = 0;
+      let badgeBg = 'rgba(245, 158, 11, 0.8)'; 
+
+      if (item.isCancelOrRefund) {
+          amountColor = '#3B82F6'; badgeBg = 'rgba(59, 130, 246, 0.8)';
+          displayAmount = `+${item.entryFee.toLocaleString()}`; badgeLabel = 'REFUNDED'; payoutDisplay = item.entryFee;
+      } else if (item.isWinner) {
+          amountColor = '#10B981'; badgeBg = 'rgba(16, 185, 129, 0.8)';
+          displayAmount = `+${item.rewardPerWinner.toLocaleString()}`; badgeLabel = 'WINNER'; payoutDisplay = item.rewardPerWinner;
+      } else {
+          amountColor = '#F59E0B'; badgeBg = 'rgba(245, 158, 11, 0.8)';
+          displayAmount = `-${item.entryFee.toLocaleString()}`; badgeLabel = 'ENTRY'; payoutDisplay = 0;
+      }
+      
+      const gameIcon = item.gameName.toUpperCase().includes("REFLEX") ? "flash" : (item.gameName.toUpperCase().includes("MEMORY") ? "extension-puzzle" : "game-controller");
+
+      let displayTime = 'JUST NOW';
+      const timeVal = item.timestamp || item.createdAt;
+      if (timeVal?.toDate) displayTime = timeVal.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      else if (timeVal?.seconds) displayTime = new Date(timeVal.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+      else if (typeof timeVal === 'string' || typeof timeVal === 'number') displayTime = new Date(timeVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+      return (
+          <Animated.View style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
+              <View style={styles.stealthHistoryCard}>
+                  <View style={[styles.quadBorderUI, { 
+                      borderLeftColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color), 
+                      borderRightColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color), 
+                      borderTopColor: item.isCancelOrRefund ? 'rgba(59, 130, 246, 0.4)' : (item.isWinner ? 'rgba(16, 185, 129, 0.4)' : rank.secondaryColor), 
+                      borderBottomColor: item.isCancelOrRefund ? 'rgba(59, 130, 246, 0.4)' : (item.isWinner ? 'rgba(16, 185, 129, 0.4)' : rank.secondaryColor) 
+                  }]} />
+                  <View style={[styles.sessionBadge, { backgroundColor: badgeBg, borderWidth: 1, borderColor: amountColor }]}>
+                       <Ionicons name={item.isCancelOrRefund ? "alert-circle" : (item.isWinner ? "trophy" : "game-controller")} size={10} color="#FFF" />
+                       <Text style={[styles.sessionTypeText, { color: '#FFF' }]} numberOfLines={1}>{badgeLabel}</Text>
+                  </View>
+                  <View style={styles.cardHeaderUI}>
+                      <View style={[styles.expertThumbRing, { borderColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color), shadowColor: item.isCancelOrRefund ? amountColor : rank.color, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }]}>
+                          <Ionicons name={gameIcon} size={28} color={item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color)} />
+                      </View>
+                      <View style={styles.expertInfo}>
+                          <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{item.gameName.toUpperCase()}</Text>
+                          <Text style={styles.callDateText} numberOfLines={1}>{displayTime}</Text>
+                      </View>
+                      <View style={styles.costContainer}>
+                           <Text style={[styles.costText, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit>{displayAmount}</Text>
+                           <Ionicons name="diamond" size={12} color={amountColor} />
+                      </View>
+                  </View>
+                  <View style={styles.statsRow}>
+                      {!(item.isWinner || item.isCancelOrRefund) && (
+                          <>
+                              <View style={styles.statItem}>
+                                  <Ionicons name="ticket-outline" size={13} color="#64748B" />
+                                  <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>Entry: {item.entryFee} 💎</Text>
+                              </View>
+                              <View style={styles.vDivider} />
+                          </>
+                      )}
+                      <View style={styles.statItem}>
+                          <Ionicons name="trophy-outline" size={13} color={item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : "#F59E0B")} />
+                          <Text style={[styles.statValueText, { color: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : '#F59E0B') }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.status}</Text>
+                      </View>
+                      {(item.isWinner || item.isCancelOrRefund) && (
+                          <>
+                              <View style={styles.vDivider} />
+                              <View style={styles.statItem}>
+                                  <Ionicons name="cash-outline" size={13} color={amountColor} />
+                                  <Text style={[styles.statValueText, { color: amountColor, fontWeight: '900' }]} numberOfLines={1} adjustsFontSizeToFit>
+                                      {item.isWinner ? 'REWARD' : 'REFUND'}: {payoutDisplay} 💎
+                                  </Text>
+                              </View>
+                          </>
+                      )}
+                  </View>
               </View>
-              <View style={{ alignItems: 'flex-end' }}>
-                  <Text style={[styles.historyAmount, { color: sign === '+' ? '#10B981' : '#F43F5E' }]}>
-                      {sign} {currency === '₹' ? currency : ''}{amountValue} {currency === '💎' ? currency : ''}
-                  </Text>
-                  <Text style={[styles.historyStatus, { color: statusColor }]}>
-                      {statusText}
-                  </Text>
-              </View>
-          </View>
+          </Animated.View>
       );
   };
 
@@ -533,7 +682,6 @@ export default function UserPassbookDetail() {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <LinearGradient colors={rank.themeBg as any} style={StyleSheet.absoluteFill} />
       
-      {/* 🔥 DYNAMIC ANIMATED SHIMMER ORBS */}
       <Animated.View style={[styles.shimmerOrb, { top: 100, right: -60, backgroundColor: rank.color, transform: [{ translateY: orbTranslateY }] }]} />
       <Animated.View style={[styles.shimmerOrb, { bottom: 200, left: -90, backgroundColor: rank.secondaryColor, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
@@ -560,13 +708,19 @@ export default function UserPassbookDetail() {
           <View style={styles.cardContainer}>{renderDynamicProfileCard()}</View>
         </SafeAreaView>
 
-        {/* 🔥 TABS SECTION (2 TABS) 🔥 */}
+        {/* 🔥 REPLACED ADMIN TABS WITH USER-STYLE TABS */}
         <View style={styles.tabsRow}>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'STATS' && styles.tabBtnActive]} onPress={() => setActiveTab('STATS')}>
-                <Text style={[styles.tabText, activeTab === 'STATS' && styles.tabTextActive]}>ANALYTICS</Text>
+                <Text style={[styles.tabText, activeTab === 'STATS' && styles.tabTextActive]} numberOfLines={1}>ANALYTICS</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'HISTORY' && styles.tabBtnActive]} onPress={() => setActiveTab('HISTORY')}>
-                <Text style={[styles.tabText, activeTab === 'HISTORY' && styles.tabTextActive]}>LEDGER HISTORY</Text>
+            <TouchableOpacity style={[styles.tabBtn, activeTab === 'CALLS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('CALLS')}>
+                <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CALL LOG</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.tabBtn, activeTab === 'GAMES' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('GAMES')}>
+                <Text style={[styles.tabText, activeTab === 'GAMES' && { color: '#FFF' }]} numberOfLines={1}>ACTIVITY</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={[styles.tabBtn, activeTab === 'REWARDS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('REWARDS')}>
+                <Text style={[styles.tabText, activeTab === 'REWARDS' && { color: '#FFF' }]} numberOfLines={1}>REWARD</Text>
             </TouchableOpacity>
         </View>
 
@@ -583,33 +737,70 @@ export default function UserPassbookDetail() {
                         <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
                     ) : (
                         <View style={styles.statsContainer}>
-                            <StatBox icon="cash-plus" label="TOTAL REFILLS" value={`₹ ${totalRecharge}`} color="#10B981" bgColor="rgba(16, 185, 129, 0.1)" />
-                            <StatBox icon="diamond-stone" label="TOTAL ALLOCATION" value={`${totalSpentCalculated} 💎`} color="#F43F5E" bgColor="rgba(244, 63, 94, 0.1)" />
-                            <StatBox icon="gamepad-variant" label="ACTIVITY NET" value={`${gameNetProfit > 0 ? '+' : ''}${gameNetProfit} 💎`} color={gameNetProfit >= 0 ? "#10B981" : "#EF4444"} bgColor={gameNetProfit >= 0 ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)"} />
-                            <StatBox icon="gift" label="GIFT ALLOCATIONS" value={`${totalGiftsSpent} 💎`} color="#A855F7" bgColor="rgba(168, 85, 247, 0.1)" />
-                            <StatBox icon="video-vintage" label="SESSION ALLOCATIONS" value={`${totalVideoCallSpent} 💎`} color="#3B82F6" bgColor="rgba(59, 130, 246, 0.1)" />
-                            <StatBox icon="clock-outline" label="PLATFORM MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" />
-                            <StatBox icon="ticket-percent" label="FULFILLED GRANTS" value={`${totalRedeemed.toLocaleString()} 💎`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" width="100%" />
+                            <StatBox icon="cash-plus" label="ASSETS ADDED" value={`${totalRechargeDiamonds} 💎`} color="#10B981" bgColor="rgba(16, 185, 129, 0.1)" />
+                            <StatBox icon="diamond-stone" label="ASSETS UTILIZED" value={`${totalSpentCalculated} 💎`} color="#F43F5E" bgColor="rgba(244, 63, 94, 0.1)" />
+                            <StatBox icon="gamepad-variant" label="ACTIVITY REWARDS" value={`${gameNetProfit > 0 ? '+' : ''}${gameNetProfit} 💎`} color={gameNetProfit >= 0 ? "#10B981" : "#EF4444"} bgColor={gameNetProfit >= 0 ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)"} />
+                            <StatBox icon="gift" label="REWARDS SENT" value={`${totalGiftsSpent} 💎`} color="#A855F7" bgColor="rgba(168, 85, 247, 0.1)" />
+                            <StatBox icon="video-vintage" label="CONSULTATION SPENT" value={`${totalVideoCallSpent} 💎`} color="#3B82F6" bgColor="rgba(59, 130, 246, 0.1)" />
+                            <StatBox icon="clock-outline" label="CONSULTATION MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" />
+                            <StatBox icon="sword-cross" label="TOTAL ARENA ENTRY" value={`${totalEntryFees.toLocaleString()} 💎`} color="#EF4444" bgColor="rgba(239, 68, 68, 0.1)" width="100%" />
                         </View>
                     )}
                 </View>
             )}
 
-            {/* UNIFIED HISTORY TAB */}
-            {activeTab === 'HISTORY' && (
+            {/* CALLS TAB */}
+            {activeTab === 'CALLS' && (
                 <View>
                     <View style={styles.talktimeHighlight}>
                          <Text style={[styles.totalTalkLabel, { color: rank.color, marginBottom: 15 }]}>TOTAL ARCHIVED ACTIVITY: {totalMinutes} MINS</Text>
                     </View>
-
                     {loading ? (
                         <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
-                    ) : historyLogs.length > 0 ? (
-                        historyLogs.map((item, index) => renderListItem({item, index}))
+                    ) : callsData.length > 0 ? (
+                        callsData.map((item, index) => <View key={item.id || index}>{renderHistoryItem({item})}</View>)
                     ) : (
                         <View style={styles.emptyBox}>
-                            <MaterialCommunityIcons name="file-document-outline" size={48} color="rgba(255,255,255,0.2)" />
-                            <Text style={styles.emptyText}>No ledger records documented.</Text>
+                            <Ionicons name="videocam-off" size={48} color="rgba(255,255,255,0.2)" />
+                            <Text style={styles.emptyText}>No session records documented.</Text>
+                        </View>
+                    )}
+                </View>
+            )}
+
+            {/* GAMES TAB */}
+            {activeTab === 'GAMES' && (
+                <View>
+                    <View style={styles.talktimeHighlight}>
+                         <Text style={[styles.totalTalkLabel, { color: rank.color, marginBottom: 15 }]}>TOTAL TASKS COMPLETED: {totalGames}</Text>
+                    </View>
+                    {loading ? (
+                        <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
+                    ) : gameHistory.length > 0 ? (
+                        gameHistory.map((item, index) => <View key={item.id || index}>{renderGameHistoryItem({item})}</View>)
+                    ) : (
+                        <View style={styles.emptyBox}>
+                            <Ionicons name="game-controller-outline" size={48} color="rgba(255,255,255,0.2)" />
+                            <Text style={styles.emptyText}>No activity records documented.</Text>
+                        </View>
+                    )}
+                </View>
+            )}
+
+            {/* REWARDS TAB */}
+            {activeTab === 'REWARDS' && (
+                <View>
+                    <View style={styles.talktimeHighlight}>
+                         <Text style={[styles.totalTalkLabel, { color: rank.color, marginBottom: 15 }]}>TOTAL REWARDS SENT: {rewardsData.length}</Text>
+                    </View>
+                    {loading ? (
+                        <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
+                    ) : rewardsData.length > 0 ? (
+                        rewardsData.map((item, index) => <View key={item.id || index}>{renderHistoryItem({item})}</View>)
+                    ) : (
+                        <View style={styles.emptyBox}>
+                            <Ionicons name="gift-outline" size={48} color="rgba(255,255,255,0.2)" />
+                            <Text style={styles.emptyText}>No reward records documented.</Text>
                         </View>
                     )}
                 </View>
@@ -633,8 +824,8 @@ const StatBox = ({ icon, label, value, color, bgColor, width = '48%' }: any) => 
         <View style={[styles.iconCircle, { backgroundColor: color + '30' }]}>
             <MaterialCommunityIcons name={icon} size={28} color={color} />
         </View>
-        <Text style={[styles.statBoxValue, { color: '#FFF' }]}>{value}</Text>
-        <Text style={styles.statBoxLabel}>{label}</Text>
+        <Text style={[styles.statBoxValue, { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{value}</Text>
+        <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
     </View>
 );
 
@@ -669,10 +860,11 @@ const styles = StyleSheet.create({
 
   menuBox: { paddingHorizontal: 16, marginTop: 10 },
   
-  tabsRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 10, marginBottom: 15, backgroundColor: '#0F172A', borderRadius: 12, padding: 5, borderWidth: 1, borderColor: '#1E293B', justifyContent: 'space-between' },
+  // Tabs Style Adjusted for 4 Items
+  tabsRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 10, marginBottom: 15, backgroundColor: '#0F172A', borderRadius: 12, padding: 5, borderWidth: 1, borderColor: '#1E293B', justifyContent: 'space-between', gap: 4 },
   tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
   tabBtnActive: { backgroundColor: '#334155' },
-  tabText: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  tabText: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   tabTextActive: { color: '#FFF' },
 
   balanceCard: { padding: 18, borderRadius: 20, borderWidth: 1, marginBottom: 15, alignItems: 'center' },
@@ -688,12 +880,27 @@ const styles = StyleSheet.create({
   talktimeHighlight: { alignItems: 'center' },
   totalTalkLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
 
-  historyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#0F172A', padding: 15, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#1E293B', marginHorizontal: 2 },
-  historyIconBox: { width: 45, height: 45, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-  historyTitle: { color: '#FFF', fontSize: 13, fontWeight: 'bold', marginBottom: 4, letterSpacing: 0.5 },
-  historyDate: { color: '#64748B', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
-  historyAmount: { fontSize: 16, fontWeight: '900', marginBottom: 4 },
-  historyStatus: { fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+  // User App Stealth Card UI Styles
+  cardContainerUI: { marginBottom: 20 },
+  stealthHistoryCard: { backgroundColor: 'rgba(5,5,5,0.7)', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
+  quadBorderUI: { ...StyleSheet.absoluteFillObject, borderLeftWidth: 4, borderRightWidth: 4, borderTopWidth: 1.2, borderBottomWidth: 1.2, borderRadius: 24, opacity: 0.8 },
+  sessionBadge: { position: 'absolute', top: 0, right: 18, paddingHorizontal: 10, paddingVertical: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4, zIndex: 10 },
+  sessionTypeText: { color: '#FFF', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
+  cardHeaderUI: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, zIndex: 10 },
+  expertThumbRing: { width: 54, height: 54, borderRadius: 18, borderWidth: 1.5, padding: 2, elevation: 10, shadowOpacity: 0.5, shadowRadius: 8 },
+  expertThumb: { width: '100%', height: '100%', borderRadius: 15 },
+  expertInfo: { flex: 1, marginLeft: 15, overflow: 'hidden' },
+  expertName: { color: '#FFF', fontSize: 14, fontWeight: '900', marginBottom: 4, letterSpacing: 0.5 },
+  callDateText: { color: '#475569', fontSize: 10, fontWeight: '800' },
+  costContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 10 },
+  costText: { fontSize: 17, fontWeight: '900' },
+  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12, zIndex: 10, width: '100%' },
+  statItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' },
+  statValueText: { color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
+  vDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 4 },
+  talkAgainBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center', flex: 1.2 },
+  talkAgainText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+
   emptyBox: { alignItems: 'center', marginTop: 40, opacity: 0.7 },
   emptyText: { color: '#64748B', marginTop: 10, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
 

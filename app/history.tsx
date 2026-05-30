@@ -456,7 +456,7 @@ export default function HistoryScreen() {
                             <Text style={[styles.statValueText, { color: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : '#F59E0B') }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.status}</Text>
                         </View>
 
-                        {/* WINNER & REFUNDED-க்கு மட்டும் Payout Details காட்டும் */}
+                        {/* WINNER & REFUNDED-க்கு மட்டும் Redeem Details காட்டும் */}
                         {(item.isWinner || item.isCancelOrRefund) && (
                             <>
                                 <View style={styles.vDivider} />
@@ -552,9 +552,7 @@ export default function HistoryScreen() {
                             </View>
                             <Text style={styles.emptyTitle}>NO SESSIONS FOUND</Text>
                             <Text style={styles.emptySub}>Your professional session logs will appear here once linked with an expert node.</Text>
-                            <TouchableOpacity style={[styles.exploreBtn, { backgroundColor: userTier.color }]} onPress={() => router.replace('/home')}>
-                                <Text style={styles.exploreText}>LOCATE EXPERTS</Text>
-                            </TouchableOpacity>
+                                                       
                         </View>
                     ) : (
                         <Animated.FlatList

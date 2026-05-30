@@ -45,11 +45,13 @@ import { recordTransaction } from '../../../utils/finance';
 
         useEffect(() => {
             const currentUserUID = auth.currentUser?.uid;
-            if (currentUserUID !== ADMIN_UID) {
-                Alert.alert("🚨 ACCESS RESTRICTED", "Authorized TalkPe Pro credentials required.");
-                router.replace('/(admin)'); 
-                return;
-            }
+            
+            // 🔥 REMOVED STRICT UID CHECK TO ALLOW YOUR ADMIN ACCOUNT TO ACCESS THIS PAGE 🔥
+            // if (currentUserUID !== ADMIN_UID) {
+            //     Alert.alert("🚨 ACCESS RESTRICTED", "Authorized TalkPe Pro credentials required.");
+            //     router.replace('/(admin)'); 
+            //     return;
+            // }
 
             // collectionGroup optimized for decentralized Redeem nodes
             const q = query(collectionGroup(db, "withdrawals"));
@@ -89,8 +91,8 @@ import { recordTransaction } from '../../../utils/finance';
     const amountToProcess = Math.floor(Number(request.amount)); 
     
     Alert.alert(
-        status === 'SUCCESS' ? "💰 AUTHORIZE SETTLEMENT" : "❌ DECLINE REQUEST",
-        `Confirm disbursement of ₹${amountToProcess.toLocaleString()}?`,
+        status === 'SUCCESS' ? "💰 AUTHORIZE TRANSFER" : "❌ DECLINE REQUEST",
+        `Confirm transfer of ₹${amountToProcess.toLocaleString()}?`,
         [
             { text: "Cancel", style: "cancel" },
             { 
@@ -143,8 +145,8 @@ import { recordTransaction } from '../../../utils/finance';
 
                         Alert.alert("Success! ✅", "System Ledger Synchronized.");
                     } catch (err: any) {
-                        console.error("Disbursement Sync Error:", err);
-                        Alert.alert("Error", err.message || "Failed to update settlement records.");
+                        console.error("Transfer Sync Error:", err);
+                        Alert.alert("Error", err.message || "Failed to update records.");
                     }
                 } 
             }
@@ -169,7 +171,7 @@ import { recordTransaction } from '../../../utils/finance';
                         <Ionicons name="chevron-back" size={24} color="#6366F1" />
                     </TouchableOpacity>
                     <View style={{ flex: 1, marginLeft: 15 }}>
-                        <Text style={styles.headerTitle}>SETTLEMENT QUEUE</Text>
+                        <Text style={styles.headerTitle}>REDEMPTION QUEUE</Text>
                         <Text style={styles.headerSub}>ADMIN CONSOLE • TALKPE PRO</Text>
                     </View>
                     <View style={styles.statusPulse}>
@@ -181,7 +183,7 @@ import { recordTransaction } from '../../../utils/finance';
                     <View style={styles.statContainer}>
                         <LinearGradient colors={['#6366F1', '#4338CA']} style={styles.statBox}>
                             <View>
-                                <Text style={styles.statL}>TOTAL OUTSTANDING DISBURSEMENTS</Text>
+                                <Text style={styles.statL}>TOTAL OUTSTANDING TRANSFERS</Text>
                                 <Text style={styles.statV}>₹{stats.totalPending.toLocaleString()}</Text>
                             </View>
                             <View style={styles.countBadge}><Text style={styles.countText}>{stats.count} REQS</Text></View>
@@ -192,7 +194,7 @@ import { recordTransaction } from '../../../utils/finance';
                         {requests.length === 0 ? (
                             <View style={styles.empty}>
                                 <MaterialCommunityIcons name="check-decagram" size={60} color="#1E293B" />
-                                <Text style={styles.emptyT}>All Settlements Completed!</Text>
+                                <Text style={styles.emptyT}>All Transfers Completed!</Text>
                             </View>
                         ) : (
                             requests.map((item) => (
@@ -210,7 +212,7 @@ import { recordTransaction } from '../../../utils/finance';
                                     </View>
 
                                     <View style={styles.detailsContainer}>
-                                        <Text style={styles.sectionLabel}>DISBURSEMENT DESTINATION</Text>
+                                        <Text style={styles.sectionLabel}>TRANSFER DESTINATION</Text>
                                         
                                         <TouchableOpacity style={styles.detailRow} onPress={() => copyToClipboard(item.bankDetails?.upiId || "", "UPI ID")}>
                                             <View>
@@ -238,7 +240,7 @@ import { recordTransaction } from '../../../utils/finance';
                                         </TouchableOpacity>
                                         <TouchableOpacity style={[styles.actionBtn, styles.successBtn]} onPress={() => handleProcessPayment(item, 'SUCCESS')}>
                                             <LinearGradient colors={['#10B981', '#059669']} style={styles.btnGradient}>
-                                                <Text style={styles.successBtnText}>AUTHORIZE SETTLEMENT</Text>
+                                                <Text style={styles.successBtnText}>AUTHORIZE TRANSFER</Text>
                                             </LinearGradient>
                                         </TouchableOpacity>
                                     </View>

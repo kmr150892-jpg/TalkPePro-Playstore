@@ -25,21 +25,20 @@ export default function MasterLedger() {
 
     useEffect(() => {
         setLoading(true);
-        // 🔥 LIVE MASTER LEDGER: Fetches Inflows, Disbursements AND Authorized Reward Grants 🔥
-        // Increased limit to 500 so recharges don't get hidden behind 100s of operational logs
+        // 🔥 LIVE MASTER LEDGER: Fetches Inflows and Activity Rewards 🔥
         const qTx = query(collection(db, "transactions"), orderBy("timestamp", "desc"), limit(500));
-        const qVouchers = query(collection(db, "reward_requests"), orderBy("requestDate", "desc"), limit(100));
-        const qACTIVITY_REWARDs = query(collection(db, "withdrawals"), orderBy("createdAt", "desc"), limit(100)); 
+        
+        // Removed orderBy here to prevent silent Firestore failures if the field name is different
+        const qACTIVITY_REWARDs = query(collection(db, "withdrawals"), limit(300)); 
         
         let txList: any[] = [];
-        let voucherList: any[] = [];
         let ACTIVITY_REWARDList: any[] = [];
 
         const updateList = () => {
-            // Combine all collections and sort them by time sequence
-            const combined = [...txList, ...voucherList, ...ACTIVITY_REWARDList].sort((a, b) => {
-                const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : 0;
-                const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : 0;
+            // Combine collections and sort them by time sequence via Javascript
+            const combined = [...txList, ...ACTIVITY_REWARDList].sort((a, b) => {
+                const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (new Date(a.timestamp).getTime() || 0);
+                const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (new Date(b.timestamp).getTime() || 0);
                 return timeB - timeA;
             });
             setTransactions(combined);
@@ -56,41 +55,24 @@ export default function MasterLedger() {
             updateList();
         });
 
-        // 🔥 SYSTEM LOGIC: Fetch Reward Grants that are marked as 'Delivered'
-        const unsubVouchers = onSnapshot(qVouchers, (snap) => {
-            const uniqueVouchers = new Map();
-            snap.docs.forEach(docSnapshot => {
-                const data = docSnapshot.data();
-                if (data.status === 'Delivered') {
-                    uniqueVouchers.set(docSnapshot.id, {
-                        id: docSnapshot.id,
-                        type: 'VOUCHER', // Unit mapping to VOUCHER
-                        userName: data.userName || data.userEmail || 'Client',
-                        amount: data.costDeducted || 0,
-                        voucherName: data.voucherName || 'Reward Grant',
-                        timestamp: data.processedDate || data.requestDate // Use operational time
-                    });
-                }
-            });
-            voucherList = Array.from(uniqueVouchers.values());
-            updateList();
-        });
-
-        // 🔥 SYSTEM LOGIC: STRICT DISBURSEMENT DUPLICATE REMOVAL & STATUS VERIFICATION 🔥
+        // 🔥 SYSTEM LOGIC: FETCH ACTIVITY REWARDS (WITHDRAWALS) 🔥
         const unsubACTIVITY_REWARDs = onSnapshot(qACTIVITY_REWARDs, (snap) => {
             const uniqueACTIVITY_REWARDs = new Map();
             snap.docs.forEach(docSnapshot => {
                 const data = docSnapshot.data();
                 const status = (data.status || '').toUpperCase();
                 
-                // Only take fully completed distributions
-                if (status === 'SUCCESS' || status === 'PAID') {
+                // Allow all logs except the explicitly rejected ones to ensure data shows up
+                if (status !== 'REJECTED' && status !== 'FAILED') {
                     uniqueACTIVITY_REWARDs.set(docSnapshot.id, {
                         id: docSnapshot.id,
-                        type: 'ACTIVITY_REWARD', // Unit mapping to ACTIVITY_REWARD
-                        userName: data.expertName || data.userName || 'Consultant',
-                        amount: data.amountRupee || data.amount || data.ACTIVITY_REWARDAmount || 0,
-                        timestamp: data.paidAt || data.createdAt || data.processedAt
+                        type: 'ACTIVITY_REWARD', 
+                        userName: data.expertName || data.userName || data.name || 'Consultant',
+                        // Added more field fallbacks in case the DB structure is slightly different
+                        amount: data.amountRupee || data.amount || data.ACTIVITY_REWARDAmount || data.withdrawAmount || 0,
+                        // Added multiple timestamp fallbacks
+                        timestamp: data.paidAt || data.createdAt || data.timestamp || data.processedAt || new Date(),
+                        ...data
                     });
                 }
             });
@@ -98,7 +80,7 @@ export default function MasterLedger() {
             updateList();
         });
 
-        return () => { unsubTx(); unsubVouchers(); unsubACTIVITY_REWARDs(); };
+        return () => { unsubTx(); unsubACTIVITY_REWARDs(); };
     }, []);
 
     // 🔥 AUTOMATIC FILTER ENGINE: Runs perfectly when data updates or tab changes
@@ -147,7 +129,6 @@ export default function MasterLedger() {
         switch(upType) {
             case 'RECHARGE': return { name: 'plus-circle', color: '#10B981' };
             case 'ACTIVITY_REWARD': return { name: 'external-link', color: '#6366F1' };
-            case 'VOUCHER': return { name: 'gift', color: '#F59E0B' }; 
             default: return { name: 'help-circle', color: '#475569' };
         }
     };
@@ -159,7 +140,7 @@ export default function MasterLedger() {
         let displayName = item.userName || item.user_name || item.callerName || item.expertName || 'System';
         
         // Amount logic (handling exact values from operational ledger)
-        const displayAmount = Number(item.amountRupee || item.amount || item.rechargeAmount || item.ACTIVITY_REWARDAmount || item.costDeducted || 0);
+        const displayAmount = Number(item.amountRupee || item.amount || item.rechargeAmount || item.ACTIVITY_REWARDAmount || 0);
 
         // Formatted Operational Timestamp
         let dateString = "Timestamp Unknown";
@@ -171,10 +152,9 @@ export default function MasterLedger() {
         }
 
         const isPositive = (upType === 'RECHARGE');
-        const isVoucher = (upType === 'VOUCHER');
         
         // Dynamic Label Mapping
-        const typeLabel = isVoucher ? `REWARD: ${item.voucherName?.toUpperCase()}` : (upType ? upType.replace('_', ' ') : 'UNKNOWN');
+        const typeLabel = upType ? upType.replace('_', ' ') : 'UNKNOWN';
 
         return (
             <View style={styles.logCard}>
@@ -189,8 +169,8 @@ export default function MasterLedger() {
                 </View>
 
                 <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={[styles.txAmount, { color: isPositive ? '#10B981' : (isVoucher ? '#F59E0B' : '#EF4444') }]}>
-                        {isPositive ? '+ ₹' : (isVoucher ? '- ' : '- ₹')}{displayAmount.toLocaleString('en-IN')}{isVoucher ? ' 💎' : ''}
+                    <Text style={[styles.txAmount, { color: isPositive ? '#10B981' : '#EF4444' }]}>
+                        {isPositive ? '+ ₹' : '- ₹'}{displayAmount.toLocaleString('en-IN')}
                     </Text>
                     <Text style={styles.txTypeLabel}>{typeLabel}</Text>
                 </View>
@@ -212,7 +192,8 @@ export default function MasterLedger() {
             {/* ⚡ ANALYTICS FILTERS */}
             <View>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filterRow}>
-                    {['TODAY_RECHARGE', 'TOTAL_RECHARGE', 'TODAY_ACTIVITY_REWARD', 'TOTAL_ACTIVITY_REWARD', 'TODAY_VOUCHER', 'TOTAL_VOUCHER'].map((f) => (
+                    {/* 🔥 Removed VOUCHER filters here as requested 🔥 */}
+                    {['TODAY_RECHARGE', 'TOTAL_RECHARGE', 'TODAY_ACTIVITY_REWARD', 'TOTAL_ACTIVITY_REWARD'].map((f) => (
                         <TouchableOpacity 
                             key={f} 
                             onPress={() => applyFilter(f)}

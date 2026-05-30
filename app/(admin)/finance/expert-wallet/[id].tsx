@@ -137,7 +137,7 @@ const ExpertWalletDetail = () => {
                     </View>
                 </View>
 
-                {/* 🕒 SETTLEMENT QUEUE */}
+                {/* 🕒 GRANT QUEUE */}
                 <View style={styles.section}>
                     <Text style={styles.sectionTitle}>RECENT DISTRIBUTIONS</Text>
                     <View style={styles.emptyBox}>
@@ -157,7 +157,7 @@ const ExpertWalletDetail = () => {
                         colors={['#0F172A', '#1E293B']} 
                         style={styles.ACTIVITY_REWARDGradient}
                     >
-                        <Text style={styles.ACTIVITY_REWARDBtnText}>AUDIT DISBURSEMENT REQUESTS</Text>
+                        <Text style={styles.ACTIVITY_REWARDBtnText}>AUDIT REDEMPTIONS REQUESTS</Text>
                         <Feather name="arrow-right" size={18} color="#6366F1" />
                     </LinearGradient>
                 </TouchableOpacity>

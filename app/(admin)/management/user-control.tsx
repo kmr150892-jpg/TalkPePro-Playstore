@@ -67,7 +67,8 @@ export default function UserControl() {
                             // Synchronizing access status across global platform nodes
                             await updateDoc(doc(db, "users", userId), {
                                 isBlocked: newStatus,
-                                status: newStatus ? "Blocked" : "Active", // Ensuring field consistency
+                                status: newStatus ? "Blocked" : "User", // Ensuring field consistency
+                                forceLogout: newStatus, // 🔥 SATTI FIX: Added this single line to clear the logout flag
                                 lastAdminAction: new Date()
                             });
                             
@@ -100,7 +101,7 @@ export default function UserControl() {
     };
 
     const renderUser = ({ item }: any) => {
-        const isBlocked = item.isBlocked || item.status === 'Blocked';
+        const isBlocked = item.isBlocked || item.status === 'Blocked' || item.forceLogout === true;
         
         // 🔥 SYSTEM LOGIC: Global Trust-Score Verification 🔥
         const blockCount = item.expertBlockCount || 0;

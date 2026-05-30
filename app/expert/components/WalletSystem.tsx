@@ -187,7 +187,7 @@ export default function WalletSystem({ expertData }: any) {
 
         // 🔥 MASTER UPDATE: CHANGED MINIMUM FROM 3000 TO 500
         if (availableRupees < 500) {
-            Alert.alert("Insufficient Balance", "Minimum ₹500 balance required to withdraw.");
+            Alert.alert("Insufficient Balance", "Minimum ₹500 balance required to Redeem.");
             return;
         }
 
@@ -437,14 +437,14 @@ export default function WalletSystem({ expertData }: any) {
                     <View style={[styles.modalSheet, { backgroundColor: theme.bgGradient[0] }]}>
                         <View style={styles.modalDragger} />
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Withdraw Assets</Text>
+                            <Text style={styles.modalTitle}> Redeem Rewards</Text>
                             <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalClose}>
                                 <Ionicons name="close" size={22} color="#FFF" />
                             </TouchableOpacity>
                         </View>
                         
                         <View style={styles.inputArea}>
-                            <Text style={styles.currencyLabel}>ENTER Redeem AMOUNT</Text>
+                            <Text style={styles.currencyLabel}>ENTER REDEEM AMOUNT</Text>
                             <TextInput 
                                 style={styles.giantInput} 
                                 placeholder="0" 

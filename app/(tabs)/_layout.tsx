@@ -58,7 +58,7 @@ export default function TabLayout() {
     if (!user) return;
 
     // 🚀 LOGOUT SYNC PROTECTOR: Global tab session cleanup logic
-    const authUnsub = auth.onAuthStateChanged((u) => {
+    const authUnsub = auth.onAuthStateChanged((u:any) => {
       if (!u) {
         requestAnimationFrame(() => {
           router.replace('/' as any);

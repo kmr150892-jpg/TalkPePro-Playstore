@@ -80,7 +80,6 @@ export default function ProfileScreen() {
   const [totalVideoCallSpent, setTotalVideoCallSpent] = useState<number>(0);
   const [totalSpentCalculated, setTotalSpentCalculated] = useState<number>(0); 
   const [gameNetProfit, setGameNetProfit] = useState<number>(0); 
-  const [totalRedeemed, setTotalRedeemed] = useState<number>(0); 
   const [totalEntryFees, setTotalEntryFees] = useState<number>(0); 
   const [totalMinutes, setTotalMinutes] = useState<number>(0);
 
@@ -153,15 +152,37 @@ export default function ProfileScreen() {
 
       let rawTransactions: any[] = [];
       let rawGifts: any[] = [];
-      let rawRequests: any[] = []; 
       let rawGames: any[] = []; 
       let rawCalls: any[] = []; // 🔥 Fetching calls globally here to sync everything properly
 
       const processAllLogs = () => {
-          const myGifts = rawGifts.filter(g => 
-              g.senderId === user.uid || 
-              (g.senderName && userData.name && String(g.senderName).trim().toLowerCase() === String(userData.name).trim().toLowerCase())
-          );
+          
+          // 🔥 NEW: Extracting In-Call Gifts directly from Calls Database to push to History Logs (WITH EXPERT NAME)
+          const mappedCallGifts = rawCalls
+              .filter(c => Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))) > 0)
+              .map(c => ({
+                  id: c.id + '_callgift',
+                  _source: 'call_gifts',
+                  type: 'GIFT',
+                  title: 'In-Call Reward',
+                  amount: Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))),
+                  status: 'COMPLETED',
+                  timestamp: c.endTime || c.createdAt || c.timestamp || c.startTime,
+                  expertName: c.expertName || c.receiverName || c.toName || '', // 🔥 Expert Name mapped here
+                  _enrichedName: c.expertName || c.receiverName || c.toName || ''
+              }));
+
+          // 🔥 SATTI FIX: We must EXCLUDE nested gifts if they belong to a Video Call (callId exists in rawCalls) to avoid Double Entry!
+          // We use absolute amounts to map
+          
+          // Filter valid standalone gifts
+          const myGifts = rawGifts.filter(g => {
+              const isMine = g.senderId === user.uid || (g.senderName && userData.name && String(g.senderName).trim().toLowerCase() === String(userData.name).trim().toLowerCase());
+              if (!isMine) return false;
+
+              // Only keep gifts that are NOT tied to a call
+              return !g.callId; 
+          });
 
           // 🔥 EXTRACT EXPERT NAME FOR GIFTS (LIVE/FORUM)
           const enrichedGifts = myGifts.map(g => ({
@@ -183,39 +204,14 @@ export default function ProfileScreen() {
               return { ...t, _enrichedName: enrichedName };
           });
 
-          const mappedRequests = rawRequests.map(r => ({
-              id: r.id,
-              _source: 'reward_requests',
-              type: 'VOUCHER_REDEEM',
-              title: `Redeemed: ${r.voucherName || 'Reward Voucher'}`,
-              amount: r.costDeducted || r.voucherValue || 0,
-              status: r.status || 'Pending',
-              timestamp: r.requestDate || r.processedDate || r.createdAt
-          }));
-
           const mappedGames = rawGames.map(g => ({
               ...g,
               _source: 'game_history',
               timestamp: g.timestamp || g.createdAt
           }));
 
-          // 🔥 NEW: Extracting In-Call Gifts directly from Calls Database to push to History Logs (WITH EXPERT NAME)
-          const mappedCallGifts = rawCalls
-              .filter(c => Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))) > 0)
-              .map(c => ({
-                  id: c.id + '_callgift',
-                  _source: 'call_gifts',
-                  type: 'GIFT',
-                  title: 'In-Call Reward',
-                  amount: Math.abs(Number(String(c.totalGiftsDiamonds || 0).replace(/[^0-9.-]+/g, ''))),
-                  status: 'COMPLETED',
-                  timestamp: c.endTime || c.createdAt || c.timestamp || c.startTime,
-                  expertName: c.expertName || c.receiverName || c.toName || '', // 🔥 Expert Name mapped here
-                  _enrichedName: c.expertName || c.receiverName || c.toName || ''
-              }));
-
           // Merge everything into history
-          const mergedLogs = [...validTransactions, ...enrichedGifts, ...mappedRequests, ...mappedGames, ...mappedCallGifts];
+          const mergedLogs = [...validTransactions, ...enrichedGifts, ...mappedGames, ...mappedCallGifts];
 
           mergedLogs.sort((a, b) => {
               const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0);
@@ -245,17 +241,16 @@ export default function ProfileScreen() {
           setTotalRechargeDiamonds(calcRecharge);
 
           // 2. 🔥 Calculate ALL Gifts (Standalone + In-Call) 🔥
-          const calcGiftsFromNested = myGifts.reduce((sum, log) => sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0), 0);
-          const calcGiftsFromTx = rawTransactions.reduce((sum, log) => {
-              const typeStr = String(log.type || '').toUpperCase();
-              if (typeStr === 'GIFT' || typeStr.includes('GIFT')) {
-                  return sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0);
-              }
-              return sum;
-          }, 0);
-          const calcCallGifts = mappedCallGifts.reduce((sum, log) => sum + log.amount, 0); // Adding mapped call gifts
           
-          const calcGifts = calcGiftsFromNested + calcGiftsFromTx + calcCallGifts;
+          // Calculate valid standalone gifts
+          const calcGiftsFromNested = enrichedGifts.reduce((sum, log) => sum + (Number(log.amount) || Number(log.diamonds) || Number(log.price) || 0), 0); 
+          
+          // 🔥 SATTI STRICT FIX: Tx table Gifts completely removed to prevent overlapping double counting!
+          // We rely exclusively on "myGifts" (nested_gifts) AND "mappedCallGifts" (calls DB) for accurate gift tracking.
+          
+          const calcCallGifts = mappedCallGifts.reduce((sum, log) => sum + log.amount, 0); 
+          
+          const calcGifts = calcGiftsFromNested + calcCallGifts;
           setTotalGiftsSpent(calcGifts);
 
           // 3. Calculate Video Call Spent
@@ -266,16 +261,6 @@ export default function ProfileScreen() {
               return sum;
           }, 0);
           setTotalVideoCallSpent(calcVideoCalls);
-
-          // 4. Calculate Redeemed Vouchers
-          const calcRedeemed = rawRequests.reduce((sum, log) => {
-              const statusStr = String(log.status || '').toLowerCase();
-              if (statusStr !== 'failed' && statusStr !== 'rejected') {
-                  return sum + (Number(log.costDeducted) || Number(log.voucherValue) || Number(log.amount) || 0);
-              }
-              return sum;
-          }, 0);
-          setTotalRedeemed(calcRedeemed);
 
           // 5. Calculate Activity Rewards & EXCLUSIVE Game Entry Fees Calculation 🔥
           let totalGameEntryFeesAll = 0; 
@@ -357,8 +342,8 @@ export default function ProfileScreen() {
               return sum;
           }, 0);
 
-          // 7. Calculate Total Spent / Asset Utilized
-          const grandTotalSpent = Math.max(0, calcVideoCalls + calcGifts + calcRedeemed);
+          // 7. Calculate Total Spent / Asset Utilized (Removed calcRedeemed here)
+          const grandTotalSpent = Math.max(0, calcVideoCalls + calcGifts);
           setTotalSpentCalculated(grandTotalSpent);
 
           // 🔥 TOTAL ARENA ENTRY : Accurately subtract Game Refunds
@@ -380,12 +365,6 @@ export default function ProfileScreen() {
           processAllLogs();
       });
 
-      const qRequests = query(collection(db, 'reward_requests'), where('userId', '==', user.uid));
-      const unsubRequests = onSnapshot(qRequests, (snap) => {
-          rawRequests = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          processAllLogs();
-      });
-
       const qGameHistory = query(collection(db, "users", user.uid, "activityHistory"));
       const unsubGameHistory = onSnapshot(qGameHistory, (snap) => {
           rawGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -399,7 +378,7 @@ export default function ProfileScreen() {
           processAllLogs();
       });
 
-      return () => { unsubHistory(); unsubGifts(); unsubRequests(); unsubGameHistory(); unsubCalls(); };
+      return () => { unsubHistory(); unsubGifts(); unsubGameHistory(); unsubCalls(); };
   }, [user, userData]);
 
   const totalSpent = userData?.totalSpentDiamonds || 0;

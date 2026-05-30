@@ -26,30 +26,15 @@ const { width, height } = Dimensions.get('window');
 
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
 const calculateUserLevel = (totalSpent: number) => {
-  if (totalSpent >= 500000001) return { 
-      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000']
-  }; 
-  if (totalSpent >= 100000001) return { 
-      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000']
-  }; 
-  if (totalSpent >= 50000000) return { 
-      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000']
-  };
-  if (totalSpent >= 10000000) return { 
-      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000']
-  };
-  if (totalSpent >= 5000000) return { 
-      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000']
-  };
-  if (totalSpent >= 1000000) return { 
-      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000']
-  };
-  if (totalSpent >= 200001) return { 
-      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000']
-  };
-  return { 
-      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000']
-  };
+  if (totalSpent >= 500000001) return { lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000'] }; 
+  if (totalSpent >= 100000001) return { lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000'] }; 
+  if (totalSpent >= 50000000) return { lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000'] };
+  if (totalSpent >= 10000000) return { lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000'] };
+  if (totalSpent >= 5000000) return { lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000'] };
+  if (totalSpent >= 1000000) return { lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000'] };
+  if (totalSpent >= 200001) return { lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000'] };
+  if (totalSpent >= 1) return { lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000'] };
+  return { lvl: 0, label: 'BEGINNER', status: 'NEW RECRUIT', color: '#94A3B8', secondaryColor: '#475569', anim: 'wave', themeBg: ['#020617', '#000000'] };
 };
 
 export default function LoginScreen() {
@@ -83,15 +68,18 @@ export default function LoginScreen() {
   const shimmerAnim = useRef(new Animated.Value(0)).current; 
   const bgScaleAnim = useRef(new Animated.Value(1)).current; 
 
-  // 🔥 NEW MAGICAL TEXT ANIMATION REFS
   const talkScale = useRef(new Animated.Value(0)).current;
   const peScale = useRef(new Animated.Value(5)).current; 
   const peOpacity = useRef(new Animated.Value(0)).current;
   const magicFloat = useRef(new Animated.Value(-50)).current; 
 
-  // 🔥 SATTI FIX: NEW ANIMATION REFS FOR ENGAGING CARDS
   const cardFloat1 = useRef(new Animated.Value(0)).current;
   const cardFloat2 = useRef(new Animated.Value(0)).current;
+  
+  // 🔥 SATTI FIX: EXACT MATH CALCULATION FOR CAROUSEL TO STOP CLIPPING/PEEKING 🔥
+  const scrollX = useRef(new Animated.Value(0)).current;
+  // Screen Width - (BottomSection Padding 24) - (BlurCard Padding 40) - (BlurCard Borders 4) = Exact 68px offset
+  const innerWidth = width - 68; 
 
   // 🔄 FULL SCREEN VIDEO Setup
   const videoSource = require('../assets/images/welcome-girl.mp4');
@@ -107,7 +95,8 @@ export default function LoginScreen() {
     }
   }, [showLoginUI, player]);
 
-  const MY_ADMIN_UID = "9yFRrTeuOCd1twDDpBiNCp4U1yf1"; 
+  // 🔥 SATTI NEW EMAIL FIX 🔥 
+  const MY_ADMIN_EMAIL = "kmr150892@gmail.com"; 
 
   useEffect(() => {
     GoogleSignin.configure({
@@ -135,7 +124,6 @@ export default function LoginScreen() {
       ])
     ).start();
 
-    // 🔥 SATTI FIX: ADDED FLOATING ANIMATIONS FOR PREMIUM CARDS
     Animated.loop(
       Animated.sequence([
         Animated.timing(cardFloat1, { toValue: -4, duration: 2500, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
@@ -185,6 +173,11 @@ export default function LoginScreen() {
 
   const handleLogin = async (selectedRole: 'user' | 'expert') => {
     setLoading(true);
+    await AsyncStorage.setItem('@is_logging_in', 'true');
+    await AsyncStorage.setItem('@intended_role', selectedRole);
+
+    let authSuccess = false; // 🔥 SATTI FIX: Tracking flag to detect GateKeeper interruption
+
     try {
       await GoogleSignin.hasPlayServices();
       const response = await GoogleSignin.signIn();
@@ -192,21 +185,16 @@ export default function LoginScreen() {
       const credential = GoogleAuthProvider.credential(idToken);
 
       const result = await signInWithCredential(auth, credential);
+      
+      // ✅ If it reaches here, Google Login was successful! 
+      // Any error after this is because GateKeeper intentionally signed them out.
+      authSuccess = true; 
+      
       const uid = result.user.uid;
+      const userEmail = result.user.email; 
 
       const userRef = doc(db, "users", uid);
       const userSnap = await getDoc(userRef);
-
-      if (userSnap.exists()) {
-        const userData = userSnap.data();
-        if (userData.isBlocked === true) {
-          await signOut(auth); 
-          setLoading(false);
-          Alert.alert("Account Locked", "Your account has been restricted for security reasons. Please contact support.");
-          return;
-        }
-        setTotalSpent(userData.totalSpentDiamonds || 0);
-      }
 
       let finalRole: string = 'user'; 
       let expertStatus: string | null = null;
@@ -214,21 +202,65 @@ export default function LoginScreen() {
 
       if (userSnap.exists()) {
         const existingData = userSnap.data();
-        finalRole = (existingData.role === 'admin' || uid === MY_ADMIN_UID) ? 'admin' : existingData.role;
+        if (existingData.isBlocked === true) {
+          await signOut(auth); 
+          setLoading(false);
+          Alert.alert("Account Locked", "Your account has been restricted for security reasons. Please contact support.");
+          return;
+        }
+        setTotalSpent(existingData.totalSpentDiamonds || 0);
+
+        finalRole = (userEmail === MY_ADMIN_EMAIL) ? 'admin' : existingData.role;
         expertStatus = existingData.status || null;
         isAlreadyApplying = existingData.isApplying || false; 
 
-        await setDoc(userRef, {
-          uid: uid,
+        // 🔥 THE MASTER PLAN FIX 🔥
+        const isDraftExpert = existingData.registrationInProgress === true && existingData.role === 'user';
+        const isApprovedOrPendingExpert = existingData.role === 'expert' || existingData.status === 'Active' || existingData.status === 'Pending' || existingData.isApplying === true;
+
+        // 1. STRICT CLIENT LOCK: Oru thadava Normal User aagitta eppavum User thaan. Consultant-nu amukkuna amaidhiya Client-kuke anuppidum.
+        if (selectedRole === 'expert' && existingData.role === 'user' && finalRole !== 'admin' && !isDraftExpert) {
+            selectedRole = 'user'; 
+        }
+
+        // 2. CONSULTANT LOCK: Oru thadava Verified Consultant aagitta eppavum Consultant thaan. Client-nu amukkuna Dashboard-kuke anuppidum.
+        if (selectedRole === 'user' && isApprovedOrPendingExpert && finalRole !== 'admin') {
+            selectedRole = 'expert'; 
+        }
+
+        let updateData: any = {
           name: result.user.displayName,
           email: result.user.email,
-          role: finalRole, 
           photoURL: result.user.photoURL,
           lastLogin: serverTimestamp(),
-        }, { merge: true });
+        };
+
+        if (finalRole === 'admin') {
+            updateData.role = 'admin';
+        }
+
+        if (selectedRole === 'user' && isDraftExpert && finalRole !== 'admin') {
+            // 3. DRAFT ESCAPE (Manasu Maatram) -> Let them become a Client permanently.
+            updateData.registrationInProgress = false;
+            updateData.isApplying = false;
+            updateData.status = "User"; 
+        } else if (selectedRole === 'expert' && finalRole !== 'admin') {
+            // Keep role as user for safety, just mark them as in progress
+            if (existingData.role === 'user') {
+                updateData.registrationInProgress = true;  
+            }
+        } else if (finalRole !== 'admin') {
+            updateData.registrationInProgress = false; 
+        }
+
+        // We only push updateData. Firebase 'merge: true' leaves role untouched unless Admin! No crash!
+        await setDoc(userRef, updateData, { merge: true });
 
       } else {
-        if (uid === MY_ADMIN_UID) finalRole = 'admin';
+        
+        // 🔥 ALL NEW USERS ARE 'USER' BY DEFAULT 🔥
+        finalRole = 'user'; 
+        if (userEmail === MY_ADMIN_EMAIL) finalRole = 'admin';
 
         let isFreeAvailable = true;
         let freeMins = 3; 
@@ -245,22 +277,22 @@ export default function LoginScreen() {
           uid: uid,
           name: result.user.displayName,
           email: result.user.email,
-          role: finalRole, 
+          role: finalRole, // ALWAYS 'user' (or admin)
           photoURL: result.user.photoURL,
           createdAt: serverTimestamp(),
           lastLogin: serverTimestamp(),
           isBlocked: false,
-          isWelcomeCallAvailable: isFreeAvailable, 
-          freeMinsRemaining: freeMins,
+          isWelcomeCallAvailable: (selectedRole === 'user' && finalRole !== 'admin') ? isFreeAvailable : false, 
+          freeMinsRemaining: (selectedRole === 'user' && finalRole !== 'admin') ? freeMins : 0,
+          registrationInProgress: (selectedRole === 'expert' && finalRole !== 'admin'), 
         };
 
-        if (selectedRole === 'expert') {
+        if (selectedRole === 'expert' && finalRole !== 'admin') {
+          // Store them as a USER internally, but setup expert fields to wait for admin approval
           expertStatus = "New"; 
           await setDoc(userRef, {
             ...baseUserData,
-            isWelcomeCallAvailable: false, 
-            freeMinsRemaining: 0,
-            status: "New",
+            status: "New", // Status New, but Role is strictly user!
             currentLevel: 0,
             levelTitle: "BEGINNER",
             pricePerMin: 10,
@@ -274,18 +306,20 @@ export default function LoginScreen() {
         } else {
           await setDoc(userRef, {
             ...baseUserData,
+            status: finalRole === 'admin' ? "Active" : "User",
             balance: 0,
           });
         }
       }
 
+      // Final Routing
       if (finalRole === 'admin') {
         router.replace('/(admin)' as any); 
       } else if (selectedRole === 'expert') {
-        if (finalRole === 'expert' && expertStatus === "Active") {
+        if ((finalRole === 'expert' || expertStatus === 'Active') && expertStatus === "Active") {
             router.replace('/expert/dashboard' as any); 
         } 
-        else if (isAlreadyApplying) {
+        else if (isAlreadyApplying || expertStatus === 'Pending') {
             router.replace('/waiting-approval' as any); 
         }
         else {
@@ -296,11 +330,18 @@ export default function LoginScreen() {
       }
 
     } catch (error: any) {
-      console.log("❌ Login Error:", error);
-      setLoading(false);
-      if (error.code !== '-3') { 
+      // 🔥 SATTI SMART ERROR HANDLER 🔥
+      if (authSuccess) {
+          // Auth aana piragu error vantha, athu GateKeeper sign out pannathunaala vantha error thaan.
+          console.log("⚠️ Safe Ignore: GateKeeper intentionally aborted the login DB sync.");
+      } else {
+          // Unmaiyave internet illana, athu auth aagarathukku munnadiye intha block-ku vanthidum.
+          console.log("❌ Login Error:", error);
           Alert.alert("Authentication Error", "Unable to sign in at the moment. Please check your internet connection.");
       }
+    } finally {
+      await AsyncStorage.removeItem('@is_logging_in');
+      setLoading(false);
     }
   };
 
@@ -326,8 +367,8 @@ export default function LoginScreen() {
           />
       </Animated.View>
       
-      <Animated.View style={[styles.shimmerOrb, { top: 50, right: -60, backgroundColor: '#061af8', transform: [{ translateY: orbTranslateY }] }]} />
-      <Animated.View style={[styles.shimmerOrb, { bottom: 150, left: -60, backgroundColor: '#f805cf', transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+      <Animated.View style={[styles.shimmerOrb, { top: 50, right: -60, backgroundColor: '#061af8', transform: [{ translateY: orbTranslateY }] }] } />
+      <Animated.View style={[styles.shimmerOrb, { bottom: 150, left: -60, backgroundColor: '#f805cf', transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }] } />
 
       <Animated.View style={[styles.glowCircle, { transform: [{ rotate: spin }] }]}>
           <LinearGradient colors={['rgba(255, 42, 133, 0.1)', 'rgba(134, 239, 172, 0.1)']} style={styles.glowInner} />
@@ -371,79 +412,121 @@ export default function LoginScreen() {
             
             {!showLoginUI ? (
               <View style={styles.formContainer}>
-                <Text style={styles.instruction}>WHY JOIN TALKPE PRO?</Text>
                 
-                {/* 🔥 COMPACT PREMIUM ANIMATED CARDS 🔥 */}
-                <View style={styles.benefitsContainer}>
-                  
-                  {/* CLIENT FEATURES - Floating Glassmorphism Design */}
-                  <Animated.View style={{ transform: [{ translateY: cardFloat1 }] }}>
-                    <LinearGradient 
-                      colors={['rgba(168, 85, 247, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
-                      style={[styles.benefitBox, { borderColor: 'rgba(168, 85, 247, 0.6)' }]}
-                    >
-                      <View style={styles.badgeContainer}>
-                          <LinearGradient colors={['#A855F7', '#7B2FF7']} style={styles.badgeLabel}>
-                              <Text style={styles.badgeText}> WELCOME TIER</Text>
-                          </LinearGradient>
-                      </View>
-                      
-                      <View style={styles.benefitHeader}>
-                          <View style={[styles.iconWrapper, { shadowColor: '#A855F7', backgroundColor: 'rgba(168, 85, 247, 0.2)' }]}>
-                              <Text style={styles.benefitIconTop}>💎</Text>
-                          </View>
-                          <View>
-                              <Text style={[styles.benefitTitle, { color: '#E9D5FF' }]}>CLIENT PORTAL</Text>
-                              <Text style={styles.benefitSubText}>Verified Expert Interactions</Text>
-                          </View>
-                      </View>
-                      <View style={styles.benefitList}>
-                          <Text style={styles.benefitBullet}>💎 <Text style={styles.highlightText}>Up to 3 Mins</Text> Free Consultation</Text>
-                          <Text style={styles.benefitBullet}>💎 Access <Text style={styles.highlightText}>Interactive</Text> Skill Activities</Text>
-                          <Text style={styles.benefitBullet}>💎 100% <Text style={styles.highlightText}>Secure & Private</Text> Network</Text>
-                          <Text style={styles.benefitBullet}>💎 Join <Text style={styles.highlightText}>Free Forums</Text> & Broadcasts</Text>
-                      </View>
-                    </LinearGradient>
-                  </Animated.View>
-                  
-                  {/* CONSULTANT FEATURES - Floating Glassmorphism Design */}
-                  <Animated.View style={{ transform: [{ translateY: cardFloat2 }] }}>
-                    <LinearGradient 
-                      colors={['rgba(249, 115, 22, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
-                      style={[styles.benefitBox, { borderColor: 'rgba(249, 115, 22, 0.6)' }]}
-                    >
-                      <View style={styles.badgeContainer}>
-                          <LinearGradient colors={['#F97316', '#EA580C']} style={styles.badgeLabel}>
-                              <Text style={styles.badgeText}> PREMIUM PARTNER</Text>
-                          </LinearGradient>
-                      </View>
-                      
-                      <View style={styles.benefitHeader}>
-                          <View style={[styles.iconWrapper, { shadowColor: '#F97316', backgroundColor: 'rgba(249, 115, 22, 0.2)' }]}>
-                              <Text style={styles.benefitIconTop}>🌟</Text>
-                          </View>
-                          <View>
-                              <Text style={[styles.benefitTitle, { color: '#FFEDD5' }]}>CONSULTANT HUB</Text>
-                              <Text style={styles.benefitSubText}>Monetize Your Expertise</Text>
-                          </View>
-                      </View>
-                      <View style={styles.benefitList}>
-                          <Text style={styles.benefitBullet}>🌟 Host Premium <Text style={styles.highlightText}>Live Broadcasts</Text></Text>
-                          <Text style={styles.benefitBullet}>🌟 Create Engauge <Text style={styles.highlightText}>Skill Activities</Text></Text>
-                          <Text style={styles.benefitBullet}>🌟 High-Yield <Text style={styles.highlightText}>Consultation Rewards</Text></Text>
-                          <Text style={styles.benefitBullet}>🌟 Verified, <Text style={styles.highlightText}>Safe & Private</Text> Platform</Text>
-                      </View>
-                    </LinearGradient>
-                  </Animated.View>
-
+                <View style={styles.instructionRow}>
+                  <Text style={styles.instruction}>WHY JOIN TALKPE PRO?</Text>
+                  <Text style={styles.swipeHint}>SWIPE ➔</Text>
                 </View>
+                
+                {/* 🔥 ULTRA PREMIUM CAROUSEL DESIGN START 🔥 */}
+                <View style={[styles.carouselContainer, { width: innerWidth }]}>
+                  <Animated.ScrollView
+                    horizontal
+                    pagingEnabled
+                    showsHorizontalScrollIndicator={false}
+                    scrollEventThrottle={16}
+                    onScroll={Animated.event(
+                      [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                      { useNativeDriver: false }
+                    )}
+                  >
+                    
+                    {/* 🔹 SLIDE 1: CLIENT PORTAL 🔹 */}
+                    <View style={[styles.cardWrapper, { width: innerWidth }]}>
+                      <Animated.View style={{ flex: 1, transform: [{ translateY: cardFloat1 }] }}>
+                        <LinearGradient 
+                          colors={['rgba(168, 85, 247, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
+                          style={[styles.benefitBox, { borderColor: 'rgba(168, 85, 247, 0.6)' }]}
+                        >
+                          {/* 🔥 CENTRED PREMIUM HEADER 🔥 */}
+                          <View style={styles.benefitHeader}>
+                              <View style={[styles.iconWrapper, { shadowColor: '#A855F7', backgroundColor: 'rgba(168, 85, 247, 0.2)' }]}>
+                                  <Text style={styles.benefitIconTop}>💎</Text>
+                              </View>
+                              <View style={styles.headerTextStack}>
+                                  <Text style={[styles.benefitTitle, { color: '#E9D5FF' }]}>CLIENT PORTAL</Text>
+                                  <Text style={styles.benefitSubText}>Verified Expert Interactions</Text>
+                              </View>
+                          </View>
+
+                          {/* 🔥 NEAT & LARGE BULLET POINTS 🔥 */}
+                          <View style={styles.benefitList}>
+                              <Text style={styles.benefitBullet}>💎  <Text style={styles.highlightText}>Up to 3 Mins</Text> Free Consultation</Text>
+                              <Text style={styles.benefitBullet}>💎  Access <Text style={styles.highlightText}>Interactive</Text> Skill Activities</Text>
+                              <Text style={styles.benefitBullet}>💎  100% <Text style={styles.highlightText}>Secure & Private</Text> Network</Text>
+                              <Text style={styles.benefitBullet}>💎  Join <Text style={styles.highlightText}>Free Forums</Text> & Broadcasts</Text>
+                          </View>
+                        </LinearGradient>
+                      </Animated.View>
+                    </View>
+
+                    {/* 🔹 SLIDE 2: CONSULTANT HUB 🔹 */}
+                    <View style={[styles.cardWrapper, { width: innerWidth }]}>
+                      <Animated.View style={{ flex: 1, transform: [{ translateY: cardFloat2 }] }}>
+                        <LinearGradient 
+                          colors={['rgba(249, 115, 22, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
+                          style={[styles.benefitBox, { borderColor: 'rgba(249, 115, 22, 0.6)' }]}
+                        >
+                          {/* 🔥 CENTRED PREMIUM HEADER 🔥 */}
+                          <View style={styles.benefitHeader}>
+                              <View style={[styles.iconWrapper, { shadowColor: '#F97316', backgroundColor: 'rgba(249, 115, 22, 0.2)' }]}>
+                                  <Text style={styles.benefitIconTop}>🌟</Text>
+                              </View>
+                              <View style={styles.headerTextStack}>
+                                  <Text style={[styles.benefitTitle, { color: '#FFEDD5' }]}>CONSULTANT HUB</Text>
+                                  <Text style={styles.benefitSubText}>Monetize Your Expertise</Text>
+                              </View>
+                          </View>
+
+                          {/* 🔥 NEAT & LARGE BULLET POINTS 🔥 */}
+                          <View style={styles.benefitList}>
+                              <Text style={styles.benefitBullet}>🌟  Host Premium <Text style={styles.highlightText}>Live Broadcasts</Text></Text>
+                              <Text style={styles.benefitBullet}>🌟  Create Engauge <Text style={styles.highlightText}>Skill Activities</Text></Text>
+                              <Text style={styles.benefitBullet}>🌟  High-Yield <Text style={styles.highlightText}>Consultation Rewards</Text></Text>
+                              <Text style={styles.benefitBullet}>🌟  Verified, <Text style={styles.highlightText}>Safe & Private</Text> Platform</Text>
+                          </View>
+                        </LinearGradient>
+                      </Animated.View>
+                    </View>
+
+                  </Animated.ScrollView>
+                </View>
+
+                {/* 🔥 PAGINATION DOTS 🔥 */}
+                <View style={styles.paginationDots}>
+                  {[0, 1].map((_, i) => {
+                    const inputRange = [(i - 1) * innerWidth, i * innerWidth, (i + 1) * innerWidth];
+                    const dotWidth = scrollX.interpolate({
+                      inputRange,
+                      outputRange: [8, 24, 8],
+                      extrapolate: 'clamp',
+                    });
+                    const opacity = scrollX.interpolate({
+                      inputRange,
+                      outputRange: [0.3, 1, 0.3],
+                      extrapolate: 'clamp',
+                    });
+                    const bgColor = scrollX.interpolate({
+                      inputRange,
+                      outputRange: ['#CBD5E1', i === 0 ? '#A855F7' : '#F97316', '#CBD5E1'],
+                      extrapolate: 'clamp',
+                    });
+                    return (
+                      <Animated.View
+                        key={i}
+                        style={[styles.dot, { width: dotWidth, opacity, backgroundColor: bgColor }]}
+                      />
+                    );
+                  })}
+                </View>
+                {/* 🔥 ULTRA PREMIUM CAROUSEL DESIGN END 🔥 */}
 
                 <TouchableOpacity onPress={() => setShowLoginUI(true)} activeOpacity={0.8}>
                   <LinearGradient 
                     colors={['#f309d0', '#F97316']} 
                     start={{x: 0, y: 0}} 
                     end={{x: 1, y: 1}} 
-                    style={[styles.btnMass, { marginTop: 10, shadowColor: '#f309d0', shadowOpacity: 0.9, shadowRadius: 20 }]}
+                    style={[styles.btnMass, { shadowColor: '#f309d0', shadowOpacity: 0.9, shadowRadius: 20 }]}
                   >
                     <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>PROCEED TO SECURE LOGIN</Text>
                   </LinearGradient>
@@ -460,7 +543,7 @@ export default function LoginScreen() {
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.instruction}>SELECT YOUR PROFESSIONAL ROLE</Text>
+                    <Text style={styles.instructionCenter}>SELECT YOUR PROFESSIONAL ROLE</Text>
                     
                     <TouchableOpacity onPress={() => handleLogin('user')} activeOpacity={0.8}>
                       <LinearGradient colors={['#7B2FF7', '#F43F8D', '#F97316']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 15 }]}>
@@ -501,33 +584,38 @@ const styles = StyleSheet.create({
   splashTextContainer: { alignItems: 'center', marginTop: 30, gap: 10 },
   tagline: { fontSize: 13, color: '#FFFFFF', fontWeight: '900', letterSpacing: 3, textTransform: 'uppercase', opacity: 0.8 },
   
-  // 🔥 UPDATED: Moved up significantly to avoid hiding behind phone buttons
   bottomSection: { position: 'absolute', bottom: 20, width: '100%', padding: 12, paddingBottom: 25, zIndex: 10 }, 
   
-  // 🔥 UPDATED: Increased padding slightly for larger appearance
   blurCard: { padding: 20, borderRadius: 35, overflow: 'hidden', backgroundColor: 'rgba(5, 5, 10, 0.7)' }, 
   formContainer: { width: '100%' },
   
-  // 🔥 UPDATED: Increased gap, margins, paddings, and font sizes (~20%) 🔥
-  benefitsContainer: { width: '100%', gap: 25, marginVertical: 15}, 
-  benefitBox: { padding: 13, paddingTop: 20, borderRadius: 20, borderWidth: 1.5, elevation: 8, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.4, shadowRadius: 8, position: 'relative' },
-  badgeContainer: { position: 'absolute', top: -14, right: 15, zIndex: 10, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 5 },
-  badgeLabel: { paddingHorizontal: 14, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
-  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' }, 
-  benefitHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.1)', paddingBottom: 12 }, 
-  iconWrapper: { padding: 10, borderRadius: 12, marginRight: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', elevation: 12, shadowOpacity: 0.9, shadowRadius: 10 }, 
-  benefitIconTop: { fontSize: 22 }, 
-  benefitTitle: { fontWeight: '900', fontSize: 15, letterSpacing: 2 }, 
-  benefitSubText: { color: '#94A3B8', fontSize: 11, fontWeight: '700', marginTop: 3, letterSpacing: 0.5 }, 
-  benefitList: { paddingLeft: 5, gap: 8 }, 
-  benefitBullet: { color: '#E2E8F0', fontSize: 13, fontWeight: '600', letterSpacing: 0.5 }, 
+  instructionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, paddingHorizontal: 12 },
+  instruction: { color: '#CBD5E1', fontSize: 13, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
+  instructionCenter: { textAlign: 'center', color: '#CBD5E1', marginBottom: 5, fontSize: 12, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
+  swipeHint: { color: '#F97316', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+  
+  carouselContainer: { height: 450, marginTop: 5 }, 
+  cardWrapper: { paddingHorizontal: 0, paddingTop: 25, paddingBottom: 3 }, 
+  
+  paginationDots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 10, gap: 5 },
+  dot: { height: 6, borderRadius: 3 },
+  
+  benefitBox: { flex: 1, padding: 5, borderRadius: 24, borderWidth: 1.5, elevation: 200, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.4, shadowRadius: 8, position: 'relative' },
+  
+  benefitHeader: { alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.15)', paddingBottom: 30, paddingTop:15 }, 
+  iconWrapper: { padding: 20, borderRadius: 20, marginBottom: 15, borderWidth: 3, borderColor: 'rgba(255,255,255,0.2)', elevation: 200, shadowOpacity: 0.9, shadowRadius: 10 }, 
+  benefitIconTop: { fontSize: 34 }, 
+  headerTextStack: { alignItems: 'center' },
+  benefitTitle: { fontWeight: '900', fontSize: 22, letterSpacing: 3, textAlign: 'center' }, 
+  benefitSubText: { color: '#94A3B8', fontSize: 13, fontWeight: '800', marginTop: 5, letterSpacing: 1, textAlign: 'center' }, 
+  
+  benefitList: { paddingHorizontal: 9, gap: 20 }, 
+  benefitBullet: { color: '#E2E8F0', fontSize: 14, fontWeight: '700', letterSpacing: 0.5, lineHeight: 22 }, 
   highlightText: { color: '#FFF', fontWeight: '900' },
   
   loadingBox: { alignItems: 'center', padding: 30 },
   loadingText: { marginTop: 1, color: '#f309d0', fontWeight: '900', fontSize: 15, letterSpacing:1.5, textTransform: 'uppercase' },
-  instruction: { textAlign: 'center', color: '#CBD5E1', marginBottom: 5, fontSize: 12, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
   
-  // 🔥 UPDATED: Made buttons larger to match the 20% scale up
   btnMass: { padding: 20, borderRadius: 30, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' }, 
   btnTextUser: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 12 },
   btnTextExpert: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 12 },

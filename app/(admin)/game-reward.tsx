@@ -27,8 +27,8 @@ export default function AdminGameRevenue() {
         totalPool: 0,
         totalAdminProfit: 0,
         totalExpertBeans: 0,
-        racingProfit: 0,
-        clashProfit: 0
+        memoryProfit: 0, // 🔥 Updated for memory_match
+        reflexProfit: 0  // 🔥 Updated for reflex_arena
     });
 
     useEffect(() => {
@@ -37,7 +37,7 @@ export default function AdminGameRevenue() {
 
         // 🔥 ANTI-FREEZE LOGIC. Delay fetching so page opens instantly! 🔥
         const startFetching = setTimeout(() => {
-            const q = query(collectionGroup(db, 'gameHistory'), orderBy('timestamp', 'desc'));
+            const q = query(collectionGroup(db, 'games'), orderBy('createdAt', 'desc'));
 
             unsub = onSnapshot(q, async (snap) => {
                 // Debounce rapid updates to prevent UI stuttering
@@ -46,8 +46,8 @@ export default function AdminGameRevenue() {
                     let tPool = 0;
                     let tAdmin = 0;
                     let tExpert = 0;
-                    let tRacingProfit = 0;
-                    let tClashProfit = 0;
+                    let tMemoryProfit = 0;
+                    let tReflexProfit = 0;
 
                     const fetchedGames: any[] = [];
 
@@ -55,53 +55,44 @@ export default function AdminGameRevenue() {
                         for (const docSnap of snap.docs) {
                             const data = docSnap.data();
                             
-                            const bigbet = Number(data.totalBigbet) || 0;
-                            const smallbet = Number(data.totalSmallbet) || 0;
-                            const bluebet = Number(data.totalBluebet) || 0;
-                            const redbet = Number(data.totalRedbet) || 0;
-                            const greenbet = Number(data.totalGreenbet) || 0;
+                            // 🔥 FETCHING EXACT NAMES FROM DB AS REQUESTED 🔥
+                            const totalPool = Number(data.totalPool) || 0;
+                            const expertBeans = Number(data.expertBeans) || 0;
+                            const adminProfit = Number(data.adminCommission) || 0; 
                             
-                            const totalPool = bigbet + smallbet + bluebet + redbet + greenbet;
-
-                            if (totalPool > 0 && data.resultType) {
+                            if (totalPool > 0 || adminProfit > 0 || expertBeans > 0) {
                                 
-                                let winnerACTIVITY_REWARD = 0;
-                                if (data.resultType === 'SMALL') winnerACTIVITY_REWARD = smallbet * 1.9;
-                                else if (data.resultType === 'BIG') winnerACTIVITY_REWARD = bigbet * 1.9;
-                                else if (data.resultType === 'BLUE') winnerACTIVITY_REWARD = bluebet * 1.9;
-                                else if (data.resultType === 'RED') winnerACTIVITY_REWARD = redbet * 1.9;
-                                else if (data.resultType === 'GREEN') winnerACTIVITY_REWARD = greenbet * 9; 
-
-                                let expertBeans = Number(data.gameBeansCollected) || Number(data.expertBeansPaid) || 0;
+                                // Calculating Expert Diamonds (1 Bean = 2 Diamonds)
                                 let expertDiamonds = expertBeans * 2; 
 
-                                if (expertDiamonds === 0 && totalPool > 0) {
-                                    expertDiamonds = Math.floor(totalPool * 0.05);
-                                    expertBeans = expertDiamonds / 2; 
-                                }
-
-                                const adminProfit = totalPool - winnerACTIVITY_REWARD - expertDiamonds;
+                                // User winning grants calculation
+                                let winnerACTIVITY_REWARD = totalPool - adminProfit - expertDiamonds;
+                                if (winnerACTIVITY_REWARD < 0) winnerACTIVITY_REWARD = 0;
 
                                 tPool += totalPool;
                                 tAdmin += adminProfit;
                                 tExpert += expertBeans;
 
-                                const isRacing = data.resultType === 'BLUE' || data.resultType === 'RED' || data.resultType === 'GREEN';
+                                // 🔥 CHECKING GAME TYPE 🔥
+                                const gameIdStr = String(data.gameName || data.gameId || data.type || docSnap.id).toLowerCase();
+                                const isMemory = gameIdStr.includes('memory_match') || gameIdStr.includes('memory');
 
-                                if (isRacing) {
-                                    tRacingProfit += adminProfit;
+                                if (isMemory) {
+                                    tMemoryProfit += adminProfit;
                                 } else {
-                                    tClashProfit += adminProfit;
+                                    // Assuming anything else is reflex_arena
+                                    tReflexProfit += adminProfit;
                                 }
 
                                 fetchedGames.push({
-                                    id: docSnap.id,
+                                    uniqueKey: docSnap.ref.path,
+                                    id: docSnap.id, // 🔥 ADDED THIS LINE BACK FOR SLICE FUNCTION
                                     totalPool,
                                     winnerACTIVITY_REWARD,
                                     expertBeans,
                                     expertDiamonds,
                                     adminProfit,
-                                    gameTypeResolved: isRacing ? 'RACING' : 'CLASH',
+                                    gameTypeResolved: isMemory ? 'MEMORY MATCH' : 'REFLEX ARENA',
                                     ...data
                                 });
                             }
@@ -115,8 +106,8 @@ export default function AdminGameRevenue() {
                         totalPool: tPool,
                         totalAdminProfit: tAdmin,
                         totalExpertBeans: tExpert,
-                        racingProfit: tRacingProfit,
-                        clashProfit: tClashProfit
+                        memoryProfit: tMemoryProfit,
+                        reflexProfit: tReflexProfit
                     });
                     setLoading(false);
                 }, 150); 
@@ -138,11 +129,8 @@ export default function AdminGameRevenue() {
 
     const renderGameCard = ({ item }: { item: any }) => {
         const isParty = item.isPartyRoom;
-        const isRacing = item.gameTypeResolved === 'RACING';
+        const isMemory = item.gameTypeResolved === 'MEMORY MATCH';
         
-        const resColor = (item.resultType === 'SMALL' || item.resultType === 'BLUE') ? '#3B82F6' : 
-                         (item.resultType === 'BIG' || item.resultType === 'RED') ? '#EF4444' : '#10B981';
-
         const isProfit = item.adminProfit >= 0;
         const profitColor = isProfit ? '#10B981' : '#EF4444';
         const profitGradient = isProfit ? ['rgba(16, 185, 129, 0.1)', 'rgba(16, 185, 129, 0.05)'] as const : ['rgba(239, 68, 68, 0.15)', 'rgba(239, 68, 68, 0.05)'] as const;
@@ -155,34 +143,34 @@ export default function AdminGameRevenue() {
                             <Ionicons name={isParty ? "headset" : "videocam"} size={12} color="#FFF" />
                             <Text style={styles.roomTypeText}>{isParty ? "Session" : "LIVE"}</Text>
                         </View>
-                        <View style={[styles.roomTypeBadge, { backgroundColor: isRacing ? '#EF4444' : '#8B5CF6' }]}>
-                            <Ionicons name={isRacing ? "car-sport" : "dice"} size={12} color="#FFF" />
-                            <Text style={styles.roomTypeText}>{isRacing ? "RACING" : "CLASH"}</Text>
+                        <View style={[styles.roomTypeBadge, { backgroundColor: isMemory ? '#8B5CF6' : '#EF4444' }]}>
+                            <Ionicons name={isMemory ? "extension-puzzle" : "game-controller"} size={12} color="#FFF" />
+                            <Text style={styles.roomTypeText}>{item.gameTypeResolved}</Text>
                         </View>
                     </View>
-                    <Text style={styles.timestampText}>{formatTime(item.timestamp)}</Text>
+                    <Text style={styles.timestampText}>{formatTime(item.createdAt)}</Text>
                 </View>
 
                 <View style={styles.resultRow}>
-                    <Text style={styles.winnerLabel}>Outflow Code: <Text style={{ color: resColor, fontWeight: '900' }}>{item.resultType}</Text></Text>
-                    <Text style={styles.hostIdText} numberOfLines={1}>Session ID: <Text style={{color: '#FFF'}}>{item.roundId}</Text></Text>
+                    <Text style={styles.winnerLabel}>Game Mode: <Text style={{ color: '#3B82F6', fontWeight: '900' }}>{item.gameTypeResolved}</Text></Text>
+                    <Text style={styles.hostIdText} numberOfLines={1}>Log ID: <Text style={{color: '#FFF'}}>{item.id.slice(-6).toUpperCase()}</Text></Text>
                 </View>
 
                 <View style={styles.statsGrid}>
                     <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>ALLOCATED</Text>
+                        <Text style={styles.statLabel}>TOTAL DIAMONDS</Text>
                         <Text style={[styles.statValue, { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                             {item.totalPool} 💎
                         </Text>
                     </View>
                     <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>USER GRANTS</Text>
+                        <Text style={styles.statLabel}>USER REWARDS</Text>
                         <Text style={[styles.statValue, { color: '#FBBF24' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                             -{Math.floor(item.winnerACTIVITY_REWARD)} 💎
                         </Text>
                     </View>
                     <View style={styles.statBox}>
-                        <Text style={styles.statLabel}>COMMISSION</Text>
+                        <Text style={styles.statLabel}>HOST BONUS</Text>
                         <Text style={[styles.statValue, { color: '#A855F7' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                             -{item.expertDiamonds} 💎
                         </Text>
@@ -193,7 +181,7 @@ export default function AdminGameRevenue() {
                     colors={profitGradient} 
                     style={[styles.adminProfitBanner, { borderColor: isProfit ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)' }]}
                 >
-                    <Text style={[styles.adminProfitLabel, { color: profitColor }]}>NET SYSTEM MARGIN</Text>
+                    <Text style={[styles.adminProfitLabel, { color: profitColor }]}>NET PLATFORM SHARE</Text>
                     <View style={{ flex: 1, alignItems: 'flex-end', paddingLeft: 10 }}>
                         <Text style={[styles.adminProfitValue, { color: profitColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                             {isProfit ? '+' : ''}{Math.floor(item.adminProfit)} 💎
@@ -226,7 +214,7 @@ export default function AdminGameRevenue() {
                 </TouchableOpacity>
                 <View>
                     <Text style={styles.headerTitle}>Interaction Analytics</Text>
-                    <Text style={styles.headerSub}>Real-time Operational Margin Analysis</Text>
+                    <Text style={styles.headerSub}>Real-time Platform Share Analysis</Text>
                 </View>
             </View>
 
@@ -234,18 +222,18 @@ export default function AdminGameRevenue() {
                 {/* 🔥 GLOBAL OVERALL Earnings CARD (WITH INR & AUTO-SHRINK) 🔥 */}
                 <LinearGradient colors={stats.totalAdminProfit >= 0 ? ['#064E3B', '#022C22'] : ['#450a0a', '#290606']} style={[styles.mainProfitCard, { borderColor: overallProfitColor }]}>
                     <MaterialCommunityIcons name="finance" size={32} color={overallProfitColor} style={{ position: 'absolute', top: 15, right: 20, opacity: 0.2 }} />
-                    <Text style={[styles.mainProfitLabel, { color: stats.totalAdminProfit >= 0 ? '#A7F3D0' : '#FECACA' }]}>GLOBAL OPERATIONAL MARGIN</Text>
+                    <Text style={[styles.mainProfitLabel, { color: stats.totalAdminProfit >= 0 ? '#A7F3D0' : '#FECACA' }]}>GLOBAL PLATFORM SHARE</Text>
                     
                     <View style={styles.profitSplitRow}>
                         <View style={styles.profitBlock}>
-                            <Text style={[styles.profitSubLabel, { color: overallProfitColor, opacity: 0.7 }]}>UNITS (💎)</Text>
+                            <Text style={[styles.profitSubLabel, { color: overallProfitColor, opacity: 0.7 }]}>VIRTUAL UNITS (💎)</Text>
                             <Text style={[styles.mainProfitValue, { color: overallProfitColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                                 {stats.totalAdminProfit > 0 ? '+' : ''}{Math.floor(stats.totalAdminProfit).toLocaleString()}
                             </Text>
                         </View>
                         <View style={styles.vDivider} />
                         <View style={styles.profitBlock}>
-                            <Text style={[styles.profitSubLabel, { color: overallProfitColor, opacity: 0.7 }]}>EQUIVALENT INR</Text>
+                            <Text style={[styles.profitSubLabel, { color: overallProfitColor, opacity: 0.7 }]}>ESTIMATED VALUE (INR)</Text>
                             <Text style={[styles.mainProfitValue, { color: overallProfitColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                                 {totalProfitINR > 0 ? '+' : ''}₹{totalProfitINR.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                             </Text>
@@ -256,40 +244,40 @@ export default function AdminGameRevenue() {
                 {/* 🔥 INDIVIDUAL ANALYTICS BREAKDOWN 🔥 */}
                 <View style={styles.subStatsRow}>
                     <View style={[styles.subStatCard, { 
-                        borderColor: stats.racingProfit >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)', 
-                        backgroundColor: stats.racingProfit >= 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)' 
+                        borderColor: stats.memoryProfit >= 0 ? 'rgba(139, 92, 246, 0.3)' : 'rgba(239, 68, 68, 0.3)', 
+                        backgroundColor: stats.memoryProfit >= 0 ? 'rgba(139, 92, 246, 0.05)' : 'rgba(239, 68, 68, 0.05)' 
                     }]}>
-                        <Ionicons name="analytics" size={18} color={stats.racingProfit >= 0 ? '#10B981' : '#EF4444'} style={{marginBottom: 6}}/>
-                        <Text style={styles.subStatLabel}>TYPE-R MARGIN</Text>
-                        <Text style={[styles.subStatValue, { color: stats.racingProfit >= 0 ? '#10B981' : '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-                            {stats.racingProfit > 0 ? '+' : ''}{Math.floor(stats.racingProfit).toLocaleString()} 💎
+                        <Ionicons name="extension-puzzle" size={18} color={stats.memoryProfit >= 0 ? '#8B5CF6' : '#EF4444'} style={{marginBottom: 6}}/>
+                        <Text style={styles.subStatLabel}>MEMORY SHARE</Text>
+                        <Text style={[styles.subStatValue, { color: stats.memoryProfit >= 0 ? '#8B5CF6' : '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                            {stats.memoryProfit > 0 ? '+' : ''}{Math.floor(stats.memoryProfit).toLocaleString()} 💎
                         </Text>
                     </View>
 
                     <View style={[styles.subStatCard, { 
-                        borderColor: stats.clashProfit >= 0 ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)', 
-                        backgroundColor: stats.clashProfit >= 0 ? 'rgba(16, 185, 129, 0.05)' : 'rgba(239, 68, 68, 0.05)' 
+                        borderColor: stats.reflexProfit >= 0 ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.3)', 
+                        backgroundColor: stats.reflexProfit >= 0 ? 'rgba(239, 68, 68, 0.05)' : 'rgba(239, 68, 68, 0.05)' 
                     }]}>
-                        <Ionicons name="bar-chart" size={18} color={stats.clashProfit >= 0 ? '#10B981' : '#EF4444'} style={{marginBottom: 6}}/>
-                        <Text style={styles.subStatLabel}>TYPE-C MARGIN</Text>
-                        <Text style={[styles.subStatValue, { color: stats.clashProfit >= 0 ? '#10B981' : '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-                            {stats.clashProfit > 0 ? '+' : ''}{Math.floor(stats.clashProfit).toLocaleString()} 💎
+                        <Ionicons name="game-controller" size={18} color={stats.reflexProfit >= 0 ? '#EF4444' : '#EF4444'} style={{marginBottom: 6}}/>
+                        <Text style={styles.subStatLabel}>REFLEX SHARE</Text>
+                        <Text style={[styles.subStatValue, { color: stats.reflexProfit >= 0 ? '#EF4444' : '#EF4444' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                            {stats.reflexProfit > 0 ? '+' : ''}{Math.floor(stats.reflexProfit).toLocaleString()} 💎
                         </Text>
                     </View>
                 </View>
 
-                {/* OVERALL POOL ANALYTICS */}
+                {/* OVERALL TASK ANALYTICS */}
                 <View style={[styles.subStatsRow, { marginTop: 15 }]}>
                     <View style={[styles.subStatCard, { borderColor: 'rgba(59, 130, 246, 0.3)' }]}>
-                        <Text style={styles.subStatLabel}>TOTAL ASSET POOL</Text>
+                        <Text style={styles.subStatLabel}>TOTAL VIRTUAL ASSETS</Text>
                         <Text style={[styles.subStatValue, { color: '#3B82F6' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
                             {stats.totalPool.toLocaleString()} 💎
                         </Text>
                     </View>
                     <View style={[styles.subStatCard, { borderColor: 'rgba(168, 85, 247, 0.3)' }]}>
-                        <Text style={styles.subStatLabel}>CONSULTANT YIELD</Text>
+                        <Text style={styles.subStatLabel}>EXPERT REWARDS</Text>
                         <Text style={[styles.subStatValue, { color: '#A855F7' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
-                            {stats.totalExpertBeans.toLocaleString()} 🌱
+                            {stats.totalExpertBeans.toLocaleString()} 🎖️
                         </Text>
                     </View>
                 </View>
@@ -302,7 +290,7 @@ export default function AdminGameRevenue() {
 
             <FlatList
                 data={gameLogs}
-                keyExtractor={(item) => item.id}
+                keyExtractor={(item) => item.uniqueKey}
                 renderItem={renderGameCard}
                 contentContainerStyle={styles.listContainer}
                 showsVerticalScrollIndicator={false}

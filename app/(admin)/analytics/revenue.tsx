@@ -6,17 +6,14 @@ import { db } from '../../../firebaseConfig';
 const RevenueAnalytics = () => {
     const [loading, setLoading] = useState(true);
     
-    // 🔥 UPDATED STATE: Added Client Distribution details for Reward Grants
+    // 🔥 UPDATED STATE: Removed Client Distribution details for Reward Grants
     const [data, setData] = useState<any>({
         totalRevenue: 0,
         todayRevenue: 0,
         totalPaidOut: 0,
         todayPaidOut: 0,
-        totalUserPaidOut: 0, // NEW: For Reward Grants
-        todayUserPaidOut: 0, // NEW: For Reward Grants
         userBreakdown: [],
-        expertBreakdown: [],
-        userACTIVITY_REWARDBreakdown: [] // NEW: List of clients who received rewards
+        expertBreakdown: []
     });
 
     useEffect(() => {
@@ -100,56 +97,18 @@ const RevenueAnalytics = () => {
             const expertArr = Object.keys(expertMap).map(k => ({ name: k, amount: expertMap[k] })).sort((a,b) => b.amount - a.amount);
 
             setData((prev: any) => ({ ...prev, totalPaidOut: paid, todayPaidOut: todayPaid, expertBreakdown: expertArr }));
-            setLoading(false); // Moved loading false here since we removed the 3rd query
-        });
-
-        // 🔥 3. NEW: Calculate Total Client Distributed (Rewards), Today's Client Distributed & Client Distribution Breakdown
-        const qVouchers = query(collection(db, "reward_requests"), where("status", "==", "Delivered"));
-        const unsubVouchers = onSnapshot(qVouchers, (vSnap) => {
-            let uPaid = 0;
-            let todayUPaid = 0;
-            let uACTIVITY_REWARDMap: any = {};
-
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-
-            vSnap.docs.forEach(d => {
-                const docData = d.data();
-                
-                // Parse INR amount from voucherValue (e.g., "₹500" -> 500)
-                const parsedAmt = Number(String(docData.voucherValue || '0').replace(/[^0-9]/g, '')) || 0;
-                uPaid += parsedAmt;
-
-                const timeData = docData.processedDate || docData.requestDate || docData.createdAt;
-                if (timeData) {
-                    try {
-                        const dateObj = timeData.toDate ? timeData.toDate() : new Date(timeData);
-                        if (dateObj >= today) {
-                            todayUPaid += parsedAmt;
-                        }
-                    } catch(e) {}
-                }
-
-                const uName = docData.userName || docData.userEmail || docData.userId || 'Unknown Client';
-                if (!uACTIVITY_REWARDMap[uName]) uACTIVITY_REWARDMap[uName] = 0;
-                uACTIVITY_REWARDMap[uName] += parsedAmt;
-            });
-
-            const uACTIVITY_REWARDArr = Object.keys(uACTIVITY_REWARDMap).map(k => ({ name: k, amount: uACTIVITY_REWARDMap[k] })).sort((a,b) => b.amount - a.amount);
-
-            setData((prev: any) => ({ ...prev, totalUserPaidOut: uPaid, todayUserPaidOut: todayUPaid, userACTIVITY_REWARDBreakdown: uACTIVITY_REWARDArr }));
+            setLoading(false); 
         });
 
         return () => {
             unsubOrders();
             unsubACTIVITY_REWARDs();
-            unsubVouchers(); // Cleanup newly added listener
         };
     }, []);
 
     return (
         <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-            <Text style={styles.sectionTitle}>FINANCIAL OVERVIEW</Text>
+            <Text style={styles.sectionTitle}>OPERATIONAL OVERVIEW</Text>
             
             <View style={styles.mainCard}>
                 <Text style={styles.label}>TOTAL CLIENT ALLOCATIONS (INFLOWS)</Text>
@@ -173,33 +132,21 @@ const RevenueAnalytics = () => {
                 </View>
             </View>
 
-            {/* 🔥 NEW: CLIENT DISTRIBUTIONS ROW (REWARD GRANTS) 🔥 */}
-            <View style={styles.row}>
-                <View style={[styles.card, {backgroundColor: '#4C1D95'}]}>
-                    <Text style={styles.cardLabel}>TOTAL DISBURSED TO CLIENTS</Text>
-                    <Text style={styles.cardValue}>₹{data.totalUserPaidOut.toLocaleString('en-IN')}</Text>
-                </View>
-                <View style={[styles.card, {backgroundColor: '#831843'}]}>
-                    <Text style={styles.cardLabel}>TODAY'S CLIENT DISBURSEMENTS</Text>
-                    <Text style={styles.cardValue}>₹{data.todayUserPaidOut.toLocaleString('en-IN')}</Text>
-                </View>
-            </View>
-
             <View style={styles.profitCard}>
                 {/* 🔥 FIX 3: EXACT Math Formula (Shows minus if loss) */}
-                <Text style={styles.cardLabel}>PLATFORM OPERATIONAL MARGIN</Text>
-                <Text style={[styles.profitValue, { color: (data.totalRevenue - data.totalPaidOut - data.totalUserPaidOut) >= 0 ? '#10B981' : '#EF4444' }]}>
-                    {(data.totalRevenue - data.totalPaidOut - data.totalUserPaidOut) < 0 ? '- ' : ''}₹{Math.abs(data.totalRevenue - data.totalPaidOut - data.totalUserPaidOut).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                <Text style={styles.cardLabel}>PLATFORM OPERATIONAL SHARE</Text>
+                <Text style={[styles.profitValue, { color: (data.totalRevenue - data.totalPaidOut) >= 0 ? '#10B981' : '#EF4444' }]}>
+                    {(data.totalRevenue - data.totalPaidOut) < 0 ? '- ' : ''}₹{Math.abs(data.totalRevenue - data.totalPaidOut).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 </Text>
-                <Text style={styles.subText}>(Allocations - Consultant Disbursements - Client Rewards)</Text>
+                <Text style={styles.subText}>(Allocations - Consultant Disbursements)</Text>
 
                 {/* 🔥 FIX 5: Today's EXACT Formula (Shows minus if loss) */}
                 <View style={styles.todayProfitBox}>
-                    <Text style={[styles.cardLabel, {color: '#818CF8'}]}>TODAY'S OPERATIONAL MARGIN</Text>
-                    <Text style={[styles.profitValue, {fontSize: 24, marginTop: 5, color: (data.todayRevenue - data.todayPaidOut - data.todayUserPaidOut) >= 0 ? '#38BDF8' : '#EF4444'}]}>
-                        {(data.todayRevenue - data.todayPaidOut - data.todayUserPaidOut) < 0 ? '- ' : ''}₹{Math.abs(data.todayRevenue - data.todayPaidOut - data.todayUserPaidOut).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    <Text style={[styles.cardLabel, {color: '#818CF8'}]}>TODAY'S OPERATIONAL SHARE</Text>
+                    <Text style={[styles.profitValue, {fontSize: 24, marginTop: 5, color: (data.todayRevenue - data.todayPaidOut) >= 0 ? '#38BDF8' : '#EF4444'}]}>
+                        {(data.todayRevenue - data.todayPaidOut) < 0 ? '- ' : ''}₹{Math.abs(data.todayRevenue - data.todayPaidOut).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </Text>
-                    <Text style={styles.subText}>(Today's Allocations - Today's Consultants - Client Rewards)</Text>
+                    <Text style={styles.subText}>(Today's Allocations - Today's Consultants)</Text>
                 </View>
             </View>
 
@@ -218,31 +165,16 @@ const RevenueAnalytics = () => {
                 )}
             </View>
 
-            {/* CONSULTANT DISBURSEMENT BREAKDOWN */}
-            <Text style={[styles.sectionTitle, { marginTop: 30 }]}>CONSULTANT DISBURSEMENT DETAILS</Text>
+            {/* CONSULTANT REDEMPTIONS BREAKDOWN */}
+            <Text style={[styles.sectionTitle, { marginTop: 30 }]}>CONSULTANT REDEMPTIONS DETAILS</Text>
             <View style={styles.listCard}>
                 {data.expertBreakdown.length === 0 ? (
-                    <Text style={styles.noDataText}>No disbursements sent yet.</Text>
+                    <Text style={styles.noDataText}>No redemptions sent yet.</Text>
                 ) : (
                     data.expertBreakdown.map((e: any, index: number) => (
                         <View key={index} style={styles.listItem}>
                             <Text style={styles.listName}>{e.name}</Text>
                             <Text style={[styles.listAmount, {color: '#10B981'}]}>₹{e.amount.toLocaleString('en-IN')}</Text>
-                        </View>
-                    ))
-                )}
-            </View>
-
-            {/* 🔥 NEW: CLIENT DISBURSEMENT BREAKDOWN (REWARDS) 🔥 */}
-            <Text style={[styles.sectionTitle, { marginTop: 30 }]}>CLIENT DISBURSEMENT DETAILS (REWARDS)</Text>
-            <View style={styles.listCard}>
-                {(!data.userACTIVITY_REWARDBreakdown || data.userACTIVITY_REWARDBreakdown.length === 0) ? (
-                    <Text style={styles.noDataText}>No reward grants delivered yet.</Text>
-                ) : (
-                    data.userACTIVITY_REWARDBreakdown.map((u: any, index: number) => (
-                        <View key={index} style={styles.listItem}>
-                            <Text style={styles.listName}>{u.name}</Text>
-                            <Text style={[styles.listAmount, {color: '#A855F7'}]}>₹{u.amount.toLocaleString('en-IN')}</Text>
                         </View>
                     ))
                 )}
@@ -272,7 +204,6 @@ const styles = StyleSheet.create({
     profitValue: { fontSize: 35, fontWeight: '900', marginTop: 10 },
     subText: { color: '#64748B', fontSize: 10, marginTop: 5 },
 
-    // 🔥 New Style for Today's Earnings Box inside Earnings Card
     todayProfitBox: { marginTop: 20, paddingTop: 20, borderTopWidth: 1, borderTopColor: '#312E81', width: '100%', alignItems: 'center' },
 
     listCard: { backgroundColor: '#0F172A', borderRadius: 20, padding: 15, borderWidth: 1, borderColor: '#1E293B' },

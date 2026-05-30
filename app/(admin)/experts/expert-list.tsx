@@ -169,7 +169,7 @@ export default function ExpertControl() {
                     >
                         <MaterialCommunityIcons name={isPending ? "file-find-outline" : "shield-account-outline"} size={18} color="#fff" />
                         <Text style={styles.actionBtnText} numberOfLines={1} adjustsFontSizeToFit>
-                            {isPending ? 'REVIEW ONBOARDING' : 'MANAGE CREDENTIALS'}
+                            {isPending ? 'REVIEW ONBOARDING' : 'MANAGE'}
                         </Text>
                     </TouchableOpacity>
                 </View>

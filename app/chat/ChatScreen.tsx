@@ -5,20 +5,20 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { addDoc, collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'; // 🔥 SATTI FIX: Added getDocs for Wipeout
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    FlatList,
-    Image,
-    KeyboardAvoidingView,
-    Platform,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
@@ -101,27 +101,45 @@ export default function ChatScreen() {
 
     // 🔥 Fetch Current User Data (For theme & "Blocked by Me" check)
     const userRef = doc(db, "users", user.uid);
-    const unsubUser = onSnapshot(userRef, (snap) => {
-      if (snap.exists()) setUserData(snap.data());
-    });
+    const unsubUser = onSnapshot(
+      userRef, 
+      (snap) => {
+        if (snap.exists()) setUserData(snap.data());
+      },
+      (error) => {
+        if (error.code === 'permission-denied') console.log("Safe Ignore: User listener detached on logout.");
+      }
+    );
 
     // 🔥 SATTI FIX: Fetch Receiver Data (For "Blocked by Them" check & Profile Pic) 🔥
     let unsubReceiver = () => {};
     if (actualReceiverId) {
-        unsubReceiver = onSnapshot(doc(db, "users", actualReceiverId), (snap) => {
+        unsubReceiver = onSnapshot(
+          doc(db, "users", actualReceiverId), 
+          (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
                 setReceiverData(data);
                 setReceiverImage(data.profilePic || data.photoURL || null);
             }
-        });
+          },
+          (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Receiver listener detached on logout.");
+          }
+        );
     }
 
     const q = query(collection(db, "chats", activeChatId, "messages"), orderBy("createdAt", "desc"));
-    const unsubscribe = onSnapshot(q, (snap) => {
-      const msgs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setMessages(msgs);
-    });
+    const unsubscribe = onSnapshot(
+      q, 
+      (snap) => {
+        const msgs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+        setMessages(msgs);
+      },
+      (error) => {
+        if (error.code === 'permission-denied') console.log("Safe Ignore: Chat listener detached on logout.");
+      }
+    );
 
     return () => { unsubscribe(); unsubUser(); unsubReceiver(); };
   }, [activeChatId, user, actualReceiverId]);

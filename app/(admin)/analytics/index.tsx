@@ -38,7 +38,7 @@ export default function AnalyticsDashboard() {
                 {/* MAIN NAVIGATION TILES */}
                 <View style={styles.menuGrid}>
                     
-                    {/* 1. SYSTEM YIELD */}
+                    {/* 1. SYSTEM REWARD */}
                     <TouchableOpacity 
                         activeOpacity={0.7}
                         style={[styles.mainTile, { borderColor: '#10B98130' }]} 
@@ -46,7 +46,7 @@ export default function AnalyticsDashboard() {
                     >
                         <LinearGradient colors={['#10B98120', 'transparent']} style={styles.tileGrad} />
                         <MaterialCommunityIcons name="currency-inr" size={30} color="#10B981" />
-                        <Text style={styles.tileTitle}>SYSTEM YIELD</Text>
+                        <Text style={styles.tileTitle}>SYSTEM REWARD</Text>
                         <Text style={styles.tileSub}>Platform Income & Distributions</Text>
                     </TouchableOpacity>
 

@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -29,12 +29,10 @@ import { auth, db } from '../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 
-// Enable LayoutAnimation for Android Smooth Steps
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-// 🔥 SATTI FIX: Emojis Added to Tags for Premium Look 🔥
 const EXPERTISE_TAGS = [
     "🎤 Singing", "💃 Dancing", "🔮 Astrology", "🎴 Tarot Reading", "🤝 Community Advice", "💼 Career Counseling", "🌱 Life Coaching", 
     "🧘 Mindfulness & Motivation",  "🧘‍♀️ Yoga", "📿 Meditation", "🍳 Cooking", "🧁 Baking", "📸 Photography", "🎬 Video Editing", 
@@ -61,14 +59,12 @@ const HOBBIES_TAGS = [
   "📸 Photography", "🎥 Videography", "🎸 Music & Instruments"
 ];
 
-// 🔥 UPDATE 4: 10 Personalities Added
 const PERSONALITY_TAGS = [
     "😊 Friendly Listener", "🎯 Direct & Honest", "😂 Humorous & Fun", "🧠 Deep Thinker", 
     "🫂 Empathetic", "🔥 Motivational", "🕊️ Spiritual", "🧩 Logical & Practical", 
     "😎 Chill & Relaxed", "⚡ High Energy"
 ];
 
-// 🔥 UPDATE 5: 10 Connect Reasons Added
 const CONNECT_TAGS = [
     "🌱 Life Advice", "💼 Career Guidance", "❤️ Relationship Tips", "🗣️ Just Venting", 
     "✨ Spiritual Growth", "💪 Daily Motivation", "🎭 Entertainment", "📚 Skill Learning", 
@@ -77,23 +73,9 @@ const CONNECT_TAGS = [
 
 const LANGUAGES = ["English", "Tamil", "Hindi", "Malayalam", "Kannada", "Telugu"];
 
-const calculateUserLevel = (totalSpent: number) => {
-  if (totalSpent >= 500000001) return { lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000'] }; 
-  if (totalSpent >= 100000001) return { lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000'] }; 
-  if (totalSpent >= 50000000) return { lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000'] };
-  if (totalSpent >= 10000000) return { lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000'] };
-  if (totalSpent >= 5000000) return { lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000'] };
-  if (totalSpent >= 1000000) return { lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000'] };
-  if (totalSpent >= 200001) return { lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000'] };
-  if (totalSpent >= 1) return { lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000'] };
-  return { lvl: 0, label: 'BEGINNER', status: 'NEW RECRUIT', color: '#94A3B8', secondaryColor: '#475569', anim: 'wave', themeBg: ['#020617', '#000000'] };
-};
-
 export default function RegisterExpert() {
-    // 🔥 AUTO-SAVE INITIALIZATION STATE 🔥
     const [isRestored, setIsRestored] = useState(false);
 
-    // 🔥 MULTI-STEP STATE (Now 5 Steps) 🔥
     const [step, setStep] = useState(1);
 
     const [name, setName] = useState('');
@@ -101,7 +83,6 @@ export default function RegisterExpert() {
     const [gender, setGender] = useState('');
     const [location, setLocation] = useState('');
     
-    // 🔥 SATTI FIX: Arrays for states
     const [selectedPersonality, setSelectedPersonality] = useState<string[]>([]);
     const [selectedConnections, setSelectedConnections] = useState<string[]>([]);
     const [bio, setBio] = useState('');
@@ -117,7 +98,6 @@ export default function RegisterExpert() {
     const shimmerAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
-    // 🔥 NEW: LOAD SAVED DRAFT PROGRESS 🔥
     useEffect(() => {
         const loadDraft = async () => {
             try {
@@ -146,9 +126,8 @@ export default function RegisterExpert() {
         loadDraft();
     }, []);
 
-    // 🔥 NEW: AUTO-SAVE PROGRESS WHEN DATA CHANGES 🔥
     useEffect(() => {
-        if (!isRestored) return; // Prevent overwriting with initial empty state
+        if (!isRestored) return; 
         const saveDraft = async () => {
             try {
                 const dataToSave = {
@@ -209,7 +188,6 @@ export default function RegisterExpert() {
         }
     };
 
-    // 🔥 STEP VALIDATION & NAVIGATION 🔥
     const nextStep = () => {
         if (step === 1) {
             if (!image || !name || !gender) return Alert.alert("Incomplete", "Please add your photo, name, and gender to proceed.");
@@ -231,6 +209,36 @@ export default function RegisterExpert() {
     const prevStep = () => {
         LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
         setStep(step - 1);
+    };
+
+    // 🔥 PUTHUSA ADD PANNA FUNCTION - BACK BUTTON FOR LOGOUT / CANCEL
+    const cancelAndGoToLogin = async () => {
+        Alert.alert(
+            "Cancel Registration?",
+            "Are you sure you want to cancel your application and sign out?",
+            [
+                { text: "No", style: "cancel" },
+                { 
+                    text: "Yes, Cancel", 
+                    style: "destructive",
+                    onPress: async () => {
+                        if (auth.currentUser) {
+                            try {
+                                await updateDoc(doc(db, "users", auth.currentUser.uid), { 
+                                    registrationInProgress: false 
+                                });
+                                await AsyncStorage.removeItem('@expert_draft');
+                                await auth.signOut();
+                            } catch (error) {
+                                console.log("Logout Error:", error);
+                            }
+                        } else {
+                            router.replace('/' as any);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const handleRegistration = async () => {
@@ -268,7 +276,6 @@ export default function RegisterExpert() {
 
             if (!photoURL) throw new Error("Image upload failed.");
 
-            // 🔥 UPDATE 1: Admin Review Ready Firebase Save 
             await setDoc(doc(db, "users", user.uid), {
                 displayName: name,
                 name: name, 
@@ -300,7 +307,6 @@ export default function RegisterExpert() {
                 pricePerMin: 1000, 
                 userPrice: 2000,
                 
-                // Admin Review Controls
                 status: "Pending",     
                 role: "user",          
                 isApplying: true,      
@@ -311,7 +317,6 @@ export default function RegisterExpert() {
                 levelTitle: "BEGINNER"
             }, { merge: true }); 
 
-            // 🔥 SUCCESS: CLEAR SAVED DRAFT AFTER REGISTRATION 🔥
             await AsyncStorage.removeItem('@expert_draft');
 
             setUploading(false);
@@ -334,11 +339,9 @@ export default function RegisterExpert() {
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -60] });
     const orbTranslateX = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 40] });
 
-    // 🔥 NEW PREMIUM ROTATION ANIMATIONS FOR AVATAR 🔥
     const rotateAnim = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
     const reverseRotateAnim = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
 
-    // Show loading screen while restoring auto-save draft
     if (!isRestored) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: darkBg }]}>
@@ -355,7 +358,6 @@ export default function RegisterExpert() {
         >
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
             
-            {/* 🔥 Background Layer */}
             <View style={StyleSheet.absoluteFill}>
                 <View style={{ flex: 1, backgroundColor: darkBg }} />
                 <Animated.View style={[styles.glowOrb, { top: -50, right: -50, backgroundColor: activeGradient[0], transform: [{ translateY: orbTranslateY }, { translateX: orbTranslateX }] }]} />
@@ -364,7 +366,6 @@ export default function RegisterExpert() {
                 <View style={styles.noiseOverlay} />
             </View>
 
-            {/* 🔥 Progress Bar (Out of 5 Steps) 🔥 */}
             <View style={styles.progressContainer}>
                 <View style={[styles.progressBar, { width: `${(step / 5) * 100}%`, backgroundColor: activeGradient[0] }]} />
             </View>
@@ -374,7 +375,6 @@ export default function RegisterExpert() {
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
-                {/* Dynamic Header Section */}
                 {step < 5 && (
                     <View style={styles.header}>
                         <LinearGradient colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.02)']} style={styles.stepBadge}>
@@ -397,14 +397,10 @@ export default function RegisterExpert() {
                 )}
 
                 <View style={styles.formContainer}>
-                    
-                    {/* 🔥 STEP 1: IDENTITY 🔥 */}
                     {step === 1 && (
                         <View style={styles.stepWrapper}>
                             <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.9}>
                                 <View style={styles.imageContainer}>
-                                    
-                                    {/* 🔥 NEW UNIQUE PREMIUM ROTATING RINGS (NO DASHES) 🔥 */}
                                     <Animated.View style={[styles.avatarBaseGlow, { transform: [{ scale: pulseAnim }], backgroundColor: activeGradient[0] }]} />
                                     <Animated.View style={[styles.rotatingSolidRing, { borderColor: activeGradient[1], transform: [{ rotate: rotateAnim }] }]} />
                                     <Animated.View style={[styles.reverseRotatingThinRing, { borderTopColor: activeGradient[0], borderBottomColor: activeGradient[0], transform: [{ rotate: reverseRotateAnim }] }]} />
@@ -419,8 +415,6 @@ export default function RegisterExpert() {
                                             </View>
                                         )}
                                     </View>
-                                    
-                                    {/* Edit Button Moved Outside of hidden overflow */}
                                     <LinearGradient colors={activeGradient} style={styles.editIconBadge}>
                                          <Feather name={image ? "edit-2" : "plus"} size={18} color="#fff" />
                                     </LinearGradient>
@@ -429,8 +423,6 @@ export default function RegisterExpert() {
 
                             <View style={styles.formCard}>
                                 <Text style={styles.sectionTitle}>Account Setup</Text>
-
-                                {/* 🔥 UPDATE 1: Only Male & Female */}
                                 <View style={styles.genderRow}>
                                     {['Male', 'Female'].map((item) => {
                                         const isSelected = gender === item;
@@ -462,7 +454,6 @@ export default function RegisterExpert() {
                         </View>
                     )}
 
-                    {/* 🔥 STEP 2: DEMOGRAPHICS & LANGUAGES 🔥 */}
                     {step === 2 && (
                         <View style={styles.stepWrapper}>
                             <View style={styles.formCard}>
@@ -516,7 +507,6 @@ export default function RegisterExpert() {
                         </View>
                     )}
 
-                    {/* 🔥 STEP 3: EXPERTISE ONLY 🔥 */}
                     {step === 3 && (
                         <View style={styles.stepWrapper}>
                             <View style={styles.formCard}>
@@ -544,11 +534,8 @@ export default function RegisterExpert() {
                         </View>
                     )}
 
-                    {/* 🔥 STEP 4: VIBE & CONNECTION 🔥 */}
                     {step === 4 && (
                         <View style={styles.stepWrapper}>
-                            
-                            {/* 🔥 UPDATE 4: My Personality Chips 🔥 */}
                             <View style={styles.formCard}>
                                 <View style={styles.tagSectionHeader}>
                                     <Text style={styles.sectionTitle}>My Personality</Text>
@@ -572,7 +559,6 @@ export default function RegisterExpert() {
                                 </View>
                             </View>
 
-                            {/* 🔥 Other Interests (Hobbies) 🔥 */}
                             <View style={[styles.formCard, { marginTop: 20 }]}>
                                 <View style={styles.tagSectionHeader}>
                                     <Text style={styles.sectionTitle}>Other Interests</Text>
@@ -616,7 +602,6 @@ export default function RegisterExpert() {
                         </View>
                     )}
 
-                    {/* 🔥 NEW STEP 5: FINAL REVIEW & SUBMIT 🔥 */}
                     {step === 5 && (
                         <Animated.View style={styles.stepWrapper}>
                             <View style={[styles.formCard, styles.finalCard]}>
@@ -643,19 +628,21 @@ export default function RegisterExpert() {
                 </View>
             </ScrollView>
 
-            {/* 🔥 Sticky Bottom Dynamic Footer 🔥 */}
             <View style={styles.stickyFooter}>
                 <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
                 
                 <View style={styles.footerRow}>
-                    {step > 1 && (
-                        <TouchableOpacity style={styles.backBtn} onPress={prevStep}>
-                            <Feather name="arrow-left" size={24} color="#F8FAFC" />
-                        </TouchableOpacity>
-                    )}
-
+                    {/* 🔥 1st Step-la Logout icon varum, Matha Step-la Back Arrow varum! */}
                     <TouchableOpacity 
-                        style={[styles.submitBtn, (step === 1 || step === 5) && { width: '100%' }]} 
+                        style={styles.backBtn} 
+                        onPress={step === 1 ? cancelAndGoToLogin : prevStep}
+                    >
+                        <Feather name={step === 1 ? "log-out" : "arrow-left"} size={24} color="#F8FAFC" />
+                    </TouchableOpacity>
+
+                    {/* 🔥 Style Update: Back button yappa paathalum irukkum, so layout udayaathu! */}
+                    <TouchableOpacity 
+                        style={styles.submitBtn} 
                         onPress={step === 5 ? handleRegistration : nextStep} 
                         disabled={uploading}
                         activeOpacity={0.9}
@@ -683,13 +670,13 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#030014' },
     glowOrb: { position: 'absolute', width: width * 1.5, height: width * 1.5, borderRadius: width * 0.75, opacity: 0.18 },
     noiseOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.01)', opacity: 0.5 },
-    
+
     progressContainer: { width: '100%', height: 4, backgroundColor: 'rgba(255,255,255,0.05)', marginTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight },
     progressBar: { height: '100%', borderRadius: 2 },
 
     scrollPadding: { paddingBottom: 150, paddingTop: 20, paddingHorizontal: 20 },
     
-    header: { alignItems: 'flex-start', marginBottom: 25, marginTop: 15 },
+    header: { alignItems: 'flex-start', marginBottom: 25, marginTop: 5 },
     stepBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' },
     stepBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
     title: { color: '#F8FAFC', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
@@ -698,11 +685,9 @@ const styles = StyleSheet.create({
     formContainer: { width: '100%' },
     stepWrapper: { width: '100%' },
 
-    // Glassmorphism Premium Cards
     formCard: { backgroundColor: 'rgba(15, 23, 42, 0.45)', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
     sectionTitle: { color: '#F8FAFC', fontSize: 15, fontWeight: '800', letterSpacing: 0.5, marginBottom: 18 },
 
-    // 🔥 HIGH-END PREMIUM FINAL CARD STYLES (Step 5) 🔥
     finalCard: { alignItems: 'center', paddingVertical: 45, paddingHorizontal: 25, backgroundColor: 'rgba(15, 23, 42, 0.65)', borderRadius: 32, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', marginTop: 25 },
     shieldIconWrap: { padding: 10, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     shieldGradient: { width: 84, height: 84, borderRadius: 42, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 12 },
@@ -712,12 +697,10 @@ const styles = StyleSheet.create({
     termsIcon: { marginTop: 2 },
     termsText: { flex: 1, color: '#94A3B8', fontSize: 12, lineHeight: 20, fontWeight: '500' },
 
-    // 🔥 UNIQUE PREMIUM IMAGE PICKER RINGS 🔥
     imagePicker: { alignSelf: 'center', marginBottom: 35, marginTop: 20 },
     imageContainer: { width: 140, height: 140, position: 'relative' },
     avatarBaseGlow: { position: 'absolute', top: -10, left: -10, right: -10, bottom: -10, borderRadius: 100, opacity: 0.25, shadowColor: '#FFF', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 1, shadowRadius: 15 },
     
-    // 🔥 SATTI FIX: Removed Dashes, made solid and clean
     rotatingSolidRing: { position: 'absolute', top: -6, left: -6, right: -6, bottom: -6, borderRadius: 100, borderWidth: 2, borderStyle: 'solid', opacity: 0.5 },
     reverseRotatingThinRing: { position: 'absolute', top: -14, left: -14, right: -14, bottom: -14, borderRadius: 100, borderWidth: 1.5, borderLeftColor: 'transparent', borderRightColor: 'transparent', opacity: 0.9 },
     
@@ -727,24 +710,20 @@ const styles = StyleSheet.create({
     selectedImage: { flex: 1, width: '100%', height: '100%' },
     editIconBadge: { position: 'absolute', bottom: -5, right: 0, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#030014', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 5 },
 
-    // Age Box Warning
     ageVerificationBox: { flexDirection: 'column', backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: 18, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 25, alignItems: 'center' },
     iconWrapperGlow: { padding: 12, borderRadius: 20, marginBottom: 5 },
     ageTitle: { color: '#F8FAFC', fontSize: 16, fontWeight: '800', marginBottom: 5 },
     ageDesc: { color: '#94A3B8', fontSize: 12, textAlign: 'center', lineHeight: 18 },
 
-    // Inputs
     inputGroup: { marginBottom: 18 },
     rowInputs: { flexDirection: 'row', gap: 15 },
     inputLabel: { color: '#94A3B8', fontSize: 11, fontWeight: '700', marginBottom: 8, marginLeft: 4, textTransform: 'uppercase', letterSpacing: 0.5 },
     inputField: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', height: 60, paddingHorizontal: 15 },
     input: { flex: 1, color: '#F8FAFC', fontSize: 15, fontWeight: '600', marginLeft: 10 },
     
-    // Bio
     bioField: { height: 130, paddingHorizontal: 0, alignItems: 'flex-start' },
     bioInput: { flex: 1, width: '100%', color: '#F8FAFC', fontSize: 14, paddingHorizontal: 18, paddingTop: 18, textAlignVertical: 'top', lineHeight: 22 },
     
-    // Gender Selection
     genderRow: { flexDirection: 'row', gap: 12, marginBottom: 25 },
     genderCard: { flex: 1, height: 65, borderRadius: 16, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
     genderCardActive: { borderColor: 'transparent', elevation: 5 },
@@ -752,7 +731,6 @@ const styles = StyleSheet.create({
     genderText: { color: '#94A3B8', fontWeight: '700', fontSize: 14 },
     genderTextActive: { color: '#FFF', fontWeight: '800' },
     
-    // Tags / Chips
     tagSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     limitBadge: { backgroundColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1', fontSize: 10, fontWeight: '800', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
     chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
@@ -761,7 +739,6 @@ const styles = StyleSheet.create({
     chipText: { color: '#94A3B8', fontSize: 13, fontWeight: '600' },
     chipTextActive: { color: '#FFF', fontWeight: '800' },
     
-    // Sticky Footer
     stickyFooter: { position: 'absolute', bottom: 0, left: 0, right: 0, paddingHorizontal: 20, paddingTop: 15, paddingBottom: Platform.OS === 'ios' ? 45 : 35, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
     footerRow: { flexDirection: 'row', alignItems: 'center', gap: 15 },
     backBtn: { width: 62, height: 62, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },

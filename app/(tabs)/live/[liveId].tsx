@@ -930,8 +930,8 @@ export default function UserLiveViewScreen() {
                                     </Animated.View>
                                 </TouchableOpacity>
                                 <TouchableOpacity onPress={() => setShowGiftModal(true)} style={[styles.giftBtnMass, { borderColor: userTier.secondaryColor + '60' }]}>
-                                    <FontAwesome5 name="gift" size={12} color={userTier.color} />
-                                    <Text style={styles.giftTextMass}>Reward</Text>
+                                    <FontAwesome5 name="gift" size={20} color={userTier.color} />
+                                    <Text style={styles.giftTextMass}></Text>
                                 </TouchableOpacity>
                                 <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.levelTag}>
                                     <FontAwesome5 name="crown" size={8} color="#FFF" />
@@ -1124,8 +1124,8 @@ const styles = StyleSheet.create({
     closeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(231, 6, 6, 0.89)', justifyContent: 'center', alignItems: 'center' },
     actionRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
     callBtnMass: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 20, gap: 6, flex: 1.5, shadowOpacity: 0.3, shadowRadius: 5 },
-    callTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
-    giftBtnMass: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgb(65, 43, 72)', paddingVertical: 12, borderRadius: 20, gap: 5, borderWidth: 1 },
+    callTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
+    giftBtnMass: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgb(255, 255, 255)', paddingVertical: 8, borderRadius: 20, gap: 1, borderWidth: 1 },
     giftTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
     levelTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, gap: 5 },
     levelTextTag: { color: '#FFF', fontSize: 12, fontWeight: '900' },

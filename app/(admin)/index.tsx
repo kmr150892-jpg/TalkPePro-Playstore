@@ -1,6 +1,9 @@
 import { Entypo, Feather, FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { BlurView } from 'expo-blur';
 import { useRouter } from 'expo-router';
+import { signOut } from 'firebase/auth';
 import { collection, doc, increment, onSnapshot, query, serverTimestamp, Unsubscribe, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -17,7 +20,7 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import { db } from '../../firebaseConfig';
+import { auth, db } from '../../firebaseConfig';
 
 const { width } = Dimensions.get('window');
 
@@ -44,6 +47,8 @@ const AdminPanel = () => {
                 setIsMaintenance(data.isMaintenance || false);
                 setMinVersion(data.minVersion ? data.minVersion.toString().trim() : "1.0.5");
             }
+        }, (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Settings listener detached on logout");
         });
         unsubs.push(unsubSettings);
 
@@ -58,6 +63,8 @@ const AdminPanel = () => {
                 pendingSum += Number(amt); 
             });
             setTotalACTIVITY_REWARDPool(pendingSum);
+        }, (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Withdrawals listener detached on logout");
         });
         unsubs.push(unsubWithdrawals);
 
@@ -70,6 +77,7 @@ const AdminPanel = () => {
             setPendingExperts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
             setLoading(false);
         }, (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Experts listener detached on logout");
             setLoading(false);
         });
         unsubs.push(unsubExperts);
@@ -81,6 +89,8 @@ const AdminPanel = () => {
         );
         const unsubBank = onSnapshot(qBank, (snap) => {
             setBankRequests(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }, (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Bank requests listener detached on logout");
         });
         unsubs.push(unsubBank);
 
@@ -92,7 +102,43 @@ const AdminPanel = () => {
         Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     }, [activeTab]);
 
-    // ✅ OPERATIONAL SYNC: Disbursement logic synchronized with professional ledger standards
+    // ✅ SECURE ADMIN LOGOUT LOGIC (INSTANT EJECT FIX)
+    const handleAdminLogout = () => {
+        Alert.alert(
+            "System Logout",
+            "Are you sure you want to terminate the admin session?",
+            [
+                { text: "Cancel", style: "cancel" },
+                { 
+                    text: "Terminate", 
+                    style: "destructive",
+                    onPress: async () => {
+                        try {
+                            // 1. 🔥 INSTANT EJECT: Mudhalla UI-ah Login page-ku mathiduvom (No freeze!)
+                            router.replace('/' as any);
+                            
+                            // 2. Background-la memory clear panrom
+                            await AsyncStorage.clear();
+                            
+                            // 3. Google session-ah safe-ah close panrom
+                            try {
+                                await GoogleSignin.signOut();
+                            } catch (e) {
+                                console.log("Google sign out skipped");
+                            }
+                            
+                            // 4. Kadasiya Firebase Logout pandrom
+                            await signOut(auth);
+                        } catch (error) {
+                            console.error("Logout Error:", error);
+                        }
+                    } 
+                }
+            ]
+        );
+    };
+
+    // ✅ OPERATIONAL SYNC: Redemptions logic synchronized with professional ledger standards
     const handleMarkAsPaid = async (withdrawalRequest: any) => {
         try {
             const userRef = doc(db, "users", withdrawalRequest.userId);
@@ -105,16 +151,16 @@ const AdminPanel = () => {
                 totalWithdrawnRs: increment(amountToProcess) 
             });
 
-            // 2. Finalize Disbursement Status
+            // 2. Finalize Redemptions Status
             await updateDoc(withdrawalRef, {
                 status: 'SUCCESS',
                 paidAt: serverTimestamp()
             });
 
-            Alert.alert("Success", "Operational disbursement finalized.");
+            Alert.alert("Success", "Operational Redemptions finalized.");
         } catch (error) {
             console.error("Ledger Sync Error:", error);
-            Alert.alert("Error", "System failed to update settlement records.");
+            Alert.alert("Error", "System failed to update Grant records.");
         }
     };
 
@@ -181,9 +227,14 @@ const AdminPanel = () => {
                         </Text>
                     </View>
                 </View>
-                <TouchableOpacity style={styles.profileBtn}>
-                    <FontAwesome5 name="user-shield" size={18} color="#6366F1" />
-                </TouchableOpacity>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity style={styles.profileBtn}>
+                        <FontAwesome5 name="user-shield" size={18} color="#6366F1" />
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.logoutBtn} onPress={handleAdminLogout}>
+                        <MaterialCommunityIcons name="logout" size={18} color="#F43F5E" />
+                    </TouchableOpacity>
+                </View>
             </View>
 
             <View style={{ height: 50, marginBottom: 20 }}>
@@ -253,7 +304,7 @@ const AdminPanel = () => {
 
                             <Text style={styles.sectionTitle}>AUDIT LEDGER</Text>
                             <SecurityLink title="LEDGER VAULT" sub="Account-level history logs" icon="card-account-details-outline" route="/passbook" color="#A855F7" />
-                            <SecurityLink title="ANALYTICS MARGIN" sub="Interaction throughput metrics" icon="finance" route="/game-Reward" color="#10B981" />
+                            <SecurityLink title="PLATFORM SHARE" sub="Interaction throughput metrics" icon="finance" route="/game-reward" color="#10B981" />
                             <SecurityLink title="SYSTEM LEDGER" sub="Financial traceability audit" icon="database-sync" route="/finance/transactions" color="#818CF8" />
 
                             <Text style={styles.sectionTitle}>SECURITY & COMPLIANCE</Text>
@@ -262,7 +313,6 @@ const AdminPanel = () => {
                             <SecurityLink title="ENGINE DIAGNOSTICS" sub="Connectivity performance audit" icon="speedometer" route="/logs/system-latency" color="#10B981" />
 
                             <Text style={styles.sectionTitle}>ADMINISTRATION</Text>
-                            <SecurityLink title="REWARD GRANTS" sub="Process operational reward allocations" icon="gift" route="/reward-requests" color="#F59E0B" />
                             <SecurityLink title="ACCESS CONTROL" sub="Manage profile permissions" icon="account-off" route="/management/user-control" color="#94A3B8" />
 
                             <TouchableOpacity style={styles.expertHubMainBtn} onPress={() => router.push('/experts/expert-list')}>
@@ -281,7 +331,7 @@ const AdminPanel = () => {
                     {activeTab === 'SETTLEMENTS' && (
                         <View>
                             <View style={styles.ACTIVITY_REWARDMainCard}>
-                                <Text style={styles.ACTIVITY_REWARDTitle}>TOTAL SETTLEMENT LIABILITIES</Text>
+                                <Text style={styles.ACTIVITY_REWARDTitle}>TOTAL REWARD GRANTS</Text>
                                 <Text style={styles.ACTIVITY_REWARDAmt}>₹{totalACTIVITY_REWARDPool.toLocaleString()}</Text>
                                 <TouchableOpacity style={styles.withdrawBtn} onPress={() => router.push('/finance/withdrawals' as any)}>
                                     <Text style={styles.withdrawText}>AUDIT DISBURSEMENTS</Text>
@@ -384,7 +434,9 @@ const styles = StyleSheet.create({
     liveIndicator: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
     pulse: { width: 6, height: 6, borderRadius: 3, marginRight: 8 },
     liveText: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+    headerActions: { flexDirection: 'row', gap: 10, alignItems: 'center' },
     profileBtn: { backgroundColor: '#0F172A', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: '#1E293B' },
+    logoutBtn: { backgroundColor: '#4C0519', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: '#881337' },
     navTab: { paddingHorizontal: 20, paddingVertical: 10, borderRadius: 12, backgroundColor: '#0F172A', marginRight: 10, borderWidth: 1, borderColor: '#1E293B' },
     navTabActive: { backgroundColor: '#6366F1', borderColor: '#818CF8' },
     navTabText: { color: '#475569', fontWeight: 'bold', fontSize: 12 },

@@ -78,8 +78,8 @@ const FAQS = [
     },
     {
         id: 5,
-        question: "How do Broadcast & Forum Activity commissions work?",
-        answer: "Whenever clients participate in digital activities in your Broadcast or Forum room, you earn a platform-defined commission on the total virtual assets they spend, credited as Rewards."
+        question: "How do Broadcast & Forum Activity Platform Share work?",
+        answer: "Whenever clients participate in digital activities in your Broadcast or Forum room, you earn a platform-defined Platform Share on the total virtual assets they spend, credited as Rewards."
     },
     {
         id: 6,

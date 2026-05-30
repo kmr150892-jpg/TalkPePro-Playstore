@@ -443,7 +443,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     userId: uid, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Reflex Arena Refund', timestamp: serverTimestamp()
                 });
             });
-            Alert.alert("Refunded 💰", "You left the arena. Entry fee has been refunded to your wallet.");
+            Alert.alert("Refunded 💰", "You left the arena. Access Requirement has been refunded to your wallet.");
         } catch (e: any) {
             Alert.alert("Exit Failed", e.toString());
         }

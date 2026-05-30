@@ -48,7 +48,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="finance/withdrawals" 
           options={{ 
-            title: 'DISBURSEMENT QUEUE',
+            title: 'REDEMPTION QUEUE',
             headerShown: true,
           }} 
         />
