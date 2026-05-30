@@ -123,11 +123,11 @@ const RevenueAnalytics = () => {
             {/* CONSULTANT DISTRIBUTIONS ROW */}
             <View style={styles.row}>
                 <View style={[styles.card, {backgroundColor: '#064E3B'}]}>
-                    <Text style={styles.cardLabel}>TOTAL DISBURSED TO CONSULTANTS</Text>
+                    <Text style={styles.cardLabel}>TOTAL PROCESSED TO CONSULTANTS</Text>
                     <Text style={styles.cardValue}>₹{data.totalPaidOut.toLocaleString('en-IN')}</Text>
                 </View>
                 <View style={[styles.card, {backgroundColor: '#7F1D1D'}]}>
-                    <Text style={styles.cardLabel}>TODAY'S CONSULTANT DISBURSEMENTS</Text>
+                    <Text style={styles.cardLabel}>TODAY'S CONSULTANT PROCESSED</Text>
                     <Text style={styles.cardValue}>₹{data.todayPaidOut.toLocaleString('en-IN')}</Text>
                 </View>
             </View>
@@ -138,7 +138,7 @@ const RevenueAnalytics = () => {
                 <Text style={[styles.profitValue, { color: (data.totalRevenue - data.totalPaidOut) >= 0 ? '#10B981' : '#EF4444' }]}>
                     {(data.totalRevenue - data.totalPaidOut) < 0 ? '- ' : ''}₹{Math.abs(data.totalRevenue - data.totalPaidOut).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 </Text>
-                <Text style={styles.subText}>(Allocations - Consultant Disbursements)</Text>
+                <Text style={styles.subText}>(Allocations - Consultant processed)</Text>
 
                 {/* 🔥 FIX 5: Today's EXACT Formula (Shows minus if loss) */}
                 <View style={styles.todayProfitBox}>

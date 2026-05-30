@@ -496,14 +496,14 @@ export default function HistoryScreen() {
 
                     <View style={styles.talktimeHighlight}>
                         <Text style={[styles.totalTalkLabel, { color: userTier.color }]} numberOfLines={1}>
-                            {activeTab === 'CALLS' ? 'TOTAL CONSULTATION TALKTIME' : activeTab === 'GAMES' ? 'TOTAL ROUNDS COMPLETED' : 'TOTAL REWARDS SENT'}
+                            {activeTab === 'CALLS' ? 'TOTAL CONSULTATION TALKTIME' : activeTab === 'GAMES' ? 'TOTAL TASKS COMPLETED' : 'TOTAL REWARDS SENT'}
                         </Text>
                         <View style={styles.minsDisplay}>
                             <Text style={styles.bigMins} numberOfLines={1} adjustsFontSizeToFit>
                                 {activeTab === 'CALLS' ? totalMinutes.toLocaleString() : activeTab === 'GAMES' ? totalGames.toLocaleString() : rewardsData.length.toLocaleString()}
                             </Text>
                             <Text style={styles.minSuffix} numberOfLines={1}>
-                                {activeTab === 'CALLS' ? 'MINS' : activeTab === 'GAMES' ? 'ROUNDS' : 'GIFTS'}
+                                {activeTab === 'CALLS' ? 'MINS' : activeTab === 'GAMES' ? 'TASKS' : 'GIFTS'}
                             </Text>
                         </View>
                     </View>

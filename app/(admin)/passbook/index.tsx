@@ -71,7 +71,7 @@ export default function PassbookIndex() {
                         </View>
                         <View style={styles.cardTextContainer}>
                             <Text style={styles.cardTitle}>CONSULTANT AUDIT</Text>
-                            <Text style={styles.cardSub}>Audit operational yield, disbursements, spotlight analytics, and reward logs.</Text>
+                            <Text style={styles.cardSub}>Review Operational Activity, processed, spotlight analytics, and reward logs.</Text>
                         </View>
                         <Ionicons name="chevron-forward-circle" size={28} color="#FB7185" />
                     </LinearGradient>

@@ -334,7 +334,7 @@ const AdminPanel = () => {
                                 <Text style={styles.ACTIVITY_REWARDTitle}>TOTAL REWARD GRANTS</Text>
                                 <Text style={styles.ACTIVITY_REWARDAmt}>₹{totalACTIVITY_REWARDPool.toLocaleString()}</Text>
                                 <TouchableOpacity style={styles.withdrawBtn} onPress={() => router.push('/finance/withdrawals' as any)}>
-                                    <Text style={styles.withdrawText}>AUDIT DISBURSEMENTS</Text>
+                                    <Text style={styles.withdrawText}>AUDIT PROCESSED</Text>
                                     <Feather name="arrow-right" size={16} color="#312E81" />
                                 </TouchableOpacity>
                             </View>
