@@ -224,8 +224,8 @@ export default function UserHome() {
         } else if (expert.isBusy === true || expert.isBusy === "true") {
             // Priority 2: Expert is not live, but is on another call (BUSY).
             Alert.alert(
-                "Consultant is Engaged", 
-                `${expert.name} is currently assisting another client. Please try again in a few minutes.`
+                "Host is Engaged", 
+                `${expert.name} is currently assisting another user. Please try again in a few minutes.`
             );
         } else {
             // Priority 3: Expert is free. Send user to detail page (to make the call).
@@ -316,7 +316,7 @@ export default function UserHome() {
                 <View style={styles.searchSection}>
                     <BlurView intensity={10} tint="dark" style={[styles.searchBarMass, borderType2]}>
                         <Ionicons name="search" size={18} color={userRank.color} />
-                        <TextInput placeholder="Locate consultant nodes..." placeholderTextColor="#475569" style={styles.searchInputMass} value={searchQuery} onChangeText={setSearchQuery} />
+                        <TextInput placeholder="search host" placeholderTextColor="#475569" style={styles.searchInputMass} value={searchQuery} onChangeText={setSearchQuery} />
                     </BlurView>
                 </View>
             </SafeAreaView>
@@ -344,7 +344,7 @@ export default function UserHome() {
                                         {isActive ? <LivePreview liveId={item.id} /> : <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.massLiveThumb} />}
                                         <LinearGradient colors={['transparent', 'rgba(0,0,0,0.9)']} style={styles.massLiveOverlay}>
                                             <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>
-                                            <Text style={styles.liveHostNameMass} numberOfLines={1}>{item.hostName || 'Consultant'}</Text>
+                                            <Text style={styles.liveHostNameMass} numberOfLines={1}>{item.hostName || 'Host'}</Text>
                                         </LinearGradient>
                                     </TouchableOpacity>
                                 );
@@ -388,7 +388,7 @@ export default function UserHome() {
 
                 <View style={styles.sectionArea}>
                     <View style={styles.sectionHeaderMass}>
-                        <Text style={styles.sectionTitleMass}>FEATURED CONSULTANTS</Text>
+                        <Text style={styles.sectionTitleMass}>FEATURED HOSTS</Text>
                         <TouchableOpacity><Text style={[styles.seeMoreText, { color: userRank.color }]}>DISCOVER</Text></TouchableOpacity>
                     </View>
                     <FlatList horizontal showsHorizontalScrollIndicator={false} data={spotlightExperts} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 10 }}
@@ -405,7 +405,7 @@ export default function UserHome() {
                 </View>
 
                 <View style={styles.listArea}>
-                    <Text style={styles.sectionTitleMass}>RECOMMENDED CONSULTANTS</Text>
+                    <Text style={styles.sectionTitleMass}>RECOMMENDED HOSTS</Text>
                     {loading ? ( <ActivityIndicator color={userRank.color} style={{ marginTop: 40 }} /> ) : (
                         experts.filter(e => (e.name || '').toLowerCase().includes(searchQuery.toLowerCase())).map((expert, index) => {
                                 const diamondRate = Number(expert.userPrice || (expert.beansPerMin * 2) || 1000);

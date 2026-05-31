@@ -32,7 +32,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'], glow: '#06B6D4' };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'], glow: '#10B981' };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'], glow: '#EAB308' };
-    if (beans >= 30000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8' };
+    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8' };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent' };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent' };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent' };
@@ -56,7 +56,7 @@ const milestones = [
 ];
 
 const TABS = [
-    { id: 'video_call', label: 'Consultation Reward', icon: 'videocam', iconType: 'Ionicons' },
+    { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
     { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
     { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
     { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
@@ -180,7 +180,7 @@ export default function ExpertPassbookDetail() {
                     const expertEarnings = Number(d.expertEarnings) || 0;
 
                     if (expertEarnings > 0) {
-                        let callerName = d.callerName || 'Consultation User';
+                        let callerName = d.callerName || 'Call User';
                         let callerPic = d.callerImage || null;
                         let callerLevel = 'Silver';
 
@@ -444,7 +444,7 @@ export default function ExpertPassbookDetail() {
                     displayMins: Math.round(Number(d.totalMinutes) || 0).toString(),
                     todayCalls: Number(d.todayCalls) || 0,
                     longestCallDisplay: Math.floor((Number(d.longestCallDuration) || 0) / 60).toString(),
-                    topFanName: d.topVipSupporter?.name && d.topVipSupporter.name !== 'None' ? `${d.topVipSupporter.name} (💎${d.topVipSupporter.amount})` : "No Key Clients Yet",
+                    topFanName: d.topVipSupporter?.name && d.topVipSupporter.name !== 'None' ? `${d.topVipSupporter.name} (💎${d.topVipSupporter.amount})` : "No Key Users Yet",
                     lastCaller: d.lastCallFrom || "Waiting...",
                 };
                 
@@ -526,7 +526,7 @@ export default function ExpertPassbookDetail() {
         const dateObj = item.timestamp?.seconds ? new Date(item.timestamp.seconds * 1000) : new Date();
         const earnings = item.beans || item.expertEarnings || 0; 
         
-        const titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Reward";
+        const titleText = item.callerName ? `Call with ${item.callerName}` : "Call Reward";
     
         return (
           <Animated.View style={[styles.eliteCard, index % 2 === 0 ? borderType1 : borderType2, { transform: [{ translateY: floatAnim }] }]}>
@@ -554,7 +554,7 @@ export default function ExpertPassbookDetail() {
               <View style={styles.earningsBlock}>
                 <Text style={styles.earnLabel}>Rewards</Text>
                 <View style={styles.beansRow}>
-                  <Text style={styles.eliteBeansValue}>+💰{earnings}</Text> 
+                  <Text style={styles.eliteBeansValue}>+🎖️{earnings}</Text> 
                 </View>
               </View>
             </View>
@@ -601,7 +601,7 @@ export default function ExpertPassbookDetail() {
                 iconType = 'gift';
                 iconColor = theme.primary;
             }
-            const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "Client";
+            const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "User";
             displayTitle = `${baseTitle} (from ${validSender})`;
         }
     
@@ -631,7 +631,7 @@ export default function ExpertPassbookDetail() {
               <View style={styles.earningsBlock}>
                 <Text style={styles.earnLabel}>REWARD</Text>
                 <View style={styles.beansRow}>
-                  <Text style={styles.eliteBeansValue}>+💰{beansEarned}</Text>
+                  <Text style={styles.eliteBeansValue}>+🎖️{beansEarned}</Text>
                 </View>
               </View>
             </View>
@@ -685,7 +685,7 @@ export default function ExpertPassbookDetail() {
                             <View style={styles.cardTop}>
                                 <View style={styles.cardHeaderLeft}>
                                     <MaterialCommunityIcons name="check-decagram" size={18} color="#10B981" />
-                                    <Text style={styles.cardType}>VERIFIED CONSULTANT</Text>
+                                    <Text style={styles.cardType}>VERIFIED HOST</Text>
                                 </View>
                                 <MaterialCommunityIcons name="integrated-circuit-chip" size={32} color={theme.accent} />
                             </View>
@@ -761,7 +761,7 @@ export default function ExpertPassbookDetail() {
                                             </View>
                                             <View style={styles.vLine} />
                                             <View style={styles.summaryItem}>
-                                                <Text style={styles.summaryLabel}>KEY CLIENT</Text>
+                                                <Text style={styles.summaryLabel}>KEY USER</Text>
                                                 <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{userData?.topFanName}</Text>
                                             </View>
                                         </View>
@@ -772,7 +772,7 @@ export default function ExpertPassbookDetail() {
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="time-outline" label="Today Session" value={`${userData?.todayMins}m`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="people-outline" label="Today Consultations" value={userData?.todayCalls} color={theme.primary} borderStyle={borderType1} />
+                                        <MatrixBox icon="people-outline" label="Today Calls" value={userData?.todayCalls} color={theme.primary} borderStyle={borderType1} />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="stats-chart-outline" label="Total Time" value={`${userData?.displayMins}m`} color={theme.primary} borderStyle={borderType1} />
@@ -783,8 +783,8 @@ export default function ExpertPassbookDetail() {
                                 <Text style={styles.subHeading}>REWARD BREAKDOWN</Text>
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="videocam" label="Consultation Earnings" value={`🎖️${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="gift" label="Consultation Rewards" value={`🎖️${breakdown.callGifts.toLocaleString()}`} color={theme.primary} borderStyle={borderType1} />
+                                        <MatrixBox icon="videocam" label="Call Earnings" value={`🎖️${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />
+                                        <MatrixBox icon="gift" label="Call Rewards" value={`🎖️${breakdown.callGifts.toLocaleString()}`} color={theme.primary} borderStyle={borderType1} />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`🎖️${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />

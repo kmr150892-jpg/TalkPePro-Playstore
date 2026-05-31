@@ -50,7 +50,7 @@ export default function RingingOverlay({
 
     useEffect(() => {
         // 🔥 REAL-TIME INSTANT FETCH PROTOCOL
-        const isConsultant = role === 'expert' || role === 'consultant';
+        const isConsultant = role === 'expert' || role === 'host';
         const targetId = isConsultant ? callerId : expertId;
         if (!targetId) return;
 
@@ -81,8 +81,8 @@ export default function RingingOverlay({
     const circumference = radius * 2 * Math.PI;
     const centerPoint = radius + stroke;
 
-    // 🔥 SATTI FIX: Consultant Role Logic for Wording Compliance
-    const isConsultant = role === 'expert' || role === 'consultant';
+    // 🔥 SATTI FIX: Host Role Logic for Wording Compliance
+    const isConsultant = role === 'expert' || role === 'host';
 
     const displayAvatarName = isConsultant ? callerDisplayName : expertName;
     const displayLabel = isConsultant ? `INCOMING ${tier.label}` : "ESTABLISHING UPLINK...";
@@ -158,7 +158,7 @@ export default function RingingOverlay({
                     <Text style={styles.actionLabel}>DECLINE</Text>
                 </TouchableOpacity>
                 
-                {/* Accept Button (Only for Consultant) */}
+                {/* Accept Button (Only for Host) */}
                 {isConsultant && (
                     <TouchableOpacity activeOpacity={0.8} style={[styles.ringBtn, styles.acceptBtn, { backgroundColor: tier.color }]} onPress={onAcceptCall}>
                         <Ionicons name="videocam" size={38} color="#FFF" />

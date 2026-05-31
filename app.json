@@ -16,7 +16,7 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.talkpe.app",
       "infoPlist": {
-        "NSCameraUsageDescription": "TalkPe Pro requires camera access to enable professional one-on-one video consultations and interactive live sessions.",
+        "NSCameraUsageDescription": "TalkPe Pro requires camera access to enable professional one-on-one video calls and interactive live sessions.",
         "NSMicrophoneUsageDescription": "TalkPe Pro requires microphone access for seamless audio communication during expert sessions and social gaming."
       }
     },

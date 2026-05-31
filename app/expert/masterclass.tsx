@@ -261,7 +261,7 @@ const player = useVideoPlayer(teaserVideo || null, (player) => {
                 hasMasterclass: true,
                 masterclassUpdatedAt: serverTimestamp()
             });
-            Alert.alert("CONGRATS 🔥", "Your Premium Spotlight is now live. Clients can connect with you securely!");
+            Alert.alert("CONGRATS 🔥", "Your Premium Spotlight is now live. Users can connect with you securely!");
         } catch (error) {
             Alert.alert("Error", "Unable to update. Please try again");
         } finally {

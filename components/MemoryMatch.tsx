@@ -390,7 +390,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     userId: uid, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Memory Match Arena Refund', timestamp: serverTimestamp()
                 });
             });
-            Alert.alert("Refunded 💰", "You left the arena. Access Requirement has been refunded to your wallet.");
+            Alert.alert("Refunded 🎖️", "You left the arena. Access Requirement has been refunded to your wallet.");
         } catch (e: any) {
             Alert.alert("Exit Failed", e.toString());
         }
@@ -763,7 +763,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     {/* MATCHMAKING / LOBBY */}
                     {gameStatus === 'WAITING' && (
                         <View style={styles.lobbyStateWrapper}>
-                            <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR EXPERT TO LOCK ARENA PASS...'}</Text>
+                            <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR HOST TO LOCK ARENA PASS...'}</Text>
                             
                             <View style={styles.entryFeeContainer}>
                                 <Text style={styles.feeLabel}>ARENA PASS:</Text>
@@ -1051,7 +1051,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 {isHost && (
                                     <View style={styles.resultRow}>
                                         <Text style={[styles.resultLabel, { color: '#F59E0B' }]}>Host Bonus (10%):</Text>
-                                        <Text style={[styles.resultValue, { color: '#F59E0B' }]}>+{matchResults.expertBeans || 0} 💰</Text>
+                                        <Text style={[styles.resultValue, { color: '#F59E0B' }]}>+{matchResults.expertBeans || 0} 🎖️</Text>
                                     </View>
                                 )}
                             </View>

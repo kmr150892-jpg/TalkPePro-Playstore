@@ -112,7 +112,7 @@ const ExpertWalletDetail = () => {
 
                 {/* 📊 SYSTEM INSIGHTS SECTION */}
                 <View style={styles.section}>
-                    <Text style={styles.sectionTitle}>CONSULTANT CONFIGURATION</Text>
+                    <Text style={styles.sectionTitle}>HOST CONFIGURATION</Text>
                     
                     <View style={styles.infoBox}>
                         <View style={styles.infoRow}>

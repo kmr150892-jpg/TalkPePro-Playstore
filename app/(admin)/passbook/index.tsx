@@ -33,7 +33,7 @@ export default function PassbookIndex() {
             <View style={styles.content}>
                 <Text style={styles.sectionTitle}>AUDIT ACCESS</Text>
 
-                {/* 👤 CLIENT ALLOCATION LEDGER BUTTON */}
+                {/* 👤 USER ALLOCATION LEDGER BUTTON */}
                 <TouchableOpacity 
                     style={styles.cardWrapper} 
                     activeOpacity={0.8}
@@ -48,14 +48,14 @@ export default function PassbookIndex() {
                             <MaterialCommunityIcons name="account-group" size={32} color="#818CF8" />
                         </View>
                         <View style={styles.cardTextContainer}>
-                            <Text style={styles.cardTitle}>CLIENT AUDIT</Text>
-                            <Text style={styles.cardSub}>Review total allocations, unit refills, and session history of all network clients.</Text>
+                            <Text style={styles.cardTitle}>USER AUDIT</Text>
+                            <Text style={styles.cardSub}>Review total allocations, unit refills, and session history of all network users.</Text>
                         </View>
                         <Ionicons name="chevron-forward-circle" size={28} color="#818CF8" />
                     </LinearGradient>
                 </TouchableOpacity>
 
-                {/* 👑 CONSULTANT PERFORMANCE LEDGER BUTTON */}
+                {/* 👑 HOST PERFORMANCE LEDGER BUTTON */}
                 <TouchableOpacity 
                     style={styles.cardWrapper} 
                     activeOpacity={0.8}
@@ -70,7 +70,7 @@ export default function PassbookIndex() {
                             <MaterialCommunityIcons name="shield-star" size={32} color="#FB7185" />
                         </View>
                         <View style={styles.cardTextContainer}>
-                            <Text style={styles.cardTitle}>CONSULTANT AUDIT</Text>
+                            <Text style={styles.cardTitle}>HOST AUDIT</Text>
                             <Text style={styles.cardSub}>Review Operational Activity, processed, spotlight analytics, and reward logs.</Text>
                         </View>
                         <Ionicons name="chevron-forward-circle" size={28} color="#FB7185" />

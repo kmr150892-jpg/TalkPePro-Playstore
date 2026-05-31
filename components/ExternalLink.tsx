@@ -16,7 +16,7 @@ export function ExternalLink(
         if (Platform.OS !== 'web') {
           // 🔥 SATTI FIX: Securely prevent default link redirection on mobile nodes.
           e.preventDefault();
-          // 🔥 SATTI FIX: Open the secure external resource via an in-app consultant-grade browser.
+          // 🔥 SATTI FIX: Open the secure external resource via an in-app host-grade browser.
           WebBrowser.openBrowserAsync(props.href as string);
         }
       }}

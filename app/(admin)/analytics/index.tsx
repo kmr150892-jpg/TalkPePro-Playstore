@@ -62,7 +62,7 @@ export default function AnalyticsDashboard() {
                         <Text style={styles.tileSub}>Operational Traffic & Metrics</Text>
                     </TouchableOpacity>
 
-                    {/* 3. CONSULTANT VERIFICATION - Updated Route Logic */}
+                    {/* 3. HOST VERIFICATION - Updated Route Logic */}
                     <TouchableOpacity 
                         activeOpacity={0.7}
                         style={[styles.mainTile, { borderColor: '#8B5CF630', width: '100%' }]} 
@@ -72,13 +72,13 @@ export default function AnalyticsDashboard() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
                             <MaterialCommunityIcons name="shield-check-outline" size={32} color="#8B5CF6" />
                             <View>
-                                <Text style={styles.tileTitle}>CONSULTANT QUEUE</Text>
+                                <Text style={styles.tileTitle}>HOST QUEUE</Text>
                                 <Text style={styles.tileSub}>Manage Identity Verifications</Text>
                             </View>
                         </View>
                     </TouchableOpacity>
 
-                    {/* 4. CLIENT GROWTH */}
+                    {/* 4. USER GROWTH */}
                     <TouchableOpacity 
                         activeOpacity={0.7}
                         style={[styles.mainTile, { borderColor: '#F59E0B30', width: '100%' }]} 
@@ -88,7 +88,7 @@ export default function AnalyticsDashboard() {
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 15 }}>
                             <Feather name="users" size={30} color="#F59E0B" />
                             <View>
-                                <Text style={styles.tileTitle}>CLIENT GROWTH</Text>
+                                <Text style={styles.tileTitle}>USER GROWTH</Text>
                                 <Text style={styles.tileSub}>Onboarding & Retention</Text>
                             </View>
                         </View>

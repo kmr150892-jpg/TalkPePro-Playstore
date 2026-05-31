@@ -55,7 +55,7 @@ const SystemLatency = () => {
                 </View>
             </View>
 
-            <Text style={styles.footerText}>Client: {item.userName} • Platform: {item.deviceOS}</Text>
+            <Text style={styles.footerText}>User: {item.userName} • Platform: {item.deviceOS}</Text>
         </View>
     );
 

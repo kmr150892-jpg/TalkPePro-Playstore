@@ -70,7 +70,7 @@ export default function ExpertControl() {
         const newStatus = !currentStatus;
         Alert.alert(
             newStatus ? "RESTRICT ACCOUNT ACCESS?" : "RESTORE ACCOUNT ACCESS?",
-            `Are you sure you want to ${newStatus ? 'suspend' : 'reinstate'} this consultant's credentials?`,
+            `Are you sure you want to ${newStatus ? 'suspend' : 'reinstate'} this host's credentials?`,
             [
                 { text: "CANCEL", style: "cancel" },
                 { 
@@ -141,7 +141,7 @@ export default function ExpertControl() {
                         </View>
                         <View style={styles.vDivider} />
                         <View style={styles.statBox}>
-                            <Text style={styles.statLabel}>CLIENT RATE</Text>
+                            <Text style={styles.statLabel}>USER RATE</Text>
                             <View style={styles.currencyRow}>
                                 <FontAwesome5 name="gem" size={10} color="#6366F1" />
                                 <Text style={styles.statValue}> {item.userPrice ?? 0}</Text>
@@ -184,7 +184,7 @@ export default function ExpertControl() {
 
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.title}>CONSULTANT HUB</Text>
+                    <Text style={styles.title}>HOST HUB</Text>
                     <Text style={styles.subtitle}>Administrative Terminal • TalkPe OS</Text>
                 </View>
                 <View style={styles.countContainer}>

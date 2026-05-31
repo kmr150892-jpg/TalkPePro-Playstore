@@ -60,15 +60,15 @@ const calculateUserLevel = (totalSpent: number) => {
 
 // 🔥 GOOGLE PLAY PRODUCT IDs (Console-la ithae IDs create pannanum)
 const BUNDLES = [
-    { id: 'diamonds_100', diamonds: '10,000', value: 10000, time: 'Consultation: ~5 Minutes', price: '₹100', numericPrice: 100 },
-    { id: 'diamonds_500', diamonds: '50,000', value: 50000, time: 'Consultation: ~25 Minutes', price: '₹500', numericPrice: 500 },
-    { id: 'diamonds_1000', diamonds: '1,00,000', value: 100000, time: 'Consultation: ~50 Minutes', price: '₹1,000', numericPrice: 1000, bestSeller: true },
-    { id: 'diamonds_1500', diamonds: '1,50,000', value: 150000, time: 'Consultation: ~75 Minutes', price: '₹1,500', numericPrice: 1500 },
-    { id: 'diamonds_2000', diamonds: '2,00,000', value: 200000, time: 'Consultation: ~100 Minutes', price: '₹2,000', numericPrice: 2000 },
-    { id: 'diamonds_3000', diamonds: '3,00,000', value: 300000, time: 'Consultation: ~150 Minutes', price: '₹3,000', numericPrice: 3000 },
-    { id: 'diamonds_5000', diamonds: '5,00,000', value: 500000, time: 'Consultation: ~250 Minutes', price: '₹5,000', numericPrice: 5000 },
-    { id: 'diamonds_8000', diamonds: '8,00,000', value: 800000, time: 'Consultation: ~400 Minutes', price: '₹8,000', numericPrice: 8000 },
-    { id: 'diamonds_10000', diamonds: '10,00,000', value: 1000000, time: 'Consultation: ~500 Minutes', price: '₹10,000', numericPrice: 10000 },
+    { id: 'diamonds_100', diamonds: '10,000', value: 10000, time: 'Call: ~5 Minutes', price: '₹100', numericPrice: 100 },
+    { id: 'diamonds_500', diamonds: '50,000', value: 50000, time: 'Call: ~25 Minutes', price: '₹500', numericPrice: 500 },
+    { id: 'diamonds_1000', diamonds: '1,00,000', value: 100000, time: 'Call: ~50 Minutes', price: '₹1,000', numericPrice: 1000, bestSeller: true },
+    { id: 'diamonds_1500', diamonds: '1,50,000', value: 150000, time: 'Call: ~75 Minutes', price: '₹1,500', numericPrice: 1500 },
+    { id: 'diamonds_2000', diamonds: '2,00,000', value: 200000, time: 'Call: ~100 Minutes', price: '₹2,000', numericPrice: 2000 },
+    { id: 'diamonds_3000', diamonds: '3,00,000', value: 300000, time: 'Call: ~150 Minutes', price: '₹3,000', numericPrice: 3000 },
+    { id: 'diamonds_5000', diamonds: '5,00,000', value: 500000, time: 'Call: ~250 Minutes', price: '₹5,000', numericPrice: 5000 },
+    { id: 'diamonds_8000', diamonds: '8,00,000', value: 800000, time: 'Call: ~400 Minutes', price: '₹8,000', numericPrice: 8000 },
+    { id: 'diamonds_10000', diamonds: '10,00,000', value: 1000000, time: 'Call: ~500 Minutes', price: '₹10,000', numericPrice: 10000 },
 ];
 
 export default function RechargeScreen() {
@@ -157,7 +157,7 @@ export default function RechargeScreen() {
 
                         await setDoc(transactionRef, {
                             userId: user.uid,
-                            userName: user.displayName || 'Consultation User',
+                            userName: user.displayName || 'Call User',
                             amount: selectedBundle.numericPrice,
                             diamondsAdded: selectedBundle.value,
                             type: 'asset_purchase',

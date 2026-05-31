@@ -193,7 +193,7 @@ export default function GiftOverlay({ giftData, onComplete, expertTotalBeans = 0
                         </Text>
                     </View>
 
-                    {/* 🔥 CONDITIONAL DISPLAY: Client sees Diamonds, Consultant sees Rewards 🔥 */}
+                    {/* 🔥 CONDITIONAL DISPLAY: User sees Diamonds, Host sees Rewards 🔥 */}
                     {role === 'user' ? (
                         <View style={[styles.beansValueBadge, { backgroundColor: 'rgba(0, 242, 254, 0.1)', borderColor: 'rgba(0, 242, 254, 0.4)' }]}>
                             <MaterialCommunityIcons name="diamond-stone" size={18} color="#00F2FE" />

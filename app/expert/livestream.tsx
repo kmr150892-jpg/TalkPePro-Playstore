@@ -358,7 +358,7 @@ export default function LiveStreamScreen() {
 
                 // ✅ FORCE FETCH ACTUAL NAME & IMAGE FOR ULTRA PREMIUM MODAL
                 let callerPic = null;
-                let fetchedName = data.userName || data.callerName || "CLIENT";
+                let fetchedName = data.userName || data.callerName || "USER";
 
                 if(currentUserId) {
                     const callerDoc = await getDoc(doc(db, "users", currentUserId));
@@ -417,11 +417,11 @@ export default function LiveStreamScreen() {
     }, []);
 
     const fetchHostData = async () => {
-        if (!auth.currentUser) return { name: "Consultant", image: "", levelTitle: "BEGINNER", userPrice: 0 };
+        if (!auth.currentUser) return { name: "Host", image: "", levelTitle: "BEGINNER", userPrice: 0 };
         const userSnap = await getDoc(doc(db, "users", auth.currentUser.uid));
         if (userSnap.exists()) {
             const userData = userSnap.data();
-            let name = userData.name || auth.currentUser.displayName || "Consultant";
+            let name = userData.name || auth.currentUser.displayName || "Host";
             
             // ✅ THE ARUVI UPDATE CHECK
             if (name === "ARUVI MULTIVERSE") {
@@ -439,7 +439,7 @@ export default function LiveStreamScreen() {
             setHostConfig(config);
             return { name, image: img, levelTitle: config.label, userPrice: price };
         }
-        return { name: "Consultant", image: "", levelTitle: "BEGINNER", userPrice: 0 };
+        return { name: "Host", image: "", levelTitle: "BEGINNER", userPrice: 0 };
     };
 
     const setupAgora = async (hostData: { name: string, image: string, levelTitle: string, userPrice: number }) => {
@@ -490,9 +490,9 @@ export default function LiveStreamScreen() {
                 const callRef = doc(db, "calls", incomingCall.id);
                 await updateDoc(callRef, {
                     status: 'accepted',
-                    expertName: hostName || "Consultant", // 🔥 SATTI FIX: NAME MAP
+                    expertName: hostName || "Host", // 🔥 SATTI FIX: NAME MAP
                     expertImage: hostImage || "",     // 🔥 SATTI FIX: IMAGE MAP
-                    callerName: incomingCall.userName || "Client",
+                    callerName: incomingCall.userName || "User",
                     expertId: auth.currentUser.uid,
                     acceptedAt: serverTimestamp()
                 });
@@ -514,9 +514,9 @@ export default function LiveStreamScreen() {
                     params: {
                         callId: incomingCall.id,
                         expertId: auth.currentUser.uid,
-                        expertName: hostName || "Consultant", // 🔥 SATTI FIX: EXPERT PARAMS
+                        expertName: hostName || "Host", // 🔥 SATTI FIX: EXPERT PARAMS
                         expertImage: hostImage || "",     // 🔥 SATTI FIX: EXPERT PARAMS
-                        callerName: incomingCall.userName || "Client",
+                        callerName: incomingCall.userName || "User",
                         callerId: incomingCall.callerId,
                         role: 'expert'
                     }
@@ -578,7 +578,7 @@ export default function LiveStreamScreen() {
                             const isNewDay = eData.lastBonusDate !== today;
                             
                             let currentTopVip = eData.topVipSupporter || { name: 'None', amount: 0, date: '' };
-                            const senderName = gift.senderName || 'Premium Client';
+                            const senderName = gift.senderName || 'Premium User';
                             if (isNewDay || diamondAmount > currentTopVip.amount) {
                                    currentTopVip = { name: senderName, amount: diamondAmount, date: today };
                             }
@@ -630,14 +630,14 @@ export default function LiveStreamScreen() {
         if (!auth.currentUser) return;
 
         // 🔥 SATTI FIX: updateData-va status-ku munnadiye initialize panitom. 
-        // Live 'ended' aagumpothu hostName update aaga kudathu, ilana pazhaya empty string "Consultant" nu overwrite aaidum.
+        // Live 'ended' aagumpothu hostName update aaga kudathu, ilana pazhaya empty string "Host" nu overwrite aaidum.
         const updateData: any = {
             status: status,
             currentLiveId: currentLiveId,
         };
 
         if (status === 'live') {
-            let finalName = manualName || hostName || "Consultant";
+            let finalName = manualName || hostName || "Host";
             
             // ✅ THE ARUVI UPDATE CHECK FOR ROOM CREATION
             if (finalName === "ARUVI MULTIVERSE") {
@@ -691,7 +691,7 @@ export default function LiveStreamScreen() {
         if (!inputText.trim() || !auth.currentUser) return;
         await addDoc(collection(db, "lives", currentLiveId, "messages"), {
             text: inputText,
-            senderName: hostName || "Consultant",
+            senderName: hostName || "Host",
             senderId: auth.currentUser.uid,
             timestamp: serverTimestamp(),
             isHost: true
@@ -782,7 +782,7 @@ export default function LiveStreamScreen() {
                             </View>
                             <View style={styles.nameAndStats}>
                                 <View style={{flexDirection: 'column', alignItems: 'flex-start', gap: 2}}>
-                                    <Text style={styles.hostNameHeaderMass} numberOfLines={1}>{hostName || "Consultant"}</Text>
+                                    <Text style={styles.hostNameHeaderMass} numberOfLines={1}>{hostName || "Host"}</Text>
                                     <View style={{ backgroundColor: hostConfig.colors[0] + '30', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: hostConfig.colors[0], alignSelf: 'flex-start' }}>
                                         <Text style={{ color: hostConfig.colors[0] === '#ad57a6' ? '#FFF' : hostConfig.colors[0], fontSize: 8, fontWeight: '900', textTransform: 'uppercase' }}>{hostConfig.label}</Text>
                                     </View>
@@ -907,8 +907,8 @@ export default function LiveStreamScreen() {
                                 <View style={styles.radarGlow} />
                             </View>
 
-                            <Text style={styles.callPulseText}>INCOMING CONSULTATION</Text>
-                            <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "CLIENT"}</Text>
+                            <Text style={styles.callPulseText}>INCOMING CALL</Text>
+                            <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "USER"}</Text>
                             
                             <View style={styles.callActionsMass}>
                                 <TouchableOpacity onPress={() => handleCallAction('rejected')} activeOpacity={0.8} style={styles.actionBtnHitbox}>
@@ -1063,7 +1063,7 @@ export default function LiveStreamScreen() {
                             <View style={styles.statItem}><Text style={styles.statVal}>{viewerCount}</Text><Text style={styles.statLabel}>Viewers</Text></View>
                             <View style={styles.statItem}>
                                 {/* 🔥 SATTI FIX: Bean Symbol removed and /Reward Symbol added 🔥 */}
-                                <Text style={styles.statVal}>{sessionEarnedBeans} 💰</Text>
+                                <Text style={styles.statVal}>{sessionEarnedBeans} 🎖️</Text>
                                 <Text style={styles.statLabel}>Rewards Accrued</Text>
                             </View>
                         </View>

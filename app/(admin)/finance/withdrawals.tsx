@@ -8,10 +8,12 @@ import {
     Alert,
     Clipboard,
     Dimensions,
+    Modal,
     ScrollView,
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View
 } from 'react-native';
@@ -34,7 +36,8 @@ import { recordTransaction } from '../../../utils/finance';
             holderName?: string;
         };
         createdAt?: any;
-        userPath?: string; // Secure sub-collection path mapping
+        userPath?: string; 
+        transactionCharge?: number; // Added to handle accurate refund
     }
 
     export default function AdminWithdrawals() {
@@ -42,6 +45,11 @@ import { recordTransaction } from '../../../utils/finance';
         const [requests, setRequests] = useState<WithdrawalRequest[]>([]);
         const [loading, setLoading] = useState(true);
         const [stats, setStats] = useState({ totalPending: 0, count: 0 });
+
+        // 🔥 STATE FOR REJECT REASON POPUP 🔥
+        const [rejectModalVisible, setRejectModalVisible] = useState(false);
+        const [rejectReason, setRejectReason] = useState("");
+        const [selectedRequestToReject, setSelectedRequestToReject] = useState<WithdrawalRequest | null>(null);
 
         useEffect(() => {
             const currentUserUID = auth.currentUser?.uid;
@@ -65,6 +73,7 @@ import { recordTransaction } from '../../../utils/finance';
                             ...data,
                             // Normalizing field names across distributed Firestore nodes
                             amount: data.amount || data.amountRupee || 0,
+                            transactionCharge: data.transactionCharge || 100, // Fetching transaction charge from DB
                             status: data.status || 'PENDING',
                             userPath: d.ref.path // Reference path for atomic updates
                         } as WithdrawalRequest;
@@ -88,71 +97,125 @@ import { recordTransaction } from '../../../utils/finance';
         }, []);
 
         const handleProcessPayment = async (request: WithdrawalRequest, status: 'SUCCESS' | 'REJECTED') => {
-    const amountToProcess = Math.floor(Number(request.amount)); 
-    
-    Alert.alert(
-        status === 'SUCCESS' ? "💰 AUTHORIZE TRANSFER" : "❌ DECLINE REQUEST",
-        `Confirm transfer of ₹${amountToProcess.toLocaleString()}?`,
-        [
-            { text: "Cancel", style: "cancel" },
-            { 
-                text: "Confirm Action", 
-                onPress: async () => {
-                    try {
-                        // 🔴 SYSTEM CHECK: Consultant reference verification
-                        const expertRef = doc(db, "users", request.userId);
-                        const expertSnap = await getDoc(expertRef);
-
-                        if (!expertSnap.exists()) {
-                            Alert.alert("Error", "Associated user record not found.");
-                            return;
-                        }
-
-                        const expertData = expertSnap.data();
-                        const currentPending = Number(expertData.pendingACTIVITY_REWARD || 0);
-                        const currentWithdrawn = Number(expertData.totalWithdrawnRs || 0);
-
-                        if (status === 'SUCCESS') {
-                            await updateDoc(expertRef, { 
-                                pendingACTIVITY_REWARD: Math.max(0, currentPending - amountToProcess),
-                                totalWithdrawnRs: currentWithdrawn + amountToProcess
-                            });
-
-                            await recordTransaction(
-                                request.userId, 
-                                request.expertName || "Consultant", 
-                                amountToProcess, 
-                                'ACTIVITY_REWARD', 
-                                `Ref ID: ${request.id}`
-                            );
-                        } else {
-                            // Atomic reversal for declined requests
-                            const currentWallet = Number(expertData.walletBalance || 0);
-                            await updateDoc(expertRef, { 
-                                pendingACTIVITY_REWARD: Math.max(0, currentPending - amountToProcess),
-                                walletBalance: currentWallet + amountToProcess
-                            });
-                        }
-
-                        // Synchronization of secure sub-collection node
-                        if (request.userPath) {
-                            await updateDoc(doc(db, request.userPath), {
-                                status: status,
-                                processedAt: serverTimestamp(),
-                                processedBy: auth.currentUser?.uid
-                            });
-                        }
-
-                        Alert.alert("Success! ✅", "System Ledger Synchronized.");
-                    } catch (err: any) {
-                        console.error("Transfer Sync Error:", err);
-                        Alert.alert("Error", err.message || "Failed to update records.");
-                    }
-                } 
+            if (status === 'REJECTED') {
+                // If rejected, open modal to get reason instead of direct alert
+                setSelectedRequestToReject(request);
+                setRejectReason("");
+                setRejectModalVisible(true);
+                return;
             }
-        ]
-    );
-};
+
+            const amountToProcess = Math.floor(Number(request.amount)); 
+            
+            Alert.alert(
+                "🎖️ AUTHORIZE TRANSFER",
+                `Confirm transfer of ₹${amountToProcess.toLocaleString()}?`,
+                [
+                    { text: "Cancel", style: "cancel" },
+                    { 
+                        text: "Confirm Action", 
+                        onPress: async () => {
+                            try {
+                                // 🔴 SYSTEM CHECK: Host reference verification
+                                const expertRef = doc(db, "users", request.userId);
+                                const expertSnap = await getDoc(expertRef);
+
+                                if (!expertSnap.exists()) {
+                                    Alert.alert("Error", "Associated user record not found.");
+                                    return;
+                                }
+
+                                const expertData = expertSnap.data();
+                                const currentPending = Number(expertData.pendingACTIVITY_REWARD || 0);
+                                const currentWithdrawn = Number(expertData.totalWithdrawnRs || 0);
+
+                                await updateDoc(expertRef, { 
+                                    pendingACTIVITY_REWARD: Math.max(0, currentPending - amountToProcess),
+                                    totalWithdrawnRs: currentWithdrawn + amountToProcess
+                                });
+
+                                await recordTransaction(
+                                    request.userId, 
+                                    request.expertName || "Host", 
+                                    amountToProcess, 
+                                    'ACTIVITY_REWARD', 
+                                    `Ref ID: ${request.id}`
+                                );
+
+                                // Synchronization of secure sub-collection node
+                                if (request.userPath) {
+                                    await updateDoc(doc(db, request.userPath), {
+                                        status: status,
+                                        processedAt: serverTimestamp(),
+                                        processedBy: auth.currentUser?.uid
+                                    });
+                                }
+
+                                Alert.alert("Success! ✅", "System Ledger Synchronized.");
+                            } catch (err: any) {
+                                console.error("Transfer Sync Error:", err);
+                                Alert.alert("Error", err.message || "Failed to update records.");
+                            }
+                        } 
+                    }
+                ]
+            );
+        };
+
+        // 🔥 NEW FUNCTION: EXECUTE REJECT WITH REASON 🔥
+        const executeReject = async () => {
+            if (!rejectReason || rejectReason.trim() === "") {
+                Alert.alert("Error", "Please provide a reason for declining.");
+                return;
+            }
+            if (!selectedRequestToReject) return;
+
+            const request = selectedRequestToReject;
+            const amountToProcess = Math.floor(Number(request.amount));
+            const transCharge = Number(request.transactionCharge || 100); // Get actual charge applied
+
+            try {
+                const expertRef = doc(db, "users", request.userId);
+                const expertSnap = await getDoc(expertRef);
+
+                if (!expertSnap.exists()) {
+                    Alert.alert("Error", "Associated user record not found.");
+                    return;
+                }
+
+                const expertData = expertSnap.data();
+                const currentPending = Number(expertData.pendingACTIVITY_REWARD || 0);
+                const currentWallet = Number(expertData.walletBalance || 0);
+
+                // 🔥 TOTAL REFUND CALCULATION = (Requested Amount + Transaction Charge) * 100 to get beans
+                const totalRefundBeans = (amountToProcess + transCharge) * 100;
+
+                // Atomic reversal for declined requests (Full Refund to wallet)
+                await updateDoc(expertRef, { 
+                    pendingACTIVITY_REWARD: Math.max(0, currentPending - amountToProcess),
+                    walletBalance: currentWallet + totalRefundBeans // Full Refund!
+                });
+
+                // Update Withdrawal status with REASON
+                if (request.userPath) {
+                    await updateDoc(doc(db, request.userPath), {
+                        status: 'REJECTED',
+                        rejectReason: rejectReason.trim(),
+                        processedAt: serverTimestamp(),
+                        processedBy: auth.currentUser?.uid
+                    });
+                }
+
+                Alert.alert("Success! ✅", `Request Declined & Fully Refunded (₹${amountToProcess + transCharge}).`);
+                setRejectModalVisible(false);
+                setSelectedRequestToReject(null);
+
+            } catch (err: any) {
+                console.error("Reject Sync Error:", err);
+                Alert.alert("Error", err.message || "Failed to reject record.");
+            }
+        };
+
         const copyToClipboard = (text: string, label: string) => {
             if(!text) return Alert.alert("Error", `${label} verification failed!`);
             Clipboard.setString(text);
@@ -201,7 +264,7 @@ import { recordTransaction } from '../../../utils/finance';
                                 <View key={item.id} style={styles.card}>
                                     <View style={styles.cardHeader}>
                                         <View>
-                                            <Text style={styles.expertId}>CONSULTANT: {item.expertName || 'System ID'}</Text>
+                                            <Text style={styles.expertId}>HOST: {item.expertName || 'System ID'}</Text>
                                             <Text style={styles.expertIdSub}>UID: {item.userId.slice(0, 15).toUpperCase()}...</Text>
                                             <Text style={styles.cardAmount}>₹{item.amount.toLocaleString()}</Text>
                                         </View>
@@ -249,6 +312,39 @@ import { recordTransaction } from '../../../utils/finance';
                         )}
                     </View>
                 </ScrollView>
+
+                {/* 🔥 REJECT REASON MODAL 🔥 */}
+                <Modal visible={rejectModalVisible} transparent animationType="fade">
+                    <View style={styles.modalOverlay}>
+                        <View style={styles.modalContent}>
+                            <View style={styles.modalHeaderBox}>
+                                <MaterialCommunityIcons name="alert-circle" size={24} color="#EF4444" />
+                                <Text style={styles.modalTitle}>DECLINE REQUEST</Text>
+                            </View>
+                            
+                            <Text style={styles.modalSub}>Reason will be shown to the Host.</Text>
+                            
+                            <TextInput
+                                style={styles.reasonInput}
+                                placeholder="E.g., Invalid Bank Details..."
+                                placeholderTextColor="#475569"
+                                value={rejectReason}
+                                onChangeText={setRejectReason}
+                                multiline
+                            />
+
+                            <View style={styles.modalActionRow}>
+                                <TouchableOpacity style={styles.modalCancelBtn} onPress={() => { setRejectModalVisible(false); setSelectedRequestToReject(null); }}>
+                                    <Text style={styles.modalCancelText}>CANCEL</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={styles.modalSubmitBtn} onPress={executeReject}>
+                                    <Text style={styles.modalSubmitText}>CONFIRM DECLINE</Text>
+                                </TouchableOpacity>
+                            </View>
+                        </View>
+                    </View>
+                </Modal>
+
             </View>
         );
     }
@@ -293,5 +389,18 @@ import { recordTransaction } from '../../../utils/finance';
         btnGradient: { flex: 1, alignItems: 'center', justifyContent: 'center' },
         successBtnText: { color: '#FFF', fontWeight: '900', fontSize: 13 },
         empty: { alignItems: 'center', marginTop: 80 },
-        emptyT: { color: '#475569', fontSize: 16, fontWeight: '800', marginTop: 15 }
+        emptyT: { color: '#475569', fontSize: 16, fontWeight: '800', marginTop: 15 },
+        
+        // 🔥 NEW STYLES FOR REJECT MODAL 🔥
+        modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+        modalContent: { width: '100%', backgroundColor: '#0F172A', padding: 25, borderRadius: 24, borderWidth: 1, borderColor: '#1E293B' },
+        modalHeaderBox: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5 },
+        modalTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
+        modalSub: { color: '#475569', fontSize: 11, fontWeight: '700', marginBottom: 20 },
+        reasonInput: { backgroundColor: '#020617', color: '#FFF', padding: 15, borderRadius: 16, borderWidth: 1, borderColor: '#1E293B', minHeight: 100, textAlignVertical: 'top', fontSize: 14 },
+        modalActionRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
+        modalCancelBtn: { flex: 1, padding: 15, borderRadius: 16, backgroundColor: '#1E293B', alignItems: 'center' },
+        modalCancelText: { color: '#94A3B8', fontWeight: '900', fontSize: 12 },
+        modalSubmitBtn: { flex: 1, padding: 15, borderRadius: 16, backgroundColor: '#EF4444', alignItems: 'center' },
+        modalSubmitText: { color: '#FFF', fontWeight: '900', fontSize: 12 }
     });

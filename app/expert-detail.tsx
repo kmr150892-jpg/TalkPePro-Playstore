@@ -55,8 +55,11 @@ export default function ExpertDetail() {
     const [userBalance, setUserBalance] = useState(0);
     const [loading, setLoading] = useState(true);
     const [activeCallId, setActiveCallId] = useState<string | null>(null);
-    const [userData, setUserData] = useState<any>(null);
     
+    // 🔥 SATTI FIX: Added a Ref to strictly track call ID in case user presses BACK button abruptly.
+    const activeCallIdRef = useRef<string | null>(null); 
+    
+    const [userData, setUserData] = useState<any>(null);
     const [connectionStatus, setConnectionStatus] = useState<string | null>(null); 
     const [followLoading, setFollowLoading] = useState(false);
     const [isBlockedByExpert, setIsBlockedByExpert] = useState(false);
@@ -83,11 +86,26 @@ export default function ExpertDetail() {
     const onShare = async () => {
         try {
             await Share.share({
-                message: `Connect with ${expert?.name} on TALKPE PRO! Verified Professional Consultant. Download now!`,
+                message: `Connect with ${expert?.name} on TALKPE PRO! Verified Professional Host. Download now!`,
                 url: `https://talkpe.com/expert/${expertId}`,
             });
         } catch (error: any) { Alert.alert(error.message); }
     };
+
+    // 🔥 SATTI FIX: UNMOUNT SAFETY. Stops the call if user leaves the screen without pressing Cancel.
+    useEffect(() => {
+        return () => {
+            if (activeCallIdRef.current) {
+                // Keep local reference to avoid closure issues
+                const cid = activeCallIdRef.current;
+                updateDoc(doc(db, "calls", cid), { 
+                    status: 'cancelled',
+                    updatedAt: serverTimestamp(),
+                    endedAt: serverTimestamp()
+                }).catch(e => console.log("Unmount cancel error: ", e));
+            }
+        };
+    }, []);
 
     useEffect(() => {
         Animated.loop(
@@ -146,7 +164,7 @@ export default function ExpertDetail() {
     }, [expertId, user]);
 
     const handleFollowAction = async () => {
-        if (!user) return Alert.alert("Login Required", "Please login to connect with consultants.");
+        if (!user) return Alert.alert("Login Required", "Please login to connect with hosts.");
         if (connectionStatus === 'friend') return router.push('/friends' as any);
         if (!userData) return Alert.alert("Wait", "User data is loading...");
 
@@ -171,54 +189,61 @@ export default function ExpertDetail() {
 
     const handleCancelCall = async () => {
         ringTimerAnim.stopAnimation();
+        
+        // 🔥 SATTI FIX: Grab the active ID from both state and ref for 100% reliability BEFORE clearing it
+        const cid = activeCallId || activeCallIdRef.current;
+        
         if (unsubCallRef.current) {
             unsubCallRef.current();
             unsubCallRef.current = null;
         }
-        if (activeCallId) {
-            try { await updateDoc(doc(db, "calls", activeCallId), { status: 'cancelled' }); } catch (err) { console.error(err); }
+
+        if (cid) {
+            try { 
+                await updateDoc(doc(db, "calls", cid), { 
+                    status: 'cancelled',
+                    updatedAt: serverTimestamp(), // 🔥 This tells Backend to stop the host's ring notification!
+                    endedAt: serverTimestamp() 
+                }); 
+            } catch (err) { console.error(err); }
         }
+
         setIsCalling(false);
         deactivateKeepAwake();
         setActiveCallId(null);
+        activeCallIdRef.current = null; // Syncing the ref AFTER database update
     };
 
     const handleStartCall = async () => {
-        if (!expert?.isOnline) return Alert.alert("Consultant Offline 💤", "This consultant is currently offline.");
+        if (!expert?.isOnline) return Alert.alert("Host Offline 💤", "This host is currently offline.");
         
         if (expert?.status === 'live' || expert?.isLive === true || expert?.isLive === "true") {
-            return Alert.alert("Consultant is Live 🔴", "This consultant is currently hosting a live broadcast. Please join the session instead.");
+            return Alert.alert("Host is Live 🔴", "This host is currently hosting a live broadcast. Please join the session instead.");
         }
         
         if (expert?.isBusy === true || expert?.isBusy === "true") {
-            return Alert.alert("Consultant is Busy ⏳", `${expert.name} is currently assisting another client. Please try again shortly.`);
+            return Alert.alert("Host is Busy ⏳", `${expert.name} is currently assisting another user. Please try again shortly.`);
         }
 
-        // 👇👇 Satti's Permission Check Box 👇👇
         const hasPermission = await checkAndRequestCallPermissions();
         if (!hasPermission) {
-            return; // Permission kidaikkalana, intha edathulaye stop aagidum, call connect aagaathu!
+            return; 
         }
-        // 👆👆 -------------------------------- 👆👆
 
         if (!userData || (!userData.name && !userData.userName)) return Alert.alert("Syncing Profile...", "Please wait a moment.");
         
         const priceToCharge = Number(expert.userPrice || (expert.beansPerMin * 2) || (expert.pricePerMin * 2) || 2400);
         
-        // 🔥 THE MICRO-FRACTION FIX 🔥
-        // Checks if user has > 0.05 minutes (approx 3 seconds). If less, it's considered ZERO.
         const validFreeMins = Number(userData?.freeMinsRemaining || 0);
         const isFreeCall = (userData?.isWelcomeCallAvailable === true) || (validFreeMins > 0.05);
 
-        // If not a free call and balance is low, block it!
         if (!isFreeCall && userBalance < priceToCharge) {
-            Alert.alert("Insufficient Assets! 💎", `Requires ${priceToCharge.toLocaleString()} diamonds for a 1 min consultation.`, [
+            Alert.alert("Insufficient Assets! 💎", `Requires ${priceToCharge.toLocaleString()} diamonds for a 1 min call.`, [
                 { text: "Later", style: "cancel" }, { text: "Add Assets", onPress: () => router.push('/recharge' as any) }
             ]);
             return;
         }
 
-        // 🔥 THE ULTIMATE ANTI-HACK DEVICE FINGERPRINTING LOGIC 🔥
         const proceedToCall = async () => {
             setIsCalling(true);
 
@@ -231,57 +256,50 @@ export default function ExpertDetail() {
                         deviceId = await Application.getIosIdForVendorAsync() || "ios_unknown";
                     }
 
-                    // 1. Strict Firestore Hardware Check
                     const deviceRef = doc(db, "used_devices", deviceId);
                     const deviceSnap = await getDoc(deviceRef);
 
                     if (deviceSnap.exists()) {
                         const deviceData = deviceSnap.data();
                         
-                        // Only block if the device is used by a DIFFERENT USER.
                         if (deviceData.userId !== user?.uid) {
-                            // 🚫 BUSTED! The user cleared app data and created a NEW account to cheat.
                             setIsCalling(false);
                             Alert.alert(
                                 "Privilege Claimed 🚫", 
-                                "This device has already utilized the Complimentary Consultation on another account. Please add assets to continue consulting.",
+                                "This device has already utilized the Complimentary Call on another account. Please add assets to continue consulting.",
                                 [
                                     { text: "Cancel", style: "cancel" },
                                     { text: "Add Assets", onPress: () => router.push('/recharge' as any) }
                                 ]
                             );
                             
-                            // Fix their fake profile silently so it stops showing "FREE"
                             if (user) {
                                 await updateDoc(doc(db, "users", user.uid), {
                                     isWelcomeCallAvailable: false,
                                     freeMinsRemaining: 0
                                 });
                             }
-                            return; // 🛑 ABORT CALL INITIATION
+                            return; 
                         }
                     } else {
-                        // 2. First time on this device ever! Lock the device ID permanently.
                         await setDoc(deviceRef, {
                             usedAt: serverTimestamp(),
                             userId: user?.uid,
                             hardwareId: deviceId
                         });
                     }
-
                 } catch (e) {
                     console.log("Device security verification error:", e);
                 }
             }
 
-            // Normal Call Flow 
             initiateCall(priceToCharge, isFreeCall);
         };
 
         if (isFreeCall) {
             Alert.alert(
                 "Welcome Privilege! 🎉", 
-                "You have a COMPLIMENTARY consultation available. Do you want to use it now?",
+                "You have a COMPLIMENTARY call available. Do you want to use it now?",
                 [
                     { text: "Not Now", style: "cancel" },
                     { text: "Yes, Start Session", onPress: proceedToCall }
@@ -296,20 +314,30 @@ export default function ExpertDetail() {
         await activateKeepAwakeAsync(); 
         try {
             const callRef = await addDoc(collection(db, "calls"), {
-                userId: user?.uid,
-                userName: userData.userName || userData.name || "TalkPe Pro User",
-                userImage: userData.profilePic || userData.profileImage || "",
+                callerId: user?.uid || "UNKNOWN_USER",
+                callerName: userData?.userName || userData?.name || "TalkPe Pro User",
+                callerImage: userData?.profilePic || userData?.profileImage || "",
                 expertId: expert.id,
                 expertName: expert.name,
                 expertImage: expert.profilePic || expert.expertImage || expert.profileImage || "",
-                status: 'ringing', 
+                status: 'calling', 
+                
+                userId: user?.uid,
+                userName: userData?.userName || userData?.name || "TalkPe Pro User",
+                userImage: userData?.profilePic || userData?.profileImage || "",
                 pricePerMin: isFreeCall ? 0 : priceToCharge, 
                 isFreeCall: isFreeCall, 
+                isFreeTrial: isFreeCall, 
                 createdAt: serverTimestamp(), 
-                callerId: user?.uid 
+                totalDiamonds: 0,
+                expertEarnings: 0,
+                finalDuration: 0
             });
 
+            // 🔥 SATTI FIX: Save to both state and ref
             setActiveCallId(callRef.id);
+            activeCallIdRef.current = callRef.id;
+
             ringTimerAnim.setValue(1);
             Animated.timing(ringTimerAnim, {
                 toValue: 0,
@@ -329,7 +357,11 @@ export default function ExpertDetail() {
                         ringTimerAnim.stopAnimation();
                         setIsCalling(false);
                         deactivateKeepAwake();
+                        
+                        // 🔥 Clear state and ref securely
                         setActiveCallId(null);
+                        activeCallIdRef.current = null;
+                        
                         router.push({
                             pathname: "/videocall",
                             params: { 
@@ -346,24 +378,32 @@ export default function ExpertDetail() {
                         ringTimerAnim.stopAnimation();
                         setIsCalling(false);
                         deactivateKeepAwake();
+                        
+                        // 🔥 Clear state and ref securely
                         setActiveCallId(null);
-                        if (callData.status === 'rejected') Alert.alert("Engaged", "The consultant is currently engaged.");
+                        activeCallIdRef.current = null;
+                        
+                        if (callData.status === 'rejected') Alert.alert("Engaged", "The host is currently engaged.");
                     }
                 }
             });
         } catch (err) {
             setIsCalling(false);
-            Alert.alert("Error", "Could not initiate consultation session.");
+            Alert.alert("Error", "Could not initiate call session.");
         }
     };
 
     const handleTimeout = async (cid: string) => {
         try {
             if (unsubCallRef.current) { unsubCallRef.current(); unsubCallRef.current = null; }
-            await updateDoc(doc(db, "calls", cid), { status: 'missed' });
+            await updateDoc(doc(db, "calls", cid), { 
+                status: 'missed',
+                updatedAt: serverTimestamp() // 🔥 Notifies backend even on timeouts
+            });
             setIsCalling(false);
             deactivateKeepAwake();
             setActiveCallId(null);
+            activeCallIdRef.current = null;
         } catch (e) { console.log(e); }
     };
 
@@ -379,7 +419,7 @@ export default function ExpertDetail() {
                     params: { liveId: actualLiveId }
                 });
             } else {
-                Alert.alert("Broadcast Concluded", "Consultant is not currently broadcasting or the session has concluded.");
+                Alert.alert("Broadcast Concluded", "Host is not currently broadcasting or the session has concluded.");
             }
         } catch (e) {
             Alert.alert("Error", "Could not join the live session right now.");
@@ -393,7 +433,7 @@ export default function ExpertDetail() {
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', padding: 20 }]}>
                 <Ionicons name="eye-off-outline" size={80} color="#1E293B" />
                 <Text style={{ color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 20 }}>Profile Not Available</Text>
-                <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 10 }}>This account is currently restricted. Please explore other consultants.</Text>
+                <Text style={{ color: '#64748B', textAlign: 'center', marginTop: 10 }}>This account is currently restricted. Please explore other hosts.</Text>
                 <TouchableOpacity onPress={() => router.back()} style={{ marginTop: 30, backgroundColor: '#334155', paddingHorizontal: 30, paddingVertical: 12, borderRadius: 15 }}><Text style={{ color: '#FFF', fontWeight: 'bold' }}>Go Back</Text></TouchableOpacity>
             </View>
         );
@@ -433,7 +473,6 @@ export default function ExpertDetail() {
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
 
-    // 🔥 THE MICRO-FRACTION FIX FOR UI 🔥
     const validFreeMinsUI = Number(userData?.freeMinsRemaining || 0);
     const hasFreeCallUI = (userData?.isWelcomeCallAvailable === true) || (validFreeMinsUI > 0.05);
 
@@ -492,7 +531,6 @@ export default function ExpertDetail() {
                     </View>
                 </View>
 
-                {/* ZERO BOX INFO SECTION */}
                 <View style={styles.infoContent}>
                     <View style={styles.nameRow}>
                         <View style={{ flex: 1 }}>
@@ -520,11 +558,10 @@ export default function ExpertDetail() {
                         </View>
                     </View>
 
-                    {/* 🔥 FLUID STATS CARD - BORDER TYPE 1 */}
                     <View style={[styles.statsCard, borderType1]}>
                         <View style={styles.statBox}>
                             <Text style={[styles.statVal, { color: theme.color }]} numberOfLines={1} adjustsFontSizeToFit>{theme.label.split(' ')[0]}</Text>
-                            <Text style={styles.statLabel}>Consultant Tier</Text>
+                            <Text style={styles.statLabel}>Host Tier</Text>
                         </View>
                         <View style={styles.vDivider} />
                         <View style={styles.statBox}>
@@ -555,10 +592,9 @@ export default function ExpertDetail() {
                     )}
 
                     <Text style={[styles.sectionTitle, { marginTop: 15, color: theme.color }]}>Professional Overview</Text>
-                    {/* 🔥 FLUID BIO BOX - BORDER TYPE 2 */}
                     <View style={[styles.bioContainer, borderType2]}>
                         <MaterialCommunityIcons name="format-quote-open" size={24} color={theme.color + '40'} style={styles.quoteIcon} />
-                        <Text style={styles.bioText}>{expert?.bio || "Professional consultant dedicated to providing high-quality guidance and support."}</Text>
+                        <Text style={styles.bioText}>{expert?.bio || "Professional host dedicated to providing high-quality guidance and support."}</Text>
                     </View>
 
                     {expert?.hobbies && expert.hobbies.length > 0 && (
@@ -582,7 +618,6 @@ export default function ExpertDetail() {
                         )) : <View style={styles.emptyGallery}><Text style={styles.emptyText}>No visual data found</Text></View>}
                     </ScrollView>
 
-                    {/* 🔥 TRUST BANNER - BORDER TYPE 1 */}
                     <View style={[styles.trustBanner, borderType1]}>
                         <MaterialCommunityIcons name="shield-lock" size={20} color={theme.color} />
                         <Text style={[styles.trustText, { color: theme.color }]}>Quantum Secure End-to-End Encryption</Text>
@@ -604,7 +639,7 @@ export default function ExpertDetail() {
                 ) : (
                     <>
                         <View style={styles.priceInfo}>
-                            <Text style={styles.totalLabel}>CONSULT FEE</Text>
+                            <Text style={styles.totalLabel}>CALL FEE</Text>
                             <View style={styles.priceRow}>
                                 <Ionicons name="diamond" size={18} color={accentColor} />
                                 <Text style={[styles.totalVal, { color: accentColor }]} numberOfLines={1} adjustsFontSizeToFit>
@@ -621,15 +656,15 @@ export default function ExpertDetail() {
                         >
                             <LinearGradient 
                                 colors={
-                                    !expert?.isOnline ? ['#1E293B', '#0F172A'] : 
-                                    (expert?.isBusy === true || expert?.isBusy === "true") ? ['#F59E0B', '#B45309'] : 
+                                    !expert?.isOnline ? (['#1E293B', '#0F172A'] as const) : 
+                                    (expert?.isBusy === true || expert?.isBusy === "true") ? (['#F59E0B', '#B45309'] as const) : 
                                     theme.grad
                                 } 
                                 style={styles.btnGradient}
                             >
                                 <Ionicons name={!expert?.isOnline ? "videocam-off" : (expert?.isBusy === true || expert?.isBusy === "true") ? "time" : "videocam"} size={22} color={expert?.isOnline ? "#FFF" : "#475569"} />
                                 <Text style={[styles.callBtnText, !expert?.isOnline && { color: '#475569' }]}>
-                                    {!expert?.isOnline ? "Offline" : (expert?.isBusy === true || expert?.isBusy === "true") ? "Engaged" : "CONSULT NOW"}
+                                    {!expert?.isOnline ? "Offline" : (expert?.isBusy === true || expert?.isBusy === "true") ? "Engaged" : "CONNECT NOW"}
                                 </Text>
                             </LinearGradient>
                         </TouchableOpacity>
@@ -643,26 +678,14 @@ export default function ExpertDetail() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#020617' },
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
-    
-    // 🔥 SHIMMER ORBS
     shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
-
     imageWrapper: { width: '100%', height: height * 0.40, position: 'relative', overflow: 'visible' },
     profileImg: { width: '100%', height: '100%', resizeMode: 'cover' },
-    coverAvatarNode: { 
-        position: 'absolute', 
-        bottom: -45, 
-        left: '50%',
-        marginLeft: -50, 
-        zIndex: 11,
-        alignItems: 'center',
-        justifyContent: 'center' 
-    },
+    coverAvatarNode: { position: 'absolute', bottom: -45, left: '50%', marginLeft: -50, zIndex: 11, alignItems: 'center', justifyContent: 'center' },
     avatarRing: { padding: 4, borderRadius: 60, elevation: 10 },
     expertMainAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#020617' },
     avatarLevelBadge: { position: 'absolute', bottom: -8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 2, borderColor: '#020617' },
     avatarLevelText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-    
     navRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 55, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
     iconCircle: { backgroundColor: 'rgba(2, 6, 23, 0.4)', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     infoContent: { padding: 25, paddingTop: 65, minHeight: height },
@@ -675,24 +698,12 @@ const styles = StyleSheet.create({
     followBtnText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
     dot: { width: 8, height: 8, borderRadius: 4 },
     statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-    
-    // 🔥 ZERO BOX STATS CARD
-    statsCard: { 
-        flexDirection: 'row', 
-        justifyContent: 'space-around', 
-        alignItems: 'center',
-        marginVertical: 30, 
-        paddingVertical: 25, 
-        borderRadius: 35, 
-        width: width - 40,
-        alignSelf: 'center'
-    },
+    statsCard: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginVertical: 30, paddingVertical: 25, borderRadius: 35, width: width - 40, alignSelf: 'center' },
     statBox: { flex: 1, alignItems: 'center', paddingHorizontal: 5 },
     priceContainer: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
     vDivider: { width: 1, height: '60%', backgroundColor: 'rgba(255,255,255,0.1)', alignSelf: 'center' },
     statVal: { color: '#FFF', fontSize: 19, fontWeight: '900', textAlign: 'center' },
     statLabel: { color: '#64748B', fontSize: 10, marginTop: 8, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
-    
     chipSection: { marginBottom: 15 },
     chipScroll: { paddingRight: 20, gap: 10, paddingVertical: 12 },
     chipItem: { backgroundColor: 'rgba(255, 255, 255, 0.03)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, borderWidth: 1 },
@@ -707,16 +718,11 @@ const styles = StyleSheet.create({
     galleryImg: { width: 130, height: 180, resizeMode: 'cover', borderRadius: 20 },
     emptyGallery: { width: width - 50, height: 120, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 30, justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#1E293B' },
     emptyText: { color: '#475569', fontSize: 12, fontWeight: '700' },
-    
-    // 🔥 ZERO BOX BIO CONTAINER
     bioContainer: { padding: 25, borderRadius: 35, marginTop: 15, position: 'relative' },
     quoteIcon: { position: 'absolute', top: 15, left: 18 },
     bioText: { color: '#94A3B8', lineHeight: 26, fontSize: 15, fontWeight: '600', paddingLeft: 8 },
-    
-    // 🔥 ZERO BOX TRUST BANNER
     trustBanner: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, marginTop: 35, gap: 12 },
     trustText: { fontSize: 12, fontWeight: '800' },
-    
     callingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 9999, justifyContent: 'center', alignItems: 'center' },
     timerWrapper: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 30 },
     timerSvg: { position: 'absolute', transform: [{ rotate: '-90deg' }] },
@@ -727,8 +733,6 @@ const styles = StyleSheet.create({
     cancelCallBtn: { marginTop: 80, alignItems: 'center' },
     cancelCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', elevation: 20, shadowColor: '#EF4444', shadowOpacity: 0.5, shadowRadius: 15 },
     cancelLabel: { color: '#EF4444', marginTop: 15, fontWeight: '900', fontSize: 13, letterSpacing: 3 },
-    
-    // 🔥 ZERO BOX BOTTOM BAR
     bottomBar: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 22, paddingBottom: Platform.OS === 'ios' ? 45 : 30, backgroundColor: 'rgba(15, 23, 42, 0.95)', borderTopLeftRadius: 40, borderTopRightRadius: 40, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', elevation: 30 },
     priceInfo: { flex: 1 },
     totalLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 2 },

@@ -23,7 +23,7 @@ export default function UserControl() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 🔍 Synchronizing client-role profiles only
+        // 🔍 Synchronizing user-role profiles only
         const q = query(collection(db, "users"), where("role", "==", "user"));
         
         // ✅ OPERATIONAL UPDATE: Error handling for secure database synchronization
@@ -57,7 +57,7 @@ export default function UserControl() {
         const newStatus = !currentStatus;
         Alert.alert(
             newStatus ? "⚠️ RESTRICT ACCESS?" : "✅ RESTORE ACCESS?",
-            `Are you sure you want to ${newStatus ? 'restrict' : 'restore'} platform access for ${name || 'this client'}?`,
+            `Are you sure you want to ${newStatus ? 'restrict' : 'restore'} platform access for ${name || 'this user'}?`,
             [
                 { text: "Cancel", style: "cancel" },
                 { 
@@ -72,7 +72,7 @@ export default function UserControl() {
                                 lastAdminAction: new Date()
                             });
                             
-                            Alert.alert("Success", `Client access has been ${newStatus ? 'restricted' : 'restored'} successfully.`);
+                            Alert.alert("Success", `User access has been ${newStatus ? 'restricted' : 'restored'} successfully.`);
                         } catch (err: any) {
                             if (err.code === 'permission-denied') {
                                 Alert.alert("Security Alert", "Administrative credentials insufficient for this modification.");
@@ -135,18 +135,18 @@ export default function UserControl() {
                         </View>
 
                         <View style={styles.userInfo}>
-                            <Text style={styles.userName} numberOfLines={1}>{item.name || 'Platform Client'}</Text>
+                            <Text style={styles.userName} numberOfLines={1}>{item.name || 'Platform User'}</Text>
                             <View style={styles.detailRow}>
                                 <Feather name="phone" size={10} color="#475569" />
                                 <Text style={styles.userPhone}> {item.phoneNumber || 'Verification Encrypted'}</Text>
                             </View>
                             
-                            {/* 🔥 Display total safety flags from consultants 🔥 */}
+                            {/* 🔥 Display total safety flags from hosts 🔥 */}
                             {blockCount > 0 && (
                                 <View style={styles.detailRow}>
                                     <MaterialCommunityIcons name="account-cancel-outline" size={12} color="#EF4444" />
                                     <Text style={[styles.userPhone, { color: '#EF4444', fontWeight: 'bold' }]}>
-                                        {' '}Flagged by {blockCount} Consultants
+                                        {' '}Flagged by {blockCount} Hosts
                                     </Text>
                                 </View>
                             )}
@@ -189,7 +189,7 @@ export default function UserControl() {
 
             <View style={styles.header}>
                 <View>
-                    <Text style={styles.title}>CLIENT ROSTER</Text>
+                    <Text style={styles.title}>USER ROSTER</Text>
                     <Text style={styles.subtitle}>Registered accounts on TalkPe secure network</Text>
                 </View>
                 <View style={styles.statsBadge}>

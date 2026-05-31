@@ -67,7 +67,7 @@ export default function MasterLedger() {
                     uniqueACTIVITY_REWARDs.set(docSnapshot.id, {
                         id: docSnapshot.id,
                         type: 'ACTIVITY_REWARD', 
-                        userName: data.expertName || data.userName || data.name || 'Consultant',
+                        userName: data.expertName || data.userName || data.name || 'Host',
                         // Added more field fallbacks in case the DB structure is slightly different
                         amount: data.amountRupee || data.amount || data.ACTIVITY_REWARDAmount || data.withdrawAmount || 0,
                         // Added multiple timestamp fallbacks

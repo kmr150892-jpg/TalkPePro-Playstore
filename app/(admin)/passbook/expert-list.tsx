@@ -23,7 +23,7 @@ export default function ExpertPassbookList() {
     const [expertsList, setExpertsList] = useState<any[]>([]);
 
     useEffect(() => {
-        // Fetch strictly ONLY Authorized Consultants
+        // Fetch strictly ONLY Authorized Hosts
         const q = query(collection(db, 'users'), where('role', '==', 'expert'));
         
         const unsub = onSnapshot(q, (snap) => {
@@ -56,7 +56,7 @@ export default function ExpertPassbookList() {
                 </View>
                 <View style={{ flex: 1, marginLeft: 15 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={styles.expertName}>{item.name || 'Authorized Consultant'}</Text>
+                        <Text style={styles.expertName}>{item.name || 'Authorized Host'}</Text>
                         <MaterialCommunityIcons name="check-decagram" size={14} color="#10B981" />
                     </View>
                     <Text style={styles.expertId} numberOfLines={1}>REF: {String(item.id).toUpperCase()}</Text>
@@ -97,7 +97,7 @@ export default function ExpertPassbookList() {
                 </TouchableOpacity>
                 <View>
                     <Text style={styles.headerTitle}>Operational Ledger</Text>
-                    <Text style={styles.headerSub}>Total Active Consultants: {expertsList.length}</Text>
+                    <Text style={styles.headerSub}>Total Active Hosts: {expertsList.length}</Text>
                 </View>
             </View>
 

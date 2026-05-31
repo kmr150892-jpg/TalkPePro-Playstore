@@ -427,7 +427,7 @@ export default function UserPassbookDetail() {
 
   const totalSpent = userData?.totalSpentDiamonds || 0;
   const rank = calculateUserLevel(totalSpent);
-  const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'Client'}&background=1E293B&color=fff&bold=true`;
+  const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=1E293B&color=fff&bold=true`;
 
   const parallaxBg = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -40], extrapolate: 'clamp' });
   const bgOpacity = scrollY.interpolate({ inputRange: [0, 200], outputRange: [0.12, 0.05], extrapolate: 'clamp' });
@@ -512,7 +512,7 @@ export default function UserPassbookDetail() {
       const secs = currentDuration % 60;
       const durationText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
       const totalSpentOnCall = (Number(item.totalDiamonds) || 0);
-      const callEName = item.expertName || item.hostName || 'CONSULTANT NODE';
+      const callEName = item.expertName || item.hostName || 'HOST NODE';
       const callEImage = item.expertImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(callEName)}&background=1E293B&color=fff&bold=true`;
 
       return (
@@ -741,8 +741,8 @@ export default function UserPassbookDetail() {
                             <StatBox icon="diamond-stone" label="ASSETS UTILIZED" value={`${totalSpentCalculated} 💎`} color="#F43F5E" bgColor="rgba(244, 63, 94, 0.1)" />
                             <StatBox icon="gamepad-variant" label="ACTIVITY REWARDS" value={`${gameNetProfit > 0 ? '+' : ''}${gameNetProfit} 💎`} color={gameNetProfit >= 0 ? "#10B981" : "#EF4444"} bgColor={gameNetProfit >= 0 ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)"} />
                             <StatBox icon="gift" label="REWARDS SENT" value={`${totalGiftsSpent} 💎`} color="#A855F7" bgColor="rgba(168, 85, 247, 0.1)" />
-                            <StatBox icon="video-vintage" label="CONSULTATION SPENT" value={`${totalVideoCallSpent} 💎`} color="#3B82F6" bgColor="rgba(59, 130, 246, 0.1)" />
-                            <StatBox icon="clock-outline" label="CONSULTATION MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" />
+                            <StatBox icon="video-vintage" label="CALL SPENT" value={`${totalVideoCallSpent} 💎`} color="#3B82F6" bgColor="rgba(59, 130, 246, 0.1)" />
+                            <StatBox icon="clock-outline" label="CALL MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" />
                             <StatBox icon="sword-cross" label="TOTAL ARENA ENTRY" value={`${totalEntryFees.toLocaleString()} 💎`} color="#EF4444" bgColor="rgba(239, 68, 68, 0.1)" width="100%" />
                         </View>
                     )}

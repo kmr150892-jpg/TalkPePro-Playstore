@@ -33,7 +33,7 @@ const UserAnalytics = () => {
         <View style={styles.container}>
             <View style={styles.header}>
                 <TouchableOpacity onPress={() => router.back()}><Feather name="arrow-left" size={24} color="#F59E0B" /></TouchableOpacity>
-                <Text style={styles.title}>CLIENT BASE METRICS</Text>
+                <Text style={styles.title}>USER BASE METRICS</Text>
             </View>
 
             <View style={styles.totalBox}>
@@ -45,17 +45,17 @@ const UserAnalytics = () => {
                 <View style={styles.statBox}>
                     <MaterialCommunityIcons name="account" size={30} color="#6366F1" />
                     <Text style={styles.statNum}>{counts.users}</Text>
-                    <Text style={styles.statLabel}>ACTIVE CLIENTS</Text>
+                    <Text style={styles.statLabel}>ACTIVE USERS</Text>
                 </View>
                 <View style={styles.statBox}>
                     <MaterialCommunityIcons name="star-face" size={30} color="#F59E0B" />
                     <Text style={styles.statNum}>{counts.experts}</Text>
-                    <Text style={styles.statLabel}>CONSULTANTS</Text>
+                    <Text style={styles.statLabel}>HOSTS</Text>
                 </View>
             </View>
 
             <View style={styles.growthCard}>
-                <Text style={styles.growthText}>Network Distribution: {((counts.experts / counts.total) * 100).toFixed(1)}% Consultants</Text>
+                <Text style={styles.growthText}>Network Distribution: {((counts.experts / counts.total) * 100).toFixed(1)}% Hosts</Text>
                 <View style={styles.progressBar}>
                     <View style={[styles.progressFill, { width: `${(counts.experts / counts.total) * 100}%` }]} />
                 </View>

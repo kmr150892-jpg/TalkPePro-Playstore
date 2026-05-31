@@ -31,7 +31,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'], glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'], glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'], glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 30000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
+    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
@@ -199,7 +199,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                         const bns = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Math.floor((Number(d.diamonds) || Number(d.amount) || 0) / 2);
                         if (bns > 0) { 
-                            rawData.push({ id: docSnap.id, type: tType, beans: bns, timestamp: d.timestamp || { seconds: 0 }, senderName: d.senderName || d.userName || d.name || "Client", userId: d.userId || d.senderId });
+                            rawData.push({ id: docSnap.id, type: tType, beans: bns, timestamp: d.timestamp || { seconds: 0 }, senderName: d.senderName || d.userName || d.name || "User", userId: d.userId || d.senderId });
                         }
                     }
                 } catch(e) { console.log('Transactions fetch error', e); }
@@ -227,7 +227,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             const g = gDoc.data();
                             const bns = Number(g.beans) || Math.floor((Number(g.amount) || Number(g.price) || 0) / 2);
                             if (bns > 0) { 
-                                rawData.push({ id: gDoc.id, type: 'live_gift', beans: bns, timestamp: g.timestamp || liveData.startedAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
+                                rawData.push({ id: gDoc.id, type: 'live_gift', beans: bns, timestamp: g.timestamp || liveData.startedAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "User", userId: g.senderId || g.userId });
                             }
                         }
                         
@@ -261,7 +261,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             const g = gDoc.data();
                             const bns = Number(g.beans) || Math.floor((Number(g.price) || Number(g.amount) || 0) / 2);
                             if (bns > 0) { 
-                                rawData.push({ id: gDoc.id, type: 'party_gift', beans: bns, timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "Client", userId: g.senderId || g.userId });
+                                rawData.push({ id: gDoc.id, type: 'party_gift', beans: bns, timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "User", userId: g.senderId || g.userId });
                             }
                         }
 
@@ -437,7 +437,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 const lastCallerName = d.lastCallFrom || "Waiting...";
                 const eliteFan = d.topVipSupporter?.name && d.topVipSupporter.name !== 'None' 
                     ? `${d.topVipSupporter.name} (💎${d.topVipSupporter.amount})` 
-                    : "No Key Clients Yet";
+                    : "No Key Users Yet";
                 
                 const longestSecs = Number(d.longestCallDuration) || 0; 
                 const longestCallMinutes = Math.floor(longestSecs / 60);
@@ -510,7 +510,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             await updateDoc(doc(db, "users", expertId), { blockedUsers: arrayUnion(targetId) });
             await updateDoc(doc(db, "users", targetId), { expertBlockCount: increment(1) });
             await addDoc(collection(db, "admin_alerts"), {
-                type: 'EXPERT_BLOCKED_USER', expertId: expertId, expertName: stats?.name || "Consultant",
+                type: 'EXPERT_BLOCKED_USER', expertId: expertId, expertName: stats?.name || "Host",
                 userId: targetId, userName: selectedUserToBlock!.name, reason: reason,
                 timestamp: serverTimestamp(), status: 'unread'
             });
@@ -554,11 +554,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
         const itemType = String(item.type || '').toLowerCase();
         const targetUserId = item.userId;
-        const targetUserName = item.callerName || item.senderName || 'Client';
+        const targetUserName = item.callerName || item.senderName || 'User';
 
         if (itemType === 'video_call') {
             iconName = "video-vintage"; iconColor = theme.primary; 
-            titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Reward";
+            titleText = item.callerName ? `Call with ${item.callerName}` : "Call Reward";
         } else if (itemType.includes('gift')) {
             iconName = "gift"; iconColor = theme.secondary; 
             let baseTitle = "";
@@ -567,7 +567,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             else if (itemType === 'call_gift') baseTitle = "Private Reward";
             else baseTitle = "Virtual Reward";
             
-            const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "Client";
+            const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "User";
             titleText = `${baseTitle} (from ${validSender})`;
         } else if (itemType.includes('game')) {
             iconName = "dice-multiple"; iconColor = "#F59E0B";
@@ -730,7 +730,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     {/* Title & Level Details with proper flex bounds to fix overlapping */}
                     <View style={{ flex: 1, marginLeft: 12, marginRight: 8, justifyContent: 'center' }}>
                         <Text style={{ color: '#FFF', fontSize: 15, fontWeight: 'bold', letterSpacing: 0.5, lineHeight: 22 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                            {user.name || 'Consultant'} {isMe && <Text style={{ color: theme.accent, fontSize: 12 }}> (You)</Text>}
+                            {user.name || 'Host'} {isMe && <Text style={{ color: theme.accent, fontSize: 12 }}> (You)</Text>}
                         </Text>
                         
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
@@ -810,7 +810,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 </View>
                                 <View style={styles.vLine} />
                                 <View style={styles.summaryItem}>
-                                    <Text style={styles.summaryLabel}>KEY CLIENT</Text>
+                                    <Text style={styles.summaryLabel}>KEY USER</Text>
                                     <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{stats?.topFanName}</Text>
                                 </View>
                             </View>
@@ -838,7 +838,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="time-outline" label="Today Session" value={`${stats?.todayMins}m`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="people-outline" label="Today Consultations" value={stats?.todayCalls} color={theme.primary} borderStyle={borderType1} />
+                                        <MatrixBox icon="people-outline" label="Today Calls" value={stats?.todayCalls} color={theme.primary} borderStyle={borderType1} />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="stats-chart-outline" label="Total Time" value={`${stats?.displayMins}m`} color={theme.primary} borderStyle={borderType1} />
@@ -849,8 +849,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 <Text style={styles.subHeading}>REWARD BREAKDOWN</Text>
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="videocam" label="Consultation Earnings" value={`🎖️${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="gift" label="Consultation Rewards" value={`🎖️${breakdown.callGifts.toLocaleString()}`} color={theme.primary} borderStyle={borderType1} />
+                                        <MatrixBox icon="videocam" label="Call Earnings" value={`🎖️${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />
+                                        <MatrixBox icon="gift" label="Call Rewards" value={`🎖️${breakdown.callGifts.toLocaleString()}`} color={theme.primary} borderStyle={borderType1} />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`🎖️${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />

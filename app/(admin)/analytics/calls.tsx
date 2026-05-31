@@ -78,7 +78,7 @@ const CallAnalytics = () => {
         const unsubLogs = onSnapshot(qLogs, (snap) => {
             const logs: any[] = snap.docs.map(doc => ({ id: doc.id, ...(doc.data() as any) }));
             
-            // Validating recognized user/consultant sessions only
+            // Validating recognized user/host sessions only
             const validLogs = logs.filter((log: any) => {
                 const eName = log.expertName || log.expert_name || log.receiverName;
                 const uName = log.callerName || log.userName || log.user_name;
@@ -160,9 +160,9 @@ const CallAnalytics = () => {
                             }
                         }
 
-                        // Consultant/User Mapping (Keys strictly preserved)
-                        const expertName = log.expertName || log.expert_name || 'Consultant';
-                        const userName = log.callerName || log.userName || 'Client';
+                        // Host/User Mapping (Keys strictly preserved)
+                        const expertName = log.expertName || log.expert_name || 'Host';
+                        const userName = log.callerName || log.userName || 'User';
 
                         // Duration Analytics
                         const durationSecs = Number(log.finalDuration || log.duration || 0);

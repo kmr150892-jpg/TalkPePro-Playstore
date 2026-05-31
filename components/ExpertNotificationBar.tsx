@@ -42,14 +42,14 @@ export default function ExpertNotificationBar() {
     const [userTier, setUserTier] = useState<any>(calculateUserLevel(0));
     const translateY = useRef(new Animated.Value(-200)).current; 
     const router = useRouter();
-    const consultant = auth.currentUser;
+    const host = auth.currentUser;
 
     useEffect(() => {
-        if (!consultant) return;
+        if (!host) return;
 
         const q = query(
             collection(db, "Discover_queue"),
-            where("expertId", "==", consultant.uid),
+            where("expertId", "==", host.uid),
             where("status", "==", "Discovered")
         );
 
@@ -58,7 +58,7 @@ export default function ExpertNotificationBar() {
                 const data = { id: snap.docs[0].id, ...snap.docs[0].data() } as any; 
                 
                 // 🔥 NAME FIX: Fetch real name to bypass Google's default 'TOTOFILM'
-                let finalName = data.userName || "Client";
+                let finalName = data.userName || "User";
                 try {
                     const uSnap = await getDoc(doc(db, "users", data.userId));
                     if (uSnap.exists()) {
@@ -67,9 +67,9 @@ export default function ExpertNotificationBar() {
                     }
                 } catch(e) {}
                 
-                // Force fallback to 'Client' if the email-based name still shows
+                // Force fallback to 'User' if the email-based name still shows
                 if (finalName.toUpperCase() === 'TOTOFILM' || finalName.includes('@')) {
-                    finalName = 'Client';
+                    finalName = 'User';
                 }
                 data.displayCallerName = finalName;
 
@@ -89,7 +89,7 @@ export default function ExpertNotificationBar() {
         });
 
         return () => unsub();
-    }, [consultant]);
+    }, [host]);
 
     const hideBar = () => {
         Animated.timing(translateY, { 

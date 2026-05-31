@@ -1,6 +1,6 @@
 /**
  * TalkPe Pro Secure Theme Protocol:
- * Consultant-grade dynamic environment synchronization (Light/Dark node).
+ * Host-grade dynamic environment synchronization (Light/Dark node).
  * Reference: https://docs.expo.io/guides/color-schemes/
  */
 import { Text as DefaultText, View as DefaultView } from 'react-native';

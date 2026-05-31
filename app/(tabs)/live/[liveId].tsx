@@ -110,7 +110,7 @@ export default function UserLiveViewScreen() {
     const [hostUid, setHostUid] = useState<number>(0);
     const [giftAlert, setGiftAlert] = useState<string | null>(null);
     const [activeGrandGift, setActiveGrandGift] = useState<any>(null); 
-    const [hostName, setHostName] = useState<string>("Consultant");
+    const [hostName, setHostName] = useState<string>("Host");
     const [hostImage, setHostImage] = useState<string>("");
     const [callRate, setCallRate] = useState<number>(25); 
     const [hostLevel, setHostLevel] = useState<string>("L1");
@@ -158,7 +158,7 @@ export default function UserLiveViewScreen() {
         isClosingRef.current = true;
         leaveChannel(); // Safely disconnect Agora so video/audio stops immediately
 
-        // 🔥 SATTI FIX: FRONTEND AUTO-REFUND LOGIC (CLIENT-SIDE SAFEGUARD) 🔥
+        // 🔥 SATTI FIX: FRONTEND AUTO-REFUND LOGIC (USER-SIDE SAFEGUARD) 🔥
         // Expert app kill pannalum, user screen close aagurathuku munnadi refund adichudum!
         try {
             if (auth.currentUser) {
@@ -203,7 +203,7 @@ export default function UserLiveViewScreen() {
         // ----------------------------------------------------------------------
 
         // 🔥 SATTI FIX: GAME WAITING LOGIC REMOVED! INSTANT EXIT & CLOSE ALL MODALS 🔥
-        setExitMessage("Consultant left the broadcast. Exiting... 🚀");
+        setExitMessage("Host left the broadcast. Exiting... 🚀");
         setIsLiveEndedWaiting(true); // Lock the screen
         
         // 🔥 Force close modals and WAIT 500ms before showing Alert! 🔥
@@ -216,7 +216,7 @@ export default function UserLiveViewScreen() {
         setTimeout(() => {
             Alert.alert(
                 "Broadcast Concluded", 
-                "Consultant has left the broadcast. See you next time! 🚀", 
+                "Host has left the broadcast. See you next time! 🚀", 
                 [{ text: "OK", onPress: () => handleBackNavigation() }],
                 { cancelable: false }
             );
@@ -322,7 +322,7 @@ export default function UserLiveViewScreen() {
             if (!viewerSnap.exists()) {
                 const userSnap = await getDoc(userProfileRef);
                 let currentUserPic = auth.currentUser?.photoURL || ""; 
-                let currentUserName = auth.currentUser?.displayName || "Client";
+                let currentUserName = auth.currentUser?.displayName || "User";
 
                 if (userSnap.exists()) {
                     const uData = userSnap.data();
@@ -358,7 +358,7 @@ export default function UserLiveViewScreen() {
         if (!auth.currentUser || !liveId) return;
         const viewerRef = doc(db, "lives", liveId, "activeViewers", auth.currentUser.uid);
         const liveDocRef = doc(db, "lives", liveId);
-        const currentUserName = userData?.name || auth.currentUser?.displayName || "Client";
+        const currentUserName = userData?.name || auth.currentUser?.displayName || "User";
 
         try {
             const viewerSnap = await getDoc(viewerRef);
@@ -525,7 +525,7 @@ export default function UserLiveViewScreen() {
                     return;
                 }
                 setViewerCount(data.viewerCount || 0);
-                setHostName(data.hostName || data.displayName || "Consultant"); 
+                setHostName(data.hostName || data.displayName || "Host"); 
                 setHostImage(data.hostImage || data.profilePic || "");
                 setHostLevel(data.levelTitle || data.currentLevel || "L0"); 
                 setCallRate(data.pricePerMin || 0);
@@ -584,7 +584,7 @@ export default function UserLiveViewScreen() {
                         params: { 
                             callId: change.id, 
                             role: 'user',
-                            expertName: callData.expertName || hostName || "Consultant", 
+                            expertName: callData.expertName || hostName || "Host", 
                             expertImage: callData.expertImage || hostImage || "",
                             isFreeTrial: hasTrialMinsRef.current ? "true" : "false" 
                         }
@@ -635,7 +635,7 @@ export default function UserLiveViewScreen() {
             isCallingRef.current = true; 
 
             // Force Fetch latest user profile to ensure picture/name is 100% there
-            let verifiedUserName = auth.currentUser.displayName || "Client";
+            let verifiedUserName = auth.currentUser.displayName || "User";
             let verifiedUserPic = auth.currentUser.photoURL || "";
             
             const userProfileRef = doc(db, "users", auth.currentUser.uid);
@@ -698,7 +698,7 @@ export default function UserLiveViewScreen() {
                 await addDoc(collection(db, "lives", liveId, "gifts"), {
                     giftName: name, 
                     amount: price, 
-                    senderName: uData.name || "Premium Client", 
+                    senderName: uData.name || "Premium User", 
                     senderId: auth.currentUser?.uid,
                     timestamp: serverTimestamp()
                 });
@@ -707,7 +707,7 @@ export default function UserLiveViewScreen() {
                 await addDoc(collection(db, "lives", liveId, "messages"), {
                     uid: "system_gift",
                     name: "System",
-                    text: `🎁 ${uData.name || "Premium Client"} sent a ${name}!`,
+                    text: `🎁 ${uData.name || "Premium User"} sent a ${name}!`,
                     timestamp: serverTimestamp(),
                     isGift: true 
                 }).catch(e => console.log(e));
@@ -737,7 +737,7 @@ export default function UserLiveViewScreen() {
 
         await addDoc(collection(db, "lives", liveId, "messages"), {
             text: text, 
-            senderName: userData?.name || auth.currentUser?.displayName || "Client", 
+            senderName: userData?.name || auth.currentUser?.displayName || "User", 
             senderId: auth.currentUser?.uid,
             timestamp: serverTimestamp(), 
             isHost: false
@@ -947,8 +947,8 @@ export default function UserLiveViewScreen() {
                                 <View style={[styles.busyIconCircle, { backgroundColor: userTier.secondaryColor + '30' }]}>
                                     <Ionicons name="time" size={32} color={userTier.color} />
                                 </View>
-                                <Text style={styles.busyTitle}>Consultant is Engaged</Text>
-                                <Text style={styles.busySub}>The consultant is currently on another call or unable to pick up. Please try again in a few minutes.</Text>
+                                <Text style={styles.busyTitle}>Host is Engaged</Text>
+                                <Text style={styles.busySub}>The host is currently on another call or unable to pick up. Please try again in a few minutes.</Text>
                             </BlurView>
                         </View>
                     )}

@@ -54,7 +54,7 @@ const getSmartLevelConfig = (userData: any) => {
     return getObj(0);
 };
 
-// 🔥 MASS FAQ DATABASE FOR CONSULTANTS (PLAY STORE COMPLIANT) 🔥
+// 🔥 MASS FAQ DATABASE FOR HOSTS (PLAY STORE COMPLIANT) 🔥
 const FAQS = [
     {
         id: 1,
@@ -64,7 +64,7 @@ const FAQS = [
     {
         id: 2,
         question: "How does the Premium Spotlight (Algorithm Boost) work?",
-        answer: "Activating Premium Spotlight pushes your profile to the top of the client feed. Our algorithm guarantees higher visibility by prioritizing your profile to active clients on the platform."
+        answer: "Activating Premium Spotlight pushes your profile to the top of the user feed. Our algorithm guarantees higher visibility by prioritizing your profile to active users on the platform."
     },
     {
         id: 3,
@@ -79,7 +79,7 @@ const FAQS = [
     {
         id: 5,
         question: "How do Broadcast & Forum Activity Platform Share work?",
-        answer: "Whenever clients participate in digital activities in your Broadcast or Forum room, you earn a platform-defined Platform Share on the total virtual assets they spend, credited as Rewards."
+        answer: "Whenever users participate in digital activities in your Broadcast or Forum room, you earn a platform-defined Platform Share on the total virtual assets they spend, credited as Rewards."
     },
     {
         id: 6,
@@ -88,12 +88,12 @@ const FAQS = [
     },
     {
         id: 7,
-        question: "How to handle abusive or misbehaving clients?",
-        answer: "Your safety is our priority. Disconnect the consultation immediately and use the 'Block & Report' feature from the Chat screen. Our Trust & Safety team will permanently ban the user within 24 hours."
+        question: "How to handle abusive or misbehaving users?",
+        answer: "Your safety is our priority. Disconnect the call immediately and use the 'Block & Report' feature from the Chat screen. Our Trust & Safety team will permanently ban the user within 24 hours."
     },
     {
         id: 8,
-        question: "Can I change my Consultation Rate?",
+        question: "Can I change my Call Rate?",
         answer: "Yes! Based on your Tier Level, you have a maximum allowed rate. You can adjust your 'Rewards per Minute' rate from your Command Center once every 30 minutes."
     }
 ];

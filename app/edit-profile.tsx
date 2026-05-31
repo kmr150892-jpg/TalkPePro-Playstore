@@ -436,7 +436,7 @@ export default function EditProfileScreen() {
                     </TouchableOpacity>
                   ))}
                 </View>
-                <Text style={[styles.inputLabel, { color: userTier.color }]}>CONSULTATION RATE (₹ / MIN)</Text>
+                <Text style={[styles.inputLabel, { color: userTier.color }]}>CALL RATE (₹ / MIN)</Text>
                 <View style={[styles.inputWrapper, borderType1]}>
                   <Ionicons name="cash-outline" size={20} color={userTier.color} style={styles.inputIcon}/>
                   <TextInput style={styles.input} value={priceInRupees} onChangeText={setPriceInRupees} keyboardType="numeric" placeholder="e.g. 10" placeholderTextColor="#475569" />

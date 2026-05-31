@@ -42,7 +42,7 @@ export default function BlockedUsersScreen() {
             "RESTORE ACCESS",
             `Do you want to unblock ${userName}?`, // 🔥 SATTI FIX: Clear English for Play Store
             [
-                { text: "ABORT", style: "cancel" },
+                { text: "CANCEL", style: "cancel" },
                 { 
                     text: "RESTORE", 
                     style: "default", 

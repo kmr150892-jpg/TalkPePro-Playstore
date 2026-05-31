@@ -239,7 +239,7 @@ const AdminPanel = () => {
 
             <View style={{ height: 50, marginBottom: 20 }}>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingLeft: 20 }}>
-                    {['DASHBOARD', 'CONSULTANTS', 'SETTLEMENTS'].map((tab) => (
+                    {['DASHBOARD', 'HOSTS', 'SETTLEMENTS'].map((tab) => (
                         <TouchableOpacity
                             key={tab}
                             onPress={() => setActiveTab(tab)}
@@ -319,7 +319,7 @@ const AdminPanel = () => {
                                 <View style={styles.expertHubContent}>
                                     <View style={styles.expertHubIconBox}><MaterialCommunityIcons name="account-group" size={24} color="#fff" /></View>
                                     <View style={{ flex: 1, marginLeft: 15 }}>
-                                        <Text style={styles.expertHubTitle}>CONSULTANT HUB (ACTIVE)</Text>
+                                        <Text style={styles.expertHubTitle}>HOST HUB (ACTIVE)</Text>
                                         <Text style={styles.expertHubSub}>Global Management of Authorized Profiles</Text>
                                     </View>
                                     <Entypo name="chevron-right" size={24} color="#6366F1" />
@@ -341,7 +341,7 @@ const AdminPanel = () => {
                         </View>
                     )}
 
-                    {activeTab === 'CONSULTANTS' && (
+                    {activeTab === 'HOSTS' && (
                         <View>
                             <Text style={styles.sectionTitle}>PROFILE ONBOARDING ({pendingExperts.length})</Text>
                             {pendingExperts.length === 0 && bankRequests.length === 0 ? (
@@ -407,12 +407,12 @@ const AdminPanel = () => {
                     <MaterialCommunityIcons name="grid-large" size={22} color={activeTab === 'DASHBOARD' ? "#6366F1" : "#475569"} />
                     <Text style={[styles.barLabel, activeTab === 'DASHBOARD' && {color: '#6366F1'}]}>Core</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setActiveTab('CONSULTANTS')} style={styles.barIcon}>
+                <TouchableOpacity onPress={() => setActiveTab('HOSTS')} style={styles.barIcon}>
                     <View>
-                        <MaterialCommunityIcons name="shield-check" size={22} color={activeTab === 'CONSULTANTS' ? "#F59E0B" : "#475569"} />
+                        <MaterialCommunityIcons name="shield-check" size={22} color={activeTab === 'HOSTS' ? "#F59E0B" : "#475569"} />
                         {(pendingExperts.length > 0 || bankRequests.length > 0) && <View style={styles.notifDot} />}
                     </View>
-                    <Text style={[styles.barLabel, activeTab === 'CONSULTANTS' && {color: '#F59E0B'}]}>Audit</Text>
+                    <Text style={[styles.barLabel, activeTab === 'HOSTS' && {color: '#F59E0B'}]}>Audit</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/management/reports' as any)} style={styles.barIcon}>
                     <Ionicons name="warning-outline" size={22} color="#F43F5E" />

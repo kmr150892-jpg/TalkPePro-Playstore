@@ -6,7 +6,7 @@ import { db } from '../../../firebaseConfig';
 const RevenueAnalytics = () => {
     const [loading, setLoading] = useState(true);
     
-    // 🔥 UPDATED STATE: Removed Client Distribution details for Reward Grants
+    // 🔥 UPDATED STATE: Removed User Distribution details for Reward Grants
     const [data, setData] = useState<any>({
         totalRevenue: 0,
         todayRevenue: 0,
@@ -51,8 +51,8 @@ const RevenueAnalytics = () => {
                     } catch(e) {}
                 }
 
-                // Client Breakdown Calculation
-                const uName = docData.userName || docData.user_name || docData.callerName || docData.userId || 'Unknown Client';
+                // User Breakdown Calculation
+                const uName = docData.userName || docData.user_name || docData.callerName || docData.userId || 'Unknown User';
                 if (!userMap[uName]) userMap[uName] = 0;
                 userMap[uName] += amt;
             });
@@ -62,7 +62,7 @@ const RevenueAnalytics = () => {
             setData((prev: any) => ({ ...prev, totalRevenue: rev, todayRevenue: todayRev, userBreakdown: userArr }));
         });
 
-        // 🔥 2. Calculate Total Distributed, Today's Distributed & Consultant Breakdown
+        // 🔥 2. Calculate Total Distributed, Today's Distributed & Host Breakdown
         const qACTIVITY_REWARDs = query(collection(db, "withdrawals"), where("status", "in", ["PAID", "paid", "SUCCESS", "success", "COMPLETED", "completed"]));
         const unsubACTIVITY_REWARDs = onSnapshot(qACTIVITY_REWARDs, (pSnap) => {
             let paid = 0;
@@ -78,7 +78,7 @@ const RevenueAnalytics = () => {
                 const amt = Number(docData.amountRupee || docData.amount || docData.ACTIVITY_REWARDAmount || docData.transferred || 0);
                 paid += amt;
 
-                // 🔥 NEW: Today's Consultant Distribution Calculation
+                // 🔥 NEW: Today's Host Distribution Calculation
                 const timeData = docData.createdAt || docData.timestamp || docData.processedAt || docData.date;
                 if (timeData) {
                     try {
@@ -89,7 +89,7 @@ const RevenueAnalytics = () => {
                     } catch(e) {}
                 }
 
-                const eName = docData.expertName || docData.userName || docData.expert_name || docData.receiverName || docData.expertId || 'Unknown Consultant';
+                const eName = docData.expertName || docData.userName || docData.expert_name || docData.receiverName || docData.expertId || 'Unknown Host';
                 if (!expertMap[eName]) expertMap[eName] = 0;
                 expertMap[eName] += amt;
             });
@@ -111,7 +111,7 @@ const RevenueAnalytics = () => {
             <Text style={styles.sectionTitle}>OPERATIONAL OVERVIEW</Text>
             
             <View style={styles.mainCard}>
-                <Text style={styles.label}>TOTAL CLIENT ALLOCATIONS (INFLOWS)</Text>
+                <Text style={styles.label}>TOTAL USER ALLOCATIONS (INFLOWS)</Text>
                 <Text style={styles.value}>₹{data.totalRevenue.toLocaleString('en-IN')}</Text>
                 
                 <View style={styles.todayBox}>
@@ -120,14 +120,14 @@ const RevenueAnalytics = () => {
                 </View>
             </View>
 
-            {/* CONSULTANT DISTRIBUTIONS ROW */}
+            {/* HOST DISTRIBUTIONS ROW */}
             <View style={styles.row}>
                 <View style={[styles.card, {backgroundColor: '#064E3B'}]}>
-                    <Text style={styles.cardLabel}>TOTAL PROCESSED TO CONSULTANTS</Text>
+                    <Text style={styles.cardLabel}>TOTAL PROCESSED TO HOSTS</Text>
                     <Text style={styles.cardValue}>₹{data.totalPaidOut.toLocaleString('en-IN')}</Text>
                 </View>
                 <View style={[styles.card, {backgroundColor: '#7F1D1D'}]}>
-                    <Text style={styles.cardLabel}>TODAY'S CONSULTANT PROCESSED</Text>
+                    <Text style={styles.cardLabel}>TODAY'S HOST PROCESSED</Text>
                     <Text style={styles.cardValue}>₹{data.todayPaidOut.toLocaleString('en-IN')}</Text>
                 </View>
             </View>
@@ -138,7 +138,7 @@ const RevenueAnalytics = () => {
                 <Text style={[styles.profitValue, { color: (data.totalRevenue - data.totalPaidOut) >= 0 ? '#10B981' : '#EF4444' }]}>
                     {(data.totalRevenue - data.totalPaidOut) < 0 ? '- ' : ''}₹{Math.abs(data.totalRevenue - data.totalPaidOut).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                 </Text>
-                <Text style={styles.subText}>(Allocations - Consultant processed)</Text>
+                <Text style={styles.subText}>(Allocations - Host processed)</Text>
 
                 {/* 🔥 FIX 5: Today's EXACT Formula (Shows minus if loss) */}
                 <View style={styles.todayProfitBox}>
@@ -146,12 +146,12 @@ const RevenueAnalytics = () => {
                     <Text style={[styles.profitValue, {fontSize: 24, marginTop: 5, color: (data.todayRevenue - data.todayPaidOut) >= 0 ? '#38BDF8' : '#EF4444'}]}>
                         {(data.todayRevenue - data.todayPaidOut) < 0 ? '- ' : ''}₹{Math.abs(data.todayRevenue - data.todayPaidOut).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                     </Text>
-                    <Text style={styles.subText}>(Today's Allocations - Today's Consultants)</Text>
+                    <Text style={styles.subText}>(Today's Allocations - Today's Hosts)</Text>
                 </View>
             </View>
 
-            {/* CLIENT ALLOCATION BREAKDOWN */}
-            <Text style={[styles.sectionTitle, { marginTop: 30 }]}>CLIENT ALLOCATION DETAILS</Text>
+            {/* USER ALLOCATION BREAKDOWN */}
+            <Text style={[styles.sectionTitle, { marginTop: 30 }]}>USER ALLOCATION DETAILS</Text>
             <View style={styles.listCard}>
                 {data.userBreakdown.length === 0 ? (
                     <Text style={styles.noDataText}>No allocations found yet.</Text>
@@ -165,8 +165,8 @@ const RevenueAnalytics = () => {
                 )}
             </View>
 
-            {/* CONSULTANT REDEMPTIONS BREAKDOWN */}
-            <Text style={[styles.sectionTitle, { marginTop: 30 }]}>CONSULTANT REDEMPTIONS DETAILS</Text>
+            {/* HOST REDEMPTIONS BREAKDOWN */}
+            <Text style={[styles.sectionTitle, { marginTop: 30 }]}>HOST REDEMPTIONS DETAILS</Text>
             <View style={styles.listCard}>
                 {data.expertBreakdown.length === 0 ? (
                     <Text style={styles.noDataText}>No redemptions sent yet.</Text>

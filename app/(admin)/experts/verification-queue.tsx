@@ -21,7 +21,7 @@ export default function VerificationQueue() {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        // 🔥 SYSTEM LOGIC: Pending consultant onboarding requests mattum fetch pannum
+        // 🔥 SYSTEM LOGIC: Pending host onboarding requests mattum fetch pannum
         const q = query(
             collection(db, "users"), 
             where("isApplying", "==", true),
@@ -73,7 +73,7 @@ export default function VerificationQueue() {
                         <Text style={styles.name}>{item.name || 'NEW CANDIDATE'}</Text>
                         <View style={styles.metaRow}>
                             <Feather name="tag" size={10} color="#6366F1" />
-                            <Text style={styles.subText}>{item.category || 'General Consultation'}</Text>
+                            <Text style={styles.subText}>{item.category || 'General Call'}</Text>
                         </View>
                     </View>
 
@@ -121,7 +121,7 @@ export default function VerificationQueue() {
                                 <Feather name="shield-off" size={40} color="#1E293B" />
                             </View>
                             <Text style={styles.emptyTitle}>NO PENDING TASKS</Text>
-                            <Text style={styles.emptySub}>All consultant applications have been processed.</Text>
+                            <Text style={styles.emptySub}>All host applications have been processed.</Text>
                         </View>
                     }
                 />

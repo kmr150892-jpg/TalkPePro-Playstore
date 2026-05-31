@@ -196,9 +196,9 @@ export default function SwipeDiscoverScreen() {
         if (searchState !== "searching") return;
         const sequences = [
             { t: "Syncing secure handshake...", d: 2000 },
-            { t: "Locating verified consultants...", d: 6000 },
+            { t: "Locating verified hosts...", d: 6000 },
             { t: `Activating ${tier.label} protocol...`, d: 10000 },
-            { t: "Waiting for consultant response...", d: 15000 }
+            { t: "Waiting for host response...", d: 15000 }
         ];
         sequences.forEach(seq => {
             setTimeout(() => {
@@ -253,7 +253,7 @@ export default function SwipeDiscoverScreen() {
 
                         if (data.status === "searching" && data.expertId === null && hasSentRequest.current) {
                             hasSentRequest.current = false;
-                            setStatusText("Consultant occupied. Re-routing...");
+                            setStatusText("Host occupied. Re-routing...");
                             findExpert(); 
                         }
                     }
@@ -299,12 +299,12 @@ export default function SwipeDiscoverScreen() {
             const callId = `Discover_${user.uid}_${Date.now()}`;
             try {
                 const eSnap = await getDoc(doc(db, "users", expertId));
-                let finalExpertName = "Consultant";
+                let finalExpertName = "Host";
                 let finalExpertImage = null;
 
                 if (eSnap.exists()) {
                     const eData = eSnap.data();
-                    finalExpertName = eData.name || eData.displayName || eData.userName || expertData?.name || "Consultant";
+                    finalExpertName = eData.name || eData.displayName || eData.userName || expertData?.name || "Host";
                     finalExpertImage = eData.profilePic || eData.photoURL || eData.image || expertData?.profilePic || null;
                 }
 
@@ -320,7 +320,7 @@ export default function SwipeDiscoverScreen() {
                     createdAt: serverTimestamp() 
                 });
                 await updateDoc(queueDocRef.current, { status: "Discovered", callId: callId, expertId: expertId });
-                setStatusText("Consultant identified. Connecting...");
+                setStatusText("Host identified. Connecting...");
                 
                 const unsubCall = onSnapshot(doc(db, "calls", callId), (callSnap) => {
                     if (callSnap.exists()) {
@@ -451,15 +451,15 @@ export default function SwipeDiscoverScreen() {
                         <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel} activeOpacity={0.8}>
                             <BlurView intensity={20} tint="dark" style={styles.cancelBlur}>
                                 <Ionicons name="close-circle-outline" size={20} color={tier.secondaryColor} />
-                                <Text style={[styles.cancelText, {color: tier.secondaryColor}]}>ABORT SEARCH</Text>
+                                <Text style={[styles.cancelText, {color: tier.secondaryColor}]}>CANCEL SEARCH</Text>
                             </BlurView>
                         </TouchableOpacity>
                     </>
                 ) : (
                     <View style={styles.noDiscoverContainer}>
                         <View style={[styles.warningRing, {borderColor: tier.color}]}><Ionicons name="warning-outline" size={60} color={tier.color} /></View>
-                        <Text style={styles.noDiscoverTitle}>NO CONSULTANT FOUND</Text>
-                        <Text style={styles.noDiscoverSub}>All verified consultants are currently engaged. Please try again in a few moments.</Text>
+                        <Text style={styles.noDiscoverTitle}>NO HOST FOUND</Text>
+                        <Text style={styles.noDiscoverSub}>All verified hosts are currently engaged. Please try again in a few moments.</Text>
                         <TouchableOpacity style={styles.retryBtn} onPress={handleRetry} activeOpacity={0.8}>
                             <LinearGradient colors={[tier.color, tier.secondaryColor]} style={styles.retryGradient} start={{x:0, y:0}} end={{x:1, y:1}}>
                                 <Ionicons name="refresh" size={24} color="#FFF" /><Text style={styles.retryText}>RE-INITIALIZE</Text>

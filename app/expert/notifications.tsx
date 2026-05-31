@@ -5,18 +5,18 @@ import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, limit, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Dimensions,
-    Easing,
-    FlatList,
-    Image,
-    Modal,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
+  Image,
+  Modal,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Circle } from 'react-native-svg';
@@ -98,7 +98,7 @@ export default function NotificationsScreen() {
                 if (userSnap.exists()) {
                   const uData = userSnap.data();
                   // Priority: Custom Name > Google Auth Name
-                  const name = uData.name || uData.userName || uData.displayName || "TALKPE PRO Client";
+                  const name = uData.name || uData.userName || uData.displayName || "TALKPE PRO User";
                   // Priority: Cloudinary Upload > Google Profile Pic
                   const photo = uData.profilePic || uData.photoURL || null;
                   
@@ -107,12 +107,12 @@ export default function NotificationsScreen() {
                   setShowCallModal(true);
                   startRingTimer();
                 } else {
-                  setRealCallerName(docData.callerName || "Client");
+                  setRealCallerName(docData.callerName || "User");
                   setShowCallModal(true);
                   startRingTimer();
                 }
             } catch (e) {
-                setRealCallerName("Client");
+                setRealCallerName("User");
                 setShowCallModal(true);
                 startRingTimer();
             }
@@ -164,7 +164,7 @@ export default function NotificationsScreen() {
         params: { 
           callId: incomingCall.id, 
           role: 'expert', 
-          callerName: realCallerName || "Client",
+          callerName: realCallerName || "User",
           callerId: incomingCall.callerId // Passing this to maintain ID tracking
         }
       } as any);
@@ -211,7 +211,7 @@ export default function NotificationsScreen() {
   };
 
   // Safe fallback if the real name is not fetched quickly
-  const displayName = realCallerName || "Client";
+  const displayName = realCallerName || "User";
   const displayPic = callerProfilePic || `https://ui-avatars.com/api/?name=${displayName}&background=0F172A&color=00F2FE&size=512&bold=true`;
 
   return (

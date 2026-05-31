@@ -1,4 +1,4 @@
-"use client";
+"use user";
 
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
@@ -40,24 +40,24 @@ export default function SupportScreen() {
             id: 2, 
             q: "Experiencing call disconnections?", 
             // 🔥 SATTI FIX: Technical stability explanation
-            a: "Our system is optimized for low-latency connections. Please ensure you are on a stable 4G/5G or Wi-Fi network. We monitor link stability to ensure your diamonds are only utilized for active consultation time." 
+            a: "Our system is optimized for low-latency connections. Please ensure you are on a stable 4G/5G or Wi-Fi network. We monitor link stability to ensure your diamonds are only utilized for active call time." 
         },
         { 
             id: 3, 
-            q: "How to locate specific experts?", 
-            a: "You can find verified experts by using the search feature on the home screen. Filter by expertise tags to find the professional best suited for your requirements." 
+            q: "How to locate specific hosts?", 
+            a: "You can find verified hosts by using the search feature on the home screen. Filter by expertise tags to find the professional best suited for your requirements." 
         },
         { 
             id: 4, 
             q: "Is my privacy protected?", 
             // 🔥 SATTI FIX: Strengthening trust for Play Store
-            a: "TalkPe Pro utilizes end-to-end encryption protocols. Your private consultations are secured, ensuring that no third Session, including TalkPe Pro, can access or record your sessions." 
+            a: "TalkPe Pro utilizes end-to-end encryption protocols. Your private calls are secured, ensuring that no third party, including TalkPe Pro, can access or record your sessions." 
         },
         // 🔥 NEW PLAY STORE COMPLIANCE FAQS ADDED HERE
         { 
             id: 5, 
             q: "What is the Refund Policy for Diamonds?", 
-            a: "All digital diamond purchases are final and non-refundable as per Play Store guidelines. However, if a transaction fails or a consultation drops due to our server error, please contact Support within 24 hours for a review." 
+            a: "All digital diamond purchases are final and non-refundable as per Play Store guidelines. However, if a transaction fails or a call drops due to our server error, please contact Support within 24 hours for a review." 
         },
         { 
             id: 6, 
@@ -72,14 +72,14 @@ export default function SupportScreen() {
         { 
             id: 8, 
             q: "How can I use my Diamonds?", 
-            a: "Diamonds act as your premium digital access keys. You can use them exclusively within the app to initiate live 1-on-1 video/audio consultations with verified experts, engage in premium live &forum activities, and unlock exclusive platform features." 
+            a: "Diamonds act as your premium digital access keys. You can use them exclusively within the app to initiate live 1-on-1 video/audio calls with verified hosts, engage in premium live & forum activities, and unlock exclusive platform features." 
         }
     ];
 
     const SupportCard = ({ icon, title, sub, onPress, color }: any) => (
         <TouchableOpacity activeOpacity={0.9} style={styles.card} onPress={onPress}>
             <LinearGradient 
-                colors={[`${color}30`, 'rgba(255,255,255,0.02)']} 
+                colors={[`${color}30`, 'rgba(255,255,255,0.02)']}
                 start={{x:0, y:0}} end={{x:1, y:1}} 
                 style={styles.cardGradient}
             >
@@ -131,7 +131,7 @@ export default function SupportScreen() {
                             title="Official Email Support" 
                             sub="support@talkpepro.com" 
                             color="#6366F1" 
-                            onPress={() => Linking.openURL('mailto:support@talkpepro.com?subject=TalkPe%20Pro%20Client%20Support')} 
+                            onPress={() => Linking.openURL('mailto:support@talkpepro.com?subject=TalkPe%20Pro%20User%20Support')} 
                         />
 
                         {/* 🔥 NEW TRUST & SAFETY CARD (Play Store Requirement) */}

@@ -121,7 +121,7 @@ export default function WelcomeRewardModal() {
                 <View style={styles.container}>
                     
                     <Text style={styles.title}>WELCOME TO TALKPE PRO</Text>
-                    <Text style={styles.subtitle}>Unlock Your Complimentary Session with Consultants</Text>
+                    <Text style={styles.subtitle}>Unlock Your Complimentary Session with Hosts</Text>
 
                     {/* 🔥 THE QUANTUM RING */}
                     <View style={styles.wheelWrapper}>

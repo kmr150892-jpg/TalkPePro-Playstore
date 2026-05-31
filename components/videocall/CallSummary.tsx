@@ -36,11 +36,11 @@ export default function CallSummary({ role, finalDurationFormatted, finalAmount,
     // 🔥 DYNAMIC THEME CALCULATION
     const config = getLevelConfig(expertBeans);
     
-    // 🔥 SATTI FIX: Added safe 'consultant' checks to prevent UI breaking if role changes in backend
-    const isConsultant = role === 'expert' || role === 'consultant';
+    // 🔥 SATTI FIX: Added safe 'host' checks to prevent UI breaking if role changes in backend
+    const isConsultant = role === 'expert' || role === 'host';
 
     const theme = {
-        // If it's the user view, fallback to standard blue. If expert/consultant, use their deep-glow colors.
+        // If it's the user view, fallback to standard blue. If expert/host, use their deep-glow colors.
         primary: isConsultant ? config.colors[0] : '#3B82F6',
         secondary: isConsultant ? config.colors[2] : '#1E40AF',
         accent: isConsultant && config.glow !== 'transparent' ? config.glow : '#60A5FA',
@@ -99,7 +99,7 @@ export default function CallSummary({ role, finalDurationFormatted, finalAmount,
                     <Text style={styles.summaryValue}>{finalDurationFormatted}</Text>
                 </View>
 
-                {/* 💰 Call Charge Row */}
+                {/* 🎖️ Call Charge Row */}
                 <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>{isConsultant ? 'Session Rewards' : 'Session Cost'}</Text>
                     <Text style={styles.summaryValue}>{finalAmount}</Text>
@@ -107,7 +107,7 @@ export default function CallSummary({ role, finalDurationFormatted, finalAmount,
 
                 {/* 🎁 Gift Row (Only shows if gifts were sent) */}
                 <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>{isConsultant ? 'Bonus Rewards' : 'Bonuses Sent'}</Text>
+                    <Text style={styles.summaryLabel}>{isConsultant ? 'Gift Rewards' : 'Bonuses Sent'}</Text>
                     <Text style={[styles.summaryValue, { color: '#FBBF24' }]}>
                         {giftAmount > 0 ? `+${giftAmount}` : '0'}
                     </Text>

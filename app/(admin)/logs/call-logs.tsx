@@ -77,7 +77,7 @@ const CallLogs = () => {
                 </View>
                 
                 <View style={{ flex: 1, marginLeft: 15 }}>
-                    <Text style={styles.userText}>{item.callerName || item.userName || item.user_name || 'Client'} ↔ {item.expertName || item.expert_name || item.receiverName || 'Consultant'}</Text>
+                    <Text style={styles.userText}>{item.callerName || item.userName || item.user_name || 'User'} ↔ {item.expertName || item.expert_name || item.receiverName || 'Host'}</Text>
                     <Text style={styles.subText}>
                         {timeText} • {formattedDate}
                     </Text>

@@ -253,7 +253,7 @@ export default function HomeScreen() {
           <View style={[styles.welcomeCard, borderType2]}>
             <Text style={styles.emoji}>🤝</Text>
             <Text style={styles.welcomeTitle}>Connect with Experts</Text>
-            <Text style={styles.welcomeSub}>Start a professional consultation and find solutions instantly.</Text>
+            <Text style={styles.welcomeSub}>Start a professional call and find solutions instantly.</Text>
             <TouchableOpacity style={[styles.joinBtn, { backgroundColor: userTier.secondaryColor, shadowColor: userTier.secondaryColor }]} onPress={() => router.push('/' as any)}>
                 <Text style={styles.joinBtnText}>Start Consulting</Text>
                 <Ionicons name="arrow-forward" size={18} color="#FFF" />
@@ -268,7 +268,7 @@ export default function HomeScreen() {
             <TouchableOpacity style={[styles.actionCard, borderType1]} onPress={() => router.push('/history' as any)}>
                <LinearGradient colors={[userTier.color + 'AA', userTier.secondaryColor + 'AA']} style={styles.gradientCard} start={{x: 0, y: 0}} end={{x: 1, y: 1}}>
                   <Ionicons name="time-outline" size={24} color="#FFF" />
-                  <Text style={styles.actionText}>Consultation History</Text>
+                  <Text style={styles.actionText}>Call History</Text>
                </LinearGradient>
             </TouchableOpacity>
 

@@ -23,7 +23,7 @@ export default function UserPassbookList() {
     const [usersList, setUsersList] = useState<any[]>([]);
 
     useEffect(() => {
-        // Synchronizing strictly with Client-role profiles
+        // Synchronizing strictly with User-role profiles
         const q = query(collection(db, 'users'), where('role', '==', 'user'));
         
         const unsub = onSnapshot(q, (snap) => {
@@ -55,7 +55,7 @@ export default function UserPassbookList() {
                     )}
                 </View>
                 <View style={{ flex: 1, marginLeft: 15 }}>
-                    <Text style={styles.userName}>{item.name || 'Platform Client'}</Text>
+                    <Text style={styles.userName}>{item.name || 'Platform User'}</Text>
                     <Text style={styles.userId} numberOfLines={1}>REF: {String(item.id).toUpperCase()}</Text>
                 </View>
                 <View style={styles.viewBtn}>
@@ -92,8 +92,8 @@ export default function UserPassbookList() {
                     <Ionicons name="arrow-back" size={24} color="#FFF" />
                 </TouchableOpacity>
                 <View>
-                    <Text style={styles.headerTitle}>Client Ledger</Text>
-                    <Text style={styles.headerSub}>Total Registered Clients: {usersList.length}</Text>
+                    <Text style={styles.headerTitle}>User Ledger</Text>
+                    <Text style={styles.headerSub}>Total Registered Users: {usersList.length}</Text>
                 </View>
             </View>
 
@@ -120,7 +120,7 @@ export default function UserPassbookList() {
                     ListEmptyComponent={
                         <View style={styles.emptyBox}>
                             <MaterialCommunityIcons name="account-search" size={48} color="#334155" />
-                            <Text style={styles.emptyText}>No Discovering client profiles found.</Text>
+                            <Text style={styles.emptyText}>No Discovering user profiles found.</Text>
                         </View>
                     }
                 />

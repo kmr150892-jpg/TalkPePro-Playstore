@@ -6,7 +6,7 @@ import { ActivityIndicator, Alert, Image, Linking, ScrollView, StyleSheet, Text,
 import { db } from '../../../../firebaseConfig';
 
 export default function VerifyBankDetails() {
-  const { id } = useLocalSearchParams(); // Consultant ID securely passed here
+  const { id } = useLocalSearchParams(); // Host ID securely passed here
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [expert, setExpert] = useState<any>(null);
@@ -22,7 +22,7 @@ export default function VerifyBankDetails() {
       if (docSnap.exists()) {
         setExpert(docSnap.data());
       } else {
-        Alert.alert("Error", "Consultant record not found");
+        Alert.alert("Error", "Host record not found");
       }
     } catch (error) {
       console.error(error);
@@ -42,7 +42,7 @@ export default function VerifyBankDetails() {
           onPress: async () => {
             setLoading(true);
             try {
-              // 1. Update Consultant Profile (Database key kept intact)
+              // 1. Update Host Profile (Database key kept intact)
               await updateDoc(doc(db, "users", id as string), {
                 isBankVerified: status === 'Approve' ? true : false
               });
@@ -91,7 +91,7 @@ export default function VerifyBankDetails() {
 
       <View style={styles.card}>
         <View style={styles.expertInfo}>
-           <Text style={styles.name}>{expert?.name || 'Consultant'}</Text>
+           <Text style={styles.name}>{expert?.name || 'Host'}</Text>
            <Text style={styles.email}>{expert?.email}</Text>
         </View>
 

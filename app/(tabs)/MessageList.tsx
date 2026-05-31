@@ -107,7 +107,7 @@ export default function MessageList() {
           return {
             id: chatDoc.id,
             ...data,
-            expertName: expertData.displayName || expertData.name || "Consultant Node",
+            expertName: expertData.displayName || expertData.name || "Host Node",
             expertImage: expertData.profilePic || expertData.photoURL || null,
             receiverId: expertId,
             unread: myUnreadCount
@@ -223,7 +223,7 @@ export default function MessageList() {
              <Ionicons name="chatbubbles-outline" size={60} color={userTier.color} />
           </View>
           <Text style={styles.emptyTitle}>NO TRANSMISSIONS</Text>
-          <Text style={styles.emptyText}>Start a secure conversation with a consultant to see threads here.</Text>
+          <Text style={styles.emptyText}>Start a secure conversation with a host to see threads here.</Text>
         </View>
       ) : (
         <Animated.FlatList

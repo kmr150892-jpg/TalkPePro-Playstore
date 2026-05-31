@@ -7,21 +7,21 @@ import { deleteUser } from 'firebase/auth'; // 🔥 Added for Delete
 import { arrayUnion, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore'; // 🔥 Added deleteDoc
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  Image,
-  Modal,
-  ScrollView,
-  Share, // 🔥 Added for Share
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    Modal,
+    ScrollView,
+    Share, // 🔥 Added for Share
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
@@ -223,7 +223,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               }).then(() => {
                   Alert.alert(
                       "Level Updated! 🚀", 
-                      `Your rank changed! Your Consultation Rate has been automatically updated to the new Max Price: ${newMaxRate} Rewards/Min!`
+                      `Your rank changed! Your Call Rate has been automatically updated to the new Max Price: ${newMaxRate} Rewards/Min!`
                   );
               }).catch(()=>{});
               
@@ -264,7 +264,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const handleShareApp = async () => {
     try {
         const result = await Share.share({
-            message: `I’m available on the TalkPe Pro platform! Connect with me for a professional consultation session. 🚀💎 Platform Link: https://play.google.com/store/apps/details?id=com.talkpe.app`,
+            message: `I’m available on the TalkPe Pro platform! Connect with me for a professional call session. 🚀💎 Platform Link: https://play.google.com/store/apps/details?id=com.talkpe.app`,
             title: 'Download TalkPe Pro'
         });
 
@@ -385,7 +385,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
       const walletBal = expertData?.walletBalance ?? expertData?.beansBalance ?? 0;
       const msg = walletBal > 0 
           ? `Hold on! You have ${walletBal} rewards in your wallet. Deleting your account means this balance is gone forever.`
-          : "Final warning: This will permanently wipe your Consultant profile and all associated data.";
+          : "Final warning: This will permanently wipe your Host profile and all associated data.";
 
       Alert.alert(
           "TERMINATE IDENTITY?",
@@ -522,7 +522,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                 <Ionicons name="camera" size={18} color="#FFF" />
               </TouchableOpacity>
             </View>
-            <Text style={styles.nameText}>{expertData?.name || 'Consultant'}</Text>
+            <Text style={styles.nameText}>{expertData?.name || 'Host'}</Text>
             
             <View style={[styles.fluidIdentityCapsule, borderType1]}>
               <View style={styles.fluidIdSection}>
@@ -714,7 +714,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
 
       <Modal visible={rateModalVisible} animationType="fade" transparent={true}>
         <View style={styles.overlay}><View style={styles.modalBox}>
-            <Text style={styles.modalTitle}>Set Consultation Rate</Text>
+            <Text style={styles.modalTitle}>Set Call Rate</Text>
             <Text style={{color: '#94A3B8', fontSize: 12, marginBottom: 20}}>Rank: <Text style={{color: theme.primary}}>{config.label}</Text>. Max: <Text style={{color: '#FFF'}}>{config.rate}</Text> rewards.</Text>
             
             <Text style={styles.inputLabel}>Rewards Per Minute</Text>

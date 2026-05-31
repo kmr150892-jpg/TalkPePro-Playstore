@@ -85,8 +85,8 @@ export default function BottomControls({
         backgroundColor: theme.primary + '30',
     };
 
-    // 🔥 STRICT CONSULTANT CHECK
-    const isConsultant = role?.toLowerCase() === 'expert' || role?.toLowerCase() === 'consultant';
+    // 🔥 STRICT HOST CHECK
+    const isConsultant = role?.toLowerCase() === 'expert' || role?.toLowerCase() === 'host';
 
     return (
         <View style={styles.bottomControlsArea}>
@@ -108,7 +108,7 @@ export default function BottomControls({
                     <Ionicons name="game-controller" size={22} color={isGameVisible ? theme.accent : "#FFF"} />
                 </TouchableOpacity>
 
-                {/* ✨ Pro FILTER BUTTON (CONSULTANT ONLY) */}
+                {/* ✨ Pro FILTER BUTTON (HOST ONLY) */}
                 {isConsultant && (
                     <TouchableOpacity style={[styles.blurBtn, isProEnabled && activeBorderType]} onPress={togglePro}>
                         <Ionicons name="sparkles" size={22} color={isProEnabled ? theme.accent : "#FFF"} />
@@ -125,7 +125,7 @@ export default function BottomControls({
                     <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#F43F5E" : "#FFF"} />
                 </TouchableOpacity>
 
-                {/* 🎁 Gift Button (HIDDEN FOR CONSULTANT) */}
+                {/* 🎁 Gift Button (HIDDEN FOR HOST) */}
                 {!isConsultant && (
                     <TouchableOpacity style={styles.blurBtn} onPress={onOpenGiftPanel}>
                         <Ionicons name="gift" size={22} color={theme.accent} />

@@ -218,12 +218,12 @@ export default function LoginScreen() {
         const isDraftExpert = existingData.registrationInProgress === true && existingData.role === 'user';
         const isApprovedOrPendingExpert = existingData.role === 'expert' || existingData.status === 'Active' || existingData.status === 'Pending' || existingData.isApplying === true;
 
-        // 1. STRICT CLIENT LOCK: Oru thadava Normal User aagitta eppavum User thaan. Consultant-nu amukkuna amaidhiya Client-kuke anuppidum.
+        // 1. STRICT USER LOCK: Oru thadava Normal User aagitta eppavum User thaan. Host-nu amukkuna amaidhiya User-kuke anuppidum.
         if (selectedRole === 'expert' && existingData.role === 'user' && finalRole !== 'admin' && !isDraftExpert) {
             selectedRole = 'user'; 
         }
 
-        // 2. CONSULTANT LOCK: Oru thadava Verified Consultant aagitta eppavum Consultant thaan. Client-nu amukkuna Dashboard-kuke anuppidum.
+        // 2. HOST LOCK: Oru thadava Verified Host aagitta eppavum Host thaan. User-nu amukkuna Dashboard-kuke anuppidum.
         if (selectedRole === 'user' && isApprovedOrPendingExpert && finalRole !== 'admin') {
             selectedRole = 'expert'; 
         }
@@ -240,7 +240,7 @@ export default function LoginScreen() {
         }
 
         if (selectedRole === 'user' && isDraftExpert && finalRole !== 'admin') {
-            // 3. DRAFT ESCAPE (Manasu Maatram) -> Let them become a Client permanently.
+            // 3. DRAFT ESCAPE (Manasu Maatram) -> Let them become a User permanently.
             updateData.registrationInProgress = false;
             updateData.isApplying = false;
             updateData.status = "User"; 
@@ -333,7 +333,7 @@ export default function LoginScreen() {
       // 🔥 SATTI SMART ERROR HANDLER 🔥
       if (authSuccess) {
           // Auth aana piragu error vantha, athu GateKeeper sign out pannathunaala vantha error thaan.
-          console.log("⚠️ Safe Ignore: GateKeeper intentionally aborted the login DB sync.");
+          console.log("⚠️ Safe Ignore: GateKeeper intentionally cancelled the login DB sync.");
       } else {
           // Unmaiyave internet illana, athu auth aagarathukku munnadiye intha block-ku vanthidum.
           console.log("❌ Login Error:", error);
@@ -431,7 +431,7 @@ export default function LoginScreen() {
                     )}
                   >
                     
-                    {/* 🔹 SLIDE 1: CLIENT PORTAL 🔹 */}
+                    {/* 🔹 SLIDE 1: USER PORTAL 🔹 */}
                     <View style={[styles.cardWrapper, { width: innerWidth }]}>
                       <Animated.View style={{ flex: 1, transform: [{ translateY: cardFloat1 }] }}>
                         <LinearGradient 
@@ -444,14 +444,14 @@ export default function LoginScreen() {
                                   <Text style={styles.benefitIconTop}>💎</Text>
                               </View>
                               <View style={styles.headerTextStack}>
-                                  <Text style={[styles.benefitTitle, { color: '#E9D5FF' }]}>CLIENT PORTAL</Text>
+                                  <Text style={[styles.benefitTitle, { color: '#E9D5FF' }]}>USER PORTAL</Text>
                                   <Text style={styles.benefitSubText}>Verified Expert Interactions</Text>
                               </View>
                           </View>
 
                           {/* 🔥 NEAT & LARGE BULLET POINTS 🔥 */}
                           <View style={styles.benefitList}>
-                              <Text style={styles.benefitBullet}>💎  <Text style={styles.highlightText}>Up to 3 Mins</Text> Free Consultation</Text>
+                              <Text style={styles.benefitBullet}>💎  <Text style={styles.highlightText}>Up to 3 Mins</Text> Free Call</Text>
                               <Text style={styles.benefitBullet}>💎  Access <Text style={styles.highlightText}>Interactive</Text> Skill Activities</Text>
                               <Text style={styles.benefitBullet}>💎  100% <Text style={styles.highlightText}>Secure & Private</Text> Network</Text>
                               <Text style={styles.benefitBullet}>💎  Join <Text style={styles.highlightText}>Free Forums</Text> & Broadcasts</Text>
@@ -460,7 +460,7 @@ export default function LoginScreen() {
                       </Animated.View>
                     </View>
 
-                    {/* 🔹 SLIDE 2: CONSULTANT HUB 🔹 */}
+                    {/* 🔹 SLIDE 2: HOST HUB 🔹 */}
                     <View style={[styles.cardWrapper, { width: innerWidth }]}>
                       <Animated.View style={{ flex: 1, transform: [{ translateY: cardFloat2 }] }}>
                         <LinearGradient 
@@ -473,7 +473,7 @@ export default function LoginScreen() {
                                   <Text style={styles.benefitIconTop}>🌟</Text>
                               </View>
                               <View style={styles.headerTextStack}>
-                                  <Text style={[styles.benefitTitle, { color: '#FFEDD5' }]}>CONSULTANT HUB</Text>
+                                  <Text style={[styles.benefitTitle, { color: '#FFEDD5' }]}>HOST HUB</Text>
                                   <Text style={styles.benefitSubText}>Monetize Your Expertise</Text>
                               </View>
                           </View>
@@ -482,7 +482,7 @@ export default function LoginScreen() {
                           <View style={styles.benefitList}>
                               <Text style={styles.benefitBullet}>🌟  Host Premium <Text style={styles.highlightText}>Live Broadcasts</Text></Text>
                               <Text style={styles.benefitBullet}>🌟  Create Engauge <Text style={styles.highlightText}>Skill Activities</Text></Text>
-                              <Text style={styles.benefitBullet}>🌟  High-Yield <Text style={styles.highlightText}>Consultation Rewards</Text></Text>
+                              <Text style={styles.benefitBullet}>🌟  High-Yield <Text style={styles.highlightText}>Call Rewards</Text></Text>
                               <Text style={styles.benefitBullet}>🌟  Verified, <Text style={styles.highlightText}>Safe & Private</Text> Platform</Text>
                           </View>
                         </LinearGradient>
@@ -547,13 +547,13 @@ export default function LoginScreen() {
                     
                     <TouchableOpacity onPress={() => handleLogin('user')} activeOpacity={0.8}>
                       <LinearGradient colors={['#7B2FF7', '#F43F8D', '#F97316']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 15 }]}>
-                          <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS CLIENT</Text>
+                          <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS USER</Text>
                       </LinearGradient>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => handleLogin('expert')} activeOpacity={0.8}>
                       <LinearGradient colors={['#F97316', '#F43F8D', '#7B2FF7']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 15 }]}>
-                          <Text style={styles.btnTextExpert} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS CONSULTANT</Text>
+                          <Text style={styles.btnTextExpert} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS HOST</Text>
                       </LinearGradient>
                     </TouchableOpacity>
                   </>

@@ -218,7 +218,7 @@ export default function WalletSystem({ expertData }: any) {
             if (user?.uid && auth.currentUser) {
                 await addDoc(collection(db, "withdrawals"), {
                     userId: user.uid,
-                    expertName: expertData?.name || 'Consultant',
+                    expertName: expertData?.name || 'Host',
                     amount: numAmtRupee,
                     amountRupee: numAmtRupee,
                     transactionCharge: transactionCharge,
@@ -270,7 +270,7 @@ export default function WalletSystem({ expertData }: any) {
                 await addDoc(collection(db, "adminNotifications"), {
                     type: 'BANK_VERIFICATION',
                     expertId: user.uid,
-                    expertName: expertData?.name || 'Consultant',
+                    expertName: expertData?.name || 'Host',
                     status: 'pending',
                     createdAt: serverTimestamp(),
                     details: { ...bankDetails, idProof: idProofImage }
@@ -408,22 +408,44 @@ export default function WalletSystem({ expertData }: any) {
                     </View>
                 ) : (
                     transactions.map((tx, index) => (
-                        /* 🔥 DYNAMIC DUAL-TONE LEDGER ITEMS (ALTERNATING TYPE 1 & 2) */
-                        <View key={tx.id} style={[styles.ledgerItem, index % 2 === 0 ? borderType2 : borderType1]}>
-                            <View style={[styles.ledgerIcon, { backgroundColor: tx.status === 'PENDING' ? '#F59E0B20' : `${theme.primary}20` }]}>
-                                <MaterialCommunityIcons 
-                                    name={tx.status === 'PENDING' ? "clock-fast" : "check-circle"} 
-                                    size={20} color={tx.status === 'PENDING' ? "#F59E0B" : theme.primary} 
-                                />
+                        <View key={tx.id} style={{ marginBottom: 12 }}>
+                            {/* 🔥 DYNAMIC DUAL-TONE LEDGER ITEMS WITH REJECT FIX */}
+                            <View style={[
+                                styles.ledgerItem, 
+                                index % 2 === 0 ? borderType2 : borderType1, 
+                                { marginBottom: tx.status === 'REJECTED' && tx.rejectReason ? 0 : 0 }
+                            ]}>
+                                <View style={[styles.ledgerIcon, { backgroundColor: tx.status === 'REJECTED' ? '#EF444420' : tx.status === 'PENDING' ? '#F59E0B20' : `${theme.primary}20` }]}>
+                                    <MaterialCommunityIcons 
+                                        name={tx.status === 'REJECTED' ? "close-circle" : tx.status === 'PENDING' ? "clock-fast" : "check-circle"} 
+                                        size={20} color={tx.status === 'REJECTED' ? "#EF4444" : tx.status === 'PENDING' ? "#F59E0B" : theme.primary} 
+                                    />
+                                </View>
+                                <View style={{ flex: 1, marginLeft: 15 }}>
+                                    <Text style={styles.ledgerType}>{tx.type || 'Redeem'}</Text>
+                                    <Text style={styles.ledgerDate}>{tx.createdAt?.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) || 'RECENT'}</Text>
+                                </View>
+                                <View style={{ alignItems: 'flex-end' }}>
+                                    {/* 🔥 Strikethrough if rejected to show amount wasn't deducted permanently */}
+                                    <Text style={[styles.ledgerAmount, tx.status === 'REJECTED' && { textDecorationLine: 'line-through', opacity: 0.5 }]}>
+                                        - ₹{tx.amountRupee || tx.amount}
+                                    </Text>
+                                    <Text style={[styles.ledgerStatus, { color: tx.status === 'REJECTED' ? '#EF4444' : tx.status === 'PENDING' ? '#F59E0B' : theme.primary }]}>
+                                        {tx.status}
+                                    </Text>
+                                </View>
                             </View>
-                            <View style={{ flex: 1, marginLeft: 15 }}>
-                                <Text style={styles.ledgerType}>{tx.type || 'Redeem'}</Text>
-                                <Text style={styles.ledgerDate}>{tx.createdAt?.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) || 'RECENT'}</Text>
-                            </View>
-                            <View style={{ alignItems: 'flex-end' }}>
-                                <Text style={styles.ledgerAmount}>- ₹{tx.amountRupee || tx.amount}</Text>
-                                <Text style={[styles.ledgerStatus, { color: tx.status === 'PENDING' ? '#F59E0B' : theme.primary }]}>{tx.status}</Text>
-                            </View>
+
+                            {/* 🔥 NEW UI: REJECTION REASON DISPLAY BOX */}
+                            {tx.status === 'REJECTED' && tx.rejectReason && (
+                                <View style={styles.rejectReasonBox}>
+                                    <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{marginTop: 2}} />
+                                    <View style={{ marginLeft: 8, flex: 1 }}>
+                                        <Text style={styles.rejectLabel}>REJECTION REASON</Text>
+                                        <Text style={styles.rejectReasonText}>{tx.rejectReason}</Text>
+                                    </View>
+                                </View>
+                            )}
                         </View>
                     ))
                 )}
@@ -571,12 +593,17 @@ const styles = StyleSheet.create({
     emptyLedger: { alignItems: 'center', padding: 40, backgroundColor: 'rgba(30, 41, 59, 0.2)', borderRadius: 25, marginTop: 10 },
     emptyLedgerText: { color: '#334155', fontSize: 12, fontWeight: '800', marginTop: 10 },
     
-    ledgerItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 30, marginBottom: 12 },
+    ledgerItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 30, zIndex: 2 },
     ledgerIcon: { width: 45, height: 45, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
     ledgerType: { color: '#FFF', fontSize: 15, fontWeight: '800' },
     ledgerDate: { color: '#475569', fontSize: 11, fontWeight: '700', marginTop: 2 },
     ledgerAmount: { color: '#FFF', fontSize: 16, fontWeight: '900' },
     ledgerStatus: { fontSize: 9, fontWeight: '900', marginTop: 3, letterSpacing: 1 },
+
+    // 🔥 NEW REJECTION REASON STYLES
+    rejectReasonBox: { flexDirection: 'row', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#EF444450', borderRadius: 20, padding: 15, marginHorizontal: 10, marginTop: -15, zIndex: -1, paddingTop: 20 },
+    rejectLabel: { color: '#EF4444', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 2 },
+    rejectReasonText: { color: '#FFF', fontSize: 11, fontWeight: '700', lineHeight: 16 },
     
     modalBg: { flex: 1, justifyContent: 'flex-end' },
     modalSheet: { borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },

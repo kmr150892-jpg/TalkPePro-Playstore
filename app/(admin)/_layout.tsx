@@ -56,7 +56,7 @@ export default function AdminLayout() {
         <Stack.Screen 
           name="experts/expert-list" 
           options={{ 
-            title: 'CONSULTANT HUB',
+            title: 'HOST HUB',
             headerShown: false, 
           }} 
         />

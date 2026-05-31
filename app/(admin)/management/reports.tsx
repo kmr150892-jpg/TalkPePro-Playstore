@@ -34,7 +34,7 @@ const ReportedUsers = () => {
             setLoading(false);
         });
 
-        // 🔥 SYSTEM LOGIC: Fetching Internal Consultant Safety Alerts
+        // 🔥 SYSTEM LOGIC: Fetching Internal Host Safety Alerts
         const qAlerts = query(collection(db, "admin_alerts"), orderBy("timestamp", "desc"));
         const unsubAlerts = onSnapshot(qAlerts, (snap) => {
             setAdminAlerts(snap.docs.map(d => ({ id: d.id, _collection: 'admin_alerts', ...d.data() })));
@@ -94,7 +94,7 @@ const ReportedUsers = () => {
         // 🔥 SYSTEM LOGIC: Dynamic mapping for multi-source moderation alerts
         const isAlert = item._collection === 'admin_alerts';
         const reporterLabel = isAlert ? item.expertName : item.reporterName;
-        const reporterRoleLabel = isAlert ? 'CONSULTANT' : item.reporterRole;
+        const reporterRoleLabel = isAlert ? 'HOST' : item.reporterRole;
         const reportedLabel = isAlert ? item.userName : item.reportedName;
         const targetUserId = isAlert ? item.userId : item.reportedId;
         const timeSecs = item.createdAt?.seconds || item.timestamp?.seconds;
@@ -118,7 +118,7 @@ const ReportedUsers = () => {
 
                 {/* 🔥 RED ALERT SAFETY WARNING 🔥 */}
                 {isCriticalRisk && (
-                    <Text style={styles.sirenText}>🚨 SAFETY WARNING: THIS USER HAS BEEN RESTRICTED BY {blockCount} CONSULTANTS. IMMEDIATE REVIEW REQUIRED.</Text>
+                    <Text style={styles.sirenText}>🚨 SAFETY WARNING: THIS USER HAS BEEN RESTRICTED BY {blockCount} HOSTS. IMMEDIATE REVIEW REQUIRED.</Text>
                 )}
 
                 <Text style={styles.reportReason}>{item.reason || 'No specific reason documented'}</Text>

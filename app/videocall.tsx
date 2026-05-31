@@ -92,7 +92,7 @@ export default function VideoCallScreen() {
     
     const safeExpertId = expertIdState || (role === 'expert' ? user?.uid : "UNKNOWN_EXPERT") as string;
 
-    const [expertName, setExpertName] = useState(params.expertName as string || "Consultant");
+    const [expertName, setExpertName] = useState(params.expertName as string || "Host");
     const callId = params.callId as string;
     const channelName = callId; 
     
@@ -116,7 +116,7 @@ export default function VideoCallScreen() {
 
     const ringTimerAnim = useRef(new Animated.Value(1)).current; 
     
-    const [callerDisplayName, setCallerDisplayName] = useState(params.callerName as string || "Client User");
+    const [callerDisplayName, setCallerDisplayName] = useState(params.callerName as string || "User User");
     const [realCallerId, setRealCallerId] = useState<string | undefined>(params.callerId as string);
     
     const [callerProfilePic, setCallerProfilePic] = useState<string | null>((params.callerImage as string) || (params.callerPic as string) || null);
@@ -232,7 +232,7 @@ export default function VideoCallScreen() {
                     const pic = data.profilePic || data.photoURL || data.image || null;
                     if (pic) setCallerProfilePic(pic);
                     if (!params.callerName) {
-                         setCallerDisplayName(data.name || data.userName || data.displayName || "Client User");
+                         setCallerDisplayName(data.name || data.userName || data.displayName || "User User");
                     }
                 }
             });
@@ -245,7 +245,7 @@ export default function VideoCallScreen() {
                     const pic = data.profilePic || data.photoURL || data.image || null;
                     if (pic) setExpertProfilePic(pic);
                     if (!params.expertName) {
-                         setExpertName(data.name || data.userName || data.displayName || "Consultant");
+                         setExpertName(data.name || data.userName || data.displayName || "Host");
                     }
                 }
             });
@@ -368,7 +368,7 @@ export default function VideoCallScreen() {
                     const expertSnap = await getDoc(doc(db, "users", finalExpertId));
                     if (expertSnap.exists()) {
                         const eData = expertSnap.data();
-                        if (!params.expertName) setExpertName(eData.name || eData.userName || eData.displayName || "Consultant");
+                        if (!params.expertName) setExpertName(eData.name || eData.userName || eData.displayName || "Host");
                         const pic = eData.profilePic || eData.photoURL || null;
                         if (pic && !expertProfilePic) setExpertProfilePic(pic); 
                         
@@ -399,7 +399,7 @@ export default function VideoCallScreen() {
                         const userSnap = await getDoc(doc(db, "users", cUid));
                         if (userSnap.exists()) {
                             const uData = userSnap.data();
-                            const realName = uData.name || uData.userName || uData.displayName || "Client User";
+                            const realName = uData.name || uData.userName || uData.displayName || "User User";
                             if (!params.callerName) setCallerDisplayName(realName);
                             const pic = uData.profilePic || uData.photoURL || null;
                             if (pic && !callerProfilePic) setCallerProfilePic(pic); 
@@ -443,7 +443,7 @@ export default function VideoCallScreen() {
                     try {
                         const uSnap = await getDoc(doc(db, "users", user!.uid));
                         const uData = uSnap.exists() ? uSnap.data() : {};
-                        const finalName = uData.name || user?.displayName || existingCallData.callerName || "Client User";
+                        const finalName = uData.name || user?.displayName || existingCallData.callerName || "User User";
                         const finalPic = uData.profilePic || user?.photoURL || existingCallData.callerImage || null; 
                         if (finalPic && !callerProfilePic) setCallerProfilePic(finalPic); 
                         
@@ -452,7 +452,7 @@ export default function VideoCallScreen() {
 
                         const eSnap = await getDoc(doc(db, "users", currentExpertId));
                         const eData = eSnap.exists() ? eSnap.data() : {};
-                        const eFinalName = eData.name || eData.userName || existingCallData.expertName || "Consultant";
+                        const eFinalName = eData.name || eData.userName || existingCallData.expertName || "Host";
                         const eFinalPic = eData.profilePic || eData.photoURL || existingCallData.expertImage || null;
                         
                         // 🔥 FIX 1 (Part 2): Instant Ringing Set on Call Creation 🔥
@@ -844,7 +844,7 @@ export default function VideoCallScreen() {
             if (snap.exists()) targetUserId = snap.data().callerId;
         }
         if (!targetUserId) return;
-        Alert.alert("Restrict Client", "Do you want to permanently restrict this client?", [
+        Alert.alert("Restrict User", "Do you want to permanently restrict this user?", [
             { text: "Cancel", style: "cancel" },
             { text: "Confirm", style: "destructive", onPress: async () => {
                 try {
@@ -914,7 +914,7 @@ export default function VideoCallScreen() {
             try {
                 const checkCallSnap = await getDoc(doc(db, "calls", callId));
                 let dbCallerId = realCallerId || (params.callerId as string);
-                let dbCallerName = callerDisplayName || "Client User";
+                let dbCallerName = callerDisplayName || "User User";
 
                 if (checkCallSnap.exists()) {
                     const cData = checkCallSnap.data();
@@ -1124,7 +1124,7 @@ export default function VideoCallScreen() {
                                     <Text style={styles.liveText}>{formatTime(secondsElapsed)}</Text>
                                     {isFreeModeActive && <Text style={styles.freeBadgeText}> COMPLIMENTARY</Text>}
                                 </View>
-                                <Text style={styles.callerNameText}>{role === 'expert' ? (callerDisplayName || "Client") : expertName}</Text>
+                                <Text style={styles.callerNameText}>{role === 'expert' ? (callerDisplayName || "User") : expertName}</Text>
                             </View>
                         </View>
                         

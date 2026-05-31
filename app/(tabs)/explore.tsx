@@ -128,7 +128,7 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
                         <View>
                             {/* 🔥 EXPERT NAME (Uses Glow Color for Shadow) 🔥 */}
                             <Text style={[styles.expertName, { color: '#FFF', textShadowColor: glowColor, textShadowRadius: 15 }]}>
-                                {expert.name || expert.userName || 'TALKPE PRO Consultant'}
+                                {expert.name || expert.userName || 'TALKPE PRO Host'}
                             </Text>
                             
                             {/* 🔥 ALL BADGES IN ONE ROW (Tier + Skill + Online) */}
@@ -163,7 +163,7 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
                     </View>
 
                     <Text style={styles.bioText} numberOfLines={2}>
-                        {expert.bio || "Hi there! I'm an official TALKPE PRO consultant. Let's have a productive session! ✨"}
+                        {expert.bio || "Hi there! I'm an official TALKPE PRO host. Let's have a productive session! ✨"}
                     </Text>
 
                     {/* 🔥 3-COLOR CONNECT BUTTON 🔥 */}
@@ -283,7 +283,7 @@ export default function CinematicExploreScreen() {
                     
                     // 🔥 FETCH USER IMAGE AND NAME DIRECTLY FROM DOC FIRST
                     let callerPic = data.callerImage || null;
-                    let fetchedName = data.callerName || data.userName || "CLIENT";
+                    let fetchedName = data.callerName || data.userName || "USER";
                     
                     // Fallback just in case callerImage wasn't saved in the db
                     if(!callerPic && data.callerId) {
@@ -341,7 +341,7 @@ export default function CinematicExploreScreen() {
             if (action === 'accepted') {
                 // 🔥 SATTI FIX: Robust fallback using userData so expert image is never null 🔥
                 const expertPic = userData?.profilePic || user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData?.name || userData?.userName || user?.displayName || 'Expert')}&background=1E293B&color=fff&bold=true`;
-                const expertNameStr = userData?.name || userData?.userName || user?.displayName || "Consultant";
+                const expertNameStr = userData?.name || userData?.userName || user?.displayName || "Host";
                 
                 await updateDoc(doc(db, "calls", incomingCall.id), { 
                     status: 'accepted', 
@@ -397,8 +397,8 @@ export default function CinematicExploreScreen() {
                             pathname: "/videocall" as any,
                             params: { 
                                 expertId: currentExpert?.id || "UNKNOWN_EXPERT",
-                                expertName: currentExpert?.name || currentExpert?.userName || "Consultant",
-                                expertImage: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || currentExpert?.userName || 'Consultant')}&background=1E293B&color=fff&bold=true`,
+                                expertName: currentExpert?.name || currentExpert?.userName || "Host",
+                                expertImage: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || currentExpert?.userName || 'Host')}&background=1E293B&color=fff&bold=true`,
                                 callId: currentCallId,
                                 role: 'user',
                                 isFreeTrial: hasTrialMins ? "true" : "false" 
@@ -408,7 +408,7 @@ export default function CinematicExploreScreen() {
                         // 🔥 EXPERT REJECTED! USER GETS ALERT & MODAL CLOSES IMMEDIATELY 🔥
                         clearInterval(interval);
                         setRingModalVisible(false);
-                        Alert.alert("Unavailable", "The consultant declined the connection.");
+                        Alert.alert("Unavailable", "The host declined the connection.");
                     }
                 }
             });
@@ -425,7 +425,7 @@ export default function CinematicExploreScreen() {
     // 🔥 HANDLERS FOR TIMEOUT AND CANCELLATION 🔥
     const handleMissedCall = async (callId: string) => {
         setRingModalVisible(false);
-        Alert.alert("Timeout", "Consultant didn't answer. Try again later.");
+        Alert.alert("Timeout", "Host didn't answer. Try again later.");
         try {
             await updateDoc(doc(db, "calls", callId), { status: 'missed' });
         } catch (e) {}
@@ -477,8 +477,8 @@ export default function CinematicExploreScreen() {
             // 2. Check if Expert is BUSY
             if (expert.isBusy === true || expert.isBusy === "true") {
                 Alert.alert(
-                    "Consultant is Engaged ⏳", 
-                    `${expert.name || "This consultant"} is currently assisting another client. Please try again in a few minutes.`
+                    "Host is Engaged ⏳", 
+                    `${expert.name || "This host"} is currently assisting another user. Please try again in a few minutes.`
                 );
                 return;
             }
@@ -495,8 +495,8 @@ export default function CinematicExploreScreen() {
             const cImage = userData?.profilePic || user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(userData?.name || userData?.userName || user?.displayName || 'User')}&background=0F172A&color=fff&bold=true`;
             const cName = userData?.name || userData?.userName || user?.displayName || "User";
 
-            const eImage = expert?.profilePic || expert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(expert?.name || expert?.userName || "Consultant")}&background=1E293B&color=fff&bold=true`;
-            const eName = expert?.name || expert?.userName || "Consultant";
+            const eImage = expert?.profilePic || expert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(expert?.name || expert?.userName || "Host")}&background=1E293B&color=fff&bold=true`;
+            const eName = expert?.name || expert?.userName || "Host";
 
             await setDoc(doc(db, "calls", newCallId), {
                 callerId: user?.uid || "UNKNOWN_USER",
@@ -548,7 +548,7 @@ export default function CinematicExploreScreen() {
 
             <View style={styles.topHeader}>
                 {/* 🔥 SATTI FIX: Header Text Overflow Fix (numberOfLines & adjustsFontSizeToFit) 🔥 */}
-                <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>FEATURED CONSULTANTS</Text>
+                <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>FEATURED HOSTS</Text>
                 <TouchableOpacity style={styles.searchBtn}>
                     <Ionicons name="search" size={24} color="#FFF" />
                 </TouchableOpacity>
@@ -560,7 +560,7 @@ export default function CinematicExploreScreen() {
                     <View style={styles.callOverlayMass}>
                         <Animated.View style={[styles.callCardWrapper, { transform: [{ scale: incomingPulse }] }]}>
                             <BlurView intensity={90} tint="dark" style={styles.callCardMass}>
-                                <Text style={styles.callPulseText}>INCOMING CONSULTATION</Text>
+                                <Text style={styles.callPulseText}>INCOMING CALL</Text>
                                 
                                 <View style={styles.callerAvatarRing}>
                                     {incomingCall.callerImage ? (
@@ -574,7 +574,7 @@ export default function CinematicExploreScreen() {
                                     )}
                                 </View>
 
-                                <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "CLIENT"}</Text>
+                                <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "USER"}</Text>
                                 
                                 <Text style={styles.ringTimerExpert}>00:{incomingTimer.toString().padStart(2, '0')}</Text>
 
@@ -608,12 +608,12 @@ export default function CinematicExploreScreen() {
                         <View style={styles.ringAvatarWrapper}>
                             <Animated.View style={[styles.ringPulseGlow, { transform: [{ scale: pulseAnim }] }]} />
                             <Image 
-                                source={{ uri: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || 'Consultant')}&background=0F172A&color=fff` }} 
+                                source={{ uri: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || 'Host')}&background=0F172A&color=fff` }} 
                                 style={styles.ringAvatar} 
                             />
                         </View>
 
-                        <Text style={styles.ringExpertName}>{currentExpert?.name || "Consultant"}</Text>
+                        <Text style={styles.ringExpertName}>{currentExpert?.name || "Host"}</Text>
                         <Text style={styles.ringTimer}>00:{ringTimer.toString().padStart(2, '0')}</Text>
 
                         <TouchableOpacity style={styles.cancelCallBtn} onPress={cancelCall} activeOpacity={0.8}>

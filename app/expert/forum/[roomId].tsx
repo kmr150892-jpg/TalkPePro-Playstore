@@ -212,7 +212,7 @@ export default function ExpertForumRoomScreen() {
                                     const isNewDay = eData.lastBonusDate !== today;
 
                                     let currentTopVip = eData.topVipSupporter || { name: 'None', amount: 0, date: '' };
-                                    const senderName = data.senderName || 'Premium Client';
+                                    const senderName = data.senderName || 'Premium User';
                                     if (isNewDay || diamondAmount > currentTopVip.amount) {
                                         currentTopVip = { name: senderName, amount: diamondAmount, date: today };
                                     }
@@ -264,7 +264,7 @@ export default function ExpertForumRoomScreen() {
             addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: "system",
                 name: "System",
-                text: `✨ ${expertData?.name || expertData?.userName || "Consultant"} has initiated the session!`,
+                text: `✨ ${expertData?.name || expertData?.userName || "Host"} has initiated the session!`,
                 timestamp: serverTimestamp(),
                 isSystem: true
             }).catch(e => console.log(e));
@@ -396,7 +396,7 @@ export default function ExpertForumRoomScreen() {
                 pathname: "/videocall" as any,
                 params: { 
                     expertId: user?.uid, 
-                    expertName: expertData?.name || "Consultant",
+                    expertName: expertData?.name || "Host",
                     callId: callId,
                     role: 'expert'
                 }
@@ -466,7 +466,7 @@ export default function ExpertForumRoomScreen() {
         try {
             await addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: user.uid,
-                name: expertData?.name || "Consultant",
+                name: expertData?.name || "Host",
                 text: chatInput.trim(),
                 timestamp: serverTimestamp()
             });
@@ -492,7 +492,7 @@ export default function ExpertForumRoomScreen() {
             return;
         }
         if (seat.uid) {
-            Alert.alert("Consultant Controls 👑", `Disconnect ${seat.name}?`, [{ text: "Confirm", style: "destructive", onPress: async () => {
+            Alert.alert("Host Controls 👑", `Disconnect ${seat.name}?`, [{ text: "Confirm", style: "destructive", onPress: async () => {
                 const updatedSeats = [...roomData.seats];
                 updatedSeats[index] = { uid: null, name: null, image: null, isMuted: false };
                 await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
@@ -502,7 +502,7 @@ export default function ExpertForumRoomScreen() {
         if (mySeatIndex !== null) return;
         try {
             const updatedSeats = [...roomData.seats];
-            const actualName = expertData?.name || expertData?.userName || user?.displayName || "Consultant";
+            const actualName = expertData?.name || expertData?.userName || user?.displayName || "Host";
             const actualImage = expertData?.profilePic || expertData?.photoURL || user?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(actualName)}&background=0F172A&color=00F2FE`;
 
             updatedSeats[index] = {
@@ -548,7 +548,7 @@ export default function ExpertForumRoomScreen() {
                         </TouchableOpacity>
                         <View style={styles.roomInfo}>
                             <Text style={styles.roomName}>{roomData.roomName}</Text>
-                            <Text style={styles.hostName}>👑 Consultant {isAgoraJoined ? "• Active" : "• Synchronizing..."}</Text>
+                            <Text style={styles.hostName}>👑 Host {isAgoraJoined ? "• Active" : "• Synchronizing..."}</Text>
                         </View>
                         <View style={styles.beanBadge}>
                             <MaterialCommunityIcons name="wallet-outline" size={14} color="#F59E0B" />
@@ -727,7 +727,7 @@ export default function ExpertForumRoomScreen() {
                             </View>
                         </View>
                         <Text style={styles.ringExpertName}>
-                            {callerProfile?.name || callerProfile?.displayName || incomingCall?.userName || incomingCall?.callerName || incomingCall?.name || incomingCall?.displayName || incomingCall?.user_name || "Premium Client"}
+                            {callerProfile?.name || callerProfile?.displayName || incomingCall?.userName || incomingCall?.callerName || incomingCall?.name || incomingCall?.displayName || incomingCall?.user_name || "Premium User"}
                         </Text>
                         <Text style={styles.ringTimer}>00:{ringTimer.toString().padStart(2, '0')}</Text>
                         <View style={styles.ringActionRow}>

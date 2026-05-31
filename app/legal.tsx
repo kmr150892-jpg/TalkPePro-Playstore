@@ -98,20 +98,20 @@ export default function LegalScreen() {
                             <ContentSection 
                                 icon="shield-account"
                                 color="#6366F1"
-                                title="1. Professional Guidelines" 
-                                text="TalkPe Pro is a professional mentorship and consulting platform. All participants must engage with respect and decorum. Any form of harassment or misuse of the service will lead to immediate account suspension as per our zero-tolerance policy." 
+                                title="1. Community Guidelines" 
+                                text="TalkPe Pro is a premium live interaction and calling platform. All participants must engage with respect and decorum. Any form of harassment or misuse of the service will lead to immediate account suspension as per our zero-tolerance policy." 
                             />
                             <ContentSection 
                                 icon="diamond-stone"
                                 color="#0EA5E9"
                                 title="2. Digital Assets & No Cashout Policy" 
-                                text="Our internal ecosystem utilizes Diamonds to connect with experts. Diamonds are purely virtual in-app assets with NO real-world monetary value. Under no circumstances can user Diamonds be withdrawn, cashed out, or exchanged for real money. All purchases are securely processed through official payment gateways and are strictly non-refundable." 
+                                text="Our internal ecosystem utilizes Diamonds to connect with hosts. Diamonds are purely virtual in-app assets with NO real-world monetary value. Under no circumstances can user Diamonds be withdrawn, cashed out, or exchanged for real money. All purchases are securely processed through official payment gateways and are strictly non-refundable." 
                             />
                             <ContentSection 
                                 icon="phone-cancel"
                                 color="#F43F5E"
                                 title="3. Interaction Safety" 
-                                text="Both the expert and the user maintain the right to end a consultation if professional safety protocols are compromised. TalkPe Pro reserves the right to review reported violations to ensure network integrity." 
+                                text="Both the host and the user maintain the right to end a call if safety protocols are compromised. TalkPe Pro reserves the right to review reported violations to ensure network integrity." 
                             />
                             <ContentSection 
                                 icon="security"
@@ -132,7 +132,7 @@ export default function LegalScreen() {
                                 icon="fountain-pen-tip"
                                 color="#A855F7"
                                 title="1. Communication Privacy" 
-                                text="All live interactions are powered by Agora SDK with industry-standard encryption. We operate under a zero-knowledge framework; your private consultations are confidential and are never recorded or monitored by TalkPe Pro." 
+                                text="All live interactions are powered by Agora SDK with industry-standard encryption. We operate under a zero-knowledge framework; your private calls are confidential and are never recorded or monitored by TalkPe Pro." 
                             />
                             <ContentSection 
                                 icon="database-lock"

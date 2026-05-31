@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as KeepAwake from 'expo-keep-awake';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, getDoc, limit, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
@@ -23,9 +24,37 @@ if (Platform.OS === 'android' && (LayoutAnimation as any).configureNext) {
   (LayoutAnimation as any).configureNext = () => {}; 
 }
 
+// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2 - DIAMONDS ONLY)
+const calculateUserLevel = (totalSpent: number) => {
+  if (totalSpent >= 500000001) return { 
+      lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000'] as const
+  }; 
+  if (totalSpent >= 100000001) return { 
+      lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000'] as const
+  }; 
+  if (totalSpent >= 50000000) return { 
+      lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000'] as const
+  };
+  if (totalSpent >= 10000000) return { 
+      lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000'] as const
+  };
+  if (totalSpent >= 5000000) return { 
+      lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000'] as const
+  };
+  if (totalSpent >= 1000000) return { 
+      lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000'] as const
+  };
+  if (totalSpent >= 200001) return { 
+      lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000'] as const
+  };
+  return { 
+      lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000'] as const
+  };
+};
+
 export default function RootLayout() {
   const [initializing, setInitializing] = useState(true);
-  const [isEjecting, setIsEjecting] = useState(false); // 🔥 SATTI FIX: The Iron Curtain state
+  const [isEjecting, setIsEjecting] = useState(false); 
   const [user, setUser] = useState<User | null>(null); 
   const [userRole, setUserRole] = useState<string | null>(null);
   const [isMaintenance, setIsMaintenance] = useState(false);
@@ -48,7 +77,6 @@ export default function RootLayout() {
   const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
   const [incomingTimer, setIncomingTimer] = useState(12); 
 
-  // 🔥 SATTI FIX: WIPE MEMORY ON APP STARTUP ONCE 🔥
   useEffect(() => {
     const wipeSession = async () => {
        await AsyncStorage.removeItem('@intended_role');
@@ -102,14 +130,11 @@ export default function RootLayout() {
       setUser(u);
 
       if (u) {
-        // 🔥 SATTI FIX: Added { includeMetadataChanges: true } here
         unsubUser = onSnapshot(doc(db, "users", u.uid), { includeMetadataChanges: true }, async (docSnap) => {
           if (docSnap.exists()) {
             const data = docSnap.data();
 
             if (data.forceLogout === true || data.status === 'Blocked' || data.isBlocked === true) {
-                // 🔥 SATTI FIX: THE MAGIC LINE 🔥
-                // Cache-la irundhu 'blocked' nu vantha, action edukkaatha, Server update-ku wait pannu!
                 if (docSnap.metadata.fromCache) {
                     console.log("Cached block detected, waiting for server to confirm...");
                     return; 
@@ -154,7 +179,7 @@ export default function RootLayout() {
         setRegistrationInProgress(false);
         setIsClientMode(false);
         setInitializing(false);
-        setIsEjecting(false); // 🔥 SATTI FIX: Lift the curtain safely after logout is complete
+        setIsEjecting(false); 
         
         setTimeout(() => {
             router.replace('/' as any);
@@ -256,9 +281,17 @@ export default function RootLayout() {
                             const uData = uDoc.data();
                             const actualPic = uData.profilePic || uData.photoURL || callData.callerImage;
                             const actualName = uData.name || uData.displayName || callData.callerName;
+                            
+                            // 🔥 SATTI FIX: Fetching the Maximum of DIAMOND/RECHARGE fields only
+                            const callerDiamonds = Math.max(
+                                uData.totalDiamonds || 0,
+                                uData.walletBalance || 0,
+                                uData.balance || 0
+                            );
+
                             setIncomingCallData((prev: any) => 
                                 prev && prev.callerId === callData.callerId 
-                                ? { ...prev, callerImage: actualPic, callerName: actualName } 
+                                ? { ...prev, callerImage: actualPic, callerName: actualName, callerDiamonds } 
                                 : prev
                             );
                         }
@@ -346,7 +379,6 @@ export default function RootLayout() {
       setIncomingCallId(null);
   };
 
-  // 🔥 SATTI FIX: THE ULTIMATE STRICT IDENTITY GATEKEEPER 🔥
   useEffect(() => {
     const gateKeeper = async () => {
         if (initializing || !rootNavigationState?.key) return;
@@ -385,15 +417,12 @@ export default function RootLayout() {
         const currentIntendedRole = await AsyncStorage.getItem('@intended_role');
         const isAnyExpertState = userRole === 'expert' || userStatus === 'Pending' || userStatus === 'Active' || registrationInProgress === true;
 
-        // 🔥 SCENARIO 1: EXPERT IDENTITY (Draft, Pending, or Active) 🔥
         if (isAnyExpertState) {
-            // STRICT LOCK: Consultant can NEVER login as Client!
             if (currentIntendedRole === 'user' && !isRealAdmin) {
-                // 🔥 SATTI FIX: INSTANT EJECT! Throw the loading curtain down, sign out securely, then alert.
                 setIsEjecting(true);
                 await AsyncStorage.removeItem('@intended_role');
                 await auth.signOut();
-                Alert.alert("Access Denied", "This account is for Consultants only. You cannot login as a Client.");
+                Alert.alert("Access Denied", "This account is for Hosts only. You cannot login as a User.");
                 return;
             }
 
@@ -413,15 +442,12 @@ export default function RootLayout() {
             }
         }
 
-        // 🔥 SCENARIO 2: CONFIRMED CLIENT IDENTITY 🔥
         if (!isAnyExpertState && isClientMode === true) {
-            // STRICT LOCK: Client can NEVER login as Consultant!
             if (currentIntendedRole === 'expert' && !isRealAdmin) {
-                // 🔥 SATTI FIX: INSTANT EJECT! Same curtain drop logic for safety.
                 setIsEjecting(true);
                 await AsyncStorage.removeItem('@intended_role');
                 await auth.signOut();
-                Alert.alert("Access Denied", "This account is for Clients only. You cannot switch to Consultant.");
+                Alert.alert("Access Denied", "This account is for Users only. You cannot switch to Host.");
                 return;
             }
 
@@ -431,12 +457,10 @@ export default function RootLayout() {
             return;
         }
 
-        // 🔥 SCENARIO 3: BRAND NEW USER (Choosing Identity for the FIRST TIME) 🔥
         if (!isAnyExpertState && isClientMode === false) {
             if (currentIntendedRole === 'expert') {
                 if (firstSegment !== 'expert-register') router.replace('/expert-register' as any);
             } else if (currentIntendedRole === 'user') {
-                // 🔥 LOCK THEM AS CLIENT FOREVER IN DATABASE 🔥
                 updateDoc(doc(db, "users", user.uid), { isClient: true }).catch(() => {});
                 
                 if (!inTabs && (firstSegment === '' || firstSegment === 'index')) {
@@ -449,12 +473,10 @@ export default function RootLayout() {
     gateKeeper();
   }, [user, userRole, userStatus, registrationInProgress, isClientMode, initializing, segments.join('/'), isMaintenance, needsUpdate, rootNavigationState?.key]);
 
-  // 🔥 GLOBAL LOCK: Safeguarding maintenance triggers from fake admins
   const isGlobalAdmin = userRole === 'admin' && user?.email === 'kmr150892@gmail.com';
   if (isMaintenance && !isGlobalAdmin) return <MaintenanceScreen />;
   if (needsUpdate && !isGlobalAdmin) return <UpdateAlert />;
   
-  // 🔥 SATTI FIX: Keep the loading spinner up if we are ejecting the user (prevents 3 second flash!)
   if (initializing || isEjecting) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' }}>
@@ -462,6 +484,9 @@ export default function RootLayout() {
       </View>
     );
   }
+
+  // 🔥 SATTI FIX: Determining User Level & Theme strictly based on Diamonds/Recharge
+  const userTheme = incomingCallData ? calculateUserLevel(incomingCallData.callerDiamonds || 0) : calculateUserLevel(0);
 
   return (
     <>
@@ -484,38 +509,60 @@ export default function RootLayout() {
       </Stack>
 
       {incomingCallData && incomingCallId && (
-        <Modal visible={true} transparent animationType="slide">
+        <Modal visible={true} transparent animationType="fade">
             <View style={styles.incomingCallOverlay}>
-                <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
-                <View style={styles.incomingCallCard}>
-                    <Text style={styles.incomingCallTitle}>📞 INCOMING CALL</Text>
+                <BlurView intensity={95} tint="dark" style={StyleSheet.absoluteFill} />
+                
+                {/* Glowing Orb Behind the Card based on Level Primary Color */}
+                <View style={[styles.glowOrb, { backgroundColor: userTheme.color }]} />
+
+                <View style={[styles.incomingCallCard, { borderColor: userTheme.secondaryColor }]}>
+                   <LinearGradient colors={userTheme.themeBg} style={[StyleSheet.absoluteFill, { borderRadius: 30 }]} />
                     
-                    <Image 
-                        source={{ uri: incomingCallData.callerImage || 'https://ui-avatars.com/api/?name=User&background=0F172A&color=fff' }} 
-                        style={styles.incomingAvatar} 
-                    />
+                    <View style={styles.callHeaderBadge}>
+                        <View style={[styles.pulsingDot, {backgroundColor: userTheme.color, shadowColor: userTheme.color}]} />
+                        <Text style={[styles.incomingCallTitle, {color: userTheme.color}]}>{userTheme.status}</Text>
+                    </View>
+                    
+                    <View style={styles.callerAvatarContainer}>
+                        <LinearGradient colors={[userTheme.color, userTheme.secondaryColor]} style={styles.avatarRing}>
+                            <Image 
+                                source={{ uri: incomingCallData.callerImage || 'https://ui-avatars.com/api/?name=User&background=0F172A&color=fff' }} 
+                                style={[styles.incomingAvatar, { borderColor: userTheme.secondaryColor }]} 
+                            />
+                        </LinearGradient>
+                        <LinearGradient colors={[userTheme.color, userTheme.secondaryColor]} style={styles.userLevelBadge}>
+                             <Text style={styles.userLevelText}>{userTheme.label} L{userTheme.lvl}</Text>
+                        </LinearGradient>
+                    </View>
                     
                     <Text style={styles.incomingCallerName} numberOfLines={1} adjustsFontSizeToFit>
                         {incomingCallData.callerName || 'A User'}
                     </Text>
                     
-                    <Text style={styles.incomingSubText}>
-                        {incomingCallData.isFreeTrial ? '🎁 Free Trial Call' : '💎 Premium Masterclass'}
-                    </Text>
+                    <View style={styles.sessionTypeBadge}>
+                        <Text style={styles.incomingSubText}>
+                            {incomingCallData.isFreeTrial ? '🎁 Complimentary Session' : '💎 Premium Private Call'}
+                        </Text>
+                    </View>
 
-                    <Text style={styles.incomingTimerText}>
+                    <Text style={[styles.incomingTimerText, { textShadowColor: userTheme.secondaryColor }]}>
                         00:{incomingTimer.toString().padStart(2, '0')}
                     </Text>
                     
                     <View style={styles.incomingActionRow}>
-                        <TouchableOpacity style={[styles.incomingBtn, { backgroundColor: '#EF4444' }]} onPress={rejectIncomingCall}>
-                            <MaterialCommunityIcons name="phone-hangup" size={28} color="#FFF" />
-                            <Text style={styles.incomingBtnText}>Decline</Text>
+                        <TouchableOpacity style={styles.actionBtnWrapper} onPress={rejectIncomingCall}>
+                            <LinearGradient colors={['#EF4444', '#991B1B']} style={styles.incomingBtn}>
+                                <MaterialCommunityIcons name="phone-hangup" size={26} color="#FFF" />
+                                <Text style={styles.incomingBtnText}>Decline</Text>
+                            </LinearGradient>
                         </TouchableOpacity>
                         
-                        <TouchableOpacity style={[styles.incomingBtn, { backgroundColor: '#10B981' }]} onPress={acceptIncomingCall}>
-                            <MaterialCommunityIcons name="phone" size={28} color="#FFF" />
-                            <Text style={styles.incomingBtnText}>Accept</Text>
+                        <TouchableOpacity style={styles.actionBtnWrapper} onPress={acceptIncomingCall}>
+                            <LinearGradient colors={['#10B981', '#047857']} style={styles.incomingBtn}>
+                                <MaterialCommunityIcons name="phone" size={26} color="#FFF" />
+                                <Text style={styles.incomingBtnText}>Accept</Text>
+                            </LinearGradient>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -527,14 +574,23 @@ export default function RootLayout() {
 }
 
 const styles = StyleSheet.create({
-    incomingCallOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', zIndex: 9999 },
-    incomingCallCard: { width: '85%', backgroundColor: 'rgba(15,23,42,0.95)', borderRadius: 25, padding: 25, alignItems: 'center', borderWidth: 2, borderColor: '#38BDF8', elevation: 20, shadowColor: '#38BDF8', shadowOpacity: 0.5, shadowRadius: 20 },
-    incomingCallTitle: { color: '#38BDF8', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
-    incomingAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#10B981', marginBottom: 15 },
-    incomingCallerName: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginBottom: 5, textAlign: 'center' },
-    incomingSubText: { color: '#94A3B8', fontSize: 14, fontWeight: '600', marginBottom: 15 },
-    incomingTimerText: { color: '#EF4444', fontSize: 22, fontWeight: '900', letterSpacing: 2, marginBottom: 25 },
-    incomingActionRow: { flexDirection: 'row', gap: 20, width: '100%', justifyContent: 'space-around' },
-    incomingBtn: { flex: 1, paddingVertical: 15, borderRadius: 15, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, elevation: 5 },
-    incomingBtnText: { color: '#FFF', fontSize: 16, fontWeight: 'bold' }
+    incomingCallOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', zIndex: 9999 },
+    glowOrb: { position: 'absolute', width: 320, height: 320, borderRadius: 160, opacity: 0.25, filter: 'blur(70px)' },
+    incomingCallCard: { width: '85%', borderRadius: 30, padding: 25, alignItems: 'center', borderWidth: 1.5, elevation: 25, shadowColor: '#000', shadowOpacity: 0.6, shadowRadius: 30 },
+    callHeaderBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 15, paddingVertical: 6, borderRadius: 20, marginBottom: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    pulsingDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8, shadowOpacity: 0.8, shadowRadius: 5 },
+    incomingCallTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+    callerAvatarContainer: { position: 'relative', marginBottom: 25, alignItems: 'center' },
+    avatarRing: { padding: 4, borderRadius: 65, elevation: 15 },
+    incomingAvatar: { width: 110, height: 110, borderRadius: 55, borderWidth: 4 },
+    userLevelBadge: { position: 'absolute', bottom: -12, paddingHorizontal: 15, paddingVertical: 5, borderRadius: 15, borderWidth: 2, borderColor: '#020617', elevation: 10 },
+    userLevelText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    incomingCallerName: { color: '#FFF', fontSize: 26, fontWeight: '900', marginBottom: 10, textAlign: 'center', letterSpacing: -0.5 },
+    sessionTypeBadge: { backgroundColor: 'rgba(255,255,255,0.05)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginBottom: 20 },
+    incomingSubText: { color: '#94A3B8', fontSize: 13, fontWeight: '700' },
+    incomingTimerText: { color: '#F87171', fontSize: 32, fontWeight: '900', letterSpacing: 3, marginBottom: 30, textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10 },
+    incomingActionRow: { flexDirection: 'row', gap: 15, width: '100%', justifyContent: 'space-between' },
+    actionBtnWrapper: { flex: 1, borderRadius: 20, overflow: 'hidden', elevation: 10 },
+    incomingBtn: { paddingVertical: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 },
+    incomingBtnText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 }
 });

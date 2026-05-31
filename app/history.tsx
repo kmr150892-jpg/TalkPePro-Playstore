@@ -76,7 +76,7 @@ export default function HistoryScreen() {
         let rawCalls: any[] = [];
         let rawGifts: any[] = [];
 
-        const processConsultationLogs = () => {
+        const processCallLogs = () => {
             const myGifts = rawGifts.filter(g => {
                 const isIdMatch = g.senderId === user.uid || g.userId === user.uid;
                 const isNameMatch = g.senderName && (g.senderName === userData?.name || g.senderName === user.displayName);
@@ -117,7 +117,7 @@ export default function HistoryScreen() {
         const qCalls = query(collection(db, "calls"), where("callerId", "==", user.uid), orderBy("endedAt", "desc"));
         const unsubscribeHistory = onSnapshot(qCalls, (snapshot) => {
             rawCalls = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            processConsultationLogs();
+            processCallLogs();
         });
 
         const qGifts = query(collectionGroup(db, 'gifts'));
@@ -139,7 +139,7 @@ export default function HistoryScreen() {
                 }
                 return { id: giftDoc.id, ...data, fetchedHostName, fetchedHostImage };
             }));
-            processConsultationLogs();
+            processCallLogs();
         });
 
         // ==========================================
@@ -312,7 +312,7 @@ export default function HistoryScreen() {
         const secs = currentDuration % 60;
         const durationText = mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
         const totalSpentOnCall = (Number(item.totalDiamonds) || 0);
-        const callEName = item.expertName || item.hostName || 'CONSULTANT NODE';
+        const callEName = item.expertName || item.hostName || 'HOST NODE';
         const callEImage = item.expertImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(callEName)}&background=1E293B&color=fff&bold=true`;
 
         return (
@@ -496,7 +496,7 @@ export default function HistoryScreen() {
 
                     <View style={styles.talktimeHighlight}>
                         <Text style={[styles.totalTalkLabel, { color: userTier.color }]} numberOfLines={1}>
-                            {activeTab === 'CALLS' ? 'TOTAL CONSULTATION TALKTIME' : activeTab === 'GAMES' ? 'TOTAL TASKS COMPLETED' : 'TOTAL REWARDS SENT'}
+                            {activeTab === 'CALLS' ? 'TOTAL CALL TALKTIME' : activeTab === 'GAMES' ? 'TOTAL TASKS COMPLETED' : 'TOTAL REWARDS SENT'}
                         </Text>
                         <View style={styles.minsDisplay}>
                             <Text style={styles.bigMins} numberOfLines={1} adjustsFontSizeToFit>
@@ -529,7 +529,7 @@ export default function HistoryScreen() {
 
                 <View style={styles.tabsRow}>
                     <TouchableOpacity style={[styles.tabBtn, activeTab === 'CALLS' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('CALLS')}>
-                        <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CONSULT LOG</Text>
+                        <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CALL LOG</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.tabBtn, activeTab === 'GAMES' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('GAMES')}>
                         <Text style={[styles.tabText, activeTab === 'GAMES' && { color: '#FFF' }]} numberOfLines={1}>ACTIVITY LOG</Text>

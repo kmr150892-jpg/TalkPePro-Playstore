@@ -40,7 +40,7 @@ export default function ExpertControl() {
     useEffect(() => {
         setLoading(true);
         
-        // Only fetch users who are authorized consultants
+        // Only fetch users who are authorized hosts
         const q = query(
             collection(db, "users"), 
             where("role", "==", "expert")
@@ -49,7 +49,7 @@ export default function ExpertControl() {
         const unsub = onSnapshot(q, (snap) => {
             const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as ExpertData));
             
-            // Sorting: Active consultants first, Restricted profiles at the bottom
+            // Sorting: Active hosts first, Restricted profiles at the bottom
             const sortedList = list.sort((a, b) => {
                 if (a.isBlocked === b.isBlocked) return 0;
                 return a.isBlocked ? 1 : -1;
@@ -69,7 +69,7 @@ export default function ExpertControl() {
         const newStatus = !currentStatus;
         Alert.alert(
             newStatus ? "RESTRICT PROFILE?" : "RESTORE ACCESS?",
-            `Confirming credential modification for this consultant. Proceed?`,
+            `Confirming credential modification for this host. Proceed?`,
             [
                 { text: "CANCEL", style: "cancel" },
                 { 
@@ -105,7 +105,7 @@ export default function ExpertControl() {
                     </View>
 
                     <View style={{ flex: 1, marginLeft: 15 }}>
-                        <Text style={styles.name}>{item.name || 'AUTHORIZED CONSULTANT'}</Text>
+                        <Text style={styles.name}>{item.name || 'AUTHORIZED HOST'}</Text>
                         <Text style={styles.idText}>SYSTEM ID: {item.uid?.slice(0, 15).toUpperCase() || item.id.slice(0, 15).toUpperCase()}</Text>
                     </View>
                     
@@ -132,7 +132,7 @@ export default function ExpertControl() {
                     </View>
                     <View style={styles.divider} />
                     <View style={styles.metricItem}>
-                        <Text style={styles.metricLabel}>CLIENT RATE</Text>
+                        <Text style={styles.metricLabel}>USER RATE</Text>
                         <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
                            <MaterialCommunityIcons name="diamond" size={12} color="#818CF8" />
                            <Text style={styles.metricValue}>{item.userPrice || 0}</Text>
@@ -175,7 +175,7 @@ export default function ExpertControl() {
                     <Feather name="settings" size={24} color="#475569" />
                 </TouchableOpacity>
                 <View>
-                    <Text style={styles.title}>CONSULTANT HUB</Text>
+                    <Text style={styles.title}>HOST HUB</Text>
                     <Text style={styles.subtitle}>Administrative Terminal • TalkPe OS</Text>
                 </View>
                 <View style={styles.countBadge}>

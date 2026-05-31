@@ -85,7 +85,7 @@ export default function AdminRewardRequestsScreen() {
     const handleReject = async (req: any) => {
         Alert.alert(
             "Decline & Unit Reversal?",
-            `This will decline the request and reverse ${req.costDeducted} units back to the client wallet. Proceed?`,
+            `This will decline the request and reverse ${req.costDeducted} units back to the user wallet. Proceed?`,
             [
                 { text: "Cancel", style: "cancel" },
                 {

@@ -51,7 +51,7 @@ export const LivePreview = ({ liveId }: LivePreviewProps) => {
             if (!isFocused) return;
 
             try {
-                // Initialize fresh Consultant RTC instance
+                // Initialize fresh Host RTC instance
                 engine.current = createAgoraRtcEngine();
                 const rtcEngine = engine.current;
 
@@ -67,7 +67,7 @@ export const LivePreview = ({ liveId }: LivePreviewProps) => {
                         if (isSubscribed) setJoined(true);
                     },
                     onUserJoined: (connection, uid) => {
-                        // console.log("Preview: Consultant Joined UID:", uid);
+                        // console.log("Preview: Host Joined UID:", uid);
                         if (isSubscribed) setRemoteUid(uid);
                     },
                     onUserOffline: () => {

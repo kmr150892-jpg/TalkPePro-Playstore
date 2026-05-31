@@ -100,7 +100,7 @@ export default function FriendsList() {
           const expertSnap = await getDoc(expertRef);
 
           let expertInfo = {
-            name: data.receiverName || "Consultant",
+            name: data.receiverName || "Host",
             image: data.receiverImage || null
           };
 
@@ -142,7 +142,7 @@ export default function FriendsList() {
       "Terminate Link",
       `Are you sure you want to disconnect your network link with ${name}?`,
       [
-        { text: "ABORT", style: "cancel" },
+        { text: "CANCEL", style: "cancel" },
         { 
           text: "CONFIRM", 
           style: "destructive", 
@@ -234,7 +234,7 @@ export default function FriendsList() {
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons name="earth-off" size={80} color={userTier.color} style={{ opacity: 0.2 }} />
           <Text style={styles.emptyTitle}>Empty Network</Text>
-          <Text style={styles.emptyDesc}>Connect with consultants to expand your secure communication network.</Text>
+          <Text style={styles.emptyDesc}>Connect with hosts to expand your secure communication network.</Text>
         </View>
       ) : (
         <Animated.FlatList

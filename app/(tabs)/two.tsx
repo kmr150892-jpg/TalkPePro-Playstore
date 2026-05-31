@@ -190,7 +190,7 @@ export default function ProfileScreen() {
               _enrichedName: g.expertName || g.receiverName || g.toName || g.hostName || g.creatorName || g.Name || ''
           }));
 
-          // 🔥 EXTRACT EXPERT NAME FOR TRANSACTIONS (CONSULTATION)
+          // 🔥 EXTRACT EXPERT NAME FOR TRANSACTIONS (CALL)
           const validTransactions = rawTransactions.filter(t => {
               const typeStr = String(t.type).toUpperCase();
               return typeStr !== 'VOUCHER_REDEEM'; 
@@ -540,12 +540,12 @@ export default function ProfileScreen() {
                             <View style={[styles.ledgerBox, borderType1]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#3B82F630' }]}><MaterialCommunityIcons name="video-vintage" size={24} color="#3B82F6" /></View>
                                 <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalVideoCallSpent} 💎</Text>
-                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CONSULTATION SPENT</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CALL SPENT</Text>
                             </View>
                             <View style={[styles.ledgerBox, borderType2]}>
                                 <View style={[styles.iconCircle, { backgroundColor: '#F59E0B30' }]}><MaterialCommunityIcons name="clock-outline" size={24} color="#F59E0B" /></View>
                                 <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalMinutes}</Text>
-                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CONSULTATION MINS</Text>
+                                <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CALL MINS</Text>
                             </View>
                             
                             {/* 🔥 NEW TOTAL ARENA ENTRY BOX 🔥 */}

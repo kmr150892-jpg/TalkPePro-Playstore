@@ -74,7 +74,7 @@ export default function VerifyExpertDetail() {
             }
 
             await updateDoc(userRef, updateData);
-            Alert.alert("SYSTEM UPDATED", `Consultant access is now ${isApprove ? 'Authorized' : 'Declined'}.`);
+            Alert.alert("SYSTEM UPDATED", `Host access is now ${isApprove ? 'Authorized' : 'Declined'}.`);
             router.back();
         } catch (err) {
             Alert.alert("ERROR", "System update failed.");
@@ -88,7 +88,7 @@ export default function VerifyExpertDetail() {
         const nextStatus = !isCurrentlyBlocked;
 
         Alert.alert(
-            nextStatus ? "RESTRICT CONSULTANT?" : "RESTORE ACCESS?",
+            nextStatus ? "RESTRICT HOST?" : "RESTORE ACCESS?",
             `Are you sure you want to ${nextStatus ? 'restrict' : 'restore'} platform access for ${expert?.name}?`,
             [
                 { text: "CANCEL", style: "cancel" },
@@ -144,7 +144,7 @@ export default function VerifyExpertDetail() {
                     <Ionicons name="chevron-back" size={24} color="#6366F1" />
                 </TouchableOpacity>
                 <View style={styles.headerText}>
-                    <Text style={styles.headerTitle}>{isPending ? 'ONBOARDING REVIEW' : 'CONSULTANT CONSOLE'}</Text>
+                    <Text style={styles.headerTitle}>{isPending ? 'ONBOARDING REVIEW' : 'HOST CONSOLE'}</Text>
                     <Text style={styles.headerSub}>SYSTEM ID: {String(expertId || '').toUpperCase()}</Text>
                 </View>
             </View>
@@ -168,7 +168,7 @@ export default function VerifyExpertDetail() {
                         <View style={[styles.statusBadge, { borderColor: isPending ? '#F59E0B' : (isBlocked ? '#EF4444' : '#10B981') }]}>
                             <View style={[styles.dot, { backgroundColor: isPending ? '#F59E0B' : (isBlocked ? '#EF4444' : '#10B981') }]} />
                             <Text style={[styles.statusText, { color: isPending ? '#F59E0B' : (isBlocked ? '#EF4444' : '#10B981') }]}>
-                                {isPending ? 'PENDING VERIFICATION' : (isBlocked ? 'ACCESS RESTRICTED' : 'ACTIVE CONSULTANT')}
+                                {isPending ? 'PENDING VERIFICATION' : (isBlocked ? 'ACCESS RESTRICTED' : 'ACTIVE HOST')}
                             </Text>
                         </View>
                     </View>
@@ -200,17 +200,17 @@ export default function VerifyExpertDetail() {
                         
                         {/* ✅ TIER BOX */}
                         <View style={[styles.statBox, { marginTop: 15, width: '100%', flexDirection: 'row', justifyContent: 'space-between' }]}>
-                             <Text style={styles.statLabel}>CONSULTANT TIER</Text>
+                             <Text style={styles.statLabel}>HOST TIER</Text>
                              <Text style={[styles.statValue, { fontSize: 14, color: '#6366F1' }]}>{expert?.levelTitle || 'BEGINNER L0'}</Text>
                         </View>
                     </View>
                 )}
 
-                {/* CONSULTANT CREDENTIALS */}
+                {/* HOST CREDENTIALS */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
                         <Feather name="shield" size={14} color="#6366F1" />
-                        <Text style={styles.sectionTitle}>CONSULTANT CREDENTIALS</Text>
+                        <Text style={styles.sectionTitle}>HOST CREDENTIALS</Text>
                     </View>
                     <View style={styles.glassBox}>
                         <View style={styles.infoRow}>
@@ -295,7 +295,7 @@ export default function VerifyExpertDetail() {
                             disabled={processing}
                         >
                             <Feather name={isBlocked ? "unlock" : "slash"} size={18} color="#fff" />
-                            <Text style={styles.approveBtnText}>{isBlocked ? 'RESTORE ACCESS' : 'RESTRICT CONSULTANT'}</Text>
+                            <Text style={styles.approveBtnText}>{isBlocked ? 'RESTORE ACCESS' : 'RESTRICT HOST'}</Text>
                         </TouchableOpacity>
                     )}
                 </BlurView>

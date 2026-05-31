@@ -158,7 +158,7 @@ export default function ExpertDashboard() {
     }, [showPreviewModal]);
 
     useEffect(() => {
-        const authUnsub = auth.onAuthStateChanged((u) => {
+        const authUnsub = auth.onAuthStateChanged((u:any) => {
             if (!u) {
                 setLoading(false);
                 router.replace('/' as any);
@@ -267,9 +267,9 @@ export default function ExpertDashboard() {
             const initialData = {
                 roomId: roomId,
                 hostId: user.uid,
-                hostName: expertData?.name || "Consultant",
+                hostName: expertData?.name || "Host",
                 hostImage: expertData?.profilePic || "",
-                roomName: `${expertData?.name || 'Consultant'}'s Forum`,
+                roomName: `${expertData?.name || 'Host'}'s Forum`,
                 status: "active",
                 viewerCount: 1,
                 createdAt: serverTimestamp(),
@@ -306,7 +306,7 @@ export default function ExpertDashboard() {
             
             await setDoc(liveRef, {
                 hostId: user.uid,
-                hostName: expertData?.name || "Consultant",
+                hostName: expertData?.name || "Host",
                 hostImage: expertData?.profilePic || "",
                 status: "live",
                 createdAt: serverTimestamp(),
@@ -417,10 +417,10 @@ export default function ExpertDashboard() {
                 pathname: '/videocall',
                 params: {
                     expertId: user.uid,
-                    expertName: expertData?.userName || expertData?.name || 'Consultant',
+                    expertName: expertData?.userName || expertData?.name || 'Host',
                     callId: incomingCall.id,
                     role: 'expert',
-                    callerName: incomingCall.callerName || 'Client'
+                    callerName: incomingCall.callerName || 'User'
                 }
             } as any);
         } catch (e) {
@@ -626,11 +626,11 @@ export default function ExpertDashboard() {
                             <Image source={{ uri: `https://ui-avatars.com/api/?name=${incomingCall?.callerName || 'U'}&background=${theme.primary.replace('#','')}&color=fff&size=200` }} style={[styles.callerAvatar, { borderColor: theme.primary }]} />
                         </View>
                         <Text style={[styles.incomingLabel, { color: theme.accent }]}>
-                            {incomingCall?.isDiscoverCall ? '🚀 QUICK SYNC REQUEST' : 'INCOMING CONSULTATION'}
+                            {incomingCall?.isDiscoverCall ? '🚀 QUICK SYNC REQUEST' : 'INCOMING CALL'}
                         </Text>
-                        <Text style={styles.callerNameText}>{incomingCall?.callerName || "New Client"}</Text>
+                        <Text style={styles.callerNameText}>{incomingCall?.callerName || "New User"}</Text>
                         <Text style={styles.callSubText}>
-                            {incomingCall?.isDiscoverCall ? 'System Discovered you with this client!' : 'Wants to initiate a session...'}
+                            {incomingCall?.isDiscoverCall ? 'System Discovered you with this user!' : 'Wants to initiate a session...'}
                         </Text>
                         <View style={styles.callActionRow}>
                             <TouchableOpacity onPress={handleRejectCall} style={[styles.actionBtn, styles.declineBg]}>

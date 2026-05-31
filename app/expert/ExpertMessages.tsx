@@ -41,7 +41,7 @@ interface ExpertMessagesProps {
 }
 
 export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
-    const [activeTab, setActiveTab] = useState<'CLIENTS' | 'REQUESTS'>('CLIENTS');
+    const [activeTab, setActiveTab] = useState<'USERS' | 'REQUESTS'>('USERS');
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [expertProfile, setExpertProfile] = useState<any>(null);
@@ -88,7 +88,7 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
             if (snap.exists()) setExpertProfile(snap.data());
         });
 
-        const statusQuery = activeTab === 'CLIENTS' ? 'friend' : 'pending';
+        const statusQuery = activeTab === 'USERS' ? 'friend' : 'pending';
         const q = query(collection(db, "connections"), where("receiverId", "==", expert.uid), where("status", "==", statusQuery));
 
         let unsubscribeChats: (() => void) | null = null;
@@ -117,7 +117,7 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
             setData(usersData);
             setLoading(false);
 
-            if (activeTab === 'CLIENTS' && usersData.length > 0 && expert?.uid) {
+            if (activeTab === 'USERS' && usersData.length > 0 && expert?.uid) {
                 if (unsubscribeChats) unsubscribeChats();
                 const chatQ = query(collection(db, "chats"), where("participants", "array-contains", expert.uid));
                 unsubscribeChats = onSnapshot(chatQ, (chatSnapshot) => {
@@ -281,10 +281,10 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
             <View style={styles.tabWrapper}>
                 <BlurView intensity={15} tint="dark" style={[styles.tabContainer, borderType1]}>
                     <TouchableOpacity
-                        style={[styles.massTab, activeTab === 'CLIENTS' && { backgroundColor: theme.primary + '30' }]}
-                        onPress={() => setActiveTab('CLIENTS')}
+                        style={[styles.massTab, activeTab === 'USERS' && { backgroundColor: theme.primary + '30' }]}
+                        onPress={() => setActiveTab('USERS')}
                     >
-                        <Text style={[styles.tabText, activeTab === 'CLIENTS' && { color: '#FFF' }]}>CLIENTS</Text>
+                        <Text style={[styles.tabText, activeTab === 'USERS' && { color: '#FFF' }]}>USERS</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                         style={[styles.massTab, activeTab === 'REQUESTS' && { backgroundColor: 'rgba(236, 72, 153, 0.25)' }]}
@@ -330,7 +330,7 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                                                 <View style={[styles.nodeAvatarRing, { borderColor: userTier.color, shadowColor: userTier.color }]}>
                                                     <Image source={{ uri: item.userImage || `https://ui-avatars.com/api/?name=${item.userName}&background=1E293B&color=fff&bold=true` }} style={styles.nodeAvatarImg} />
                                                 </View>
-                                                {activeTab === 'CLIENTS' && <View style={styles.onlineStatus} />}
+                                                {activeTab === 'USERS' && <View style={styles.onlineStatus} />}
                                             </TouchableOpacity>
                                         </View>
 
@@ -343,7 +343,7 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                                             </View>
                                         </View>
 
-                                        {activeTab === 'CLIENTS' ? (
+                                        {activeTab === 'USERS' ? (
                                             <View style={styles.actionNode}>
                                                 {/* Button also navigates or deletes on long press */}
                                                 <TouchableOpacity 

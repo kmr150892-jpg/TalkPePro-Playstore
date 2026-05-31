@@ -259,12 +259,12 @@ export default function ChatScreen() {
            <View style={styles.headerInfo}>
               <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.headerAvatarRing}>
                   <Image 
-                    source={{ uri: receiverImage || `https://ui-avatars.com/api/?name=${actualReceiverName || 'Consultant'}&background=1E293B&color=fff` }} 
+                    source={{ uri: receiverImage || `https://ui-avatars.com/api/?name=${actualReceiverName || 'Host'}&background=1E293B&color=fff` }} 
                     style={styles.headerAvatar} 
                   />
               </LinearGradient>
               <View style={{marginLeft: 12}}>
-                  <Text style={styles.headerName}>{actualReceiverName || "Consultant Node"}</Text>
+                  <Text style={styles.headerName}>{actualReceiverName || "Host Node"}</Text>
                   <View style={styles.statusRow}>
                      <View style={[styles.pulseDot, { backgroundColor: isChatBlocked ? '#EF4444' : userTier.color }]} />
                      <Text style={[styles.statusText, { color: isChatBlocked ? '#EF4444' : userTier.color }]}>

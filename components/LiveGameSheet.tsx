@@ -443,7 +443,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     userId: uid, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Reflex Arena Refund', timestamp: serverTimestamp()
                 });
             });
-            Alert.alert("Refunded 💰", "You left the arena. Access Requirement has been refunded to your wallet.");
+            Alert.alert("Refunded 🎖️", "You left the arena. Access Requirement has been refunded to your wallet.");
         } catch (e: any) {
             Alert.alert("Exit Failed", e.toString());
         }
@@ -726,7 +726,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     {/* MATCHMAKING */}
                     {gameStatus === 'WAITING' && (
                         <View style={styles.lobbyStateWrapper}>
-                            <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR EXPERT TO LOCK ARENA PASS...'}</Text>
+                            <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR HOST TO LOCK ARENA PASS...'}</Text>
                             
                             <View style={styles.entryFeeContainer}>
                                 <Text style={styles.feeLabel}>ARENA PASS:</Text>
@@ -943,7 +943,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 {isHost && (
                                     <View style={styles.resultRow}>
                                         <Text style={styles.resultLabel}>Host Bonus (10%):</Text>
-                                        <Text style={[styles.resultValue, { color: '#A855F7' }]}>+{matchResults.expertBeans} 💰</Text>
+                                        <Text style={[styles.resultValue, { color: '#A855F7' }]}>+{matchResults.expertBeans} 🎖️</Text>
                                     </View>
                                 )}
                                 <View style={styles.resultRow}>

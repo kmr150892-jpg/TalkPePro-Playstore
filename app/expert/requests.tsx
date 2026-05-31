@@ -34,7 +34,7 @@ export default function ExpertUserList() {
           const userSnap = await getDoc(userRef);
 
           let userInfo = {
-            name: data.senderName || "TALKPE PRO Client",
+            name: data.senderName || "TALKPE PRO User",
             image: data.senderImage || null
           };
 
@@ -79,7 +79,7 @@ export default function ExpertUserList() {
       "DISCONNECT NODE",
       `Are you sure you want to terminate connection with ${name}?`,
       [
-        { text: "ABORT", style: "cancel" },
+        { text: "CANCEL", style: "cancel" },
         { 
           text: "TERMINATE", 
           style: "destructive", 
@@ -116,7 +116,7 @@ export default function ExpertUserList() {
           </TouchableOpacity>
           <View>
             <Text style={styles.headerLabel}>TERMINAL ACCESS</Text>
-            <Text style={styles.headerTitle}>CLIENTS LIST</Text>
+            <Text style={styles.headerTitle}>USERS LIST</Text>
           </View>
         </View>
       </SafeAreaView>

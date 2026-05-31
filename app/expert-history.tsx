@@ -94,7 +94,7 @@ export default function ExpertHistory() {
             const expertEarnings = Number(d.expertEarnings) || 0;
 
             if (expertEarnings > 0) {
-                let callerName = d.callerName || 'Consultation User';
+                let callerName = d.callerName || 'Call User';
                 let callerPic = d.callerImage || null;
                 let callerLevel = 'Silver';
 
@@ -452,7 +452,7 @@ export default function ExpertHistory() {
     const dateObj = item.timestamp?.seconds ? new Date(item.timestamp.seconds * 1000) : new Date();
     const earnings = item.expertEarnings || 0; 
     
-    const titleText = item.callerName ? `Consultation with ${item.callerName}` : "Consultation Reward";
+    const titleText = item.callerName ? `Call with ${item.callerName}` : "Call Reward";
 
     return (
       <Animated.View style={[styles.eliteCard, index % 2 === 0 ? borderType1 : borderType2, { transform: [{ translateY: floatAnim }] }]}>
@@ -481,7 +481,7 @@ export default function ExpertHistory() {
           <View style={styles.earningsBlock}>
             <Text style={styles.earnLabel}>Rewards</Text>
             <View style={styles.beansRow}>
-              <Text style={styles.eliteBeansValue}>+💰{earnings}</Text> 
+              <Text style={styles.eliteBeansValue}>+🎖️{earnings}</Text> 
             </View>
           </View>
         </View>
@@ -529,7 +529,7 @@ export default function ExpertHistory() {
             iconColor = theme.primary;
         }
         
-        const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "Client";
+        const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "User";
         displayTitle = `${baseTitle} (from ${validSender})`;
     }
 
@@ -560,7 +560,7 @@ export default function ExpertHistory() {
           <View style={styles.earningsBlock}>
             <Text style={styles.earnLabel}>REWARD</Text>
             <View style={styles.beansRow}>
-              <Text style={styles.eliteBeansValue}>+💰{beansEarned}</Text>
+              <Text style={styles.eliteBeansValue}>+🎖️{beansEarned}</Text>
             </View>
           </View>
         </View>
@@ -578,7 +578,7 @@ export default function ExpertHistory() {
   const filteredData = allTransactions.filter(t => t.type === activeTab);
 
   const TABS = [
-      { id: 'video_call', label: 'Consultation Reward', icon: 'videocam', iconType: 'Ionicons' },
+      { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
       { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
       { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
       { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
