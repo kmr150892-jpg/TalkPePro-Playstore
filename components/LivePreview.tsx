@@ -6,6 +6,7 @@ import {
     Animated, // 🔥 ADDED FOR ORB ANIMATION
     Easing, // 🔥 ADDED FOR ORB ANIMATION
     StyleSheet,
+    Text, // 🔥 ADDED FOR LOADING TEXT
     View
 } from 'react-native';
 import createAgoraRtcEngine, {
@@ -30,6 +31,10 @@ export const LivePreview = ({ liveId }: LivePreviewProps) => {
 
     // 🔥 ANIMATION REF FOR DEEP-GLOW LOADING STATE
     const shimmerAnim = useRef(new Animated.Value(0)).current;
+    
+    // 🔥 SATTI FIX: NEW ANIMATION REFS FOR RADAR PULSE EFFECT
+    const pulseScale = useRef(new Animated.Value(1)).current;
+    const pulseOpacity = useRef(new Animated.Value(0.8)).current;
 
     useEffect(() => {
         // 🔥 Start Ambient Animation for Secure Loading Interface
@@ -40,6 +45,20 @@ export const LivePreview = ({ liveId }: LivePreviewProps) => {
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true
           })
+        ).start();
+
+        // 🔥 SATTI FIX: START RADAR PULSE ANIMATION
+        Animated.loop(
+            Animated.parallel([
+                Animated.sequence([
+                    Animated.timing(pulseScale, { toValue: 1.8, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+                    Animated.timing(pulseScale, { toValue: 1, duration: 0, useNativeDriver: true })
+                ]),
+                Animated.sequence([
+                    Animated.timing(pulseOpacity, { toValue: 0, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+                    Animated.timing(pulseOpacity, { toValue: 0.8, duration: 0, useNativeDriver: true })
+                ])
+            ])
         ).start();
     }, []);
 
@@ -122,11 +141,22 @@ export const LivePreview = ({ liveId }: LivePreviewProps) => {
             ) : (
                 <View style={styles.loading}>
                     {/* 🔥 AAA DYNAMIC DEEP-GLOW THEME FOR SECURE LOADING STATE */}
-                    <LinearGradient colors={['#020617', '#1E1B4B', '#020617']} style={StyleSheet.absoluteFill} />
-                    <Animated.View style={[styles.shimmerOrb, { top: -20, right: -20, backgroundColor: '#6366F1', transform: [{ translateY: orbTranslateY }] }]} />
-                    <Animated.View style={[styles.shimmerOrb, { bottom: -20, left: -20, backgroundColor: '#EC4899', transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+                    <LinearGradient colors={['#050505', '#110022', '#000000']} style={StyleSheet.absoluteFill} />
                     
-                    <ActivityIndicator color="#6366F1" size="large" />
+                    {/* 🔥 SATTI FIX: BIGGER, MORE VIBRANT NEON ORBS */}
+                    <Animated.View style={[styles.shimmerOrb, { top: -40, right: -40, backgroundColor: '#00F2FE', transform: [{ translateY: orbTranslateY }] }]} />
+                    <Animated.View style={[styles.shimmerOrb, { bottom: -40, left: -40, backgroundColor: '#FF0844', transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+                    
+                    {/* 🔥 SATTI FIX: NEW HIGH-END RADAR PULSE UI */}
+                    <View style={styles.radarContainer}>
+                        <Animated.View style={[styles.pulseRing, { transform: [{ scale: pulseScale }], opacity: pulseOpacity }]} />
+                        <View style={styles.centerOrb}>
+                            <ActivityIndicator color="#FFF" size="large" />
+                        </View>
+                    </View>
+
+                    {/* 🔥 SATTI FIX: GLOWING TEXT INDICATOR */}
+                    <Text style={styles.loadingText}>CONNECTING...</Text>
                 </View>
             )}
         </View>
@@ -148,13 +178,52 @@ const styles = StyleSheet.create({
         backgroundColor: '#020617', 
         overflow: 'hidden',
     },
-    // 🔥 DESIGN: SECURE AMBIENT SHIMMER ORBS
+    // 🔥 DESIGN: SECURE AMBIENT SHIMMER ORBS - MADE BIGGER & MORE PREMIUM
     shimmerOrb: { 
         position: 'absolute', 
-        width: 150, 
-        height: 150, 
-        borderRadius: 75, 
-        opacity: 0.25, 
+        width: 250, 
+        height: 250, 
+        borderRadius: 125, 
+        opacity: 0.20, 
         // filter: 'blur(40px)' // Note: Standard React Native doesn't support 'filter' on View; usually handled via BlurView or SVG
+    },
+    // 🔥 SATTI FIX: NEW MASS STYLES FOR RADAR PULSE & TEXT
+    radarContainer: {
+        justifyContent: 'center',
+        alignItems: 'center',
+        marginBottom: 25,
+    },
+    pulseRing: {
+        position: 'absolute',
+        width: 90,
+        height: 90,
+        borderRadius: 45,
+        borderWidth: 2,
+        borderColor: '#00F2FE',
+    },
+    centerOrb: {
+        width: 76,
+        height: 76,
+        borderRadius: 38,
+        backgroundColor: 'rgba(0, 242, 254, 0.15)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        borderColor: '#00F2FE',
+        shadowColor: '#00F2FE',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.8,
+        shadowRadius: 15,
+        elevation: 10,
+    },
+    loadingText: {
+        color: '#00F2FE',
+        fontSize: 13,
+        fontWeight: '900',
+        letterSpacing: 4,
+        textShadowColor: '#00F2FE',
+        textShadowOffset: { width: 0, height: 0 },
+        textShadowRadius: 8,
+        marginTop: 10,
     }
 });

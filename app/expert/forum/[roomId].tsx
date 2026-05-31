@@ -274,10 +274,11 @@ export default function ExpertForumRoomScreen() {
     useEffect(() => {
         if (!user?.uid) return;
 
+        // 🔥 SATTI FIX: Listen for calling, ringing, AND pending to guarantee notification pops up 🔥
         const callsQuery = query(
             collection(db, "calls"),
             where("expertId", "==", user.uid),
-            where("status", "==", "ringing"),
+            where("status", "in", ["calling", "ringing", "pending"]),
             limit(1)
         );
 
@@ -398,7 +399,8 @@ export default function ExpertForumRoomScreen() {
                     expertId: user?.uid, 
                     expertName: expertData?.name || "Host",
                     callId: callId,
-                    role: 'expert'
+                    role: 'expert',
+                    isAccepted: 'true' // 🔥 SATTI FIX: BYPASS DOUBLE RING IN VIDEOCALL 🔥
                 }
             });
         } catch (e) {}

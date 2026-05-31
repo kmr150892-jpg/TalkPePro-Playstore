@@ -221,8 +221,13 @@ export default function ChatScreen() {
       );
   };
 
-  const totalSpent = userData?.totalSpentDiamonds || 0;
-  const userTier = calculateUserLevel(totalSpent);
+  // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display in Chat!
+  const userDiamonds = Math.max(
+      userData?.totalDiamonds || 0,
+      userData?.walletBalance || 0,
+      userData?.balance || 0
+  );
+  const userTier = calculateUserLevel(userDiamonds);
   
   const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 

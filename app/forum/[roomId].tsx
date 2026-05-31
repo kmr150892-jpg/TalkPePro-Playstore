@@ -51,13 +51,13 @@ const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = "718cedc3c47e44d1bfa4853d6ac6cd80"; 
 
 const GIFTS = [
-    { id: 'rose', name: 'Rose', price: 10, icon: '🌹', colors: ['#ef4444', '#7f1d1d'] },
-    { id: 'chocolate', name: 'Chocolate', price: 50, icon: '🍫', colors: ['#d97706', '#78350f'] },
-    { id: 'diamond', name: 'Diamond', price: 100, icon: '💎', colors: ['#3b82f6', '#1e3a8a'] },
-    { id: 'crown', name: 'Crown', price: 500, icon: '👑', colors: ['#f59e0b', '#78350f'] },
-    { id: 'car', name: 'Sports Car', price: 1000, icon: '🏎️', colors: ['#ef4444', '#450a0a'] },
-    { id: 'rocket', name: 'Rocket', price: 5000, icon: '🚀', colors: ['#8b5cf6', '#312e81'] },
-    { id: 'castle', name: 'Castle', price: 10000, icon: '🏰', colors: ['#ec4899', '#831843'] },
+    { id: 'rose', name: 'Rose', price: 100, icon: '🌹', colors: ['#ef4444', '#7f1d1d'] },
+    { id: 'chocolate', name: 'Chocolate', price: 500, icon: '🍫', colors: ['#d97706', '#78350f'] },
+    { id: 'diamond', name: 'Diamond', price: 1000, icon: '💎', colors: ['#3b82f6', '#1e3a8a'] },
+    { id: 'crown', name: 'Crown', price: 2000, icon: '👑', colors: ['#f59e0b', '#78350f'] },
+    { id: 'car', name: 'Sports Car', price: 5000, icon: '🏎️', colors: ['#ef4444', '#450a0a'] },
+    { id: 'rocket', name: 'Rocket', price: 10000, icon: '🚀', colors: ['#8b5cf6', '#312e81'] },
+    { id: 'castle', name: 'Castle', price: 50000, icon: '🏰', colors: ['#ec4899', '#831843'] },
 ];
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😂', '👏', '🙌', '💯'];

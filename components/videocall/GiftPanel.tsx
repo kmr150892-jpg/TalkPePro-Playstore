@@ -1,15 +1,17 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Easing, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-// 🔥 ADDED 100 & 500 GIFTS (Aligned with GiftOverlay names for proper icon rendering)
+// 🔥 SATTI FIX: UPDATED GIFT LIST TO INCLUDE ALL YOUR PREMIUM CUSTOM IMAGE GIFTS 🔥
 const GIFT_OPTIONS = [
-    { id: '1', name: 'Rose', amount: 100, type: 'diamond', icon: 'flower' },
-    { id: '2', name: 'Star', amount: 500, type: 'diamond', icon: 'star' },
-    { id: '3', name: 'Diamond', amount: 1000, type: 'diamond', icon: 'diamond-stone' },
-    { id: '4', name: 'Confetti', amount: 2000, type: 'confetti', icon: 'party-popper' },
-    { id: '5', name: 'Fireworks', amount: 5000, type: 'fireworks', icon: 'firework' },
+    { id: '3', name: 'Chocolate', amount: 1000, type: 'diamond', icon: 'gift' },
+    { id: '4', name: 'Cake', amount: 3000, type: 'diamond', icon: 'cake' },
+    { id: '5', name: 'Crown', amount: 5000, type: 'diamond', icon: 'crown' },
+    { id: '6', name: 'Diamond', amount: 10000, type: 'diamond', icon: 'diamond-stone' },
+    { id: '7', name: 'Car', amount: 25000, type: 'diamond', icon: 'car' },
+    { id: '8', name: 'Private Jet', amount: 50000, type: 'diamond', icon: 'airplane' },
+    { id: '9', name: 'Palace', amount: 100000, type: 'diamond', icon: 'castle' },
 ];
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
@@ -25,6 +27,19 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 100000)   return { lvl: 2, colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent' };
     if (beans >= 30000)    return { lvl: 1, colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent' };
     return { lvl: 0, colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent' };
+};
+
+// 🔥 SATTI FIX: Path updated from '../' to '../../' because this file is inside 'videocall' folder
+const getGiftImage = (giftName: string) => {
+    const name = (giftName || "").toLowerCase();
+    if (name.includes('chocolate')) return require('../../assets/images/chocolate.png');
+    if (name.includes('cake')) return require('../../assets/images/cake.png');
+    if (name.includes('crown')) return require('../../assets/images/crown.png');
+    if (name.includes('diamond')) return require('../../assets/images/diamond.png');
+    if (name.includes('car')) return require('../../assets/images/car.png');
+    if (name.includes('private jet')) return require('../../assets/images/private jet.png');
+    if (name.includes('palace')) return require('../../assets/images/palace.png');
+    return null;
 };
 
 interface GiftPanelProps {
@@ -114,13 +129,22 @@ export default function GiftPanel({ onSendGift, onClose, userBalance, expertBean
                         // 🔥 Alternating Dual-Tone Borders
                         const cardBorderStyle = index % 2 === 0 ? borderType2 : borderType1;
                         
+                        // 🔥 SATTI FIX: Fetch image if it matches the name
+                        const imageSource = getGiftImage(item.name);
+                        
                         return (
                             <TouchableOpacity 
                                 style={[styles.giftCard, cardBorderStyle]} 
                                 onPress={() => onSendGift(item.amount, item.type, item.name)}
                                 activeOpacity={0.7}
                             >
-                                <MaterialCommunityIcons name={item.icon as any} size={40} color={index % 2 === 0 ? theme.secondary : theme.primary} />
+                                {/* 🔥 SATTI FIX: Image rendering logic inside Flatlist */}
+                                {imageSource ? (
+                                    <Image source={imageSource} style={styles.giftImage} resizeMode="contain" />
+                                ) : (
+                                    <MaterialCommunityIcons name={item.icon as any} size={40} color={index % 2 === 0 ? theme.secondary : theme.primary} />
+                                )}
+                                
                                 <Text style={styles.giftName}>{item.name}</Text>
                                 <View style={[styles.priceRow, { backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }]}>
                                     <MaterialCommunityIcons name="diamond-stone" size={12} color="#FBBF24" />
@@ -146,7 +170,7 @@ export default function GiftPanel({ onSendGift, onClose, userBalance, expertBean
 const styles = StyleSheet.create({
     overlay: { 
         position: 'absolute', 
-        bottom: 100, 
+        bottom: 125, 
         left: 0, 
         right: 0, 
         alignItems: 'center', 
@@ -179,28 +203,34 @@ const styles = StyleSheet.create({
         letterSpacing: 1 
     },
     giftCard: { 
-        padding: 18, 
+        padding: 2, 
         borderRadius: 25, 
         alignItems: 'center', 
-        marginRight: 15, 
-        width: 105, 
+        marginRight: 10, 
+        width: 150, 
+    },
+    // 🔥 SATTI FIX: Custom style for your PNG images inside the card
+    giftImage: {
+        width: 125,
+        height: 125,
+        marginBottom: 2,
     },
     giftName: { 
         color: '#FFF', 
-        fontSize: 12, 
+        fontSize: 20, 
         fontWeight: '900', 
-        marginTop: 10,
-        marginBottom: 8,
+        marginTop: 3,
+        marginBottom: 5,
         letterSpacing: 0.5
     },
     priceRow: { 
         flexDirection: 'row', 
         alignItems: 'center', 
-        gap: 4, 
+        gap: 3, 
     },
     priceText: { 
         color: '#FBBF24', 
-        fontSize: 12, 
+        fontSize: 15, 
         fontWeight: '900' 
     },
     balanceContainer: {

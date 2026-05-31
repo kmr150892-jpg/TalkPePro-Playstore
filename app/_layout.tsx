@@ -212,8 +212,9 @@ export default function RootLayout() {
     const inVideoCall = currentPath.includes('videocall');
     const inLiveMode = currentPath.includes('live') || isExpertLive; 
     const inPartyMode = currentPath.includes('Session');
+    const inForum = currentPath.includes('forum'); 
 
-    if (!snap.empty && !inVideoCall && !inLiveMode && !inPartyMode && !isNavigatingToCall.current) {
+    if (!snap.empty && !inVideoCall && !inLiveMode && !inPartyMode && !inForum && !isNavigatingToCall.current) {
       const callDoc = snap.docs[0];
       const callData = callDoc.data();
 
@@ -261,6 +262,15 @@ export default function RootLayout() {
 
   useEffect(() => {
     if (!user?.uid || userRole !== 'expert' || initializing) return;
+
+    const currentPath = segments.join('/');
+    const inForum = currentPath.includes('forum');
+    const inLiveMode = currentPath.includes('live') || isExpertLive;
+    const inVideoCall = currentPath.includes('videocall');
+    const inPartyMode = currentPath.includes('Session');
+    
+    // 🔥 SATTI FIX: If in forum, live, videocall, or party, we don't need this global call overlay listener!
+    if (inForum || inLiveMode || inVideoCall || inPartyMode) return;
 
     const callsRef = collection(db, 'calls');
     const q = query(callsRef, where('expertId', '==', user.uid), where('status', '==', 'calling'));
@@ -314,8 +324,10 @@ export default function RootLayout() {
         if (error.code === 'permission-denied') console.log("Incoming call sync detached.");
     });
 
-    return () => unsubIncomingCall();
-  }, [user?.uid, userRole, initializing]);
+    return () => {
+        if (unsubIncomingCall) unsubIncomingCall();
+    };
+  }, [user?.uid, userRole, initializing, segments.join('/'), isExpertLive]); // 🔥 Added isExpertLive dependency
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;

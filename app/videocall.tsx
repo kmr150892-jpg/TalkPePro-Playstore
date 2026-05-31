@@ -40,6 +40,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
 
 import GameOverlay from '../components/GameOverlay';
+import GiftOverlay from '../components/GiftOverlay'; // 🔥 SATTI FIX: Imported GiftOverlay
 import BottomControls from '../components/videocall/BottomControls';
 import CallSummary from '../components/videocall/CallSummary';
 import FloatingChat from '../components/videocall/FloatingChat';
@@ -156,6 +157,10 @@ export default function VideoCallScreen() {
     const [totalGiftsBeans, setTotalGiftsBeans] = useState(0);
 
     const [remoteDisconnected, setRemoteDisconnected] = useState(false);
+
+    // 🔥 SATTI FIX: Added states for Premium Gift Overlay
+    const [activeGiftOverlay, setActiveGiftOverlay] = useState<any>(null);
+    const [expertThemeBeans, setExpertThemeBeans] = useState<number>(0);
 
     const pan = useRef(new Animated.ValueXY({ x: width - 120, y: 110 })).current;
     const panResponder = useRef(
@@ -373,6 +378,8 @@ export default function VideoCallScreen() {
                         if (pic && !expertProfilePic) setExpertProfilePic(pic); 
                         
                         const totalBeans = eData.totalBeansEarned || eData.totalBeans || 0;
+                        setExpertThemeBeans(totalBeans); // 🔥 SATTI FIX: Save beans for the Premium overlay
+
                         let finalUserPaymentRate = 0;
 
                         if (isQuickDiscover) {
@@ -404,7 +411,6 @@ export default function VideoCallScreen() {
                             const pic = uData.profilePic || uData.photoURL || null;
                             if (pic && !callerProfilePic) setCallerProfilePic(pic); 
                             
-                            // 🔥 FIX 1: Instant Ringing Update to DB 🔥
                             await updateDoc(doc(db, "calls", callId), { callerName: params.callerName || realName, status: 'ringing' });
                         }
                     }
@@ -436,7 +442,6 @@ export default function VideoCallScreen() {
                 const callSnap = await getDoc(doc(db, "calls", callId));
                 const existingCallData = callSnap.exists() ? callSnap.data() : {};
                 
-                // 🔥 SATTI FIX: Fetch expert ID safely from DB to prevent "UNKNOWN_EXPERT" overwrite
                 let currentExpertId = safeExpertId !== "UNKNOWN_EXPERT" ? safeExpertId : (existingCallData.expertId || "UNKNOWN_EXPERT");
 
                 if (currentExpertId && callId) {
@@ -455,7 +460,6 @@ export default function VideoCallScreen() {
                         const eFinalName = eData.name || eData.userName || existingCallData.expertName || "Host";
                         const eFinalPic = eData.profilePic || eData.photoURL || existingCallData.expertImage || null;
                         
-                        // 🔥 FIX 1 (Part 2): Instant Ringing Set on Call Creation 🔥
                         await setDoc(doc(db, "calls", callId), {
                             callerId: user?.uid,
                             callerName: params.callerName || finalName, 
@@ -505,6 +509,7 @@ export default function VideoCallScreen() {
                 if (data.lastGift && data.lastGift.timestamp > (Date.now() - 5000)) {
                     setActiveGiftType(data.lastGift.type);
                     setGiftRainVisible(true);
+                    setActiveGiftOverlay(data.lastGift); // 🔥 SATTI FIX: Triggers the new premium overlay!
                 }
 
                 if (data.totalGiftsDiamonds !== undefined) {
@@ -543,7 +548,6 @@ export default function VideoCallScreen() {
                         databaseUpdated.current = true;
                         setIsFinishing(true);
                         
-                        // 🔥 FIX 2: Instant Video Feed Kill on external end command 🔥
                         if (engine.current) { engine.current.leaveChannel(); engine.current.release(); engine.current = null; }
                         
                         setShowSummary(true);
@@ -729,7 +733,8 @@ export default function VideoCallScreen() {
         }
     };
 
-    const handleSendGift = async (amount: number, type: string) => {
+    // 🔥 SATTI FIX: Added giftName parameter for GiftOverlay functionality 🔥
+    const handleSendGift = async (amount: number, type: string, giftName: string = 'Gift') => {
         if (!user) return;
         const targetUserIdForLog = realCallerId || params.callerId || user?.uid || 'unknown';
 
@@ -802,8 +807,15 @@ export default function VideoCallScreen() {
                 });
             }
             
+            // 🔥 SATTI FIX: Appended giftName & senderName for the Animated Premium Overlay 🔥
             await updateDoc(doc(db, "calls", callId), {
-                lastGift: { type, amount, timestamp: Date.now() },
+                lastGift: { 
+                    type, 
+                    amount, 
+                    timestamp: Date.now(), 
+                    giftName, 
+                    senderName: userData?.name || callerDisplayName || "User" 
+                },
                 totalGiftsDiamonds: increment(amount),
                 totalGiftsBeans: increment(expertBeans)
             });
@@ -855,13 +867,11 @@ export default function VideoCallScreen() {
         ]);
     };
 
-    // 🔥 FIX 2: Instant Video Feed Kill on Manual Disconnect 🔥
     const handleCallEnd = async (shouldDeduct = true, finalStatus = 'completed', isRemoteKill = false) => {
         if (isFinishing || showSummary || databaseUpdated.current) return;
 
         setIsFinishing(true); 
         
-        // 🛑 INSTANT VIDEO KILL! No 4-second delay 🛑
         if (engine.current) { 
             engine.current.leaveChannel(); 
             engine.current.release(); 
@@ -872,7 +882,6 @@ export default function VideoCallScreen() {
 
         if (role === 'user' && !isRemoteKill && finalStatus === 'completed') {
             try { await updateDoc(doc(db, "calls", callId), { status: "user_ended" }); } catch (e) {}
-            // 🔥 SATTI FIX: Release expert busy state immediately when user cuts the call
             if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
                 try { updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
             }
@@ -905,7 +914,6 @@ export default function VideoCallScreen() {
         if (databaseUpdated.current) return; 
         databaseUpdated.current = true;
 
-        // 🔥 SATTI FIX: GLOBAL BUSY STATE RELEASE 🔥
         if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
             try { await updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
         }
@@ -1036,10 +1044,8 @@ export default function VideoCallScreen() {
     };
 
     const cleanupAndExit = (finalStatus: string) => {
-        // Redundant cleanup just in case
         if (engine.current) { engine.current.leaveChannel(); engine.current.release(); engine.current = null; }
 
-        // 🔥 SATTI FIX: GUARANTEED RELEASE ON ANY EXIT 🔥
         if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
             try { updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
         }
@@ -1095,6 +1101,14 @@ export default function VideoCallScreen() {
             <GameOverlay isVisible={isGameVisible} gameType="tictactoe" board={board} isXNext={isXNext} winner={checkWinner(board)} expertName={expertName} onClose={async () => await setDoc(doc(db, "calls", callId, "game", "state"), { isVisible: false }, { merge: true })} onSquareClick={async (i) => { if (!board[i]) { const nb = [...board]; nb[i] = isXNext ? 'X' : 'O'; await setDoc(doc(db, "calls", callId, "game", "state"), { board: nb, isXNext: !isXNext, isVisible: true }, { merge: true }); }}} onReset={async () => await setDoc(doc(db, "calls", callId, "game", "state"), { board: Array(9).fill(null), isXNext: true, isVisible: true }, { merge: true })} />
 
             <GiftRain visible={giftRainVisible} giftType={activeGiftType} onComplete={() => setGiftRainVisible(false)} />
+
+            {/* 🔥 SATTI FIX: GIFT OVERLAY COMPONENT ADDED HERE TO SHOW PREMIUM ANIMATED GIFTS DURING THE VIDEO CALL 🔥 */}
+            <GiftOverlay 
+                giftData={activeGiftOverlay} 
+                onComplete={() => setActiveGiftOverlay(null)} 
+                expertTotalBeans={expertThemeBeans} 
+                role={role} 
+            />
 
             {showLowBalanceWarning && remainingSeconds !== null && remainingSeconds <= 10 && !showSummary && (
                 <View style={styles.warningContainer} pointerEvents="none">

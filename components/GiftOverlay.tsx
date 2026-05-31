@@ -1,7 +1,7 @@
 import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Image, StyleSheet, Text, View } from 'react-native'; // 🔥 SATTI FIX: Added Image import
 
 const { width, height } = Dimensions.get('window');
 
@@ -11,13 +11,26 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 50000000) return { lvl: 9, label: 'MYTHIC L9', colors: ['#f40691', '#dbc0c0', '#0a0303'] as const, glow: '#EC4899' };
     if (beans >= 30000000) return { lvl: 8, label: 'ELITE L8', colors: ['#660aee', '#d4cfdf', '#d40808'] as const, glow: '#8B5CF6' };
     if (beans >= 10000000) return { lvl: 7, label: 'MASTER L7', colors: ['#0af635', '#ca0bf5', '#fd068a'] as const, glow: '#3B82F6' };
-    if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4' };
+    if (beans >= 500000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4' };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981' };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308' };
     if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8' };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent' };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent' };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent' };
+};
+
+// 🔥 SATTI FIX: Image Mapper function based on your assets
+const getGiftImage = (giftName: string) => {
+    const name = (giftName || "").toLowerCase();
+    if (name.includes('chocolate')) return require('../assets/images/chocolate.png');
+    if (name.includes('cake')) return require('../assets/images/cake.png');
+    if (name.includes('crown')) return require('../assets/images/crown.png');
+    if (name.includes('diamond')) return require('../assets/images/diamond.png');
+    if (name.includes('car')) return require('../assets/images/car.png');
+    if (name.includes('private jet')) return require('../assets/images/private jet.png');
+    if (name.includes('palace')) return require('../assets/images/palace.png');
+    return null;
 };
 
 // 🔥 NEW: Added `role` prop to detect if viewer is User or Expert
@@ -51,7 +64,7 @@ export default function GiftOverlay({ giftData, onComplete, expertTotalBeans = 0
             Animated.parallel([
                 Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }),
                 Animated.spring(moveAnim, { 
-                    toValue: height * 0.30, 
+                    toValue: height * 0.20, // 🔥 SATTI FIX: Whole container placed perfectly at 20% height for absolute screen centering!
                     friction: 5, 
                     tension: 40,
                     useNativeDriver: true 
@@ -116,36 +129,42 @@ export default function GiftOverlay({ giftData, onComplete, expertTotalBeans = 0
     // Dynamic Icons logic (Locked as per your code)
     let GiftIcon = <MaterialCommunityIcons name="gift-outline" size={24} color={theme.accent} />;
     const giftNameLower = (giftData.giftName || "").toLowerCase();
+    
+    // 🔥 SATTI FIX: Fetch image source if it matches our custom gifts
+    const customImageSource = getGiftImage(giftNameLower);
 
-    if (giftNameLower.includes('rose')) {
-      GiftIcon = <MaterialCommunityIcons name="flower" size={60} color={theme.primary} />;
+    if (customImageSource) {
+        // Render Image if it's one of the custom PNGs
+        GiftIcon = <Image source={customImageSource} style={styles.customGiftImage} resizeMode="contain" />;
+    } else if (giftNameLower.includes('rose')) {
+      GiftIcon = <MaterialCommunityIcons name="flower" size={120} color={theme.primary} />; 
     } else if (giftNameLower.includes('heart')) {
-      GiftIcon = <Ionicons name="heart" size={60} color={theme.primary} />;
+      GiftIcon = <Ionicons name="heart" size={120} color={theme.primary} />; 
     } else if (giftNameLower.includes('crown')) {
-      GiftIcon = <MaterialCommunityIcons name="crown" size={70} color={theme.accent} />;
+      GiftIcon = <MaterialCommunityIcons name="crown" size={140} color={theme.accent} />; 
     } else if (giftNameLower.includes('lion')) {
-      GiftIcon = <MaterialCommunityIcons name="paw" size={70} color={theme.accent} />;
+      GiftIcon = <MaterialCommunityIcons name="paw" size={140} color={theme.accent} />; 
     } else if (giftNameLower.includes('car')) {
-      GiftIcon = <Ionicons name="car-sport" size={80} color={theme.secondary} />;
+      GiftIcon = <Ionicons name="car-sport" size={160} color={theme.secondary} />; 
     } else if (giftNameLower.includes('rocket') || giftNameLower.includes('galaxy')) {
-      GiftIcon = <Ionicons name="rocket" size={90} color={theme.primary} />;
+      GiftIcon = <Ionicons name="rocket" size={160} color={theme.primary} />; 
     } else {
-      if (giftData.amount >= 25000) GiftIcon = <Ionicons name="car-sport" size={80} color={theme.primary} />;
-      else if (giftData.amount >= 10000) GiftIcon = <MaterialCommunityIcons name="crown" size={70} color={theme.accent} />;
-      else if (giftData.amount >= 5000) GiftIcon = <MaterialCommunityIcons name="diamond" size={60} color={theme.secondary} />;
-      else GiftIcon = <FontAwesome5 name="thumbs-up" size={50} color={theme.primary} />;
+      if (giftData.amount >= 25000) GiftIcon = <Ionicons name="car-sport" size={160} color={theme.primary} />; 
+      else if (giftData.amount >= 10000) GiftIcon = <MaterialCommunityIcons name="crown" size={140} color={theme.accent} />; 
+      else if (giftData.amount >= 5000) GiftIcon = <MaterialCommunityIcons name="diamond" size={120} color={theme.secondary} />; 
+      else GiftIcon = <FontAwesome5 name="thumbs-up" size={100} color={theme.primary} />; 
     }
 
-    // 🔥 DUAL TONE BORDER STYLES (FLUID) FOR THE GIFT BOX
+    // 🔥 SATTI FIX: DUAL TONE BORDER STYLES REMOVED (Made Transparent) SO NO BOX APPEARS
     const dynamicDualBorder = {
-        borderLeftWidth: 2,
-        borderRightWidth: 2,
-        borderTopWidth: 0.5,
-        borderBottomWidth: 0.5,
-        borderLeftColor: theme.primary,
-        borderRightColor: theme.primary,
-        borderTopColor: theme.secondary + '80',
-        borderBottomColor: theme.secondary + '80',
+        borderLeftWidth: 0,
+        borderRightWidth: 0,
+        borderTopWidth: 0,
+        borderBottomWidth: 0,
+        borderLeftColor: 'transparent',
+        borderRightColor: 'transparent',
+        borderTopColor: 'transparent',
+        borderBottomColor: 'transparent',
     };
 
     return (
@@ -164,45 +183,41 @@ export default function GiftOverlay({ giftData, onComplete, expertTotalBeans = 0
                     zIndex: 1 
                 }
             ]}>
-                {/* 🔥 DYNAMIC GLOW AURA BASED ON LEVEL */}
-                <View style={[styles.glowAura, { backgroundColor: theme.primary + '50' }, giftData.amount >= 25000 && { backgroundColor: theme.accent + '60', transform: [{ scale: 1.8 }] }]} />
+                {/* 🔥 SATTI FIX: Glow Aura made completely transparent so the rose color is GONE 🔥 */}
+                <View style={[styles.glowAura, { backgroundColor: 'transparent' }, giftData.amount >= 25000 && { backgroundColor: 'transparent', transform: [{ scale: 1.8 }] }]} />
 
                 <Animated.View style={[
                     styles.giftBox, 
                     dynamicDualBorder,
-                    { backgroundColor: 'rgba(15, 23, 42, 0.85)' }, 
-                    giftData.amount >= 25000 && { backgroundColor: 'rgba(20, 10, 5, 0.9)', borderColor: theme.accent, borderWidth: 3 }, 
+                    { backgroundColor: 'transparent' }, // 🔥 SATTI FIX: Changed from rgba to transparent
+                    giftData.amount >= 25000 && { backgroundColor: 'transparent', borderColor: 'transparent', borderWidth: 0 }, // 🔥 SATTI FIX: Made transparent
                     { transform: [{ scale: pulseAnim }] } 
                 ]}>
-                    <View style={[styles.senderBadge, { backgroundColor: theme.primary + '20' }]}>
-                        <MaterialCommunityIcons name="star-shooting" size={14} color={theme.accent} />
+                    <View style={[styles.senderBadge, { backgroundColor: 'rgba(0,0,0,0.5)', borderColor: 'rgba(255,255,255,0.2)' }]}>
+                        <MaterialCommunityIcons name="star-shooting" size={16} color="#FFD700" />
                         <Text style={[styles.senderBadgeText, { color: '#FFF' }]}>{giftData.senderName} SHARED</Text>
-                        <MaterialCommunityIcons name="star-shooting" size={14} color={theme.accent} />
+                        <MaterialCommunityIcons name="star-shooting" size={16} color="#FFD700" />
                     </View>
 
                     <View style={styles.iconWrapper}>
                         {GiftIcon}
-                        <Text style={[styles.grandText, { color: theme.accent, textShadowColor: theme.primary + '80' }]}>
-                            {giftData.amount >= 50000 ? "PREMIUM UPLINK!" 
-                            : giftData.amount >= 25000 ? "SUPER ACHIEVEMENT!" 
-                            : giftData.amount >= 10000 ? "CONSULTING ELITE!" 
-                            : giftData.amount >= 5000 ? "GOLDEN TIER!" 
-                            : giftData.amount >= 1000 ? "TOP APPRECIATION!" 
-                            : giftData.amount >= 500 ? "SHINING NODE!" 
-                            : "KUDOS!"}
+                        
+                        {/* 🔥 SATTI FIX: PREMIUM GOLD COLOR, SMALLER TEXT SIZE 🔥 */}
+                        <Text style={[styles.grandText, { color: '#FFD700', textShadowColor: 'rgba(0,0,0,0.9)' }]}>
+                            {giftData.giftName ? `${giftData.giftName.toUpperCase()}!` : "KUDOS!"}
                         </Text>
                     </View>
 
                     {/* 🔥 CONDITIONAL DISPLAY: User sees Diamonds, Host sees Rewards 🔥 */}
                     {role === 'user' ? (
-                        <View style={[styles.beansValueBadge, { backgroundColor: 'rgba(0, 242, 254, 0.1)', borderColor: 'rgba(0, 242, 254, 0.4)' }]}>
-                            <MaterialCommunityIcons name="diamond-stone" size={18} color="#00F2FE" />
-                            <Text style={[styles.beansValueText, { color: '#00F2FE' }]}>{giftData.amount} DIAMONDS</Text>
+                        <View style={[styles.beansValueBadge, { backgroundColor: 'rgba(0, 0, 0, 0.6)', borderColor: 'rgb(255, 128, 0)' }]}>
+                            <MaterialCommunityIcons name="diamond-stone" size={20} color="#fea900" />
+                            <Text style={[styles.beansValueText, { color: '#ff9900'  }]}>{giftData.amount} DIAMONDS</Text>
                         </View>
                     ) : (
-                        <View style={[styles.beansValueBadge, { backgroundColor: theme.primary + '20', borderColor: theme.primary + '50' }]}>
-                            <MaterialCommunityIcons name="seed" size={18} color={theme.accent} />
-                            <Text style={[styles.beansValueText, { color: theme.accent }]}>+{beansEarned} REWARDS</Text>
+                        <View style={[styles.beansValueBadge, { backgroundColor: 'rgba(0, 0, 0, 0.6)', borderColor: '#ff9900'  }]}>
+                            <Text style={{ fontSize: 20 }}>🎖️</Text>
+                            <Text style={[styles.beansValueText, { color: '#ff9900' }]}>+{beansEarned} REWARDS</Text>
                         </View>
                     )}
                     
@@ -238,68 +253,80 @@ const styles = StyleSheet.create({
     container: { 
         alignItems: 'center', 
         justifyContent: 'center',
-        width: width * 0.85, 
+        width: width * 0.9, 
     },
     glowAura: {
         position: 'absolute',
-        width: width * 0.7,
-        height: width * 0.7,
-        borderRadius: width * 0.35,
-        transform: [{ scale: 1.5 }],
-        opacity: 0.6,
+        width: width * 0.75,
+        height: width * 0.75,
+        borderRadius: width * 0.375,
+        transform: [{ scale: 1.6 }],
+        opacity: 0, 
+        filter: 'blur(40px)',
     },
     giftBox: { 
-        paddingVertical: 25, 
-        paddingHorizontal: 20, 
-        borderRadius: 35, 
+        paddingVertical: 35, 
+        paddingHorizontal: 25, 
+        borderRadius: 45, 
         alignItems: 'center', 
         width: '100%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.8,
-        shadowRadius: 15,
-        elevation: 20,
+        shadowColor: 'transparent', 
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
     },
     senderBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingVertical: 6,
-        borderRadius: 20,
-        marginBottom: 10,
+        paddingHorizontal: 18,
+        paddingVertical: 18,
+        borderRadius: 25,
+        marginBottom: 15,
+        marginTop: 90, // 🔥 SATTI FIX: Increased to push "Sender Name" much further down!
+        borderWidth: 1,
     },
     senderBadgeText: {
-        fontSize: 12,
+        fontSize: 14,
         fontWeight: '900',
-        letterSpacing: 1.5,
+        letterSpacing: 2,
         marginHorizontal: 8,
         textTransform: 'uppercase'
     },
     iconWrapper: {
         alignItems: 'center',
-        marginVertical: 5,
+        marginVertical: 10,
     },
+    // 🔥 SATTI FIX: Image pulled UP & text pulled tight to make it highly compact inside the screen!
+    customGiftImage: {
+        width: 380, // Large, premium size
+        height: 380, 
+        marginTop: -30, // 🔥 Pulls the image UP towards the sender name
+        marginBottom: -50, // 🔥 Pulls the bottom text UP towards the image
+    },
+    // 🔥 SATTI FIX: Pulled UP closely to the image
     grandText: { 
-        fontSize: 26, 
+        fontSize: 24, 
         fontWeight: '900', 
-        marginTop: 15, 
+        marginTop: -15, // 🔥 Pushed further UP towards image
         textAlign: 'center', 
-        textShadowRadius: 15,
-        letterSpacing: 1
+        textShadowRadius: 10,
+        letterSpacing: 1.5,
+        textTransform: 'uppercase',
     },
     beansValueBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingHorizontal: 15,
-        paddingVertical: 8,
-        borderRadius: 20,
-        marginTop: 15,
-        borderWidth: 1,
+        paddingHorizontal: 22,
+        paddingVertical: 12,
+        borderRadius: 30,
+        marginTop: -10, // 🔥 Pushed the bottom "Diamonds/Rewards" badge further UP!
+        borderWidth: 1.5,
     },
     beansValueText: {
-        fontSize: 16,
+        fontSize: 18,
         fontWeight: '900',
-        marginLeft: 6,
-        letterSpacing: 1
+        marginLeft: 8,
+        letterSpacing: 1.5
     }
 });

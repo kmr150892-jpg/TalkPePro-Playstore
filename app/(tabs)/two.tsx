@@ -381,8 +381,14 @@ export default function ProfileScreen() {
       return () => { unsubHistory(); unsubGifts(); unsubGameHistory(); unsubCalls(); };
   }, [user, userData]);
 
-  const totalSpent = userData?.totalSpentDiamonds || 0;
-  const rank = calculateUserLevel(totalSpent);
+  // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display across all screens!
+  const userDiamonds = Math.max(
+      userData?.totalDiamonds || 0,
+      userData?.walletBalance || 0,
+      userData?.balance || 0
+  );
+  
+  const rank = calculateUserLevel(userDiamonds);
   const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=1E293B&color=fff&bold=true`;
 
   const parallaxBg = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -40], extrapolate: 'clamp' });
@@ -440,7 +446,7 @@ export default function ProfileScreen() {
           <View style={{ marginLeft: 15, flex: 1 }}>
               <View style={[styles.badge, { borderColor: rank.color, backgroundColor: rank.color + '15' }]}>
                 <MaterialCommunityIcons name={rank.icon as any} size={11} color={rank.color} />
-                <Text style={[styles.badgeText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rank.label}</Text>
+                <Text style={[styles.badgeText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rank.label} L{rank.lvl}</Text>
               </View>
               <Text style={styles.nameRow} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{userData?.name || 'SYNCING...'}</Text>
               <Text style={[styles.statusText, { color: rank.secondaryColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rank.status}</Text>

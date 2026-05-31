@@ -42,9 +42,13 @@ export default function TabLayout() {
   // 🔥 Animation Value for Center Button (Pulse Only)
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
-  // Dynamic Theme Engine processing
-  const totalBeans = userData?.totalBeansEarned || userData?.totalBeans || 0;
-  const config = calculateUserLevel(totalBeans);
+  // 🔥 SATTI FIX: Synced Highest Balance check for accurate Tab Theme display!
+  const userDiamonds = Math.max(
+      userData?.totalDiamonds || 0,
+      userData?.walletBalance || 0,
+      userData?.balance || 0
+  );
+  const config = calculateUserLevel(userDiamonds);
   
   // Syncing your custom tier engine to the button theme
   const theme = {

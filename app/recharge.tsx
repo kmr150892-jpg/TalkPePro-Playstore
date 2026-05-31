@@ -76,6 +76,7 @@ export default function RechargeScreen() {
     const [selected, setSelected] = useState('diamonds_1000');
     const [balance, setBalance] = useState(0);
     const [totalSpentDiamonds, setTotalSpentDiamonds] = useState(0);
+    const [userData, setUserData] = useState<any>(null); // 🔥 Added for Universal Theme Sync
     const [loading, setLoading] = useState(true);
     const [isBuying, setIsBuying] = useState(false);
     const user = auth.currentUser;
@@ -119,6 +120,7 @@ export default function RechargeScreen() {
         const unsubscribe = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) {
                 const d = docSnap.data();
+                setUserData(d); // 🔥 Fetching complete data for Level Math check
                 setBalance(d.balance || 0);
                 setTotalSpentDiamonds(d.totalSpentDiamonds || 0);
             }
@@ -209,7 +211,14 @@ export default function RechargeScreen() {
         }
     };
 
-    const userTier = calculateUserLevel(totalSpentDiamonds);
+    // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display in Recharge!
+    const userDiamonds = Math.max(
+        userData?.totalDiamonds || 0,
+        userData?.walletBalance || 0,
+        userData?.balance || 0
+    );
+    const userTier = calculateUserLevel(userDiamonds);
+    
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 
     const borderType1 = {

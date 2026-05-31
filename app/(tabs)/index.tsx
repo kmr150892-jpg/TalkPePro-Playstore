@@ -167,8 +167,13 @@ export default function UserHome() {
         return () => { unsubExperts(); unsubLives(); unsubUser(); unsubParties(); };
     }, [user]);
 
-    const totalSpent = userData?.totalSpentDiamonds || 0;
-    const userRank = calculateUserLevel(totalSpent);
+    // 🔥 SATTI FIX: Fetching the Maximum of DIAMOND/RECHARGE fields only for accurate Home Screen Level
+    const userDiamonds = Math.max(
+        userData?.totalDiamonds || 0,
+        userData?.walletBalance || 0,
+        userData?.balance || 0
+    );
+    const userRank = calculateUserLevel(userDiamonds);
     const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=020617&color=fff&bold=true`;
 
     const parallaxAura = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -50], extrapolate: 'clamp' });

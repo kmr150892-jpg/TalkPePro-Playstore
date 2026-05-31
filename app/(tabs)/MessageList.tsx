@@ -121,8 +121,13 @@ export default function MessageList() {
     return () => { unsubscribe(); unsubUser(); };
   }, [user]);
 
-  const totalSpent = userData?.totalSpentDiamonds || 0;
-  const userTier = calculateUserLevel(totalSpent);
+  // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display in Messages!
+  const userDiamonds = Math.max(
+      userData?.totalDiamonds || 0,
+      userData?.walletBalance || 0,
+      userData?.balance || 0
+  );
+  const userTier = calculateUserLevel(userDiamonds);
 
   const handleChatPress = (chatId: string, expertId: string, name: string) => {
     router.push({

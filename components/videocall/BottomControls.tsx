@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -72,17 +73,28 @@ export default function BottomControls({
         ? `Trial ends in ${freeTimeLeft}s` 
         : (remainingSeconds && remainingSeconds <= 30 ? `Session ends in ${remainingSeconds}s` : "Low Balance Alert!");
 
-    // 🔥 DUAL-TONE BORDER STYLES (FLUID, 2px) for Active Buttons
+    // 🔥 HIGH-END NEON GLOW FOR ACTIVE BUTTONS (GAME, CHAT)
     const activeBorderType = {
-        borderLeftWidth: 2,
-        borderRightWidth: 2,
-        borderTopWidth: 0.5,
-        borderBottomWidth: 0.5,
-        borderLeftColor: theme.primary,
-        borderRightColor: theme.primary,
-        borderTopColor: theme.secondary + '80',
-        borderBottomColor: theme.secondary + '80',
-        backgroundColor: theme.primary + '30',
+        borderWidth: 2,
+        borderColor: theme.accent,
+        backgroundColor: theme.primary + '50', // Darker opacity for floating feel
+        shadowColor: theme.accent,
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 15,
+        elevation: 15,
+    };
+
+    // 🔥 SATTI FIX: EXPLOSIVE GLOW FOR PRO FILTER BUTTON SO HOST KNOWS IT WORKED
+    const activeProFilterStyle = {
+        borderWidth: 2,
+        borderColor: '#FFD700', // Gold pop for Pro
+        backgroundColor: 'rgba(255, 215, 0, 0.35)', 
+        shadowColor: '#FFD700',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 1,
+        shadowRadius: 15,
+        elevation: 15,
     };
 
     // 🔥 STRICT HOST CHECK
@@ -91,51 +103,62 @@ export default function BottomControls({
     return (
         <View style={styles.bottomControlsArea}>
             {showWarning && (
-                <View style={[styles.warningFloating, isCriticalWarning ? {backgroundColor: '#B91C1C'} : {backgroundColor: theme.primary + '90'}]}>
+                <View style={[styles.warningFloating, isCriticalWarning ? {backgroundColor: '#B91C1C', shadowColor: '#B91C1C'} : {backgroundColor: theme.primary + '95', shadowColor: theme.primary}]}>
                     <Ionicons name="alert-circle" size={18} color="#FFF" />
                     <Text style={styles.warningText}>{warningMessage}</Text>
                 </View>
             )}
             
-            <View style={[styles.buttonsRow, { backgroundColor: 'rgba(15, 23, 42, 0.45)', paddingVertical: 12, borderRadius: 40 }]}>
+            {/* 🔥 NO BLACK BOX - BUTTONS DIRECTLY FLOAT ON SCREEN 🔥 */}
+            <View style={styles.buttonsRow}>
+                
                 {/* 🔄 Camera Switch Button */}
-                <TouchableOpacity style={styles.blurBtn} onPress={switchCamera}>
+                <TouchableOpacity style={styles.blurBtn} activeOpacity={0.6} onPress={switchCamera}>
                     <Ionicons name="camera-reverse" size={22} color="#FFF" />
                 </TouchableOpacity>
 
                 {/* 🎮 Game Button */}
-                <TouchableOpacity style={[styles.blurBtn, isGameVisible && activeBorderType]} onPress={toggleGameVisibility}>
-                    <Ionicons name="game-controller" size={22} color={isGameVisible ? theme.accent : "#FFF"} />
+                <TouchableOpacity style={[styles.blurBtn, isGameVisible && activeBorderType]} activeOpacity={0.6} onPress={toggleGameVisibility}>
+                    <Ionicons name="game-controller" size={22} color={isGameVisible ? "#FFF" : "#FFF"} />
                 </TouchableOpacity>
 
                 {/* ✨ Pro FILTER BUTTON (HOST ONLY) */}
                 {isConsultant && (
-                    <TouchableOpacity style={[styles.blurBtn, isProEnabled && activeBorderType]} onPress={togglePro}>
-                        <Ionicons name="sparkles" size={22} color={isProEnabled ? theme.accent : "#FFF"} />
+                    <TouchableOpacity style={[styles.blurBtn, isProEnabled && activeProFilterStyle]} activeOpacity={0.6} onPress={togglePro}>
+                        <Ionicons name="sparkles" size={22} color={isProEnabled ? "#FFD700" : "#FFF"} />
+                        {/* 🔥 Added a tiny indicator dot to show it's LIVE */}
+                        {isProEnabled && <View style={styles.proActiveDot} />}
                     </TouchableOpacity>
                 )}
 
-                {/* 📞 HANGUP BUTTON */}
-                <TouchableOpacity style={styles.hangupBtn} onPress={() => handleCallEnd(true, 'completed')}>
-                    <Ionicons name="call" size={28} color="#FFF" />
+                {/* 📞 HANGUP BUTTON - RICH RED GRADIENT GLOW */}
+                <TouchableOpacity style={styles.hangupWrapper} activeOpacity={0.8} onPress={() => handleCallEnd(true, 'completed')}>
+                    <LinearGradient 
+                        colors={['#FF416C', '#FF4B2B']} 
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={styles.hangupGradient}
+                    >
+                        <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+                    </LinearGradient>
                 </TouchableOpacity>
 
                 {/* 🎤 Mute Button */}
-                <TouchableOpacity style={[styles.blurBtn, isMuted && { backgroundColor: 'rgba(244, 63, 94, 0.2)', borderColor: 'rgba(244, 63, 94, 0.5)' }]} onPress={toggleMute}>
-                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#F43F5E" : "#FFF"} />
+                <TouchableOpacity style={[styles.blurBtn, isMuted && styles.mutedBtnStyle]} activeOpacity={0.6} onPress={toggleMute}>
+                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#FFF" : "#FFF"} />
                 </TouchableOpacity>
 
                 {/* 🎁 Gift Button (HIDDEN FOR HOST) */}
                 {!isConsultant && (
-                    <TouchableOpacity style={styles.blurBtn} onPress={onOpenGiftPanel}>
+                    <TouchableOpacity style={[styles.blurBtn, { borderColor: theme.accent + '90' }]} activeOpacity={0.6} onPress={onOpenGiftPanel}>
                         <Ionicons name="gift" size={22} color={theme.accent} />
                     </TouchableOpacity>
                 )}
 
                 {/* 💬 Chat Button */}
-                <TouchableOpacity style={[styles.blurBtn, isChatVisible && activeBorderType]} onPress={toggleChatVisibility}>
-                    <Ionicons name="chatbubble-ellipses" size={22} color={isChatVisible ? theme.accent : "#FFF"} />
+                <TouchableOpacity style={[styles.blurBtn, isChatVisible && activeBorderType]} activeOpacity={0.6} onPress={toggleChatVisibility}>
+                    <Ionicons name="chatbubble-ellipses" size={22} color={isChatVisible ? "#FFF" : "#FFF"} />
                 </TouchableOpacity>
+                
             </View>
         </View>
     );
@@ -145,53 +168,91 @@ const styles = StyleSheet.create({
     bottomControlsArea: { 
         width: '100%', 
         alignItems: 'center', 
-        marginBottom: 40, 
+        marginBottom: 15, // 🔥 PUSHED WAY DOWN (Closer to bottom)
         zIndex: 40 
     },
     buttonsRow: { 
         flexDirection: 'row', 
         alignItems: 'center', 
         justifyContent: 'space-evenly', 
-        width: '98%', 
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.1)'
+        width: '100%', // Takes full width to space out the floating buttons
+        paddingHorizontal: 10,
+        // 🔥 REMOVED ALL BORDERS, BACKGROUNDS & SHADOWS OF THE CONTAINER (NO BLACK BOX)
     },
     blurBtn: { 
-        width: 48, 
-        height: 48, 
-        borderRadius: 24, 
-        backgroundColor: 'rgba(255,255,255,0.12)', 
+        width: 50, // Slightly bigger for standalone floating look
+        height: 50, 
+        borderRadius: 25, 
+        backgroundColor: 'rgba(0, 0, 0, 0.55)', // Dark frosted glass for high contrast over video
         justifyContent: 'center', 
         alignItems: 'center', 
-        borderWidth: 1, 
-        borderColor: 'rgba(255,255,255,0.2)' 
+        borderWidth: 1.5, 
+        borderColor: 'rgba(255, 255, 255, 0.25)', // Crisper white edge
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.8,
+        shadowRadius: 10,
+        elevation: 12,
     },
-    hangupBtn: { 
-        width: 62, 
-        height: 62, 
-        borderRadius: 31, 
-        backgroundColor: '#EF4444', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        transform: [{ rotate: '135deg' }], 
-        elevation: 8,
-        shadowColor: '#EF4444',
-        shadowOpacity: 0.5,
-        shadowRadius: 10
+    mutedBtnStyle: {
+        backgroundColor: 'rgba(244, 63, 94, 0.85)', // Strong red for mute
+        borderColor: '#F43F5E',
+        shadowColor: '#F43F5E',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0.9,
+        shadowRadius: 12,
+        elevation: 12,
+    },
+    proActiveDot: {
+        position: 'absolute',
+        top: 8,
+        right: 10,
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: '#FFF',
+        shadowColor: '#FFF',
+        shadowRadius: 4,
+        shadowOpacity: 1,
+    },
+    hangupWrapper: {
+        width: 68, // Made hangup button slightly more prominent
+        height: 68, 
+        borderRadius: 34, 
+        shadowColor: '#FF416C',
+        shadowOffset: { width: 0, height: 10 },
+        shadowOpacity: 0.7,
+        shadowRadius: 15,
+        elevation: 15,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    hangupGradient: {
+        width: '100%',
+        height: '100%',
+        borderRadius: 34,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: 'rgba(255, 255, 255, 0.4)',
     },
     warningFloating: { 
         flexDirection: 'row', 
         alignItems: 'center', 
-        paddingHorizontal: 16, 
-        paddingVertical: 10, 
-        borderRadius: 20, 
+        paddingHorizontal: 20, 
+        paddingVertical: 12, 
+        borderRadius: 25, 
         marginBottom: 20, 
-        elevation: 5 
+        shadowOffset: { width: 0, height: 5 },
+        shadowOpacity: 0.5,
+        shadowRadius: 10,
+        elevation: 10 
     },
     warningText: { 
         color: '#FFF', 
         fontSize: 14, 
         fontWeight: '900', 
-        marginLeft: 8 
+        marginLeft: 8,
+        letterSpacing: 0.5
     }
 });

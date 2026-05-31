@@ -102,13 +102,20 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                     const userSnap = await getDoc(userRef);
                     const uData = userSnap.exists() ? userSnap.data() : {};
 
+                    // 🔥 SATTI FIX: Synced Highest Balance check for accurate User Tier in list!
+                    const highestDiamonds = Math.max(
+                        uData?.totalDiamonds || 0,
+                        uData?.walletBalance || 0,
+                        uData?.balance || 0
+                    );
+
                     return {
                         id: connDoc.id,
                         ...connData,
                         userName: uData.displayName || uData.name || connData.senderName || "User",
                         userImage: uData.profilePic || uData.photoURL || connData.senderImage || null,
                         userId: userId,
-                        totalSpent: uData.totalSpentDiamonds || 0,
+                        totalSpent: highestDiamonds, // 🔥 Replaced simple totalSpentDiamonds with Highest Balance Logic
                         unread: 0
                     };
                 })

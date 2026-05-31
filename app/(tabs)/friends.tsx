@@ -125,8 +125,13 @@ export default function FriendsList() {
     return () => { unsubscribe(); unsubUser(); };
   }, [user]);
 
-  const totalSpent = userData?.totalSpentDiamonds || 0;
-  const userTier = calculateUserLevel(totalSpent);
+  // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
+  const userDiamonds = Math.max(
+      userData?.totalDiamonds || 0,
+      userData?.walletBalance || 0,
+      userData?.balance || 0
+  );
+  const userTier = calculateUserLevel(userDiamonds);
 
   const handleChatPress = (expertId: string, expertName: string) => {
     if (!user) return;

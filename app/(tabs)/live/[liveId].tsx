@@ -66,6 +66,30 @@ const FloatingHeart = ({ x }: { x: number }) => {
     );
 };
 
+// 🔥 SATTI FIX: NEW ANIMATED PREMIUM GIFT COMPONENT 🔥
+const AnimatedGiftIcon = ({ source }: { source: any }) => {
+    const anim = useRef(new Animated.Value(0)).current;
+    
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(anim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(anim, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
+    
+    const translateY = anim.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
+    
+    return (
+        <Animated.Image 
+            source={source} 
+            style={[styles.giftImage, { transform: [{ translateY }] }]} 
+            resizeMode="contain" 
+        />
+    );
+};
+
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
 const calculateUserLevel = (totalSpent: number) => {
   if (totalSpent >= 500000001) return { 
@@ -768,9 +792,13 @@ export default function UserLiveViewScreen() {
         else router.replace('/');
     };
 
-    // 🔥 THEME CALCULATIONS
-    const totalSpent = userData?.totalSpentDiamonds || 0;
-    const userTier = calculateUserLevel(totalSpent);
+    // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
+    const userDiamonds = Math.max(
+        userData?.totalDiamonds || 0,
+        userData?.walletBalance || 0,
+        userData?.balance || 0
+    );
+    const userTier = calculateUserLevel(userDiamonds);
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
 
     // 🔥 ALTERNATING BORDER STYLES (FLUID, 2px)
@@ -867,30 +895,30 @@ export default function UserLiveViewScreen() {
                                 
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                     {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
-<TouchableOpacity 
-    onPress={() => setGlassPathVisible(true)} 
-    style={[styles.closeIcon, { 
-        borderColor: '#A855F7', 
-        borderWidth: 1.5, 
-        backgroundColor: 'rgba(168, 85, 247, 0.2)',
-        justifyContent: 'center', 
-        alignItems: 'center' 
-    }]}
->
-    <View style={{ 
-        width: 24, 
-        height: 24, 
-        flexDirection: 'row', 
-        flexWrap: 'wrap', 
-        justifyContent: 'center', 
-        alignItems: 'center' 
-    }}>
-        <Text style={{ fontSize: 9 }}>🍎</Text>
-        <Text style={{ fontSize: 9 }}>🍌</Text>
-        <Text style={{ fontSize: 9 }}>🍇</Text>
-        <Text style={{ fontSize: 9 }}>🍓</Text>
-    </View>
-</TouchableOpacity>
+                                    <TouchableOpacity 
+                                        onPress={() => setGlassPathVisible(true)} 
+                                        style={[styles.closeIcon, { 
+                                            borderColor: '#A855F7', 
+                                            borderWidth: 1.5, 
+                                            backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                                            justifyContent: 'center', 
+                                            alignItems: 'center' 
+                                        }]}
+                                    >
+                                        <View style={{ 
+                                            width: 24, 
+                                            height: 24, 
+                                            flexDirection: 'row', 
+                                            flexWrap: 'wrap', 
+                                            justifyContent: 'center', 
+                                            alignItems: 'center' 
+                                        }}>
+                                            <Text style={{ fontSize: 9 }}>🍎</Text>
+                                            <Text style={{ fontSize: 9 }}>🍌</Text>
+                                            <Text style={{ fontSize: 9 }}>🍇</Text>
+                                            <Text style={{ fontSize: 9 }}>🍓</Text>
+                                        </View>
+                                    </TouchableOpacity>
 
                                     {/* 🔥 SATTI FIX: CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
                                     <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: 'rgb(0, 234, 255)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
@@ -1035,6 +1063,7 @@ export default function UserLiveViewScreen() {
                 role="user"
             />
 
+            {/* 🔥 SATTI FIX: ANIMATED PREMIUM GIFTS REPLACED EMOJIS 🔥 */}
             <Modal visible={showGiftModal} transparent animationType="slide">
                 <View style={styles.modalOverlay}>
                     <BlurView intensity={100} tint="dark" style={[styles.modalContent, borderType2, { borderBottomWidth: 0 }]}>
@@ -1045,29 +1074,40 @@ export default function UserLiveViewScreen() {
                             </TouchableOpacity>
                         </View>
                         <View style={styles.giftGrid}>
-                            <TouchableOpacity onPress={() => sendGift('Rose', 1000)} style={[styles.giftBtnMain, borderType1]}>
-                                <Text style={styles.giftEmoji}>🌹</Text>
+                            <TouchableOpacity onPress={() => sendGift('Chocolate', 1000)} style={[styles.giftBtnMain, borderType1]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/chocolate.png')} />
+                                <Text style={styles.giftNameText}>Chocolate</Text>
                                 <Text style={[styles.giftPrice, { color: userTier.color }]}>1k</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Heart', 3000)} style={[styles.giftBtnMain, borderType2]}>
-                                <Text style={styles.giftEmoji}>❤️</Text>
+                            <TouchableOpacity onPress={() => sendGift('Cake', 3000)} style={[styles.giftBtnMain, borderType2]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/cake.png')} />
+                                <Text style={styles.giftNameText}>Cake</Text>
                                 <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>3k</Text>
                             </TouchableOpacity>
                             <TouchableOpacity onPress={() => sendGift('Crown', 5000)} style={[styles.giftBtnMain, borderType1]}>
-                                <Text style={styles.giftEmoji}>👑</Text>
+                                <AnimatedGiftIcon source={require('../../../assets/images/crown.png')} />
+                                <Text style={styles.giftNameText}>Crown</Text>
                                 <Text style={[styles.giftPrice, { color: userTier.color }]}>5k</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Lion', 10000)} style={[styles.giftBtnMain, borderType2]}>
-                                <Text style={styles.giftEmoji}>🦁</Text>
+                            <TouchableOpacity onPress={() => sendGift('Diamond', 10000)} style={[styles.giftBtnMain, borderType2]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/diamond.png')} />
+                                <Text style={styles.giftNameText}>Diamond</Text>
                                 <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>10k</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Super Car', 25000)} style={[styles.giftBtnMain, borderType1]}>
-                                <Text style={styles.giftEmoji}>🏎️</Text>
+                            <TouchableOpacity onPress={() => sendGift('Car', 25000)} style={[styles.giftBtnMain, borderType1]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/car.png')} />
+                                <Text style={styles.giftNameText}>Car</Text>
                                 <Text style={[styles.giftPrice, { color: userTier.color }]}>25k</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Galaxy Rocket', 50000)} style={[styles.giftBtnMain, borderType2]}>
-                                <Text style={styles.giftEmoji}>🚀</Text>
+                            <TouchableOpacity onPress={() => sendGift('Private Jet', 50000)} style={[styles.giftBtnMain, borderType2]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/private jet.png')} />
+                                <Text style={styles.giftNameText}>Private Jet</Text>
                                 <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>50k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Palace', 100000)} style={[styles.giftBtnMain, borderType1, { width: '45%' }]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/palace.png')} />
+                                <Text style={styles.giftNameText}>Palace</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>100k</Text>
                             </TouchableOpacity>
                         </View>
                     </BlurView>
@@ -1157,9 +1197,14 @@ const styles = StyleSheet.create({
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
     modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },
     giftGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, justifyContent: 'center', marginBottom: 30 },
-    giftBtnMain: { width: 80, height: 95, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-    giftEmoji: { fontSize: 34 },
-    giftPrice: { fontSize: 14, fontWeight: '900', marginTop: 8 },
+    
+    // 🔥 SATTI FIX: CHANGED BUTTON SIZE TO ACCOMMODATE TEXT 🔥
+    giftBtnMain: { width: 85, height: 110, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
+    
+    // 🔥 SATTI FIX: NEW STYLES FOR ANIMATED IMAGES & TEXT 🔥
+    giftImage: { width: 80, height: 80 },
+    giftNameText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', marginTop: -10, textAlign: 'center' },
+    giftPrice: { fontSize: 14, fontWeight: '900', marginTop: 2 },
     
     busyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
     busyCard: { width: width * 0.85, padding: 35, borderRadius: 35, alignItems: 'center', overflow: 'hidden' },
