@@ -154,6 +154,8 @@ export default function UserLiveViewScreen() {
     // 🔥 THE FIX: CALL TRANSITION SHIELDS 🔥
     const isCallingRef = useRef(false);
     const navigatingToCallRef = useRef(false);
+    // 🔥 SATTI FIX: CALL TIMER REF 🔥
+    const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     useEffect(() => {
         isCallingRef.current = isCalling;
@@ -593,6 +595,9 @@ export default function UserLiveViewScreen() {
                 const isRecent = (now - callTime) < 30000; 
 
                 if (callData.status === "accepted") {
+                    // 🔥 Clear 10-second auto-cut timer if call is accepted
+                    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+
                     navigatingToCallRef.current = true;
                     
                     unsub(); 
@@ -614,6 +619,9 @@ export default function UserLiveViewScreen() {
                         }
                     });
                 } else if (callData.status === "rejected" && isRecent) {
+                    // 🔥 Clear 10-second auto-cut timer if call is rejected by host
+                    if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+
                     setIsCalling(false);
                     isCallingRef.current = false;
                     
@@ -642,7 +650,7 @@ export default function UserLiveViewScreen() {
         return unsub;
     };
 
-    // 🔥 SATTI FIX: ROBUST CALL INITIATOR WITH PERMISSION CHECK 🔥
+    // 🔥 SATTI FIX: ROBUST CALL INITIATOR WITH 10 SECONDS AUTO CUT 🔥
     const handleCallButtonPress = async () => {
         if (!hostFirestoreId || !auth.currentUser) return;
         if (isCalling) return;
@@ -683,13 +691,42 @@ export default function UserLiveViewScreen() {
                 pricePerMin: callRate,
                 type: "video"
             });
+            
             setCallRequestId(callRef.id);
+
+            // 🔥 SATTI FIX: 10 SECONDS AUTO CUT LOGIC 🔥
+            callTimeoutRef.current = setTimeout(async () => {
+                try {
+                    const checkCallSnap = await getDoc(doc(db, "calls", callRef.id));
+                    if (checkCallSnap.exists()) {
+                        const callData = checkCallSnap.data();
+                        
+                        // If it's still pending after 10 seconds, force cancel it
+                        if (callData.status === "pending" || callData.status === "ringing") {
+                            await updateDoc(doc(db, "calls", callRef.id), { status: "missed" });
+                            setIsCalling(false);
+                            isCallingRef.current = false;
+                            Alert.alert("No Answer", "The host is currently unavailable. Try again later.");
+                        }
+                    }
+                } catch (e) {
+                    console.log("Auto-cut error:", e);
+                }
+            }, 10000); // 10000 ms = 10 Seconds
+
         } catch (error) {
             setIsCalling(false);
             isCallingRef.current = false; 
             Alert.alert("Error", "Could not initiate call request.");
         }
     };
+
+    // Clear timeout if user exits component during ringing
+    useEffect(() => {
+        return () => {
+            if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
+        };
+    }, []);
 
     const triggerGiftAnim = () => {
         Animated.sequence([
