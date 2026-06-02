@@ -1,7 +1,7 @@
 import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, Image, StyleSheet, Text, View } from 'react-native'; // 🔥 SATTI FIX: Added Image import
+import { Animated, Dimensions, Image, StyleSheet, Text, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,16 +20,27 @@ const getLevelConfig = (beans: number) => {
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent' };
 };
 
-// 🔥 SATTI FIX: Image Mapper function based on your assets
+// 🔥 SATTI FIX: Image Mapper function based on your assets (Corrected Exact Names)
 const getGiftImage = (giftName: string) => {
     const name = (giftName || "").toLowerCase();
     if (name.includes('chocolate')) return require('../assets/images/chocolate.png');
     if (name.includes('cake')) return require('../assets/images/cake.png');
+    
+    // 🔥 PUDHUSA ADD PANNA GIFTS 🔥
+    if (name.includes('talent crown')) return require('../assets/images/Talent Crown.png');
+    if (name.includes('golden shoe')) return require('../assets/images/Golden Shoe.png');
+    if (name.includes('melody queen')) return require('../assets/images/Melody Queen.png');
+    if (name.includes('rockstar')) return require('../assets/images/Rockstar.png');
+    if (name.includes('rising star')) return require('../assets/images/Rising Star.png');
+    if (name.includes('superstar mic')) return require('../assets/images/Superstar Mic.png');
+
+    // Pazhaya Gifts
     if (name.includes('crown')) return require('../assets/images/crown.png');
     if (name.includes('diamond')) return require('../assets/images/diamond.png');
     if (name.includes('car')) return require('../assets/images/car.png');
     if (name.includes('private jet')) return require('../assets/images/private jet.png');
     if (name.includes('palace')) return require('../assets/images/palace.png');
+    
     return null;
 };
 
@@ -283,7 +294,7 @@ const styles = StyleSheet.create({
         paddingVertical: 18,
         borderRadius: 25,
         marginBottom: 15,
-        marginTop: 90, // 🔥 SATTI FIX: Increased to push "Sender Name" much further down!
+        marginTop: 90, 
         borderWidth: 1,
     },
     senderBadgeText: {
@@ -297,18 +308,16 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         marginVertical: 10,
     },
-    // 🔥 SATTI FIX: Image pulled UP & text pulled tight to make it highly compact inside the screen!
     customGiftImage: {
-        width: 380, // Large, premium size
+        width: 380, 
         height: 380, 
-        marginTop: -30, // 🔥 Pulls the image UP towards the sender name
-        marginBottom: -50, // 🔥 Pulls the bottom text UP towards the image
+        marginTop: -30, 
+        marginBottom: -50, 
     },
-    // 🔥 SATTI FIX: Pulled UP closely to the image
     grandText: { 
         fontSize: 24, 
         fontWeight: '900', 
-        marginTop: -15, // 🔥 Pushed further UP towards image
+        marginTop: -15, 
         textAlign: 'center', 
         textShadowRadius: 10,
         letterSpacing: 1.5,
@@ -320,7 +329,7 @@ const styles = StyleSheet.create({
         paddingHorizontal: 22,
         paddingVertical: 12,
         borderRadius: 30,
-        marginTop: -10, // 🔥 Pushed the bottom "Diamonds/Rewards" badge further UP!
+        marginTop: -10, 
         borderWidth: 1.5,
     },
     beansValueText: {

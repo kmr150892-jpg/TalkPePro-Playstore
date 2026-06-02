@@ -5,13 +5,21 @@ import { Animated, Easing, FlatList, Image, StyleSheet, Text, TouchableOpacity, 
 
 // 🔥 SATTI FIX: UPDATED GIFT LIST TO INCLUDE ALL YOUR PREMIUM CUSTOM IMAGE GIFTS 🔥
 const GIFT_OPTIONS = [
-    { id: '3', name: 'Chocolate', amount: 1000, type: 'diamond', icon: 'gift' },
-    { id: '4', name: 'Cake', amount: 3000, type: 'diamond', icon: 'cake' },
-    { id: '5', name: 'Crown', amount: 5000, type: 'diamond', icon: 'crown' },
-    { id: '6', name: 'Diamond', amount: 10000, type: 'diamond', icon: 'diamond-stone' },
-    { id: '7', name: 'Car', amount: 25000, type: 'diamond', icon: 'car' },
-    { id: '8', name: 'Private Jet', amount: 50000, type: 'diamond', icon: 'airplane' },
-    { id: '9', name: 'Palace', amount: 100000, type: 'diamond', icon: 'castle' },
+    // Total 13 Gifts from 100 to 1,000,000 based on the provided assets
+    { id: '1', name: 'Chocolate', amount: 100, type: 'diamond', icon: 'gift' },
+    { id: '2', name: 'Cake', amount: 500, type: 'diamond', icon: 'cake' },
+    { id: '3', name: 'Diamond', amount: 1000, type: 'diamond', icon: 'diamond-stone' },
+    { id: '4', name: 'Crown', amount: 5000, type: 'diamond', icon: 'crown' },
+    { id: '5', name: 'Car', amount: 10000, type: 'diamond', icon: 'car' },
+    { id: '6', name: 'Private Jet', amount: 25000, type: 'diamond', icon: 'airplane' },
+    { id: '7', name: 'Palace', amount: 50000, type: 'diamond', icon: 'castle' },
+    { id: '8', name: 'Golden Shoe', amount: 100000, type: 'diamond', icon: 'shoe-heel' },
+    { id: '9', name: 'Melody Queen', amount: 150000, type: 'diamond', icon: 'music' },
+    // 🔥 SATTI FIX: Changed 'Rockstar Guitar' to 'Rockstar' & Added 'Rising Star' 🔥
+    { id: '10', name: 'Rockstar', amount: 200000, type: 'diamond', icon: 'guitar-electric' },
+    { id: '11', name: 'Rising Star', amount: 300000, type: 'diamond', icon: 'star' },
+    { id: '12', name: 'Superstar Mic', amount: 500000, type: 'diamond', icon: 'microphone-variant' },
+    { id: '13', name: 'Talent Crown', amount: 1000000, type: 'diamond', icon: 'crown' },
 ];
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
@@ -30,8 +38,20 @@ const getLevelConfig = (beans: number) => {
 };
 
 // 🔥 SATTI FIX: Path updated from '../' to '../../' because this file is inside 'videocall' folder
+// Mapped exactly to the files shown in the screenshot
 const getGiftImage = (giftName: string) => {
     const name = (giftName || "").toLowerCase();
+    
+    // Check custom ones first to avoid overlap
+    if (name.includes('talent crown')) return require('../../assets/images/Talent Crown.png');
+    if (name.includes('golden shoe')) return require('../../assets/images/Golden Shoe.png');
+    if (name.includes('melody queen')) return require('../../assets/images/Melody Queen.png');
+    // 🔥 SATTI FIX: Corrected Names Below 🔥
+    if (name.includes('rockstar')) return require('../../assets/images/Rockstar.png');
+    if (name.includes('rising star')) return require('../../assets/images/Rising Star.png');
+    if (name.includes('superstar mic')) return require('../../assets/images/Superstar Mic.png');
+
+    // Standard ones
     if (name.includes('chocolate')) return require('../../assets/images/chocolate.png');
     if (name.includes('cake')) return require('../../assets/images/cake.png');
     if (name.includes('crown')) return require('../../assets/images/crown.png');
@@ -39,6 +59,7 @@ const getGiftImage = (giftName: string) => {
     if (name.includes('car')) return require('../../assets/images/car.png');
     if (name.includes('private jet')) return require('../../assets/images/private jet.png');
     if (name.includes('palace')) return require('../../assets/images/palace.png');
+    
     return null;
 };
 
@@ -221,7 +242,8 @@ const styles = StyleSheet.create({
         fontWeight: '900', 
         marginTop: 3,
         marginBottom: 5,
-        letterSpacing: 0.5
+        letterSpacing: 0.5,
+        textAlign: 'center'
     },
     priceRow: { 
         flexDirection: 'row', 

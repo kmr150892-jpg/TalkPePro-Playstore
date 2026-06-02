@@ -175,8 +175,13 @@ export default function UserDetail() {
 
     if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#6366F1" /></View>;
 
-    const totalSpent = targetUser?.totalSpentDiamonds || 0;
-    const userRank = calculateUserLevel(totalSpent);
+    // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
+    const userDiamonds = Math.max(
+        targetUser?.totalDiamonds || 0,
+        targetUser?.walletBalance || 0,
+        targetUser?.balance || 0
+    );
+    const userRank = calculateUserLevel(userDiamonds);
     const gender = targetUser?.gender || 'N/A';
 
     const parallaxImg = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -50], extrapolate: 'clamp' });

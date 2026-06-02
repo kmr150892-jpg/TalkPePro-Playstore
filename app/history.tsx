@@ -242,8 +242,13 @@ export default function HistoryScreen() {
         };
     }, [user, userData]);
 
-    const totalSpentTotal = userData?.totalSpentDiamonds || 0;
-    const userTier = calculateUserLevel(totalSpentTotal);
+    // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
+    const userDiamonds = Math.max(
+        userData?.totalDiamonds || 0,
+        userData?.walletBalance || 0,
+        userData?.balance || 0
+    );
+    const userTier = calculateUserLevel(userDiamonds);
 
     const callsData = history.filter(item => item.isCall);
     const rewardsData = history.filter(item => item.isCallGift || item.isStandaloneGift);

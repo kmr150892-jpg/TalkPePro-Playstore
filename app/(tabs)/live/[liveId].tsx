@@ -1110,41 +1110,72 @@ export default function UserLiveViewScreen() {
                                 <Ionicons name="close" size={28} color={userTier.color} />
                             </TouchableOpacity>
                         </View>
+                        {/* 🔥 12 GIFTS IN GRID VIEW 🔥 */}
                         <View style={styles.giftGrid}>
-                            <TouchableOpacity onPress={() => sendGift('Chocolate', 1000)} style={[styles.giftBtnMain, borderType1]}>
+                            <TouchableOpacity onPress={() => sendGift('Chocolate', 100)} style={[styles.giftBtnMain, borderType1]}>
                                 <AnimatedGiftIcon source={require('../../../assets/images/chocolate.png')} />
                                 <Text style={styles.giftNameText}>Chocolate</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>1k</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>100</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Cake', 3000)} style={[styles.giftBtnMain, borderType2]}>
+                            <TouchableOpacity onPress={() => sendGift('Cake', 500)} style={[styles.giftBtnMain, borderType2]}>
                                 <AnimatedGiftIcon source={require('../../../assets/images/cake.png')} />
                                 <Text style={styles.giftNameText}>Cake</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>3k</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>500</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Crown', 5000)} style={[styles.giftBtnMain, borderType1]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/crown.png')} />
-                                <Text style={styles.giftNameText}>Crown</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>5k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Diamond', 10000)} style={[styles.giftBtnMain, borderType2]}>
+                            <TouchableOpacity onPress={() => sendGift('Diamond', 1000)} style={[styles.giftBtnMain, borderType1]}>
                                 <AnimatedGiftIcon source={require('../../../assets/images/diamond.png')} />
                                 <Text style={styles.giftNameText}>Diamond</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>10k</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>1k</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Car', 25000)} style={[styles.giftBtnMain, borderType1]}>
+                            <TouchableOpacity onPress={() => sendGift('Crown', 5000)} style={[styles.giftBtnMain, borderType2]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/crown.png')} />
+                                <Text style={styles.giftNameText}>Crown</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>5k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Car', 10000)} style={[styles.giftBtnMain, borderType1]}>
                                 <AnimatedGiftIcon source={require('../../../assets/images/car.png')} />
                                 <Text style={styles.giftNameText}>Car</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>25k</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>10k</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Private Jet', 50000)} style={[styles.giftBtnMain, borderType2]}>
+                            <TouchableOpacity onPress={() => sendGift('Private Jet', 25000)} style={[styles.giftBtnMain, borderType2]}>
                                 <AnimatedGiftIcon source={require('../../../assets/images/private jet.png')} />
                                 <Text style={styles.giftNameText}>Private Jet</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>50k</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>25k</Text>
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Palace', 100000)} style={[styles.giftBtnMain, borderType1, { width: '45%' }]}>
+                            <TouchableOpacity onPress={() => sendGift('Palace', 50000)} style={[styles.giftBtnMain, borderType1]}>
                                 <AnimatedGiftIcon source={require('../../../assets/images/palace.png')} />
                                 <Text style={styles.giftNameText}>Palace</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>100k</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>50k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Golden Shoe', 100000)} style={[styles.giftBtnMain, borderType2]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/Golden Shoe.png')} />
+                                <Text style={styles.giftNameText}>Golden Shoe</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>100k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Melody Queen', 150000)} style={[styles.giftBtnMain, borderType1]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/Melody Queen.png')} />
+                                <Text style={styles.giftNameText}>Melody Queen</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>150k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Rockstar Guitar', 200000)} style={[styles.giftBtnMain, borderType2]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/Rockstar.png')} />
+                                <Text style={styles.giftNameText}>Rockstar Guitar</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>200k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Star Performer', 300000)} style={[styles.giftBtnMain, borderType1]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/Rising Star.png')} />
+                                <Text style={styles.giftNameText}>Star Performer</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>300k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Superstar Mic', 500000)} style={[styles.giftBtnMain, borderType2]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/Superstar Mic.png')} />
+                                <Text style={styles.giftNameText}>Superstar Mic</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>500k</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => sendGift('Talent Crown', 1000000)} style={[styles.giftBtnMain, borderType1, { width: '45%' }]}>
+                                <AnimatedGiftIcon source={require('../../../assets/images/Talent Crown.png')} />
+                                <Text style={styles.giftNameText}>Talent Crown</Text>
+                                <Text style={[styles.giftPrice, { color: userTier.color }]}>1M</Text>
                             </TouchableOpacity>
                         </View>
                     </BlurView>

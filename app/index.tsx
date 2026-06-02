@@ -14,6 +14,7 @@ import {
   BackHandler,
   Dimensions,
   Easing,
+  Image,
   StatusBar,
   StyleSheet,
   Text,
@@ -76,10 +77,10 @@ export default function LoginScreen() {
   const cardFloat1 = useRef(new Animated.Value(0)).current;
   const cardFloat2 = useRef(new Animated.Value(0)).current;
   
-  // 🔥 SATTI FIX: EXACT MATH CALCULATION FOR CAROUSEL TO STOP CLIPPING/PEEKING 🔥
+  // 🔥 SATTI FIX: EXACT MATH CALCULATION FOR CAROUSEL 🔥
   const scrollX = useRef(new Animated.Value(0)).current;
-  // Screen Width - (BottomSection Padding 24) - (BlurCard Padding 40) - (BlurCard Borders 4) = Exact 68px offset
-  const innerWidth = width - 68; 
+  // Screen Width - (BottomSection Padding 20) = Exact 44px offset
+  const innerWidth = width - 44; 
 
   // 🔄 FULL SCREEN VIDEO Setup
   const videoSource = require('../assets/images/welcome-girl.mp4');
@@ -362,7 +363,7 @@ export default function LoginScreen() {
       
       <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ scale: bgScaleAnim }] }]}>
           <LinearGradient 
-            colors={['#7B2FF7', '#A855F7', '#F43F8D', '#FB7185', '#F97316']} 
+            colors={['#690efc', '#8815f4', '#F43F8D', '#FB7185', '#F97316']} 
             style={StyleSheet.absoluteFill} 
           />
       </Animated.View>
@@ -390,10 +391,10 @@ export default function LoginScreen() {
 
       <View style={[styles.header, showSplash ? styles.headerCentered : styles.headerTop]}>
         <Animated.View style={{ opacity: fadeAnim, transform: [{ scale: scaleAnim }, { translateY: magicFloat }], alignItems: 'center' }}>
-          {!showSplash && (
+          {!showSplash && showLoginUI && (
               <View style={styles.logoTextContainer}>
                   <Animated.Text style={[styles.logoTextTalk, { color: '#bf00ff', textShadowColor: 'rgb(0, 0, 0)', transform: [{ scale: talkScale }] }]}>TALKPE</Animated.Text>
-                  <Animated.Text style={[styles.logoTextPe, { color: '#F97316', textShadowColor: 'rgba(0,0,0,0.8)', opacity: peOpacity, transform: [{ scale: peScale }] }]}>PRO</Animated.Text>
+                  <Animated.Text style={[styles.logoTextPe, { color: '#fc6a02', textShadowColor: 'rgba(0,0,0,0.8)', opacity: peOpacity, transform: [{ scale: peScale }] }]}>PRO</Animated.Text>
               </View>
           )}
         </Animated.View>
@@ -407,135 +408,114 @@ export default function LoginScreen() {
       </View>
 
       {!showSplash && (
-        <Animated.View style={[styles.bottomSection, { transform: [{ translateY: slideAnim }] }]}>
-          <BlurView intensity={40} tint="dark" style={[styles.blurCard, borderType1]}>
-            
-            {!showLoginUI ? (
-              <View style={styles.formContainer}>
-                
-                <View style={styles.instructionRow}>
-                  <Text style={styles.instruction}>WHY JOIN TALKPE PRO?</Text>
-                  <Text style={styles.swipeHint}>SWIPE ➔</Text>
-                </View>
-                
-                {/* 🔥 ULTRA PREMIUM CAROUSEL DESIGN START 🔥 */}
-                <View style={[styles.carouselContainer, { width: innerWidth }]}>
-                  <Animated.ScrollView
-                    horizontal
-                    pagingEnabled
-                    showsHorizontalScrollIndicator={false}
-                    scrollEventThrottle={16}
-                    onScroll={Animated.event(
-                      [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                      { useNativeDriver: false }
-                    )}
-                  >
-                    
-                    {/* 🔹 SLIDE 1: USER PORTAL 🔹 */}
-                    <View style={[styles.cardWrapper, { width: innerWidth }]}>
-                      <Animated.View style={{ flex: 1, transform: [{ translateY: cardFloat1 }] }}>
-                        <LinearGradient 
-                          colors={['rgba(168, 85, 247, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
-                          style={[styles.benefitBox, { borderColor: 'rgba(168, 85, 247, 0.6)' }]}
-                        >
-                          {/* 🔥 CENTRED PREMIUM HEADER 🔥 */}
-                          <View style={styles.benefitHeader}>
-                              <View style={[styles.iconWrapper, { shadowColor: '#A855F7', backgroundColor: 'rgba(168, 85, 247, 0.2)' }]}>
-                                  <Text style={styles.benefitIconTop}>💎</Text>
-                              </View>
-                              <View style={styles.headerTextStack}>
-                                  <Text style={[styles.benefitTitle, { color: '#E9D5FF' }]}>USER PORTAL</Text>
-                                  <Text style={styles.benefitSubText}>Verified Expert Interactions</Text>
-                              </View>
-                          </View>
-
-                          {/* 🔥 NEAT & LARGE BULLET POINTS 🔥 */}
-                          <View style={styles.benefitList}>
-                              <Text style={styles.benefitBullet}>💎  <Text style={styles.highlightText}>Up to 3 Mins</Text> Free Call</Text>
-                              <Text style={styles.benefitBullet}>💎  Access <Text style={styles.highlightText}>Interactive</Text> Skill Activities</Text>
-                              <Text style={styles.benefitBullet}>💎  100% <Text style={styles.highlightText}>Secure & Private</Text> Network</Text>
-                              <Text style={styles.benefitBullet}>💎  Join <Text style={styles.highlightText}>Free Forums</Text> & Broadcasts</Text>
-                          </View>
-                        </LinearGradient>
-                      </Animated.View>
-                    </View>
-
-                    {/* 🔹 SLIDE 2: HOST HUB 🔹 */}
-                    <View style={[styles.cardWrapper, { width: innerWidth }]}>
-                      <Animated.View style={{ flex: 1, transform: [{ translateY: cardFloat2 }] }}>
-                        <LinearGradient 
-                          colors={['rgba(249, 115, 22, 0.25)', 'rgba(2, 6, 23, 0.9)']} 
-                          style={[styles.benefitBox, { borderColor: 'rgba(249, 115, 22, 0.6)' }]}
-                        >
-                          {/* 🔥 CENTRED PREMIUM HEADER 🔥 */}
-                          <View style={styles.benefitHeader}>
-                              <View style={[styles.iconWrapper, { shadowColor: '#F97316', backgroundColor: 'rgba(249, 115, 22, 0.2)' }]}>
-                                  <Text style={styles.benefitIconTop}>🌟</Text>
-                              </View>
-                              <View style={styles.headerTextStack}>
-                                  <Text style={[styles.benefitTitle, { color: '#FFEDD5' }]}>HOST HUB</Text>
-                                  <Text style={styles.benefitSubText}>Monetize Your Expertise</Text>
-                              </View>
-                          </View>
-
-                          {/* 🔥 NEAT & LARGE BULLET POINTS 🔥 */}
-                          <View style={styles.benefitList}>
-                              <Text style={styles.benefitBullet}>🌟  Host Premium <Text style={styles.highlightText}>Live Broadcasts</Text></Text>
-                              <Text style={styles.benefitBullet}>🌟  Create Engauge <Text style={styles.highlightText}>Skill Activities</Text></Text>
-                              <Text style={styles.benefitBullet}>🌟  High-Yield <Text style={styles.highlightText}>Call Rewards</Text></Text>
-                              <Text style={styles.benefitBullet}>🌟  Verified, <Text style={styles.highlightText}>Safe & Private</Text> Platform</Text>
-                          </View>
-                        </LinearGradient>
-                      </Animated.View>
-                    </View>
-
-                  </Animated.ScrollView>
-                </View>
-
-                {/* 🔥 PAGINATION DOTS 🔥 */}
-                <View style={styles.paginationDots}>
-                  {[0, 1].map((_, i) => {
-                    const inputRange = [(i - 1) * innerWidth, i * innerWidth, (i + 1) * innerWidth];
-                    const dotWidth = scrollX.interpolate({
-                      inputRange,
-                      outputRange: [8, 24, 8],
-                      extrapolate: 'clamp',
-                    });
-                    const opacity = scrollX.interpolate({
-                      inputRange,
-                      outputRange: [0.3, 1, 0.3],
-                      extrapolate: 'clamp',
-                    });
-                    const bgColor = scrollX.interpolate({
-                      inputRange,
-                      outputRange: ['#CBD5E1', i === 0 ? '#A855F7' : '#F97316', '#CBD5E1'],
-                      extrapolate: 'clamp',
-                    });
-                    return (
-                      <Animated.View
-                        key={i}
-                        style={[styles.dot, { width: dotWidth, opacity, backgroundColor: bgColor }]}
+        <Animated.View style={[
+          styles.bottomSection, 
+          // 🔥 SATTI FIX: OVERRIDE FOR LOGIN UI ONLY 🔥
+          showLoginUI && { top: undefined, bottom: 50, paddingHorizontal: 0, height: height * 0.26 },
+          { transform: [{ translateY: slideAnim }] }
+        ]}>
+          
+          {!showLoginUI ? (
+            <View style={styles.transparentFormContainer}>
+              
+              <View style={styles.instructionRow}>
+                <Text style={styles.instructionFloating}>WHY JOIN TALKPE PRO?</Text>
+                <Text style={styles.swipeHintFloating}>SWIPE ➔</Text>
+              </View>
+              
+              {/* 🔥 ULTRA PREMIUM FULL SCREEN IMAGE CAROUSEL START 🔥 */}
+              <View style={[styles.carouselContainer, { width: innerWidth }]}>
+                <Animated.ScrollView
+                  horizontal
+                  pagingEnabled
+                  showsHorizontalScrollIndicator={false}
+                  scrollEventThrottle={16}
+                  onScroll={Animated.event(
+                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                    { useNativeDriver: false }
+                  )}
+                >
+                  
+                  {/* 🔹 SLIDE 1: USER PORTAL 🔹 */}
+                  <View style={[styles.cardWrapper, { width: innerWidth }]}>
+                    <Animated.View style={{ flex: 1, width: '100%', height: '100%', transform: [{ translateY: cardFloat1 }] }}>
+                      <Image 
+                        source={require('../assets/images/uesr.png')} 
+                        style={styles.fullImageCard} 
+                        resizeMode="cover" 
                       />
-                    );
-                  })}
-                </View>
-                {/* 🔥 ULTRA PREMIUM CAROUSEL DESIGN END 🔥 */}
+                    </Animated.View>
+                  </View>
 
-                <TouchableOpacity onPress={() => setShowLoginUI(true)} activeOpacity={0.8}>
-                  <LinearGradient 
-                    colors={['#f309d0', '#F97316']} 
-                    start={{x: 0, y: 0}} 
-                    end={{x: 1, y: 1}} 
-                    style={[styles.btnMass, { shadowColor: '#f309d0', shadowOpacity: 0.9, shadowRadius: 20 }]}
-                  >
-                    <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>PROCEED TO SECURE LOGIN</Text>
-                  </LinearGradient>
-                </TouchableOpacity>
+                  {/* 🔹 SLIDE 2: HOST HUB 🔹 */}
+                  <View style={[styles.cardWrapper, { width: innerWidth }]}>
+                    <Animated.View style={{ flex: 1, width: '100%', height: '100%', transform: [{ translateY: cardFloat2 }] }}>
+                      <Image 
+                        source={require('../assets/images/host.png')} 
+                        style={styles.fullImageCard} 
+                        resizeMode="cover" 
+                      />
+                    </Animated.View>
+                  </View>
+
+                </Animated.ScrollView>
               </View>
 
-            ) : (
+              {/* 🔥 PAGINATION DOTS 🔥 */}
+              <View style={styles.paginationDots}>
+                {[0, 1].map((_, i) => {
+                  const inputRange = [(i - 1) * innerWidth, i * innerWidth, (i + 1) * innerWidth];
+                  const dotWidth = scrollX.interpolate({
+                    inputRange,
+                    outputRange: [8, 24, 8],
+                    extrapolate: 'clamp',
+                  });
+                  const opacity = scrollX.interpolate({
+                    inputRange,
+                    outputRange: [0.3, 1, 0.3],
+                    extrapolate: 'clamp',
+                  });
+                  const bgColor = scrollX.interpolate({
+                    inputRange,
+                    outputRange: ['#CBD5E1', i === 0 ? '#7B2FF7' : '#F97316', '#CBD5E1'],
+                    extrapolate: 'clamp',
+                  });
+                  return (
+                    <Animated.View
+                      key={i}
+                      style={[styles.dot, { width: dotWidth, opacity, backgroundColor: bgColor }]}
+                    />
+                  );
+                })}
+              </View>
+              {/* 🔥 ULTRA PREMIUM CAROUSEL DESIGN END 🔥 */}
 
-              <View style={styles.formContainer}>
+              <TouchableOpacity onPress={() => setShowLoginUI(true)} activeOpacity={0.8} style={{ width: '100%' }}>
+                <LinearGradient 
+                  colors={['#6102f9', '#fd6a00']} 
+                  start={{x: 0, y: 0}} 
+                  end={{x: 1, y: 1}} 
+                  style={[styles.btnMass, { shadowColor: '#7B2FF7', shadowOpacity: 0.9, shadowRadius: 20 }]}
+                >
+                  <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>PROCEED TO SECURE LOGIN</Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <Text style={styles.footerTextFloating}>🛡️ END-TO-END ENCRYPTED ACCESS</Text>
+            </View>
+
+          ) : (
+
+            <BlurView 
+              intensity={40} 
+              tint="dark" 
+              style={[
+                styles.blurCard, 
+                borderType1, 
+                { flex: 1, paddingVertical: 15, paddingHorizontal: 25, justifyContent: 'center' } 
+              ]}
+            >
+              <View style={[styles.formContainer, { flex: 1, justifyContent: 'space-evenly' }]}>
                 {loading ? (
                   <View style={styles.loadingBox}>
                     <ActivityIndicator size="large" color="#A855F7" />
@@ -543,26 +523,26 @@ export default function LoginScreen() {
                   </View>
                 ) : (
                   <>
-                    <Text style={styles.instructionCenter}>SELECT YOUR PROFESSIONAL ROLE</Text>
+                    <Text style={[styles.instructionCenter, { marginBottom: 5 }]}>SELECT YOUR PROFESSIONAL ROLE</Text>
                     
                     <TouchableOpacity onPress={() => handleLogin('user')} activeOpacity={0.8}>
-                      <LinearGradient colors={['#7B2FF7', '#F43F8D', '#F97316']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 15 }]}>
+                      <LinearGradient colors={['#7B2FF7', '#F43F8D', '#F97316']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 12, paddingVertical: 12 }]}>
                           <Text style={styles.btnTextUser} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS USER</Text>
                       </LinearGradient>
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => handleLogin('expert')} activeOpacity={0.8}>
-                      <LinearGradient colors={['#F97316', '#F43F8D', '#7B2FF7']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 15 }]}>
+                      <LinearGradient colors={['#F97316', '#F43F8D', '#7B2FF7']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 12, paddingVertical: 12}]}>
                           <Text style={styles.btnTextExpert} adjustsFontSizeToFit numberOfLines={1}>CONTINUE AS HOST</Text>
                       </LinearGradient>
                     </TouchableOpacity>
                   </>
                 )}
               </View>
-            )}
+              <Text style={[styles.footerText, { marginTop: 8}]}>🛡️ END-TO-END ENCRYPTED ACCESS</Text>
+            </BlurView>
+          )}
 
-            <Text style={styles.footerText}>🛡️ END-TO-END ENCRYPTED ACCESS</Text>
-          </BlurView>
         </Animated.View>
       )}
     </View>
@@ -576,42 +556,34 @@ const styles = StyleSheet.create({
   glowInner: { flex: 1, borderRadius: 150 },
   fullTopVideo: { ...StyleSheet.absoluteFillObject },
   header: { alignItems: 'center', zIndex: 10 }, 
-  headerTop: { marginTop: 40 }, 
-  headerCentered: { flex: 1, justifyContent: 'center', marginTop: 10 },
+  headerTop: { marginTop: 30 }, 
+  headerCentered: { flex: 1, justifyContent: 'center', marginTop: 50 },
   logoTextContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
   logoTextTalk: { fontSize: 50, fontWeight: '900', letterSpacing: 1, textShadowOffset: {width: 0, height: 10}, textShadowRadius: 15 },
-  logoTextPe: { fontSize: 50, fontWeight: '900', letterSpacing: 1, textShadowOffset: {width: 0, height: 10}, textShadowRadius: 15, marginLeft: 8 },
+  logoTextPe: { fontSize:50, fontWeight: '900', letterSpacing: 1, textShadowOffset: {width: 0, height: 10}, textShadowRadius: 15, marginLeft: 8 },
   splashTextContainer: { alignItems: 'center', marginTop: 30, gap: 10 },
   tagline: { fontSize: 13, color: '#FFFFFF', fontWeight: '900', letterSpacing: 3, textTransform: 'uppercase', opacity: 0.8 },
   
-  bottomSection: { position: 'absolute', bottom: 20, width: '100%', padding: 12, paddingBottom: 25, zIndex: 10 }, 
+  // Base style for Landing Page
+  bottomSection: { position: 'absolute', top: 55, bottom: 40, width: '100%', paddingHorizontal: 20, zIndex: 10, justifyContent: 'flex-end' }, 
   
-  blurCard: { padding: 20, borderRadius: 35, overflow: 'hidden', backgroundColor: 'rgba(5, 5, 10, 0.7)' }, 
-  formContainer: { width: '100%' },
+  blurCard: { padding: 30, borderRadius: 35, overflow: 'hidden', backgroundColor: 'rgba(5, 5, 10, 0.7)' }, 
   
-  instructionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5, paddingHorizontal: 12 },
-  instruction: { color: '#CBD5E1', fontSize: 13, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
+  formContainer: { justifyContent: 'center', width: '100%' },
+
+  transparentFormContainer: { flex: 1, width: '100%', alignItems: 'center', justifyContent: 'space-between' }, 
+  carouselContainer: { flex: 1, width: '100%' }, 
+  cardWrapper: { justifyContent: 'center', alignItems: 'center' }, 
+  fullImageCard: { width: '100%', height: '100%', borderRadius: 25, borderWidth: 8, borderColor: 'rgba(255, 2, 2, 0.22)', backgroundColor: 'transparent' }, 
+
+  instructionRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', width: '100%', paddingHorizontal: 8, marginBottom: 15 },
   instructionCenter: { textAlign: 'center', color: '#CBD5E1', marginBottom: 5, fontSize: 12, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase' },
-  swipeHint: { color: '#F97316', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
+
+  instructionFloating: { color: '#FFFFFF', fontSize: 13, fontWeight: '900', letterSpacing: 2, textTransform: 'uppercase', textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 10 },
+  swipeHintFloating: { color: '#F97316', fontSize: 13, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 10 },
   
-  carouselContainer: { height: 450, marginTop: 5 }, 
-  cardWrapper: { paddingHorizontal: 0, paddingTop: 25, paddingBottom: 3 }, 
-  
-  paginationDots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 10, gap: 5 },
+  paginationDots: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginVertical: 8, gap: 5 },
   dot: { height: 6, borderRadius: 3 },
-  
-  benefitBox: { flex: 1, padding: 5, borderRadius: 24, borderWidth: 1.5, elevation: 200, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 0.4, shadowRadius: 8, position: 'relative' },
-  
-  benefitHeader: { alignItems: 'center', justifyContent: 'center', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.15)', paddingBottom: 30, paddingTop:15 }, 
-  iconWrapper: { padding: 20, borderRadius: 20, marginBottom: 15, borderWidth: 3, borderColor: 'rgba(255,255,255,0.2)', elevation: 200, shadowOpacity: 0.9, shadowRadius: 10 }, 
-  benefitIconTop: { fontSize: 34 }, 
-  headerTextStack: { alignItems: 'center' },
-  benefitTitle: { fontWeight: '900', fontSize: 22, letterSpacing: 3, textAlign: 'center' }, 
-  benefitSubText: { color: '#94A3B8', fontSize: 13, fontWeight: '800', marginTop: 5, letterSpacing: 1, textAlign: 'center' }, 
-  
-  benefitList: { paddingHorizontal: 9, gap: 20 }, 
-  benefitBullet: { color: '#E2E8F0', fontSize: 14, fontWeight: '700', letterSpacing: 0.5, lineHeight: 22 }, 
-  highlightText: { color: '#FFF', fontWeight: '900' },
   
   loadingBox: { alignItems: 'center', padding: 30 },
   loadingText: { marginTop: 1, color: '#f309d0', fontWeight: '900', fontSize: 15, letterSpacing:1.5, textTransform: 'uppercase' },
@@ -619,5 +591,7 @@ const styles = StyleSheet.create({
   btnMass: { padding: 20, borderRadius: 30, width: '100%', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden' }, 
   btnTextUser: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 12 },
   btnTextExpert: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 12 },
-  footerText: { textAlign: 'center', marginTop: 15, color: 'rgba(249, 249, 250, 0.4)', fontSize: 10, fontWeight: '900', letterSpacing: 2 } 
+  
+  footerText: { textAlign: 'center', marginTop: 15, color: 'rgba(249, 249, 250, 0.4)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+  footerTextFloating: { textAlign: 'center', marginTop: 10, marginBottom: 5, color: 'rgba(255, 255, 255, 0.8)', fontSize: 10, fontWeight: '900', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 8 } 
 });
