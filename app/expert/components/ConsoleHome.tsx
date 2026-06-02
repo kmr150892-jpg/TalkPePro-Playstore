@@ -1,27 +1,28 @@
 import { Feather, FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { deleteUser } from 'firebase/auth'; // 🔥 Added for Delete
-import { arrayUnion, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore'; // 🔥 Added deleteDoc
+import { deleteUser } from 'firebase/auth';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    Image,
-    Modal,
-    ScrollView,
-    Share, // 🔥 Added for Share
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
@@ -33,9 +34,9 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const ADMIN_UID = "jOQ0LxpaFkhuqIiMtOcYCGb3nEf2";
 
 const CLOUDINARY_URL = "https://api.cloudinary.com/v1_1/dvwjxeexc/image/upload";
-const UPLOAD_PRESET = "talkpe"; 
+const UPLOAD_PRESET = "talkpe";
 
-// ✅ ACCURATE THEME & LEVEL CONFIG (🔥 SUPER SMART FETCH: EXTRACTS REAL LEVEL FROM ANY STRING 🔥)
+// ✅ ACCURATE THEME & LEVEL CONFIG
 const getLevelConfig = (userData: any) => {
     const getObj = (lvl: number) => {
         if (lvl >= 10) return { lvl: 10, label: 'LEGEND L10', colors: ['#ff0404', '#F59E0B', '#df03ee'] as const, glow: '#F59E0B', next: 0, prev: 50000000, rate: 8000 };
@@ -51,7 +52,6 @@ const getLevelConfig = (userData: any) => {
         return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
     };
 
-    // 1. Robust Direct Level Override (Extracts number from "Level 1", "L1", "1", etc.)
     const rawLvl = userData?.expertLevel ?? userData?.currentLevel ?? userData?.level;
     if (rawLvl !== undefined && rawLvl !== null) {
         if (typeof rawLvl === 'number') return getObj(rawLvl);
@@ -61,14 +61,12 @@ const getLevelConfig = (userData: any) => {
         }
     }
 
-    // 2. Robust Title Fallback
     const title = String(userData?.levelTitle || '').toUpperCase();
     if (title) {
         const Discover = title.match(/\d+/);
         if (Discover) return getObj(parseInt(Discover[0], 10));
     }
 
-    // 3. Beans Fallback
     const beans = Number(userData?.totalBeansEarned) || Number(userData?.beans) || 0;
     if (beans >= 100000000) return getObj(10);
     if (beans >= 50000000) return getObj(9);
@@ -83,17 +81,17 @@ const getLevelConfig = (userData: any) => {
     return getObj(0);
 };
 
-const EXPERTISE_TAGS = [ "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching", 
-    "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
-    "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development", 
-    "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
-    "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro", 
-    "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting", 
-    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Standup Comedy", "Math Tutoring", 
+const EXPERTISE_TAGS = [ "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching",
+    "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing",
+    "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development",
+    "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency",
+    "Tamil Stories", "Comedy & Mimicry", "Acting", "Makeup & Styling", "Fashion Advice", "Interior Design", "Gaming Pro",
+    "Chess Strategy", "Magic Tricks", "Guitar Lessons", "Keyboard Lessons", "Drawing & Sketching", "Painting",
+    "Crafting", "Pet Care", "Travel Planning", "Event Planning", "Standup Comedy", "Math Tutoring",
     "Science Tutoring", "History & Culture", "Storytelling", "Poetry & Writing"];
-const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytics 📊", "Public Speaking 🎙️", "Networking 🤝", "Planning 📅", "Strategy 🎯","Gaming 🎮", "Photography 📸", "Traveling ✈️", "Cooking 🍳", 
-    "Music 🎵", "Fitness & Gym 🏋️‍♂️", "Art & Design 🎨", "Gardening 🌱", 
-    "Movies & Anime 🍿", "Sports & Outdoors ⚽", "Yoga & Meditation 🧘‍♀️", 
+const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytics 📊", "Public Speaking 🎙️", "Networking 🤝", "Planning 📅", "Strategy 🎯","Gaming 🎮", "Photography 📸", "Traveling ✈️", "Cooking 🍳",
+    "Music 🎵", "Fitness & Gym 🏋️‍♂️", "Art & Design 🎨", "Gardening 🌱",
+    "Movies & Anime 🍿", "Sports & Outdoors ⚽", "Yoga & Meditation 🧘‍♀️",
     "DIY Crafts ✂️", "Podcasting 🎧", "Astrology ✨", "Pets & Animals 🐾",
     "Foodie & Cafe Hopping 🍕", "Vlogging 📹", "Board Games 🎲"];
 
@@ -105,39 +103,38 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const [expertData, setExpertData] = useState(initialData);
   const [modalVisible, setModalVisible] = useState(false);
   const [rateModalVisible, setRateModalVisible] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false); 
-  
+  const [isDeleting, setIsDeleting] = useState(false);
+ 
   const [editName, setEditName] = useState('');
   const [editBio, setEditBio] = useState('');
   const [editLocation, setEditLocation] = useState('');
   const [editAge, setEditAge] = useState('');
   const [editGender, setEditGender] = useState('');
   const [newRate, setNewRate] = useState('1000');
-  
+ 
   const [editExpertise, setEditExpertise] = useState<string[]>([]);
   const [editHobbies, setEditHobbies] = useState<string[]>([]);
 
   const [uploading, setUploading] = useState(false);
-  const [coverUploading, setCoverUploading] = useState(false); 
+  const [coverUploading, setCoverUploading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
-  // 🔥 DYNAMIC THEME ENGINE
   const config = getLevelConfig(expertData);
   const walletBalance = expertData?.walletBalance ?? expertData?.beansBalance ?? 0;
   const totalBeans = expertData?.totalBeansEarned || expertData?.totalBeans || 0;
-  
+ 
   const theme = {
     primary: config.colors[0],
     secondary: config.colors[2] || config.colors[1] || config.colors[0],
     accent: config.glow !== 'transparent' ? config.glow : config.colors[0],
     bgGradient: [
-        config.lvl >= 7 ? `${config.colors[0]}40` : '#020617', 
-        config.lvl >= 3 ? `${config.colors[1] || config.colors[0]}20` : '#0F172A', 
+        config.lvl >= 7 ? `${config.colors[0]}40` : '#020617',
+        config.lvl >= 3 ? `${config.colors[1] || config.colors[0]}20` : '#0F172A',
         '#020617'
-    ] as const 
+    ] as const
   };
 
   const range = config.next - config.prev;
@@ -145,17 +142,8 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const progressPercent = config.next > 0 ? Math.max(0, Math.min((earnedInRange / range) * 100, 100)) : 100;
   const pendingBeans = config.next - totalBeans;
 
-  const [isCreatingParty, setIsCreatingParty] = useState(false);
-  const [incomingCall, setIncomingCall] = useState<any>(null);
-  const [showCallModal, setShowCallModal] = useState(false);
-  const fadeAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim = useRef(new Animated.Value(20)).current;
-  const pulseAnim = useRef(new Animated.Value(1)).current;
-
-  // 🔥 SATTI FIX: Track Previous Level for Auto-Max Price Update 🔥
   const prevLvlRef = useRef<number | null>(null);
 
-  // 🛡️ 1. AUTH OBSERVER (AUTO ONLINE ON LOGIN)
   useEffect(() => {
     const authUnsub = auth.onAuthStateChanged((u: any) => {
         if (u) {
@@ -189,7 +177,6 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         setEditAge(data.age || '');
         setEditGender(data.gender || '');
         
-        // Only initialize rate if newRate hasn't been set by user/auto-update yet
         if (!newRate || newRate === '1000' && data.pricePerMin !== 1000) {
             setNewRate(String(data.pricePerMin || '1000'));
         }
@@ -205,13 +192,99 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     return () => unsub();
   }, [user?.uid]);
 
-  // 🔥 SATTI FIX: AUTO-MAX PRICE ON LEVEL CHANGE 🔥
+  // 🔥 SATTI FIX: 🚀 BULLETPROOF ANTI-LOOP DAILY BONUS ENGINE 🚀 🔥
+  const bonusLock = useRef(false); // 🔥 Prevents instant React concurrent loops
+
+  useEffect(() => {
+    const checkAndAwardDailyBonus = async () => {
+        if (!user?.uid || !expertData) return;
+
+        const today = new Date();
+        const offset = today.getTimezoneOffset() * 60000;
+        const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
+
+        const lastBonusDate = expertData.lastBonusDate || "";
+        const milestoneStr = String(expertData.currentDailyMilestone || "").toUpperCase();
+
+        if (lastBonusDate !== localDateStr && milestoneStr) {
+            
+            // 🔥 SATTI FIX: INSTANT SYNCHRONOUS LOCK BEFORE ANY AWAIT CAUSES RACE CONDITION
+            if (bonusLock.current) return; 
+            bonusLock.current = true; 
+
+            // 🔥 2nd Layer Lock (AsyncStorage)
+            const storageKey = `@bonus_claimed_${localDateStr}_${user.uid}`;
+            const hasClaimedLocally = await AsyncStorage.getItem(storageKey);
+            
+            if (hasClaimedLocally === 'true') return; 
+            
+            await AsyncStorage.setItem(storageKey, 'true'); // Instantly locks the gate locally
+
+            let bonusEarned = 0;
+            
+            if (milestoneStr.includes('1M')) bonusEarned = 30000;
+            else if (milestoneStr.includes('500K')) bonusEarned = 15000;
+            else if (milestoneStr.includes('300K')) bonusEarned = 9000;
+            else if (milestoneStr.includes('100K')) bonusEarned = 3000;
+            else if (milestoneStr.includes('50K')) bonusEarned = 1500;
+            else if (milestoneStr.includes('10K')) bonusEarned = 300;
+
+            try {
+                const currentWallet = expertData.walletBalance ?? expertData.beansBalance ?? 0;
+                const currentLifetime = expertData.totalBeansEarned ?? expertData.beans ?? 0;
+                
+                const newWalletBalance = currentWallet + bonusEarned;
+                const newTotalBeans = currentLifetime + bonusEarned;
+
+                // Update Database Securely
+                // 🔥 SATTI FIX: Cleared currentDailyMilestone so it resets for the new day
+                await updateDoc(doc(db, "users", user.uid), {
+                    walletBalance: newWalletBalance,
+                    beansBalance: newWalletBalance,
+                    totalBeansEarned: newTotalBeans,
+                    beans: newTotalBeans,
+                    lastBonusDate: localDateStr,
+                    currentDailyMilestone: "" 
+                });
+
+                if (bonusEarned > 0) {
+                    await addDoc(collection(db, "transactions"), {
+                        userId: user.uid,
+                        type: 'mission_bonus',
+                        title: `Daily Mission Reward: ${milestoneStr}`,
+                        amount: bonusEarned,
+                        beans: bonusEarned,
+                        expertBeans: bonusEarned,
+                        timestamp: serverTimestamp(),
+                        createdAt: serverTimestamp(),
+                        status: 'completed'
+                    });
+
+                    Alert.alert(
+                        "🎉 Daily Milestone Reached! 💸", 
+                        `Awesome work! You received ${bonusEarned.toLocaleString()} rewards for completing the ${milestoneStr} mission yesterday!\n\nIt has been credited to your wallet.`
+                    );
+                }
+            } catch (e) {
+                console.error("Bonus Award Error: ", e);
+                bonusLock.current = false; 
+                await AsyncStorage.removeItem(storageKey); // Unlock if DB failed so it can retry
+            }
+        }
+    };
+
+    const timer = setTimeout(() => {
+        checkAndAwardDailyBonus();
+    }, 3500);
+
+    return () => clearTimeout(timer);
+  }, [expertData?.lastBonusDate]); 
+
   useEffect(() => {
       if (expertData && user?.uid) {
           if (prevLvlRef.current === null) {
               prevLvlRef.current = config.lvl;
           } else if (prevLvlRef.current !== config.lvl) {
-              // Level Changed! Auto update to new Max Price
               const newMaxRate = config.rate;
               setNewRate(String(newMaxRate));
               
@@ -222,7 +295,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                   lastRateUpdate: serverTimestamp()
               }).then(() => {
                   Alert.alert(
-                      "Level Updated! 🚀", 
+                      "Level Updated! 🚀",
                       `Your rank changed! Your Call Rate has been automatically updated to the new Max Price: ${newMaxRate} Rewards/Min!`
                   );
               }).catch(()=>{});
@@ -232,7 +305,6 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
       }
   }, [config.lvl, config.rate, expertData, user?.uid]);
 
-  // 🔥 SATTI FIX: 30-MINUTE COOLDOWN LOCK FOR RATE CHANGE 🔥
   const handleOpenRateModal = () => {
       if (expertData?.lastRateUpdate) {
           let lastUpdateMillis = 0;
@@ -250,17 +322,16 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               if (diffMins < 30) {
                   const remainingMins = Math.ceil(30 - diffMins);
                   Alert.alert(
-                      "Rate Locked ⏳", 
+                      "Rate Locked ⏳",
                       `You can only update your rate once every 30 minutes. Please wait ${remainingMins} more minute(s).`
                   );
-                  return; // Lock the modal from opening
+                  return; 
               }
           }
       }
       setRateModalVisible(true);
   };
 
-  // 🔥 SHARE APP LOGIC
   const handleShareApp = async () => {
     try {
         const result = await Share.share({
@@ -290,7 +361,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         pricePerMin: rateNum,
         beansPerMin: rateNum,
         userPrice: rateNum * 2,
-        lastRateUpdate: serverTimestamp() 
+        lastRateUpdate: serverTimestamp()
       });
       setRateModalVisible(false);
     } catch (e) { Alert.alert("Error", "Update failed."); } finally { setSaving(false); }
@@ -347,15 +418,13 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     }
   };
 
-  // 🔥 SATTI FIX: Updated toggleTag to automatically replace oldest tag if limit is reached
   const toggleTag = (tag: string, list: string[], setList: any, maxLimit: number) => {
     if (list.includes(tag)) {
         setList(list.filter((t: string) => t !== tag));
     } else {
         if (list.length >= maxLimit) {
-            // Auto-replace the oldest selected tag with the newly tapped tag
             const updatedList = [...list];
-            updatedList.shift(); 
+            updatedList.shift();
             setList([...updatedList, tag]);
             return;
         }
@@ -372,18 +441,18 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     } catch (error) { Alert.alert("Error", "Save failed"); } finally { setSaving(false); }
   };
 
-  const handleLogout = async () => { 
+  const handleLogout = async () => {
       if (user?.uid) {
           try {
               await updateDoc(doc(db, "users", user.uid), { isOnline: false });
           } catch (e) {}
       }
-      auth.signOut().then(() => { router.replace('/'); }); 
+      auth.signOut().then(() => { router.replace('/'); });
   };
 
   const handleTerminateExpert = () => {
       const walletBal = expertData?.walletBalance ?? expertData?.beansBalance ?? 0;
-      const msg = walletBal > 0 
+      const msg = walletBal > 0
           ? `Hold on! You have ${walletBal} rewards in your wallet. Deleting your account means this balance is gone forever.`
           : "Final warning: This will permanently wipe your Host profile and all associated data.";
 
@@ -451,8 +520,8 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     setIsOnline(status);
     try {
         await updateDoc(doc(db, "users", user.uid), { isOnline: status });
-    } catch (e) { 
-        console.log("Status Update Error", e); 
+    } catch (e) {
+        console.log("Status Update Error", e);
         setIsOnline(!status);
     }
   };
@@ -460,10 +529,8 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   return (
     <ScrollView style={styles.mainContainer} contentContainerStyle={{ paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
       
-      {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
       <LinearGradient colors={theme.bgGradient} style={StyleSheet.absoluteFill} />
       
-      {/* Shimmer Orbs for Animation */}
       <Animated.View style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
       <Animated.View style={[styles.shimmerOrb, { top: 450, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
@@ -495,13 +562,11 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
             </View>
          </View>
 
-         {/* 🔥 MOVED: SHARE BUTTON (BOTTOM LEFT OF BANNER) 🔥 */}
          <TouchableOpacity style={styles.shareCoverBtn} onPress={handleShareApp}>
              <Ionicons name="share-social" size={14} color="#FFF" />
              <Text style={styles.editCoverText}>Share</Text>
          </TouchableOpacity>
 
-         {/* 🔥 MOVED: EDIT BANNER BUTTON (BOTTOM RIGHT OF BANNER) 🔥 */}
          <TouchableOpacity style={styles.editCoverBtn} onPress={pickCoverImage} disabled={coverUploading}>
             {coverUploading ? <ActivityIndicator size="small" color="#FFF" /> : <><Ionicons name="camera" size={14} color="#FFF" /><Text style={styles.editCoverText}>Banner</Text></>}
          </TouchableOpacity>
@@ -523,7 +588,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               </TouchableOpacity>
             </View>
             <Text style={styles.nameText}>{expertData?.name || 'Host'}</Text>
-            
+           
             <View style={[styles.fluidIdentityCapsule, borderType1]}>
               <View style={styles.fluidIdSection}>
                 <Ionicons name="location-sharp" size={16} color={theme.primary} />
@@ -573,10 +638,9 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
           <View style={styles.fluidStatsGrid}>
             <TouchableOpacity style={[styles.fluidStatCard, borderType2]} onPress={() => router.push('/expert-history')}>
               <MaterialCommunityIcons name="history" size={20} color={theme.primary} />
-              <Text style={styles.statValue}>LOGS</Text> 
+              <Text style={styles.statValue}>LOGS</Text>
               <Text style={styles.statLabel}>HISTORY</Text>
             </TouchableOpacity>
-            {/* 🔥 SATTI FIX: UPDATED ONPRESS TO TRIGGER 30-MIN LOCK LOGIC 🔥 */}
             <TouchableOpacity style={[styles.fluidStatCard, borderType1]} onPress={handleOpenRateModal}>
               <FontAwesome5 name="fire-alt" size={18} color="#FBBF24" />
               <Text style={styles.statValue}>{expertData?.pricePerMin || 1000}</Text>
@@ -670,7 +734,6 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
             </BlurView>
           </View>
 
-          {/* 🔥 SUPPORT & LEGAL BUTTONS 🔥 */}
           <View style={[styles.compactRow, { marginTop: 30 }]}>
               <TouchableOpacity
                   style={[styles.compactBtn, { borderColor: theme.primary, borderWidth: 1 }]}
@@ -716,13 +779,12 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         <View style={styles.overlay}><View style={styles.modalBox}>
             <Text style={styles.modalTitle}>Set Call Rate</Text>
             <Text style={{color: '#94A3B8', fontSize: 12, marginBottom: 20}}>Rank: <Text style={{color: theme.primary}}>{config.label}</Text>. Max: <Text style={{color: '#FFF'}}>{config.rate}</Text> rewards.</Text>
-            
+           
             <Text style={styles.inputLabel}>Rewards Per Minute</Text>
-            
-            {/* 🔥 SATTI FIX: MAX PRICE QUICK BUTTON ADDED HERE 🔥 */}
+           
             <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}>
                 <TextInput style={[styles.input, {flex: 1, marginBottom: 0}]} value={newRate} onChangeText={setNewRate} keyboardType="numeric" placeholderTextColor="#475569" />
-                <TouchableOpacity 
+                <TouchableOpacity
                     style={{backgroundColor: `${theme.primary}20`, padding: 15, borderRadius: 15, marginLeft: 10, borderWidth: 1, borderColor: theme.primary}}
                     onPress={() => setNewRate(String(config.rate))}
                 >
@@ -782,48 +844,46 @@ const styles = StyleSheet.create({
   logoText: { color: '#FFF', fontSize: 22, fontWeight: '900' },
   subLogo: { color: '#94A3B8', fontSize: 8, fontWeight: '800', letterSpacing: 1 },
   leftHeader: { flex: 1 },
-  
-  // 🔥 BOTTOM LEFT: SHARE BUTTON
+ 
   shareCoverBtn: { position: 'absolute', bottom: 2, left: 3, backgroundColor: 'rgb(243, 6, 156)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.4)', elevation: 5, zIndex: 10 },
-  // 🔥 BOTTOM RIGHT: CAMERA BUTTON
   editCoverBtn: { position: 'absolute', bottom: 2, right: 3, backgroundColor: 'rgba(4, 4, 247, 0.6)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', zIndex: 10 },
-  
+ 
   editCoverText: { color: '#FFF', fontSize: 11, fontWeight: '800', marginLeft: 6, letterSpacing: 0.5 },
-  
+ 
   contentContainer: { paddingHorizontal: 20, marginTop: -60 },
   rightHeader: { flexDirection: 'row', alignItems: 'center' },
   adminIconBtn: { width: 38, height: 38, backgroundColor: 'rgba(16, 185, 129, 0.2)', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#10B98140' },
   iconCircle: { width: 38, height: 38, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   profileSection: { alignItems: 'center', marginBottom: 25 },
   avatarWrapper: { position: 'relative', padding: 5 },
-  avatarRing: { width: 140, height: 140, borderRadius: 70, justifyContent: 'center', alignItems: 'center' }, 
+  avatarRing: { width: 140, height: 140, borderRadius: 70, justifyContent: 'center', alignItems: 'center' },
   avatar: { width: 130, height: 130, borderRadius: 65, borderWidth: 4, borderColor: '#020617' },
   cameraIconBtn: { position: 'absolute', bottom: 5, right: 5, padding: 8, borderRadius: 12, borderWidth: 3, borderColor: '#020617' },
   nameText: { color: '#FFF', fontSize: 28, fontWeight: '900', marginTop: 15 },
-  
+ 
   fluidIdentityCapsule: { flexDirection: 'row', width: '100%', borderRadius: 40, paddingVertical: 12, marginTop: 20, alignItems: 'center', justifyContent: 'space-evenly' },
   fluidIdSection: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   fluidDivider: { width: 1, height: '70%' },
   fluidIdLabel: { color: '#475569', fontSize: 8, fontWeight: '900', marginTop: 5 },
   fluidIdVal: { color: '#FFF', fontSize: 13, fontWeight: '800', marginTop: 2 },
-  
+ 
   expertActionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 20 },
   fluidActionPill: { paddingHorizontal: 18, paddingVertical: 12, borderRadius: 30 },
   editProfileText: { fontSize: 10, fontWeight: '900' },
   fluidCrownBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 30, gap: 6 },
   levelBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900' },
-  
+ 
   fluidStatusCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 18, borderRadius: 35, marginBottom: 20 },
   statusInner: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   statusDot: { width: 10, height: 10, borderRadius: 5, elevation: 10 },
   statusLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
   statusSubText: { color: '#475569', fontSize: 9, fontWeight: '600' },
-  
+ 
   fluidStatsGrid: { flexDirection: 'row', gap: 12, marginBottom: 20 },
   fluidStatCard: { flex: 1, paddingVertical: 20, borderRadius: 30, alignItems: 'center' },
   statValue: { color: '#FFF', fontSize: 16, fontWeight: '900', marginVertical: 4 },
   statLabel: { color: '#475569', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
-  
+ 
   fluidWalletCard: { padding: 25, borderRadius: 40, marginBottom: 30, elevation: 15 },
   walletHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   walletTitle: { color: 'rgba(255,255,255,0.8)', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
@@ -832,7 +892,7 @@ const styles = StyleSheet.create({
   walletSubTitle: { fontSize: 9, fontWeight: '800' },
   lifetimeBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12 },
   lifetimeText: { fontSize: 10, fontWeight: '800' },
-  
+ 
   cyberProgressBox: { marginBottom: 30, padding: 15 },
   progressTextRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   neonBarContainer: { height: 35, justifyContent: 'center', marginVertical: 10 },
@@ -852,11 +912,11 @@ const styles = StyleSheet.create({
   galleryImg: { width: 100, height: 100, borderRadius: 15, marginRight: 10 },
   emptyGallery: { width: width - 40, height: 100, borderRadius: 15, backgroundColor: 'rgba(30, 41, 59, 0.4)', justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#334155' },
   emptyText: { color: '#475569', fontSize: 10, fontWeight: '700' },
-  
-  bioWrapper: { width: '100%', marginTop: 10 }, 
+ 
+  bioWrapper: { width: '100%', marginTop: 10 },
   fluidBioBox: { padding: 22, borderRadius: 35, overflow: 'hidden' },
   bioText: { color: '#94A3B8', fontSize: 14, lineHeight: 22 },
-  
+ 
   overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.9)', justifyContent: 'center', padding: 20 },
   modalBox: { backgroundColor: '#0F172A', borderRadius: 30, padding: 25 },
   modalBoxLarge: { backgroundColor: '#0F172A', borderRadius: 30, padding: 20, borderWidth: 1, borderColor: '#1E293B' },
@@ -878,7 +938,7 @@ const styles = StyleSheet.create({
   compactTopBar: {
     width: 'auto',
     justifyContent: 'center',
-    paddingVertical: 12, 
+    paddingVertical: 12,
     paddingHorizontal: 12,
     marginHorizontal: 15,
     marginTop: 10,
@@ -937,13 +997,13 @@ const styles = StyleSheet.create({
   masterclassGradient: {
       flexDirection: 'row',
       alignItems: 'center',
-      justifyContent: 'center', 
-      padding: 15, 
+      justifyContent: 'center',
+      padding: 15,
   },
   masterclassTitle: {
-      fontSize: 14, 
+      fontSize: 14,
       fontWeight: '900',
-      letterSpacing: 3, 
+      letterSpacing: 3,
       textTransform: 'uppercase'
   }
 });

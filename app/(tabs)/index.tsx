@@ -178,7 +178,40 @@ export default function UserHome() {
 
     const parallaxAura = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -50], extrapolate: 'clamp' });
     const cardScale = scrollY.interpolate({ inputRange: [-100, 0, 100], outputRange: [1.05, 1, 0.98], extrapolate: 'clamp' });
-    const spotlightExperts = experts.filter(e => (e.rating || 5.0) >= 4.0);
+
+    // ==========================================
+    // 🔥 CORE GHOST FILTER APPLICATION (DIRECT SYNC) 🔥
+    // ==========================================
+    const currentBlocked = userData?.blockedUsers || [];
+    
+    // 1. Filter Experts (Two-Way Block Check)
+    const safeExperts = experts.filter((expert) => {
+        const hostBlockedUsers = expert.blockedUsers || [];
+        const notBlockedByMe = !currentBlocked.includes(expert.id);
+        const notBlockedByHost = !hostBlockedUsers.includes(user?.uid);
+        return notBlockedByMe && notBlockedByHost;
+    });
+
+    // 2. Filter Lives (Two-Way Block Check)
+    const safeLives = activeLives.filter(live => {
+        const hostProfile = experts.find(e => e.id === live.hostId);
+        const hostBlockedUsers = hostProfile?.blockedUsers || [];
+        const notBlockedByMe = !currentBlocked.includes(live.hostId);
+        const notBlockedByHost = !hostBlockedUsers.includes(user?.uid);
+        return notBlockedByMe && notBlockedByHost;
+    });
+
+    // 3. Filter Parties/Forums (Two-Way Block Check)
+    const safeParties = activeParties.filter(party => {
+        const hostProfile = experts.find(e => e.id === party.hostId);
+        const hostBlockedUsers = hostProfile?.blockedUsers || [];
+        const notBlockedByMe = !currentBlocked.includes(party.hostId);
+        const notBlockedByHost = !hostBlockedUsers.includes(user?.uid);
+        return notBlockedByMe && notBlockedByHost;
+    });
+
+    // 4. Spotlight (Featured) inherits from already filtered safeExperts
+    const spotlightExperts = safeExperts.filter(e => (e.rating || 5.0) >= 4.0);
 
     const getWalletStyle = () => {
         switch(userRank.anim) {
@@ -313,7 +346,7 @@ export default function UserHome() {
                         <Text style={styles.DiscoverBtnText}>QUICK CONNECT</Text>
                         <View style={styles.liveIndicatorDiscover}>
                             <View style={styles.liveDotDiscover} />
-                            <Text style={styles.liveCountDiscover}>{activeLives.length + experts.length + 42} Online</Text>
+                            <Text style={styles.liveCountDiscover}>{safeLives.length + safeExperts.length + 42} Online</Text>
                         </View>
                     </LinearGradient>
                 </TouchableOpacity>
@@ -331,14 +364,14 @@ export default function UserHome() {
                 contentContainerStyle={styles.scrollContent}
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
             >
-                {activeLives.length > 0 && (
+                {safeLives.length > 0 && (
                     <View style={styles.sectionArea}>
                         <View style={styles.sectionHeaderMass}>
                             <View style={styles.rowCenter}><View style={styles.livePulseDot} /><Text style={styles.sectionTitleMass}>ACTIVE BROADCASTS</Text></View>
-                            <Text style={styles.onlineCountText}>{activeLives.length} NODES</Text>
+                            <Text style={styles.onlineCountText}>{safeLives.length} NODES</Text>
                         </View>
                         <FlatList horizontal snapToInterval={width * 0.45 + 15} decelerationRate="fast" showsHorizontalScrollIndicator={false}
-                            data={activeLives} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20 }}
+                            data={safeLives} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20 }}
                             onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}
                             renderItem={({ item, index }) => {
                                 const isActive = item.id === activeLiveId && isFocused;
@@ -359,16 +392,16 @@ export default function UserHome() {
                 )}
 
                 {/* 🔥 NEW: VIP Session ARENAS SECTION 🔥 */}
-                {activeParties.length > 0 && (
+                {safeParties.length > 0 && (
                     <View style={styles.sectionArea}>
                         <View style={styles.sectionHeaderMass}>
                             <View style={styles.rowCenter}>
                                 <MaterialCommunityIcons name="party-popper" size={16} color={userRank.color} style={{marginRight: 8}} />
                                 <Text style={styles.sectionTitleMass}>OPEN FORUMS</Text>
                             </View>
-                            <Text style={styles.onlineCountText}>{activeParties.length} ROOMS</Text>
+                            <Text style={styles.onlineCountText}>{safeParties.length} ROOMS</Text>
                         </View>
-                        <FlatList horizontal showsHorizontalScrollIndicator={false} data={activeParties} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20 }}
+                        <FlatList horizontal showsHorizontalScrollIndicator={false} data={safeParties} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20 }}
                             renderItem={({ item, index }) => {
                                 const partyBorder = index % 2 === 0 ? borderType1 : borderType2;
                                 return (
@@ -398,7 +431,7 @@ export default function UserHome() {
                     </View>
                     <FlatList horizontal showsHorizontalScrollIndicator={false} data={spotlightExperts} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 10 }}
                         renderItem={({ item }) => {
-                            const liveNode = activeLives.find(l => l.hostId === item.id);
+                            const liveNode = safeLives.find(l => l.hostId === item.id);
                             return (
                                 <TouchableOpacity activeOpacity={0.8} style={styles.circleBtn} onPress={() => liveNode ? router.push({ pathname: "/(tabs)/live/[liveId]", params: { liveId: liveNode.id } } as any) : router.push({ pathname: '/expert-detail', params: { id: item.id } } as any)}>
                                     <LevelAvatar image={item.profilePic || item.photoURL} beans={item.totalBeansEarned || 0} size={64} />
@@ -412,9 +445,9 @@ export default function UserHome() {
                 <View style={styles.listArea}>
                     <Text style={styles.sectionTitleMass}>RECOMMENDED HOSTS</Text>
                     {loading ? ( <ActivityIndicator color={userRank.color} style={{ marginTop: 40 }} /> ) : (
-                        experts.filter(e => (e.name || '').toLowerCase().includes(searchQuery.toLowerCase())).map((expert, index) => {
+                        safeExperts.filter(e => (e.name || '').toLowerCase().includes(searchQuery.toLowerCase())).map((expert, index) => {
                                 const diamondRate = Number(expert.userPrice || (expert.beansPerMin * 2) || 1000);
-                                const liveSession = activeLives.find(live => live.hostId === expert.id);
+                                const liveSession = safeLives.find(live => live.hostId === expert.id);
                                 const expertThemeColor = getExpertThemeColor(expert.totalBeansEarned || 0);
                                 
                                 // 🔥 Alternating Border Logic

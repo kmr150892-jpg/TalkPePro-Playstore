@@ -136,6 +136,9 @@ export default function SwipeDiscoverScreen() {
     const [tier, setTier] = useState<any>(calculateUserLevel(0));
     const [hasTrialMins, setHasTrialMins] = useState<boolean>(false);
     
+    // 🔥 GHOST FILTER REF (Stores the current user's blocked IDs)
+    const myBlockedUsersRef = useRef<string[]>([]);
+
     const queueDocRef = useRef<any>(null);
     const isDiscovered = useRef(false);
     const hasSentRequest = useRef(false);
@@ -149,7 +152,6 @@ export default function SwipeDiscoverScreen() {
                 permissionChecked.current = true;
                 const hasPermission = await checkAndRequestCallPermissions();
                 if (!hasPermission) {
-                    // 🔥 SATTI FIX: SAFE ROUTING ADDED 🔥
                     if (router.canGoBack()) {
                         router.back(); 
                     } else {
@@ -171,6 +173,10 @@ export default function SwipeDiscoverScreen() {
                     setUserRealPic(data.profilePic || data.photoURL || null);
                     setUserName(data.name || user.displayName || "User");
                     setTier(calculateUserLevel(data.totalSpent || 0));
+                    
+                    // 🔥 GHOST FILTER: Save user's block list to Ref
+                    myBlockedUsersRef.current = data.blockedUsers || [];
+
                     if (data.freeMinsRemaining && data.freeMinsRemaining > 0) {
                         setHasTrialMins(true);
                     }
@@ -181,16 +187,27 @@ export default function SwipeDiscoverScreen() {
     }, [user]);
 
     useEffect(() => {
+        if (!user) return;
         const q = query(collection(db, 'users'), where('role', '==', 'expert'), limit(50));
         const unsubExperts = onSnapshot(q, (snap) => {
             const pics = snap.docs
-                .filter(d => d.data().isOnline === true || d.data().isOnline === "true")
+                .filter(d => {
+                    const data = d.data();
+                    const isOnline = data.isOnline === true || data.isOnline === "true";
+                    
+                    // 🔥 GHOST FILTER LOGIC FOR AVATARS 🔥
+                    const hostBlockedUsers = data.blockedUsers || [];
+                    const notBlockedByMe = !myBlockedUsersRef.current.includes(d.id);
+                    const notBlockedByHost = !hostBlockedUsers.includes(user.uid);
+                    
+                    return isOnline && notBlockedByMe && notBlockedByHost;
+                })
                 .map(d => d.data().profilePic || d.data().photoURL)
                 .filter(p => !!p);
             setExpertAvatars(pics.slice(0, 25));
         });
         return () => unsubExperts();
-    }, []);
+    }, [user]);
 
     useEffect(() => {
         if (searchState !== "searching") return;
@@ -278,7 +295,13 @@ export default function SwipeDiscoverScreen() {
                         const data = doc.data();
                         const isOnline = data.isOnline === true || data.isOnline === "true";
                         const isBusy = data.isBusy === true || data.isBusy === "true";
-                        return isOnline && !isBusy && doc.id !== user.uid && !triedExpertsRef.current.includes(doc.id);
+                        
+                        // 🔥 GHOST FILTER LOGIC FOR ALGORITHM 🔥
+                        const hostBlockedUsers = data.blockedUsers || [];
+                        const notBlockedByMe = !myBlockedUsersRef.current.includes(doc.id);
+                        const notBlockedByHost = !hostBlockedUsers.includes(user.uid);
+
+                        return isOnline && !isBusy && doc.id !== user.uid && !triedExpertsRef.current.includes(doc.id) && notBlockedByMe && notBlockedByHost;
                     });
                     
                     if (availableExperts.length > 0) {
@@ -393,7 +416,6 @@ export default function SwipeDiscoverScreen() {
             }
         } catch (error) { console.log(error); }
 
-        // 🔥 SATTI FIX: SAFE ROUTING ADDED 🔥
         if (router.canGoBack()) {
             router.back();
         } else {

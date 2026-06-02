@@ -94,6 +94,24 @@ export default function AdminLayout() {
           }} 
         />
 
+        {/* 🔥 SATTI UPDATE: REGISTERED PASSBOOK EXPERT DETAIL ROUTE 🔥 */}
+        <Stack.Screen 
+          name="passbook/expert-detail/[id]" 
+          options={{ 
+            title: 'HOST AUDIT PROFILE',
+            headerShown: false,
+          }} 
+        />
+
+        {/* 🔥 SATTI UPDATE: REGISTERED PASSBOOK USER DETAIL ROUTE 🔥 */}
+        <Stack.Screen 
+          name="passbook/user-detail/[id]" 
+          options={{ 
+            title: 'USER AUDIT PROFILE',
+            headerShown: false,
+          }} 
+        />
+
       </Stack>
     </>
   );

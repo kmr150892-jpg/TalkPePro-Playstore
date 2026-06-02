@@ -183,9 +183,10 @@ export default function VerifyExpertDetail() {
                         </View>
                         <View style={styles.statsRow}>
                             <View style={styles.statBox}>
-                                <Text style={styles.statLabel}>REWARDS (BEANS)</Text>
+                                <Text style={styles.statLabel}>REWARDS</Text>
                                 <View style={styles.currencyRow}>
-                                    <MaterialCommunityIcons name="leaf" size={16} color="#FBBF24" />
+                                    {/* 🔥 SATTI UPDATE: REPLACED LEAF WITH MEDAL 🎖️ */}
+                                    <Text style={{ fontSize: 16 }}>🎖️</Text>
                                     <Text style={styles.statValue}> {expert?.walletBalance || 0}</Text>
                                 </View>
                             </View>
@@ -226,7 +227,8 @@ export default function VerifyExpertDetail() {
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>BASE RATE:</Text>
                             <View style={styles.valRow}>
-                                <MaterialCommunityIcons name="leaf" size={14} color="#FBBF24" style={{marginRight: 4}} />
+                                {/* 🔥 SATTI UPDATE: REPLACED LEAF WITH MEDAL 🎖️ */}
+                                <Text style={{ fontSize: 14, marginRight: 4 }}>🎖️</Text>
                                 <Text style={styles.infoValue}>{expert?.pricePerMin || 1000} /min</Text>
                             </View>
                         </View>

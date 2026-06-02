@@ -9,7 +9,7 @@ import {
     query,
     where
 } from 'firebase/firestore';
-import { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Animated,
@@ -55,6 +55,17 @@ const calculateLevel = (d: number) => {
     return "Godlike";
 };
 
+// 🔥 SATTI UPDATE: Added 'daily_bonus' to TABS array 🔥
+const TABS = [
+    { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
+    { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
+    { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
+    { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
+    { id: 'live_game_bonus', label: 'Broadcast Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
+    { id: 'party_game_bonus', label: 'Forum Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
+    { id: 'daily_bonus', label: 'Daily Bonus', icon: 'star-shooting', iconType: 'MaterialCommunityIcons' } 
+];
+
 export default function ExpertHistory() {
   const router = useRouter();
   const user = auth.currentUser;
@@ -63,7 +74,8 @@ export default function ExpertHistory() {
   const [loading, setLoading] = useState(true);
   const [totalMinutes, setTotalMinutes] = useState(0);
   
-  const [activeTab, setActiveTab] = useState<'video_call' | 'live_gift' | 'party_gift' | 'call_gift' | 'live_game_bonus' | 'party_game_bonus'>('video_call');
+  // 🔥 SATTI UPDATE: Added 'daily_bonus' to activeTab state 🔥
+  const [activeTab, setActiveTab] = useState<'video_call' | 'live_gift' | 'party_gift' | 'call_gift' | 'live_game_bonus' | 'party_game_bonus' | 'daily_bonus'>('video_call');
   const [expertProfile, setExpertProfile] = useState<any>(null);
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
@@ -111,7 +123,7 @@ export default function ExpertHistory() {
                 rawData.push({
                     id: docSnap.id,
                     type: 'video_call',
-                    callerId: d.callerId, // 🔥 SATTI FIX: Added ID for routing
+                    callerId: d.callerId, 
                     callerName: callerName,
                     syncPic: callerPic,
                     syncLevel: callerLevel,
@@ -122,12 +134,33 @@ export default function ExpertHistory() {
             }
         }
 
-        // 2. FETCH TRANSACTIONS (For Call Gifts Fallback)
-        const transSnap = await getDocs(query(collection(db, "transactions"), where("expertId", "==", user.uid)));
+        // 2. FETCH TRANSACTIONS (For Call Gifts & DAILY BONUS)
+        // 🔥 SATTI FIX: Query checking "userId" instead of "expertId" to catch system rewards 🔥
+        const transSnap = await getDocs(query(collection(db, "transactions"), where("userId", "==", user.uid)));
         for (const docSnap of transSnap.docs) {
             const d = docSnap.data();
             if (d.type === 'video_call') continue; 
             
+            // 🔥 SATTI FIX: STRICT DAILY BONUS FILTER (Eliminates Arena Bonus overlap) 🔥
+            if (d.type === 'mission_bonus' || d.title?.includes('Daily Mission') || (d.title?.includes('Bonus') && !d.title?.includes('Arena'))) {
+                const bonusAmount = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Number(d.amount) || 0;
+                if (bonusAmount > 0) {
+                    rawData.push({
+                        id: docSnap.id,
+                        type: 'daily_bonus',
+                        senderId: null,
+                        senderName: 'TalkPe System',
+                        syncPic: 'https://img.icons8.com/3d-fluency/512/star.png', // Special star icon for bonus
+                        syncLevel: 'Legend',
+                        giftName: d.title || 'Daily Goal Completion',
+                        amount: bonusAmount,
+                        beans: bonusAmount,
+                        timestamp: d.timestamp || d.createdAt || { seconds: 0 }
+                    });
+                }
+                continue; // Skip the rest of logic for this transaction
+            }
+
             const bns = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Math.floor((Number(d.diamonds) || Number(d.amount) || 0) / 2);
 
             if (bns > 0) {
@@ -142,7 +175,8 @@ export default function ExpertHistory() {
                 let senderPic = d.userImage || null;
                 let senderLevel = 'Silver';
 
-                if (d.userId && d.userId !== 'unknown') {
+                // Prevent query bug if sender is the current expert.
+                if (d.userId && d.userId !== 'unknown' && d.userId !== user.uid) {
                     const uSnap = await getDoc(doc(db, "users", d.userId));
                     if (uSnap.exists()) {
                         const uData = uSnap.data();
@@ -155,7 +189,7 @@ export default function ExpertHistory() {
                 rawData.push({
                     id: docSnap.id,
                     type: tType,
-                    senderId: d.userId, // 🔥 SATTI FIX: Added ID for routing
+                    senderId: d.userId, 
                     senderName: senderName,
                     syncPic: senderPic,
                     syncLevel: senderLevel,
@@ -212,7 +246,7 @@ export default function ExpertHistory() {
                         rawData.push({
                             id: gDoc.id,
                             type: 'live_gift',
-                            senderId: g.senderId, // 🔥 SATTI FIX: Added ID for routing
+                            senderId: g.senderId, 
                             senderName: gSenderName,
                             giftName: g.giftName || 'Virtual Reward',
                             amount: g.amount || g.price || 0,
@@ -275,7 +309,7 @@ export default function ExpertHistory() {
                     rawData.push({
                         id: gDoc.id,
                         type: 'party_gift',
-                        senderId: g.senderId, // 🔥 SATTI FIX: Added ID for routing
+                        senderId: g.senderId, 
                         senderName: gSenderName,
                         giftName: g.giftName || 'Virtual Reward',
                         amount: g.price || g.amount || 0,
@@ -459,7 +493,6 @@ export default function ExpertHistory() {
         <LinearGradient colors={[theme.primary, 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.statusGlowLine} />
         <View style={styles.cardMain}>
           <View style={styles.userSection}>
-            {/* 🔥 SATTI FIX: Wrapped Avatar in TouchableOpacity for Profile Navigation 🔥 */}
             <TouchableOpacity 
                 style={styles.avatarWrapper} 
                 onPress={() => item.callerId ? router.push({ pathname: '/user-detail', params: { id: item.callerId } } as any) : null}
@@ -508,7 +541,12 @@ export default function ExpertHistory() {
     let iconType = 'gift';
     let iconColor = theme.primary;
 
-    if (item.type.includes('game')) {
+    if (item.type === 'daily_bonus') {
+        displayTitle = 'Daily Mission Bonus';
+        displaySub = item.giftName || 'System Reward';
+        iconType = 'star-shooting';
+        iconColor = '#8B5CF6';
+    } else if (item.type?.includes('game')) {
         displayTitle = item.type === 'live_game_bonus' ? 'Broadcast Activity Reward' : 'Forum Activity Reward';
         displaySub = item.senderName || 'System Reward';
         iconType = 'dice-multiple';
@@ -538,7 +576,6 @@ export default function ExpertHistory() {
         <LinearGradient colors={[theme.secondary, 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.statusGlowLine} />
         <View style={styles.cardMain}>
           <View style={styles.userSection}>
-            {/* 🔥 SATTI FIX: Wrapped Avatar in TouchableOpacity for Profile Navigation 🔥 */}
             <TouchableOpacity 
                 style={styles.avatarWrapper} 
                 onPress={() => item.senderId ? router.push({ pathname: '/user-detail', params: { id: item.senderId } } as any) : null}
@@ -576,15 +613,6 @@ export default function ExpertHistory() {
   };
 
   const filteredData = allTransactions.filter(t => t.type === activeTab);
-
-  const TABS = [
-      { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
-      { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
-      { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
-      { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
-      { id: 'live_game_bonus', label: 'Broadcast Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
-      { id: 'party_game_bonus', label: 'Forum Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' }
-  ];
 
   return (
     <View style={styles.mainContainer}>

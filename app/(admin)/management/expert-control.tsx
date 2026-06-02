@@ -30,11 +30,13 @@ interface ExpertData {
     role?: string;
     uid?: string;
     photoURL?: string;
+    expertBlockCount?: number; 
 }
 
 export default function ExpertControl() {
     const router = useRouter();
     const [experts, setExperts] = useState<ExpertData[]>([]);
+    const [adminAlerts, setAdminAlerts] = useState<any[]>([]); 
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -62,7 +64,16 @@ export default function ExpertControl() {
             setLoading(false);
         });
 
-        return () => unsub();
+        // 🔥 SATTI UPDATE: Fetching ALL Admin Alerts to dynamically count flags per host 🔥
+        const alertsQuery = query(collection(db, "admin_alerts"));
+        const unsubAlerts = onSnapshot(alertsQuery, (snap) => {
+            setAdminAlerts(snap.docs.map(d => d.data()));
+        });
+
+        return () => {
+            unsub();
+            unsubAlerts();
+        };
     }, []);
 
     const toggleBlockStatus = async (userId: string, currentStatus: boolean) => {
@@ -95,9 +106,16 @@ export default function ExpertControl() {
 
     const renderExpert = ({ item }: { item: ExpertData }) => {
         const isBlocked = item.isBlocked || item.status === 'Blocked';
+        
+        // 🔥 SATTI UPDATE: DYNAMIC REPORT COUNT CALCULATION 🔥
+        // Checks the admin_alerts collection directly. If an alert has this expert's ID, it counts it!
+        const dynamicFlags = adminAlerts.filter(alert => alert.expertId === item.id || alert.hostId === item.id).length;
+        const blockCount = Math.max(dynamicFlags, item.expertBlockCount || 0); // Takes the highest accurate number
+        
+        const isCriticalRisk = blockCount >= 5;
 
         return (
-            <View style={[styles.card, isBlocked && styles.blockedCard]}>
+            <View style={[styles.card, isBlocked && styles.blockedCard, isCriticalRisk && styles.criticalCard]}>
                 <View style={styles.cardHeader}>
                     <View style={styles.avatarWrapper}>
                         <Image source={{ uri: item.photoURL || 'https://via.placeholder.com/150' }} style={styles.avatarImage} />
@@ -109,12 +127,30 @@ export default function ExpertControl() {
                         <Text style={styles.idText}>SYSTEM ID: {item.uid?.slice(0, 15).toUpperCase() || item.id.slice(0, 15).toUpperCase()}</Text>
                     </View>
                     
-                    <View style={[styles.statusBadge, { backgroundColor: isBlocked ? '#EF444415' : '#10B98115' }]}>
-                        <Text style={[styles.statusText, { color: isBlocked ? '#EF4444' : '#10B981' }]}>
-                            {isBlocked ? 'RESTRICTED' : 'ACTIVE'}
-                        </Text>
+                    {/* 🔥 SATTI FIX: Permanent Report Count Badge 🔥 */}
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                        <View style={[styles.statusBadge, { backgroundColor: isBlocked ? '#EF444415' : '#10B98115' }]}>
+                            <Text style={[styles.statusText, { color: isBlocked ? '#EF4444' : '#10B981' }]}>
+                                {isBlocked ? 'RESTRICTED' : 'ACTIVE'}
+                            </Text>
+                        </View>
+                        
+                        <View style={[styles.statusBadge, { backgroundColor: blockCount > 0 ? '#EF444420' : '#1E293B', flexDirection: 'row', alignItems: 'center' }]}>
+                            <MaterialCommunityIcons name="flag-variant" size={10} color={blockCount > 0 ? '#EF4444' : '#64748B'} style={{marginRight: 4}} />
+                            <Text style={[styles.statusText, { color: blockCount > 0 ? '#EF4444' : '#64748B' }]}>
+                                {blockCount} REPORTS
+                            </Text>
+                        </View>
                     </View>
                 </View>
+
+                {/* 🔥 RED ALERT SAFETY WARNING FOR HOSTS 🔥 */}
+                {isCriticalRisk && (
+                    <Text style={styles.sirenText}>🚨 SAFETY WARNING: THIS HOST HAS BEEN BLOCKED/REPORTED {blockCount} TIMES BY USERS. REVIEW REQUIRED.</Text>
+                )}
+                {!isCriticalRisk && blockCount > 0 && (
+                    <Text style={styles.warningText}>⚠️ Note: This host has {blockCount} block reports.</Text>
+                )}
 
                 {/* PERFORMANCE METRICS GRID */}
                 <View style={styles.metricsGrid}>
@@ -126,7 +162,8 @@ export default function ExpertControl() {
                     <View style={styles.metricItem}>
                         <Text style={styles.metricLabel}>REWARD /MIN</Text>
                         <View style={{flexDirection: 'row', alignItems: 'center', gap: 4}}>
-                           <MaterialCommunityIcons name="leaf" size={12} color="#FBBF24" />
+                           {/* 🔥 SATTI UPDATE: Leaf Symbol Removed. Medal Added Here 🔥 */}
+                           <Text style={{ fontSize: 12 }}>🎖️</Text>
                            <Text style={styles.metricValue}>{item.beansPerMin || 0}</Text>
                         </View>
                     </View>
@@ -238,5 +275,8 @@ const styles = StyleSheet.create({
     primaryBtn: { backgroundColor: '#6366F1', borderColor: '#6366F1' },
     btnText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
     emptyContainer: { alignItems: 'center', marginTop: 100 },
-    emptyText: { color: '#1E293B', fontSize: 12, fontWeight: '900', marginTop: 15 }
+    emptyText: { color: '#1E293B', fontSize: 12, fontWeight: '900', marginTop: 15 },
+    criticalCard: { borderColor: '#EF4444', borderWidth: 2, backgroundColor: 'rgba(239, 68, 68, 0.08)' },
+    sirenText: { color: '#EF4444', fontSize: 10, fontWeight: '900', marginTop: 20, letterSpacing: 0.5 },
+    warningText: { color: '#F59E0B', fontSize: 10, fontWeight: '900', marginTop: 20, letterSpacing: 0.5 },
 });

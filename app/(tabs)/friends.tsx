@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { collection, deleteDoc, doc, getDoc, increment, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { arrayRemove, collection, deleteDoc, doc, getDoc, increment, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -43,6 +43,12 @@ export default function FriendsList() {
   const [friends, setFriends] = useState<any[]>([]);
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  
+  // 🔥 NEW STATE FOR TAB & BLOCKED LIST
+  const [activeTab, setActiveTab] = useState<'friends' | 'blocked'>('friends');
+  const [blockedProfiles, setBlockedProfiles] = useState<any[]>([]);
+  const [actionId, setActionId] = useState<string | null>(null);
+
   const user = auth.currentUser;
   const router = useRouter();
 
@@ -79,7 +85,7 @@ export default function FriendsList() {
 
     if (!user) return;
 
-    // Fetch User Data for Theme Sync
+    // Fetch User Data for Theme Sync & Blocked Users Array
     const userRef = doc(db, "users", user.uid);
     const unsubUser = onSnapshot(userRef, (snap) => {
       if (snap.exists()) setUserData(snap.data());
@@ -125,6 +131,33 @@ export default function FriendsList() {
     return () => { unsubscribe(); unsubUser(); };
   }, [user]);
 
+  // 🔥 NEW EFFECT TO FETCH BLOCKED PROFILES PROPERLY
+  useEffect(() => {
+    if (!userData?.blockedUsers || userData.blockedUsers.length === 0) {
+        setBlockedProfiles([]);
+        return;
+    }
+    const fetchBlocked = async () => {
+        try {
+            const profiles = await Promise.all(
+                userData.blockedUsers.map(async (id: string) => {
+                    const docRef = doc(db, "users", id);
+                    const docSnap = await getDoc(docRef);
+                    if (docSnap.exists()) {
+                        return { id: docSnap.id, ...docSnap.data() };
+                    }
+                    return { id, name: "Unknown Network Node", profilePic: null };
+                })
+            );
+            setBlockedProfiles(profiles);
+        } catch (e) {
+            console.error("Blocked fetch error:", e);
+        }
+    };
+    fetchBlocked();
+  }, [userData?.blockedUsers]);
+
+
   // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
   const userDiamonds = Math.max(
       userData?.totalDiamonds || 0,
@@ -168,6 +201,35 @@ export default function FriendsList() {
           } 
         }
       ]
+    );
+  };
+
+  // 🔥 NEW UNBLOCK FUNCTION 🔥
+  const handleUnblock = async (targetId: string, targetName: string) => {
+    if (!user) return;
+    Alert.alert(
+        "RESTORE SECURITY ACCESS",
+        `Are you sure you want to unblock and restore communication links with ${targetName}?`,
+        [
+            { text: "CANCEL", style: "cancel" },
+            {
+                text: "CONFIRM UNBLOCK",
+                onPress: async () => {
+                    setActionId(targetId);
+                    try {
+                        const myRef = doc(db, "users", user.uid);
+                        await updateDoc(myRef, {
+                            blockedUsers: arrayRemove(targetId)
+                        });
+                        Alert.alert("LINK RESTORED", `${targetName} has been successfully unblocked.`);
+                    } catch (error) {
+                        Alert.alert("CRITICAL ERROR", "Unable to alter database arrays.");
+                    } finally {
+                        setActionId(null);
+                    }
+                }
+            }
+        ]
     );
   };
 
@@ -230,75 +292,150 @@ export default function FriendsList() {
           </TouchableOpacity>
           <View>
             <Text style={styles.headerTitle}>SECURE NETWORK</Text>
-            <Text style={[styles.headerSubTitle, { color: userTier.color }]}>{friends.length} Active Node Links</Text>
+            <Text style={[styles.headerSubTitle, { color: userTier.color }]}>Connection Manager</Text>
           </View>
         </View>
+
+        {/* 🔥 NEW TAB SWITCHER 🔥 */}
+        <View style={styles.tabContainer}>
+            <TouchableOpacity 
+                activeOpacity={0.8}
+                style={[styles.tabBtn, activeTab === 'friends' && { backgroundColor: userTier.color }]} 
+                onPress={() => setActiveTab('friends')}
+            >
+                <Text style={[styles.tabText, activeTab === 'friends' && { color: '#FFF' }]}>ACTIVE LINKS ({friends.length})</Text>
+            </TouchableOpacity>
+            <TouchableOpacity 
+                activeOpacity={0.8}
+                style={[styles.tabBtn, activeTab === 'blocked' && { backgroundColor: userTier.secondaryColor }]} 
+                onPress={() => setActiveTab('blocked')}
+            >
+                <Text style={[styles.tabText, activeTab === 'blocked' && { color: '#FFF' }]}>RESTRICTED ({blockedProfiles.length})</Text>
+            </TouchableOpacity>
+        </View>
+
       </SafeAreaView>
 
-      {friends.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons name="earth-off" size={80} color={userTier.color} style={{ opacity: 0.2 }} />
-          <Text style={styles.emptyTitle}>Empty Network</Text>
-          <Text style={styles.emptyDesc}>Connect with hosts to expand your secure communication network.</Text>
-        </View>
-      ) : (
-        <Animated.FlatList
-          data={friends}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
-          onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
-          showsVerticalScrollIndicator={false}
-          renderItem={({ item, index }) => {
-             // 🔥 Alternating Border Logic for Network Cards
-             const cardBorderStyle = index % 2 === 0 ? borderType1 : borderType2;
+      {/* 🔥 DYNAMIC CONTENT RENDER BASED ON TAB 🔥 */}
+      {activeTab === 'friends' ? (
+          friends.length === 0 ? (
+            <View style={styles.emptyContainer}>
+              <MaterialCommunityIcons name="earth-off" size={80} color={userTier.color} style={{ opacity: 0.2 }} />
+              <Text style={styles.emptyTitle}>Empty Network</Text>
+              <Text style={styles.emptyDesc}>Connect with hosts to expand your secure communication network.</Text>
+            </View>
+          ) : (
+            <Animated.FlatList
+              data={friends}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+              onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+              showsVerticalScrollIndicator={false}
+              renderItem={({ item, index }) => {
+                 const cardBorderStyle = index % 2 === 0 ? borderType1 : borderType2;
+                 return (
+                    <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+                      <BlurView intensity={25} tint="dark" style={[styles.stealthCardBase, cardBorderStyle]}>
+                        
+                        <TouchableOpacity 
+                          activeOpacity={0.8}
+                          style={styles.cardMain}
+                          onPress={() => router.push(`/expert-detail?id=${item.receiverId}` as any)}
+                        >
+                          <View style={[styles.avatarGlow, { shadowColor: index % 2 === 0 ? userTier.color : userTier.secondaryColor, borderColor: index % 2 === 0 ? userTier.color : userTier.secondaryColor }]}>
+                            <Image 
+                              source={{ uri: item.realImage || `https://ui-avatars.com/api/?name=${item.realName}&background=1E293B&color=fff&bold=true` }} 
+                              style={styles.friendImg} 
+                            />
+                          </View>
+                          <View style={styles.infoArea}>
+                            <Text style={styles.friendName}>{item.realName.toUpperCase()}</Text>
+                            <View style={styles.statusBadge}>
+                              <View style={[styles.pulseDot, { backgroundColor: '#10B981' }]} />
+                              <Text style={styles.statusText}>ENCRYPTED LINK ACTIVE</Text>
+                            </View>
+                          </View>
+                          <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.2)" />
+                        </TouchableOpacity>
 
-             return (
-                <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
-                  <BlurView intensity={25} tint="dark" style={[styles.stealthCardBase, cardBorderStyle]}>
-                    
-                    <TouchableOpacity 
-                      activeOpacity={0.8}
-                      style={styles.cardMain}
-                      onPress={() => router.push(`/expert-detail?id=${item.receiverId}` as any)}
-                    >
-                      <View style={[styles.avatarGlow, { shadowColor: index % 2 === 0 ? userTier.color : userTier.secondaryColor, borderColor: index % 2 === 0 ? userTier.color : userTier.secondaryColor }]}>
-                        <Image 
-                          source={{ uri: item.realImage || `https://ui-avatars.com/api/?name=${item.realName}&background=1E293B&color=fff&bold=true` }} 
-                          style={styles.friendImg} 
-                        />
-                      </View>
-                      <View style={styles.infoArea}>
-                        <Text style={styles.friendName}>{item.realName.toUpperCase()}</Text>
-                        <View style={styles.statusBadge}>
-                          <View style={[styles.pulseDot, { backgroundColor: '#10B981' }]} />
-                          <Text style={styles.statusText}>ENCRYPTED LINK ACTIVE</Text>
+                        <View style={styles.actionRow}>
+                          <TouchableOpacity 
+                            style={[styles.actionBtn, { borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }]}
+                            onPress={() => handleChatPress(item.receiverId, item.realName)}
+                          >
+                            <Ionicons name="chatbubble-ellipses" size={18} color={userTier.color} />
+                            <Text style={[styles.btnLabel, { color: userTier.color }]}>MESSAGE</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity 
+                            style={styles.actionBtn}
+                            onPress={() => handleUnfollow(item.id, item.realName)}
+                          >
+                            <Ionicons name="link-outline" size={18} color="#FB7185" />
+                            <Text style={[styles.btnLabel, { color: '#FB7185' }]}>TERMINATE</Text>
+                          </TouchableOpacity>
                         </View>
-                      </View>
-                      <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.2)" />
-                    </TouchableOpacity>
+                      </BlurView>
+                    </Animated.View>
+                 );
+              }}
+            />
+          )
+      ) : (
+          // 🔥 NEW: BLOCKED LIST UI 🔥
+          blockedProfiles.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                  <MaterialCommunityIcons name="shield-check" size={80} color={userTier.secondaryColor} style={{ opacity: 0.2 }} />
+                  <Text style={styles.emptyTitle}>NO RESTRICTIONS</Text>
+                  <Text style={styles.emptyDesc}>Your secure shield matrix is currently clear. No accounts are restricted.</Text>
+              </View>
+          ) : (
+              <Animated.FlatList
+                  data={blockedProfiles}
+                  keyExtractor={(item) => item.id}
+                  contentContainerStyle={{ padding: 20, paddingBottom: 120 }}
+                  onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+                  showsVerticalScrollIndicator={false}
+                  renderItem={({ item, index }) => {
+                      const cardBorderStyle = index % 2 === 0 ? borderType2 : borderType1;
+                      return (
+                          <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+                              <BlurView intensity={25} tint="dark" style={[styles.stealthCardBase, cardBorderStyle, { padding: 18, flexDirection: 'row', alignItems: 'center' }]}>
+                                  
+                                  <View style={styles.nodeLeft}>
+                                      <View style={[styles.avatarGlow, { width: 50, height: 50, borderRadius: 25, shadowColor: index % 2 === 0 ? userTier.secondaryColor : userTier.color, borderColor: index % 2 === 0 ? userTier.secondaryColor : userTier.color }]}>
+                                          <Image 
+                                              source={{ uri: item.profilePic || `https://ui-avatars.com/api/?name=${item.name || 'User'}&background=1E293B&color=fff&bold=true` }} 
+                                              style={styles.friendImg} 
+                                          />
+                                      </View>
+                                      <View style={styles.infoArea}>
+                                          <Text style={styles.friendName} numberOfLines={1}>{item.name?.toUpperCase()}</Text>
+                                          <Text style={styles.nodeStatus}>STATUS: ISOLATED_NODE</Text>
+                                      </View>
+                                  </View>
 
-                    <View style={styles.actionRow}>
-                      <TouchableOpacity 
-                        style={[styles.actionBtn, { borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.05)' }]}
-                        onPress={() => handleChatPress(item.receiverId, item.realName)}
-                      >
-                        <Ionicons name="chatbubble-ellipses" size={18} color={userTier.color} />
-                        <Text style={[styles.btnLabel, { color: userTier.color }]}>MESSAGE</Text>
-                      </TouchableOpacity>
+                                  <TouchableOpacity 
+                                      style={[styles.unblockBtn, { borderColor: userTier.color + '60' }]}
+                                      onPress={() => handleUnblock(item.id, item.name || "Host")}
+                                      disabled={actionId !== null}
+                                  >
+                                      {actionId === item.id ? (
+                                          <ActivityIndicator size="small" color="#FFF" />
+                                      ) : (
+                                          <>
+                                              <MaterialCommunityIcons name="shield-lock-open" size={14} color="#FFF" />
+                                              <Text style={styles.unblockBtnText}>UNBLOCK</Text>
+                                          </>
+                                      )}
+                                  </TouchableOpacity>
 
-                      <TouchableOpacity 
-                        style={styles.actionBtn}
-                        onPress={() => handleUnfollow(item.id, item.realName)}
-                      >
-                        <Ionicons name="link-outline" size={18} color="#FB7185" />
-                        <Text style={[styles.btnLabel, { color: '#FB7185' }]}>TERMINATE</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </BlurView>
-                </Animated.View>
-             );
-          }}
-        />
+                              </BlurView>
+                          </Animated.View>
+                      )
+                  }}
+              />
+          )
       )}
     </View>
   );
@@ -306,23 +443,26 @@ export default function FriendsList() {
 
 const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: '#020617' },
-  // 🔥 DESIGN: AMBIENT SHIMMER ORBS
   shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(100px)' },
   aura: { position: 'absolute', width: 400, height: 400, borderRadius: 200, filter: 'blur(100px)' },
   darkLoader: { flex: 1, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' },
   loaderText: { marginTop: 15, fontWeight: '900', letterSpacing: 2, fontSize: 10 },
   
-  headerArea: { borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)', backgroundColor: 'rgba(2, 6, 23, 0.4)' },
-  header: { flexDirection: 'row', alignItems: 'center', padding: 20, gap: 20 },
+  headerArea: { borderBottomWidth: 1, borderColor: 'rgba(255,255,255,0.05)', backgroundColor: 'rgba(2, 6, 23, 0.4)', paddingBottom: 15 },
+  header: { flexDirection: 'row', alignItems: 'center', padding: 20, paddingBottom: 10, gap: 20 },
   backButton: { backgroundColor: 'rgba(255,255,255,0.03)', padding: 10, borderRadius: 15, borderWidth: 1 },
   headerTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 3 },
   headerSubTitle: { fontSize: 10, fontWeight: '800', letterSpacing: 1, marginTop: 4 },
   
-  // ZERO BOX STEALTH CARD DESIGN (SYNCED)
+  // 🔥 NEW TAB CONTAINER STYLES 🔥
+  tabContainer: { flexDirection: 'row', marginHorizontal: 20, marginTop: 5, backgroundColor: 'rgba(255,255,255,0.03)', borderRadius: 20, padding: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+  tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 15 },
+  tabText: { color: 'rgba(255,255,255,0.4)', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+
   stealthCardBase: { borderRadius: 35, marginBottom: 20, overflow: 'hidden', elevation: 10 },
   cardMain: { flexDirection: 'row', alignItems: 'center', padding: 20, zIndex: 10 },
   avatarGlow: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, padding: 2, shadowOpacity: 0.6, shadowRadius: 10, elevation: 10, backgroundColor: '#000' },
-  friendImg: { width: '100%', height: '100%', borderRadius: 28 },
+  friendImg: { width: '100%', height: '100%', borderRadius: 30 },
   infoArea: { marginLeft: 18, flex: 1 },
   friendName: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
   statusBadge: { flexDirection: 'row', alignItems: 'center', marginTop: 8, gap: 6 },
@@ -333,6 +473,12 @@ const styles = StyleSheet.create({
   actionBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   btnLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
   
+  // 🔥 BLOCKED LIST SPECIFIC STYLES 🔥
+  nodeLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: 10 },
+  nodeStatus: { color: '#EF4444', fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 4 },
+  unblockBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 10, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.03)' },
+  unblockBtnText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+
   emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 40 },
   emptyTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', marginTop: 20, letterSpacing: 2 },
   emptyDesc: { color: '#475569', textAlign: 'center', marginTop: 12, fontWeight: '700', lineHeight: 20, fontSize: 12 }

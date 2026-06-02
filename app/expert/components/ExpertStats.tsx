@@ -1,4 +1,5 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
@@ -11,7 +12,7 @@ import {
     Dimensions,
     Easing,
     Image,
-    Modal,
+    Modal, // 🔥 SATTI FIX: Added Modal to imports 🔥
     ScrollView,
     StyleSheet,
     Text,
@@ -20,7 +21,7 @@ import {
 } from 'react-native';
 import { auth, db } from '../../../firebaseConfig';
 
-const { width } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
 const getLevelConfig = (beans: number) => {
@@ -36,6 +37,28 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
 };
+
+const calculateLevel = (d: number) => {
+    if (d <= 200000) return "Silver";
+    if (d <= 1000000) return "Gold";
+    if (d <= 5000000) return "Diamond";
+    if (d <= 10000000) return "Legend";
+    if (d <= 50000000) return "Elite";
+    if (d <= 100000000) return "Master";
+    if (d <= 500000000) return "Grandmaster";
+    return "Godlike";
+};
+
+// 🔥 SATTI UPDATE: Added 'daily_bonus' to TABS array 🔥
+const TABS = [
+    { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
+    { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
+    { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
+    { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
+    { id: 'live_game_bonus', label: 'Broadcast Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
+    { id: 'party_game_bonus', label: 'Forum Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
+    { id: 'daily_bonus', label: 'Daily Bonus', icon: 'star-shooting', iconType: 'MaterialCommunityIcons' } 
+];
 
 export default function ExpertStats({ expertData }: { expertData: any }) {
     const router = useRouter(); 
@@ -100,29 +123,44 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         ] as const 
     };
 
+    // 🔥 SATTI FIX: Added memory lock to prevent 5 times trigger loop
+    const bonusLock = useRef(false);
+
     const evaluateAndResetDailyStats = async (expertId: string, currentData: any) => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = new Date();
+        const offset = today.getTimezoneOffset() * 60000;
+        const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
         
-        if (currentData.lastBonusDate && currentData.lastBonusDate !== today) {
+        if (currentData.lastBonusDate && currentData.lastBonusDate !== localDateStr) {
+            
+            if (bonusLock.current) return;
+            bonusLock.current = true; // Lock the execution immediately!
+
+            // Storage check to 100% kill any duplicate loops across refreshes
+            const storageKey = `@daily_reset_${localDateStr}_${expertId}`;
+            const hasClaimedLocally = await AsyncStorage.getItem(storageKey);
+            if (hasClaimedLocally === 'true') return; 
+
+            await AsyncStorage.setItem(storageKey, 'true');
+
+            // 🔥 SATTI FIX: Safely handling the 'highestAchievedMilestone' null check 🔥
             let bonusEarned = 0;
+            let earnedLabel = "";
             const yesterdayBeans = Number(currentData.todayBeans) || 0;
 
-            let highestAchievedMilestone = null;
             for (let i = milestones.length - 1; i >= 0; i--) {
                 if (yesterdayBeans >= milestones[i].target) {
-                    highestAchievedMilestone = milestones[i];
+                    bonusEarned = milestones[i].bonus;
+                    earnedLabel = milestones[i].label;
                     break; 
                 }
-            }
-
-            if (highestAchievedMilestone) {
-                bonusEarned = highestAchievedMilestone.bonus;
             }
 
             try {
                 const updates: any = {
                     todayBeans: 0, todayMinutes: 0, todayCalls: 0, 
-                    lastBonusDate: today, topVipSupporter: { name: 'None', amount: 0, date: today } 
+                    lastBonusDate: localDateStr, topVipSupporter: { name: 'None', amount: 0, date: localDateStr },
+                    currentDailyMilestone: "" // Clears old milestone so it resets cleanly
                 };
 
                 if (bonusEarned > 0) {
@@ -132,8 +170,30 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 }
 
                 await updateDoc(doc(db, "users", expertId), updates);
+
+                // Creates transaction ONLY if a milestone was reached
+                if (bonusEarned > 0) {
+                    await addDoc(collection(db, "transactions"), {
+                        userId: expertId,
+                        type: 'mission_bonus',
+                        title: `Daily Mission Reward: ${earnedLabel}`,
+                        amount: bonusEarned,
+                        beans: bonusEarned,
+                        expertBeans: bonusEarned,
+                        timestamp: serverTimestamp(),
+                        createdAt: serverTimestamp(),
+                        status: 'completed'
+                    });
+
+                    Alert.alert(
+                        "🎉 Daily Milestone Reached! 💸", 
+                        `Awesome work! You received ${bonusEarned.toLocaleString()} rewards for completing the ${earnedLabel} mission yesterday!\n\nIt has been credited to your wallet.`
+                    );
+                }
             } catch (e) {
                 console.error("Failed to auto-reset stats:", e);
+                bonusLock.current = false; // Unlock if failed
+                await AsyncStorage.removeItem(storageKey);
             }
         }
     };
@@ -184,12 +244,36 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 } catch(e) { console.log('Calls fetch error', e); }
 
-                // 2. TRANSACTIONS (Fallback)
+                // 2. TRANSACTIONS (Fallback & Daily Bonus)
                 try {
-                    const transSnap = await getDocs(query(collection(db, "transactions"), where("expertId", "==", user.uid)));
+                    // 🔥 SATTI FIX: We explicitly query by userId here so the system rewards don't get missed 🔥
+                    const transSnap = await getDocs(query(collection(db, "transactions"), where("userId", "==", user.uid)));
                     for (const docSnap of transSnap.docs) {
                         const d = docSnap.data();
+                        
+                        // Ignore video calls since they are handled above
                         if (d.type === 'video_call') continue; 
+                        
+                        // 🔥 SATTI FIX: Explicit logic to fetch the specific Daily Bonus for Monthly Logs 🔥
+                        if (d.type === 'mission_bonus' || d.title?.includes('Daily Mission') || (d.title?.includes('Bonus') && !d.title?.includes('Arena'))) {
+                            const bonusAmount = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Number(d.amount) || 0;
+                            if (bonusAmount > 0) {
+                                rawData.push({
+                                    id: docSnap.id,
+                                    type: 'daily_bonus',
+                                    senderId: null,
+                                    senderName: 'TalkPe System',
+                                    syncPic: 'https://img.icons8.com/3d-fluency/512/star.png',
+                                    syncLevel: 'Legend',
+                                    giftName: d.title || 'Daily Goal Completion',
+                                    amount: bonusAmount,
+                                    beans: bonusAmount,
+                                    timestamp: d.timestamp || d.createdAt || { seconds: 0 }
+                                });
+                            }
+                            continue; // Move to next transaction
+                        }
+
                         let tType = 'call_gift';
                         if (d.source === 'Session' || d.source === 'forum') tType = 'party_gift';
                         if (d.source === 'live') tType = 'live_gift';
@@ -211,7 +295,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         const liveData = liveDoc.data();
                         const isParty = liveData.isPartyRoom === true || liveData.status === "party_hidden";
 
-                        // 🔥 SATTI FIX: Added missing gameBeansCollected for EXACT syncing with History 🔥
                         if (liveData.gameBeansCollected && liveData.gameBeansCollected > 0) {
                             rawData.push({
                                 id: `game_${liveDoc.id}`,
@@ -231,7 +314,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             }
                         }
                         
-                        // 🔥 SATTI FIX: Made nested game IDs strictly unique using liveDoc.id + gameDoc.id 🔥
                         try {
                             const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
                             for (const gameDoc of gamesSnap.docs) {
@@ -265,7 +347,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             }
                         }
 
-                        // 🔥 SATTI FIX: Made nested game IDs strictly unique using forumDoc.id + gameDoc.id 🔥
                         try {
                             const gamesSnap = await getDocs(collection(db, "forum_rooms", forumDoc.id, "games"));
                             for (const gameDoc of gamesSnap.docs) {
@@ -378,6 +459,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         if (t.type === 'video_call') earned = Number(t.expertEarnings) || 0;
                         else if (t.type === 'live_gift' || t.type === 'party_gift' || t.type === 'call_gift') earned = Number(t.beans) || 0;
                         else if (t.type === 'live_game_bonus' || t.type === 'party_game_bonus') earned = Number(t.beans) || 0;
+                        else if (t.type === 'daily_bonus') earned = Number(t.beans) || 0; 
                         else earned = Number(t.expertEarnings) || Number(t.beans) || 0;
 
                         if (earned > 0) { 
@@ -542,18 +624,12 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
     const renderExpertHistoryItem = (item: any, index: number) => {
         const uniqueKey = item.id ? `${item.id}-${index}-${item.type}` : `log-${index}`;
-
         let iconName = "swap-horizontal";
         let iconColor = "#94A3B8";
-        let sign = "+";
-        let currency = "🎖️";
         let amountValue = Number(item.beans) || Number(item.expertEarnings) || 0;
-        let titleText = item.title || item.type || 'Transaction';
-        let statusText = 'ACQUIRED';
-        let statusColor = '#10B981';
-
+        let titleText = item.giftName || item.title || item.type || 'Transaction';
+        
         const itemType = String(item.type || '').toLowerCase();
-        const targetUserId = item.userId;
         const targetUserName = item.callerName || item.senderName || 'User';
 
         if (itemType === 'video_call') {
@@ -561,47 +637,25 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             titleText = item.callerName ? `Call with ${item.callerName}` : "Call Reward";
         } else if (itemType.includes('gift')) {
             iconName = "gift"; iconColor = theme.secondary; 
-            let baseTitle = "";
-            if (itemType === 'live_gift') baseTitle = "Broadcast Reward";
-            else if (itemType === 'party_gift') baseTitle = "Forum Reward";
-            else if (itemType === 'call_gift') baseTitle = "Private Reward";
-            else baseTitle = "Virtual Reward";
-            
-            const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "User";
-            titleText = `${baseTitle} (from ${validSender})`;
+            let baseTitle = itemType === 'live_gift' ? "Broadcast Reward" : itemType === 'party_gift' ? "Forum Reward" : "Private Reward";
+            titleText = `${baseTitle} (from ${targetUserName})`;
         } else if (itemType.includes('game')) {
             iconName = "dice-multiple"; iconColor = "#F59E0B";
-            if (itemType === 'live_game_bonus') titleText = "Broadcast Activity Reward";
-            else if (itemType === 'party_game_bonus') titleText = "Forum Activity Reward";
+            titleText = itemType === 'live_game_bonus' ? "Broadcast Activity Reward" : "Forum Activity Reward";
+        } else if (itemType === 'daily_bonus') {
+            iconName = "star-shooting"; iconColor = "#8B5CF6";
+            titleText = item.giftName || 'Daily Mission Bonus';
         }
 
         const timeVal = item.timestamp || item.createdAt;
         let displayTime = 'Recent';
-        if (timeVal) {
-            if (timeVal.toDate) {
-                displayTime = timeVal.toDate().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            } else if (timeVal.seconds) {
-                displayTime = new Date(timeVal.seconds * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            } else if (typeof timeVal === 'number') {
-                displayTime = new Date(timeVal < 10000000000 ? timeVal * 1000 : timeVal).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            } else if (typeof timeVal === 'string') {
-                displayTime = new Date(timeVal).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            }
-        }
+        if (timeVal?.toDate) displayTime = timeVal.toDate().toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+        else if (timeVal?.seconds) displayTime = new Date(timeVal.seconds * 1000).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 
         const itemBorder = index % 2 === 0 ? borderType2 : borderType1;
 
         return (
-            <TouchableOpacity 
-                key={uniqueKey} 
-                style={[styles.historyCard, itemBorder]}
-                activeOpacity={targetUserId ? 0.7 : 1}
-                onPress={() => {
-                    if (targetUserId) {
-                        router.push({ pathname: '/user-detail', params: { id: targetUserId } });
-                    }
-                }}
-            >
+            <View key={uniqueKey} style={[styles.historyCard, itemBorder]}>
                 <View style={[styles.historyIconBox, { backgroundColor: iconColor + '20', borderColor: iconColor + '40' }]}>
                     <MaterialCommunityIcons name={iconName as any} size={20} color={iconColor} />
                 </View>
@@ -609,36 +663,18 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{titleText}</Text>
                     <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{displayTime}</Text>
                 </View>
-                
-                <View style={{ alignItems: 'center', flexDirection: 'row', gap: 8, flexShrink: 0 }}>
-                    <View style={{ alignItems: 'flex-end' }}>
-                        <Text style={[styles.historyAmount, { color: statusColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                            {sign}{amountValue.toLocaleString()} {currency}
-                        </Text>
-                        <Text style={[styles.historyStatus, { color: statusColor }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                            {statusText}
-                        </Text>
-                    </View>
-                    
-                    {targetUserId && (
-                        <TouchableOpacity 
-                            style={{ backgroundColor: theme.primary + '20', padding: 8, borderRadius: 12, marginLeft: 2, borderWidth: 1, borderColor: theme.primary + '40' }}
-                            onPress={() => {
-                                router.push({ 
-                                    pathname: '/chat/ChatScreen', 
-                                    params: { userId: targetUserId, userName: targetUserName } 
-                                });
-                            }}
-                        >
-                            <Ionicons name="chatbubble-ellipses-outline" size={18} color={theme.accent} />
-                        </TouchableOpacity>
-                    )}
+                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+                    <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                        +{amountValue.toLocaleString()} 🎖️
+                    </Text>
+                    <Text style={[styles.historyStatus, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                        ACQUIRED
+                    </Text>
                 </View>
-            </TouchableOpacity>
+            </View>
         );
     };
 
-    // 🔥 SATTI FIX: FULLY REDESIGNED LEADERBOARD ITEM WITH OVERLAP FIXES 🔥
     const renderLeaderboardItem = (user: any, index: number) => {
         let rankColor = theme.primary;
         let rankGradient = ['rgba(15, 23, 42, 0.45)', 'rgba(15, 23, 42, 0.45)'];
@@ -652,7 +688,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const isMe = user.id === auth.currentUser?.uid;
         const uConfig = getLevelConfig(user.totalBeansEarned || 0);
 
-        // 🔥 SATTI FIX: Upgraded Floating & Pulsing Effect perfectly timed to Shimmer Loop [0, 0.5, 1] 🔥
         const scaleAnim = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.03, 1] }) : 1;
         const translateYAnim = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -4, 0] }) : 0;
         const glowOpacity = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 0.8, 0.3] }) : 0;
@@ -675,7 +710,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     style={{
                         flexDirection: 'row',
                         alignItems: 'center',
-                        padding: 12, // Adjusted padding for more inner space
+                        padding: 12, 
                         borderRadius: 24,
                         borderWidth: isTop3 || isMe ? 1.5 : 1,
                         borderColor: isTop3 ? rankColor : (isMe ? theme.accent : 'rgba(255,255,255,0.1)'),
@@ -683,20 +718,18 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         position: 'relative'
                     }}
                 >
-                    {/* Background Gamified Watermark */}
                     {isTop3 && (
                         <View style={{ position: 'absolute', right: -20, bottom: -25, opacity: 0.1 }}>
                             <MaterialCommunityIcons name={iconName as any} size={110} color={rankColor} style={{ transform: [{ rotate: '15deg' }] }} />
                         </View>
                     )}
 
-                    {/* Left Rank Badge Element */}
                     <View style={{
-                        width: 40, height: 40, borderRadius: 20, // Adjusted dimensions for better text fitting
+                        width: 40, height: 40, borderRadius: 20, 
                         backgroundColor: isTop3 ? rankColor : 'rgba(255,255,255,0.05)',
                         justifyContent: 'center', alignItems: 'center',
                         shadowColor: rankColor, shadowOpacity: isTop3 ? 0.5 : 0, shadowRadius: 6, elevation: 5,
-                        marginRight: 10, // Adjusted margin to prevent squash
+                        marginRight: 10, 
                         position: 'relative',
                         flexShrink: 0
                     }}>
@@ -705,7 +738,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         ) : (
                             <Text style={{ color: '#94A3B8', fontSize: 14, fontWeight: '900' }}>{index + 1}</Text>
                         )}
-                        {/* Gamified Number Tag for Top 3 */}
                         {isTop3 && (
                             <View style={{ position: 'absolute', bottom: -6, backgroundColor: '#000', paddingHorizontal: 6, borderRadius: 6, borderWidth: 1, borderColor: rankColor }}>
                                 <Text style={{ color: rankColor, fontSize: 9, fontWeight: '900' }}>#{index + 1}</Text>
@@ -713,12 +745,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         )}
                     </View>
 
-                    {/* Avatar Group */}
                     <View style={{ position: 'relative', flexShrink: 0 }}>
                         <Image
                             source={{ uri: user.profilePic || `https://ui-avatars.com/api/?name=${user.name || 'U'}&background=0F172A&color=fff` }}
                             style={{
-                                width: 48, height: 48, borderRadius: 18, // Slightly reduced to save space
+                                width: 48, height: 48, borderRadius: 18, 
                                 borderWidth: 2, borderColor: isTop3 ? rankColor : 'rgba(255,255,255,0.15)'
                             }}
                         />
@@ -727,7 +758,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         )}
                     </View>
 
-                    {/* Title & Level Details with proper flex bounds to fix overlapping */}
                     <View style={{ flex: 1, marginLeft: 12, marginRight: 8, justifyContent: 'center' }}>
                         <Text style={{ color: '#FFF', fontSize: 15, fontWeight: 'bold', letterSpacing: 0.5, lineHeight: 22 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                             {user.name || 'Host'} {isMe && <Text style={{ color: theme.accent, fontSize: 12 }}> (You)</Text>}
@@ -743,7 +773,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         </View>
                     </View>
 
-                    {/* Reward Bag Output safely locked to right */}
                     <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
                         <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 4 }}>REWARDS</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
@@ -817,7 +846,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         </LinearGradient>
                     </View>
 
-                    {/* 🔥 SATTI FIX: Added LEADERBOARD / RANKING Tab 🔥 */}
                     <View style={styles.tabsRow}>
                         <TouchableOpacity style={[styles.tabBtn, mainTab === 'STATS' && styles.tabBtnActive]} onPress={() => setMainTab('STATS')}>
                             <Text style={[styles.tabText, mainTab === 'STATS' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>STATS</Text>
@@ -1078,12 +1106,10 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             </View>
                         )}
 
-                        {/* 🔥 SATTI FIX: LEADERBOARD TAB RENDER 🔥 */}
                         {mainTab === 'LEADERBOARD' && (
                             <View style={{ marginTop: 10 }}>
                                 <View style={{ alignItems: 'center', marginBottom: 25 }}>
                                     <Text style={[styles.totalTalkLabel, { color: theme.primary, marginBottom: 5 }]}>GLOBAL TOP PERFORMERS (LIFETIME)</Text>
-                                    {/* 🔥 SATTI FIX: TEXT CHANGED TO LEADERBOARD 🔥 */}
                                     <Text style={{color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: -0.5}}>LEADERBOARD</Text>
                                 </View>
                                 

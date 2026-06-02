@@ -1,4 +1,5 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router'; // 🔥 SATTI UPDATE: Router imported
 import { collection, doc, onSnapshot, orderBy, query, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
 import {
@@ -14,9 +15,10 @@ import {
 import { db } from '../../../firebaseConfig';
 
 const ReportedUsers = () => {
+    const router = useRouter(); 
     const [reports, setReports] = useState<any[]>([]);
-    const [adminAlerts, setAdminAlerts] = useState<any[]>([]); // 🔥 SYSTEM LOGIC: Moderation Alerts State
-    const [usersMap, setUsersMap] = useState<Record<string, any>>({}); // 🔥 SYSTEM LOGIC: Global Security Mapping
+    const [adminAlerts, setAdminAlerts] = useState<any[]>([]); 
+    const [usersMap, setUsersMap] = useState<Record<string, any>>({}); 
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
@@ -91,12 +93,42 @@ const ReportedUsers = () => {
     };
 
     const renderReportItem = ({ item }: any) => {
-        // 🔥 SYSTEM LOGIC: Dynamic mapping for multi-source moderation alerts
         const isAlert = item._collection === 'admin_alerts';
-        const reporterLabel = isAlert ? item.expertName : item.reporterName;
-        const reporterRoleLabel = isAlert ? 'HOST' : item.reporterRole;
-        const reportedLabel = isAlert ? item.userName : item.reportedName;
-        const targetUserId = isAlert ? item.userId : item.reportedId;
+        
+        // 🔥 SATTI FIX: Dynamic mapping for precise Source and Target attribution
+        let reporterLabel = "Unknown Source";
+        let reporterRoleLabel = "USER";
+        let reportedLabel = "Unknown Target";
+        let targetUserId = "";
+
+        if (isAlert) {
+            if (item.type === 'USER_BLOCKED_EXPERT') {
+                // User reported the Host
+                reporterLabel = item.userName || "User";
+                reporterRoleLabel = "USER";
+                reportedLabel = item.expertName || "Host";
+                targetUserId = item.expertId;
+            } else if (item.type === 'EXPERT_BLOCKED_USER') {
+                // Host reported the User
+                reporterLabel = item.expertName || "Host";
+                reporterRoleLabel = "HOST";
+                reportedLabel = item.userName || "User";
+                targetUserId = item.userId;
+            } else {
+                // Fallback for older admin alerts
+                reporterLabel = item.expertName || "System";
+                reporterRoleLabel = "HOST";
+                reportedLabel = item.userName || "Target";
+                targetUserId = item.userId || item.expertId;
+            }
+        } else {
+            // Standard Reports Collection
+            reporterLabel = item.reporterName;
+            reporterRoleLabel = item.reporterRole;
+            reportedLabel = item.reportedName;
+            targetUserId = item.reportedId;
+        }
+
         const timeSecs = item.createdAt?.seconds || item.timestamp?.seconds;
 
         // 🔥 CRITICAL COMPLIANCE CHECK (Red Siren)
@@ -104,8 +136,42 @@ const ReportedUsers = () => {
         const blockCount = targetUser?.expertBlockCount || 0;
         const isCriticalRisk = blockCount >= 5;
 
+        // 🔥 SATTI UPDATE: BULLETPROOF TARGET ROUTING 🔥
+        // Explicitly defining role based on alert type to prevent missing map data bugs
+        let finalTargetRole = 'user';
+        if (isAlert) {
+            if (item.type === 'USER_BLOCKED_EXPERT') finalTargetRole = 'expert';
+            else if (item.type === 'EXPERT_BLOCKED_USER') finalTargetRole = 'user';
+            else finalTargetRole = targetUser?.role || 'user';
+        } else {
+            finalTargetRole = targetUser?.role || (item.reportedRole ? item.reportedRole.toLowerCase() : 'user');
+        }
+
+        const handleCardPress = () => {
+    if (!targetUserId) {
+        Alert.alert("Error", "Target ID not found in database.");
+        return;
+    }
+    
+    try {
+        // Checks if the TARGET is Expert/Host and sends exactly to their passbook
+        if (finalTargetRole === 'expert' || finalTargetRole === 'host') {
+            // 🔥 SATTI FIX: Added parenthesis around (admin)
+            router.push(`/(admin)/passbook/expert-detail/${targetUserId}` as any);
+        } else {
+            // 🔥 SATTI FIX: Added parenthesis around (admin)
+            router.push(`/(admin)/passbook/user-detail/${targetUserId}` as any);
+        }
+    } catch (e) {
+        console.log("Routing Error: ", e);
+    }
+};
         return (
-            <View style={[styles.reportCard, item.status === 'resolved' && { opacity: 0.6 }, isCriticalRisk && styles.criticalCard]}>
+            <TouchableOpacity 
+                activeOpacity={0.85} 
+                onPress={handleCardPress}
+                style={[styles.reportCard, item.status === 'resolved' && { opacity: 0.6 }, isCriticalRisk && styles.criticalCard]}
+            >
                 <View style={styles.cardHeader}>
                     <View style={[styles.severityBadge, { backgroundColor: isCriticalRisk ? '#EF4444' : (item.priority === 'HIGH' || isAlert ? '#EF444420' : '#F59E0B20') }]}>
                         <View style={[styles.dot, { backgroundColor: isCriticalRisk ? '#FFF' : (item.priority === 'HIGH' || isAlert ? '#EF4444' : '#F59E0B') }]} />
@@ -118,7 +184,7 @@ const ReportedUsers = () => {
 
                 {/* 🔥 RED ALERT SAFETY WARNING 🔥 */}
                 {isCriticalRisk && (
-                    <Text style={styles.sirenText}>🚨 SAFETY WARNING: THIS USER HAS BEEN RESTRICTED BY {blockCount} HOSTS. IMMEDIATE REVIEW REQUIRED.</Text>
+                    <Text style={styles.sirenText}>🚨 SAFETY WARNING: THIS TARGET HAS BEEN RESTRICTED {blockCount} TIMES. IMMEDIATE REVIEW REQUIRED.</Text>
                 )}
 
                 <Text style={styles.reportReason}>{item.reason || 'No specific reason documented'}</Text>
@@ -149,7 +215,7 @@ const ReportedUsers = () => {
                         <Text style={[styles.btnText, { color: '#EF4444' }]}>RESTRICT</Text>
                     </TouchableOpacity>
                 </View>
-            </View>
+            </TouchableOpacity>
         );
     };
 

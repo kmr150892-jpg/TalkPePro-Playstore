@@ -64,13 +64,14 @@ export default function UserPassbookDetail() {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Tabs: Merged Admin STATS with User Tabs
-  const [activeTab, setActiveTab] = useState<'STATS' | 'CALLS' | 'GAMES' | 'REWARDS'>('STATS'); 
+  // Tabs: Merged Admin STATS with User Tabs + FLAGS
+  const [activeTab, setActiveTab] = useState<'STATS' | 'CALLS' | 'GAMES' | 'REWARDS' | 'FLAGS'>('STATS'); 
 
   // 🔥 USER HISTORY STATES
   const [history, setHistory] = useState<any[]>([]);
   const [gameHistory, setGameHistory] = useState<any[]>([]); 
   const [totalGames, setTotalGames] = useState<number>(0); 
+  const [flags, setFlags] = useState<any[]>([]); // 🔥 SATTI UPDATE: Flag Data State
 
   // 🔥 ADMIN EXACT STATS VARIABLES
   const [totalRechargeDiamonds, setTotalRechargeDiamonds] = useState<number>(0); 
@@ -137,7 +138,7 @@ export default function UserPassbookDetail() {
           if (!currentUserData) return;
 
           // ==========================================
-          // 🔥 1. CALLS & GIFTS FETCHING ENGINE (USER LOGIC EXACT MATCH)
+          // 🔥 1. CALLS & GIFTS FETCHING ENGINE
           // ==========================================
           const myGifts = rawGifts.filter(g => {
               const isIdMatch = g.senderId === id || g.userId === id;
@@ -176,7 +177,7 @@ export default function UserPassbookDetail() {
           setHistory(combinedHistory);
 
           // ==========================================
-          // 🔥 2. GAME HISTORY ENGINE (USER LOGIC EXACT MATCH)
+          // 🔥 2. GAME HISTORY ENGINE
           // ==========================================
           const mappedTxGames = rawTxGames.map(d => {
               const typeStr = String(d.type || '').toUpperCase();
@@ -290,7 +291,7 @@ export default function UserPassbookDetail() {
           }, 0);
           setTotalRedeemed(calcRedeemed);
 
-          // 5. Calculate Activity Rewards & EXCLUSIVE Game Entry Fees Calculation 🔥 (EXACT MATCH FROM USER PROFILE)
+          // 5. Calculate Activity Rewards & EXCLUSIVE Game Entry Fees Calculation 🔥
           let totalGameEntryFeesAll = 0; 
           let totalGameRefundsAll = 0; 
           
@@ -301,7 +302,6 @@ export default function UserPassbookDetail() {
               
               const isWin = rawStatus.includes('WIN') || rawStatus === 'WON' || rawStatus.includes('REWARD') || typeStr.includes('WIN') || typeStr.includes('REWARD') || titleStr.includes('WIN') || titleStr.includes('REWARD') || Number(String(log.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
               
-              // 🔥 If game is Cancelled or Refunded, completely isolate it
               const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || rawStatus.includes('REFUND');
               const isFailedOrCancelled = rawStatus.includes('CANCEL') || rawStatus.includes('FAIL');
               
@@ -328,7 +328,6 @@ export default function UserPassbookDetail() {
               
               let amountVal = Math.abs(Number(String(log.amount || log.diamonds || log.diamondsAdded || log.winAmount || log.entryFee || log.price || log.fee || 0).replace(/[^0-9.-]+/g, ''))) || 0;
 
-              // 🔥 1. ABSOLUTE STOP FOR ANY REFUND
               const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
               const isGameRelated = typeStr.includes('ARENA') || typeStr.includes('GAME') || typeStr.includes('ENTRY') || 
                                     titleStr.includes('ARENA') || titleStr.includes('GAME') || titleStr.includes('ENTRY');
@@ -337,10 +336,9 @@ export default function UserPassbookDetail() {
                   if (isGameRelated) {
                       totalGameRefundsAll += amountVal;
                   }
-                  return sum; // 🛑 STRICTLY STOP HERE IF IT IS A REFUND
+                  return sum;
               }
 
-              // 🔥 2. ONLY PROCEED IF IT IS DEFINITELY NOT A REFUND
               const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
               const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
               const isFailed = statusStr.includes('CANCEL') || statusStr.includes('FAIL');
@@ -420,13 +418,51 @@ export default function UserPassbookDetail() {
           processAllLogs();
       });
 
-      return () => { unsubUser(); unsubHistory(); unsubGifts(); unsubRequests(); unsubGameHistory(); unsubCalls(); };
+      // 🔥 SATTI UPDATE: FLAG LISTENER ENGINE WITH ACTUAL PROFILE PICTURE FETCH 🔥
+      const qFlags = query(
+          collection(db, "admin_alerts"), 
+          where("userId", "==", id), 
+          where("type", "==", "EXPERT_BLOCKED_USER")
+      );
+      const unsubFlags = onSnapshot(qFlags, async (snap) => {
+          const list = await Promise.all(snap.docs.map(async (d) => {
+              const data = d.data() as any;
+              // Mudhalla irukkura field la picture irukka nu theduvom
+              let fetchedPic = data.expertImage || data.hostImage || data.profilePic || '';
+              
+              // Illana, antha expertId vechu main users collection la poi original photo edupom!
+              if (!fetchedPic && (data.expertId || data.hostId)) {
+                  try {
+                      const hostId = data.expertId || data.hostId;
+                      const hostDoc = await getDoc(doc(db, 'users', hostId));
+                      if (hostDoc.exists()) {
+                          const hData = hostDoc.data() as any;
+                          fetchedPic = hData.profilePic || hData.image || ''; // Unmayaana Profile pic
+                      }
+                  } catch (e) {
+                      console.log("Error fetching host picture:", e);
+                  }
+              }
+              
+              return { alertId: d.id, fetchedExpertPic: fetchedPic, ...data };
+          }));
+
+          list.sort((a: any, b: any) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+          setFlags(list);
+      });
+
+      return () => { unsubUser(); unsubHistory(); unsubGifts(); unsubRequests(); unsubGameHistory(); unsubCalls(); unsubFlags(); };
   }, [id]);
 
   if (!userData && !loading) return <View style={styles.loader}><Text style={{color: '#FFF'}}>Account record not found in secure vault.</Text></View>;
 
-  const totalSpent = userData?.totalSpentDiamonds || 0;
-  const rank = calculateUserLevel(totalSpent);
+  // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
+  const userDiamonds = Math.max(
+      userData?.totalDiamonds || 0,
+      userData?.walletBalance || 0,
+      userData?.balance || 0
+  );
+  const rank = calculateUserLevel(userDiamonds);
   const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=1E293B&color=fff&bold=true`;
 
   const parallaxBg = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -40], extrapolate: 'clamp' });
@@ -452,7 +488,6 @@ export default function UserPassbookDetail() {
       backgroundColor: 'rgba(5, 5, 5, 0.85)',
   };
 
-  // 🔥 USER FILE EXACT RENDERERS 🔥
   const callsData = history.filter(item => item.isCall);
   const rewardsData = history.filter(item => item.isCallGift || item.isStandaloneGift);
 
@@ -708,7 +743,6 @@ export default function UserPassbookDetail() {
           <View style={styles.cardContainer}>{renderDynamicProfileCard()}</View>
         </SafeAreaView>
 
-        {/* 🔥 REPLACED ADMIN TABS WITH USER-STYLE TABS */}
         <View style={styles.tabsRow}>
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'STATS' && styles.tabBtnActive]} onPress={() => setActiveTab('STATS')}>
                 <Text style={[styles.tabText, activeTab === 'STATS' && styles.tabTextActive]} numberOfLines={1}>ANALYTICS</Text>
@@ -805,14 +839,78 @@ export default function UserPassbookDetail() {
                     )}
                 </View>
             )}
+
+            {/* 🔥 SATTI UPDATE: NEW FLAGS TAB CONTENT 🔥 */}
+            {activeTab === 'FLAGS' && (
+                <View>
+                    <View style={styles.talktimeHighlight}>
+                         <Text style={[styles.totalTalkLabel, { color: '#EF4444', marginBottom: 15 }]}>HOST REPORTS AUDIT LOG: {flags.length} SECURE FLAGS</Text>
+                    </View>
+                    {loading ? (
+                        <ActivityIndicator size="large" color="#EF4444" style={{ marginTop: 40 }} />
+                    ) : flags.length > 0 ? (
+                        flags.map((item, index) => {
+                            // 🔥 SATTI UPDATE: Rendering the Blocked Host Profile Picture (Actual Photo)
+                            const hostPic = item.fetchedExpertPic || item.expertImage || item.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.expertName || 'Host')}&background=EF4444&color=fff&bold=true`;
+                            return (
+                                <Animated.View key={item.alertId || index} style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
+                                    <View style={styles.stealthHistoryCard}>
+                                        <View style={[styles.quadBorderUI, { borderLeftColor: '#EF4444', borderRightColor: '#EF4444', borderTopColor: 'rgba(239, 68, 68, 0.2)', borderBottomColor: 'rgba(239, 68, 68, 0.2)' }]} />
+                                        <View style={[styles.sessionBadge, { backgroundColor: '#EF4444' }]}>
+                                             <MaterialCommunityIcons name="alert-circle" size={10} color="#FFF" />
+                                             <Text style={styles.sessionTypeText}>REPORTED_LOG</Text>
+                                        </View>
+                                        <View style={styles.cardHeaderUI}>
+                                            <View style={[styles.expertThumbRing, { borderColor: '#EF4444', shadowColor: '#EF4444', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                                                <Image source={{ uri: hostPic }} style={styles.expertThumb} />
+                                            </View>
+                                            <View style={styles.expertInfo}>
+                                                <Text style={styles.expertName} numberOfLines={1}>HOST: {(item.expertName || 'Unknown Host').toUpperCase()}</Text>
+                                                <Text style={styles.callDateText} numberOfLines={1}>
+                                                    {item.timestamp?.seconds 
+                                                    ? new Date(item.timestamp.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
+                                                    : 'RECENT FLAG'}
+                                                </Text>
+                                            </View>
+                                        </View>
+                                        <View style={[styles.statsRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
+                                            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '900' }}>REASON FOR BLOCK:</Text>
+                                            <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700' }}>{item.reason || 'No specific reason documented by the host.'}</Text>
+                                        </View>
+                                    </View>
+                                </Animated.View>
+                            )
+                        })
+                    ) : (
+                        <View style={styles.emptyBox}>
+                            <MaterialCommunityIcons name="shield-check" size={48} color="#10B981" />
+                            <Text style={styles.emptyText}>Clean Record. No host reports found.</Text>
+                        </View>
+                    )}
+                </View>
+            )}
         </View>
 
-        <View style={styles.footer}>
-          <Text style={styles.verText}>TALKPE OS • SECURE_LEDGER</Text>
-          <View style={[styles.secureNode, { borderColor: 'rgba(255,255,255,0.08)' }]}>
-              <MaterialCommunityIcons name="shield-check" size={12} color={rank.color} />
-              <Text style={[styles.secureText, { color: rank.color }]}>Encrypted Data Node</Text>
-          </View>
+        {/* 🔥 SATTI UPDATE: FLAG BUTTON LAST LA BOTTOM LA VECHACHU! 🔥 */}
+        <View style={styles.footerContainer}>
+            <TouchableOpacity 
+                style={[styles.bottomFlagBtn, flags.length > 0 ? {backgroundColor: '#EF4444'} : {backgroundColor: 'rgba(255,255,255,0.05)'}]}
+                onPress={() => setActiveTab('FLAGS')}
+                activeOpacity={0.8}
+            >
+                <MaterialCommunityIcons name={flags.length > 0 ? "alert-octagon" : "shield-check"} size={20} color={flags.length > 0 ? "#FFF" : "#10B981"} />
+                <Text style={[styles.bottomFlagText, {color: flags.length > 0 ? "#FFF" : "#10B981"}]}>
+                    {flags.length > 0 ? `VIEW SECURITY FLAGS (${flags.length})` : 'CLEAN RECORD (0 FLAGS)'}
+                </Text>
+            </TouchableOpacity>
+
+            <View style={styles.footer}>
+              <Text style={styles.verText}>TALKPE OS • SECURE_LEDGER</Text>
+              <View style={[styles.secureNode, { borderColor: 'rgba(255,255,255,0.08)' }]}>
+                  <MaterialCommunityIcons name="shield-check" size={12} color={rank.color} />
+                  <Text style={[styles.secureText, { color: rank.color }]}>Encrypted Data Node</Text>
+              </View>
+            </View>
         </View>
       </ScrollView>
     </View>
@@ -860,7 +958,6 @@ const styles = StyleSheet.create({
 
   menuBox: { paddingHorizontal: 16, marginTop: 10 },
   
-  // Tabs Style Adjusted for 4 Items
   tabsRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 10, marginBottom: 15, backgroundColor: '#0F172A', borderRadius: 12, padding: 5, borderWidth: 1, borderColor: '#1E293B', justifyContent: 'space-between', gap: 4 },
   tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
   tabBtnActive: { backgroundColor: '#334155' },
@@ -904,7 +1001,12 @@ const styles = StyleSheet.create({
   emptyBox: { alignItems: 'center', marginTop: 40, opacity: 0.7 },
   emptyText: { color: '#64748B', marginTop: 10, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
 
-  footer: { alignItems: 'center', marginTop: 80 },
+  // 🔥 SATTI UPDATE: Bottom Button Styles Added 🔥
+  footerContainer: { marginTop: 40, alignItems: 'center', paddingHorizontal: 20 },
+  bottomFlagBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 25, width: '100%', gap: 10, elevation: 5, shadowColor: '#EF4444', shadowOpacity: 0.3, shadowRadius: 10 },
+  bottomFlagText: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
+  
+  footer: { alignItems: 'center', marginTop: 40 },
   verText: { color: 'rgba(255,255,255,0.15)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
   secureNode: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 15, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25, borderWidth: 1 },
   secureText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },

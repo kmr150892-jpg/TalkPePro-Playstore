@@ -3,7 +3,7 @@ import * as Application from 'expo-application';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { collection, doc, getDoc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import {
   Alert,
   Animated,
@@ -20,6 +20,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
+
+// 🔥 IMPORTING GHOST FILTER CONTEXT (Adjust path if needed)
+import { BlockContext } from '../utils/context/BlockContext';
 
 const { width, height } = Dimensions.get('window');
 
@@ -56,6 +59,9 @@ export default function HomeScreen() {
   const user = auth.currentUser;
   const [userData, setUserData] = useState<any>(null);
   const [isCalling, setIsCalling] = useState(false);
+
+  // 🔥 GHOST FILTER ACTIVATED: Pulling blocked users from Context
+  const { blockedUsers } = useContext(BlockContext);
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
@@ -161,8 +167,13 @@ export default function HomeScreen() {
     ]);
   };
 
-  const totalSpent = userData?.totalSpentDiamonds || 0;
-  const userTier = calculateUserLevel(totalSpent);
+  // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
+  const userDiamonds = Math.max(
+      userData?.totalDiamonds || 0,
+      userData?.walletBalance || 0,
+      userData?.balance || 0
+  );
+  const userTier = calculateUserLevel(userDiamonds);
   const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 
   const borderType1 = {

@@ -3,8 +3,8 @@ import * as Application from 'expo-application';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import React, { useContext, useEffect, useRef, useState } from 'react'; // 🔥 SATTI UPDATE: Added useContext here
 import {
     ActivityIndicator,
     Alert,
@@ -12,6 +12,7 @@ import {
     Dimensions,
     Easing,
     Image,
+    Modal,
     Platform,
     ScrollView,
     Share,
@@ -23,6 +24,7 @@ import {
 } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
+import { BlockContext } from '../utils/context/BlockContext'; // 🔥 SATTI UPDATE: BlockContext Imported Here
 import { checkAndRequestCallPermissions } from '../utils/permissions';
 
 const { height, width } = Dimensions.get('window');
@@ -50,6 +52,8 @@ export default function ExpertDetail() {
     const router = useRouter();
     const user = auth.currentUser;
 
+    const { blockUser } = useContext(BlockContext); // 🔥 SATTI UPDATE: Context initialized
+
     const [expert, setExpert] = useState<any>(null);
     const [isCalling, setIsCalling] = useState(false);
     const [userBalance, setUserBalance] = useState(0);
@@ -63,6 +67,17 @@ export default function ExpertDetail() {
     const [connectionStatus, setConnectionStatus] = useState<string | null>(null); 
     const [followLoading, setFollowLoading] = useState(false);
     const [isBlockedByExpert, setIsBlockedByExpert] = useState(false);
+
+    // 🔥 SATTI UPDATE: Block & Report Admin Setup
+    const [blockModalVisible, setBlockModalVisible] = useState(false);
+    const [isBlocking, setIsBlocking] = useState(false);
+    const blockReasons = [
+        "Abusive Language / Harassment",
+        "Inappropriate Behavior / Nudity",
+        "Scam / Spam / Phishing",
+        "Threatening / Aggressive",
+        "Other Unwanted Contact"
+    ];
 
     const unsubCallRef = useRef<(() => void) | null>(null);
     const ringTimerAnim = useRef(new Animated.Value(1)).current;
@@ -162,6 +177,71 @@ export default function ExpertDetail() {
             if (unsubCallRef.current) unsubCallRef.current();
         };
     }, [expertId, user]);
+
+    // 🔥 SATTI UPDATE: Block & Admin Report Core Engine 🔥
+    const handleReasonSelect = (reason: string) => {
+        if (!expert || !user) return;
+
+        const alreadyBlocked = Array.isArray(userData?.blockedUsers) && userData.blockedUsers.includes(expertId);
+        
+        if (alreadyBlocked) {
+            Alert.alert(
+                "ACTION RESTRICTED", 
+                "This host is already in your blacklist. Please manage them via Security Settings if you wish to restore access."
+            );
+            setBlockModalVisible(false);
+            return;
+        }
+
+        Alert.alert(
+            "CONFIRM BLOCK",
+            `Are you sure you want to block ${expert.name}?\n\nReason: ${reason}`,
+            [
+                { text: "CANCEL", style: "cancel" },
+                { 
+                    text: "BLOCK & REPORT", 
+                    style: "destructive",
+                    onPress: () => executeBlockUser(reason)
+                }
+            ]
+        );
+    };
+
+    const executeBlockUser = async (reason: string) => {
+        setIsBlocking(true);
+        const myUid = user!.uid;
+
+        try {
+            // Update my doc
+            await updateDoc(doc(db, "users", myUid), { blockedUsers: arrayUnion(expertId) });
+            // Update expert's block count
+            await updateDoc(doc(db, "users", expertId), { expertBlockCount: increment(1) });
+            
+            // Push alert to admin
+            await addDoc(collection(db, "admin_alerts"), {
+                type: 'USER_BLOCKED_EXPERT', 
+                expertId: expertId, 
+                expertName: expert.name || "Unknown Expert",
+                userId: myUid, 
+                userName: userData?.name || user?.displayName || "TalkPe User", 
+                reason: reason,
+                timestamp: serverTimestamp(), 
+                status: 'unread'
+            });
+
+            // Trigger local context block to clear app feeds
+            blockUser(expertId); 
+
+            Alert.alert("HOST BLOCKED", `${expert.name} has been successfully restricted and reported to safety moderation.`, [
+                { text: "OK", onPress: () => router.back() }
+            ]);
+        } catch (error) {
+            Alert.alert("SYSTEM ERROR", "Unable to complete blocking protocol. Please check your connection.");
+        } finally {
+            setIsBlocking(false); 
+            setBlockModalVisible(false);
+        }
+    };
 
     const handleFollowAction = async () => {
         if (!user) return Alert.alert("Login Required", "Please login to connect with hosts.");
@@ -527,7 +607,17 @@ export default function ExpertDetail() {
 
                     <View style={styles.navRow}>
                         <TouchableOpacity onPress={() => router.back()} style={styles.iconCircle}><Ionicons name="chevron-back" size={24} color="#FFF" /></TouchableOpacity>
-                        <TouchableOpacity onPress={onShare} style={styles.iconCircle}><Ionicons name="share-social-outline" size={22} color="#FFF" /></TouchableOpacity>
+                        
+                        {/* 🔥 SATTI UPDATE: Changed to Block & Report Modal Trigger */}
+                        <View style={{ flexDirection: 'row', gap: 12 }}>
+                            <TouchableOpacity onPress={() => setBlockModalVisible(true)} style={styles.iconCircle}>
+                                <MaterialCommunityIcons name="shield-off" size={22} color="#EF4444" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={onShare} style={styles.iconCircle}>
+                                <Ionicons name="share-social-outline" size={22} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+
                     </View>
                 </View>
 
@@ -671,6 +761,54 @@ export default function ExpertDetail() {
                     </>
                 )}
             </View>
+
+            {/* 🔥 SATTI UPDATE: BLOCK & REPORT MODAL UI 🔥 */}
+            <Modal
+                visible={blockModalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setBlockModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={[styles.modalContainer, { borderColor: theme.color }]}>
+                        <View style={{ alignItems: 'center', marginBottom: 15 }}>
+                            <View style={[styles.modalIconRing, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                                <MaterialCommunityIcons name="shield-off-outline" size={32} color="#EF4444" />
+                            </View>
+                            <Text style={styles.modalTitle}>BLOCK HOST</Text>
+                            <Text style={styles.modalSubText}>
+                                Restrict {expert?.name} from contacting you or showing in your feed. This action will be reported for safety moderation.
+                            </Text>
+                        </View>
+
+                        <Text style={styles.modalLabel}>REASON FOR REPORTING:</Text>
+                        {blockReasons.map((reason, idx) => (
+                            <TouchableOpacity 
+                                key={idx} 
+                                style={[styles.reasonBtn, { borderColor: theme.color + '40' }]}
+                                onPress={() => handleReasonSelect(reason)}
+                                disabled={isBlocking}
+                            >
+                                <Text style={styles.reasonText}>{reason}</Text>
+                                <Ionicons name="chevron-forward" size={16} color={theme.color} />
+                            </TouchableOpacity>
+                        ))}
+
+                        {isBlocking && (
+                            <ActivityIndicator size="small" color="#EF4444" style={{ marginTop: 10 }} />
+                        )}
+
+                        <TouchableOpacity 
+                            style={styles.cancelActionBtn} 
+                            onPress={() => setBlockModalVisible(false)}
+                            disabled={isBlocking}
+                        >
+                            <Text style={styles.cancelBtnText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
         </View>
     );
 }
@@ -741,5 +879,17 @@ const styles = StyleSheet.create({
     callBtn: { width: '58%', height: 65, borderRadius: 32, overflow: 'hidden', elevation: 15 },
     btnGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
     callBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-    liveActionBtn: { flex: 1, height: 68, borderRadius: 35, overflow: 'hidden', elevation: 15 }
+    liveActionBtn: { flex: 1, height: 68, borderRadius: 35, overflow: 'hidden', elevation: 15 },
+
+    // 🔥 SATTI UPDATE: MODAL STYLES 🔥
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+    modalContainer: { backgroundColor: '#0F172A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0 },
+    modalIconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+    modalTitle: { color: '#EF4444', fontSize: 20, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
+    modalSubText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
+    modalLabel: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
+    reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1 },
+    reasonText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+    cancelActionBtn: { marginTop: 15, padding: 16, alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
+    cancelBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '900', letterSpacing: 1 }
 });

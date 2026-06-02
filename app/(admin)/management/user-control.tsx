@@ -1,5 +1,6 @@
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useRouter } from 'expo-router'; // 🔥 SATTI UPDATE: Imported Router
 import { collection, doc, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react'; // 🔥 SYSTEM LOGIC: Reference hook for animations
 import {
@@ -8,6 +9,10 @@ import {
     Animated, // 🔥 SYSTEM LOGIC: Animation engine for risk alerts
     Dimensions,
     FlatList,
+    Image // 🔥 SATTI UPDATE: Imported Image component
+    ,
+
+
     StatusBar,
     StyleSheet,
     Text,
@@ -19,6 +24,7 @@ import { db } from '../../../firebaseConfig';
 const { width } = Dimensions.get('window');
 
 export default function UserControl() {
+    const router = useRouter(); // 🔥 SATTI UPDATE: Initialized Router
     const [users, setUsers] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
 
@@ -111,8 +117,18 @@ export default function UserControl() {
         const BlinkRenderer = () => {
             const blinkOpacity = useBlinkAnimation();
             
+            // 🔥 SATTI UPDATE: Navigation function added
+            const handleCardPress = () => {
+                router.push(`/(admin)/passbook/user-detail/${item.id}` as any);
+            };
+
             return (
-                <View style={[styles.card, isBlocked ? styles.blockedCard : (isHighRisk ? styles.highRiskCard : {})]}>
+                // 🔥 SATTI UPDATE: Changed View to TouchableOpacity
+                <TouchableOpacity 
+                    activeOpacity={0.8}
+                    onPress={handleCardPress}
+                    style={[styles.card, isBlocked ? styles.blockedCard : (isHighRisk ? styles.highRiskCard : {})]}
+                >
                     
                     {/* 🔥 SYSTEM ALARM: HIGH-RISK INDICATOR 🔥 */}
                     {isHighRisk && !isBlocked && (
@@ -125,12 +141,20 @@ export default function UserControl() {
                     <View style={styles.cardHeader}>
                         {/* Normalized Profile Avatar Component */}
                         <View style={styles.avatarContainer}>
-                            <LinearGradient 
-                                colors={isHighRisk && !isBlocked ? ['#EF4444', '#7F1D1D'] : ['#1E293B', '#0F172A']} 
-                                style={styles.avatarGradient}
-                            >
-                                <Text style={[styles.avatarText, isHighRisk && !isBlocked && { color: '#FFF' }]}>{item.name?.[0] || 'C'}</Text>
-                            </LinearGradient>
+                            {/* 🔥 SATTI UPDATE: Added Profile Picture Logic */}
+                            {item.profileImage || item.image ? (
+                                <Image 
+                                    source={{ uri: item.profileImage || item.image }}
+                                    style={styles.avatarGradient} 
+                                />
+                            ) : (
+                                <LinearGradient 
+                                    colors={isHighRisk && !isBlocked ? ['#EF4444', '#7F1D1D'] : ['#1E293B', '#0F172A']} 
+                                    style={styles.avatarGradient}
+                                >
+                                    <Text style={[styles.avatarText, isHighRisk && !isBlocked && { color: '#FFF' }]}>{item.name?.[0] || 'C'}</Text>
+                                </LinearGradient>
+                            )}
                             <View style={[styles.indicator, { backgroundColor: isBlocked ? '#EF4444' : (isHighRisk ? '#EF4444' : '#10B981') }]} />
                         </View>
 
@@ -175,7 +199,7 @@ export default function UserControl() {
                             <Text style={styles.actionBtnText}>{isBlocked ? ' RESTORE' : ' RESTRICT'}</Text>
                         </TouchableOpacity>
                     </View>
-                </View>
+                </TouchableOpacity>
             );
         };
 

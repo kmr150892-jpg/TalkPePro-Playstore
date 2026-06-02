@@ -187,6 +187,12 @@ export default function LoginScreen() {
 
       const result = await signInWithCredential(auth, credential);
       
+      // 🔥 SATTI FIX: FORCING TOKEN REFRESH IMMEDIATELY AFTER LOGIN
+      // Ithu unblock aana users-ku pazhaya "blocked" permission error varama stop pannidum!
+      if (result.user) {
+          await result.user.getIdToken(true);
+      }
+
       // ✅ If it reaches here, Google Login was successful! 
       // Any error after this is because GateKeeper intentionally signed them out.
       authSuccess = true; 
@@ -313,11 +319,13 @@ export default function LoginScreen() {
         }
       }
 
-      // Final Routing
+      // 🔥 Final Routing - SATTI HOST UNBLOCK DIRECT ROUTE FIX 🔥
       if (finalRole === 'admin') {
         router.replace('/(admin)' as any); 
-      } else if (selectedRole === 'expert') {
-        if ((finalRole === 'expert' || expertStatus === 'Active') && expertStatus === "Active") {
+      } else if (selectedRole === 'expert' || finalRole === 'expert') {
+        // 🔥 SATTI FIX: Direct pass for Active Experts!
+        if (finalRole === 'expert' && expertStatus === 'Active') {
+            console.log("Host is active. Sending to dashboard...");
             router.replace('/expert/dashboard' as any); 
         } 
         else if (isAlreadyApplying || expertStatus === 'Pending') {

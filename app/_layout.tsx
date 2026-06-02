@@ -11,6 +11,7 @@ import { ActivityIndicator, Alert, Image, LayoutAnimation, LogBox, Modal, Platfo
 import MaintenanceScreen from '../components/.MaintenanceScreen';
 import UpdateAlert from '../components/UpdateAlert';
 import { auth, db } from '../firebaseConfig';
+import { BlockProvider } from '../utils/context/BlockContext'; // 🔥 SATTI UPDATE: BlockProvider Imported Here
 
 LogBox.ignoreLogs([
   'BloomFilter error',
@@ -134,7 +135,9 @@ export default function RootLayout() {
           if (docSnap.exists()) {
             const data = docSnap.data();
 
-            if (data.forceLogout === true || data.status === 'Blocked' || data.isBlocked === true) {
+            // 🔥 SATTI FIX: Removed 'forceLogout' & 'status === Blocked' check. 
+            // We ONLY trust 'isBlocked === true' to prevent stuck loops!
+            if (data.isBlocked === true) {
                 if (docSnap.metadata.fromCache) {
                     console.log("Cached block detected, waiting for server to confirm...");
                     return; 
@@ -269,7 +272,6 @@ export default function RootLayout() {
     const inVideoCall = currentPath.includes('videocall');
     const inPartyMode = currentPath.includes('Session');
     
-    // 🔥 SATTI FIX: If in forum, live, videocall, or party, we don't need this global call overlay listener!
     if (inForum || inLiveMode || inVideoCall || inPartyMode) return;
 
     const callsRef = collection(db, 'calls');
@@ -292,7 +294,6 @@ export default function RootLayout() {
                             const actualPic = uData.profilePic || uData.photoURL || callData.callerImage;
                             const actualName = uData.name || uData.displayName || callData.callerName;
                             
-                            // 🔥 SATTI FIX: Fetching the Maximum of DIAMOND/RECHARGE fields only
                             const callerDiamonds = Math.max(
                                 uData.totalDiamonds || 0,
                                 uData.walletBalance || 0,
@@ -327,7 +328,7 @@ export default function RootLayout() {
     return () => {
         if (unsubIncomingCall) unsubIncomingCall();
     };
-  }, [user?.uid, userRole, initializing, segments.join('/'), isExpertLive]); // 🔥 Added isExpertLive dependency
+  }, [user?.uid, userRole, initializing, segments.join('/'), isExpertLive]); 
 
   useEffect(() => {
     let interval: ReturnType<typeof setInterval>;
@@ -500,8 +501,9 @@ export default function RootLayout() {
   // 🔥 SATTI FIX: Determining User Level & Theme strictly based on Diamonds/Recharge
   const userTheme = incomingCallData ? calculateUserLevel(incomingCallData.callerDiamonds || 0) : calculateUserLevel(0);
 
+  // 🔥 SATTI UPDATE: Wrapped the entire return inside <BlockProvider>
   return (
-    <>
+    <BlockProvider>
       <StatusBar barStyle="light-content" backgroundColor="#020617" />
       <Stack screenOptions={{ headerShown: false, animation: 'fade' }}>
         <Stack.Screen name="index" /> 
@@ -581,7 +583,7 @@ export default function RootLayout() {
             </View>
         </Modal>
       )}
-    </>
+    </BlockProvider>
   );
 }
 

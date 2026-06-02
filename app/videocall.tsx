@@ -6,13 +6,12 @@ import * as ScreenCapture from 'expo-screen-capture';
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import {
     addDoc,
-    arrayUnion,
     collection,
     doc, getDoc,
     increment, onSnapshot, orderBy, query,
     serverTimestamp, setDoc, updateDoc, where
 } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useContext, useEffect, useRef, useState } from 'react';
 import {
     Alert,
     Animated,
@@ -40,13 +39,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
 
 import GameOverlay from '../components/GameOverlay';
-import GiftOverlay from '../components/GiftOverlay'; // 🔥 SATTI FIX: Imported GiftOverlay
+import GiftOverlay from '../components/GiftOverlay';
 import BottomControls from '../components/videocall/BottomControls';
 import CallSummary from '../components/videocall/CallSummary';
 import FloatingChat from '../components/videocall/FloatingChat';
 import GiftPanel from '../components/videocall/GiftPanel';
 import GiftRain from '../components/videocall/GiftRain';
 import RingingOverlay from '../components/videocall/RingingOverlay';
+import { BlockContext } from '../utils/context/BlockContext';
 import { checkWinner } from '../utils/gameLogic';
 
 const { width } = Dimensions.get('window');
@@ -84,6 +84,7 @@ export default function VideoCallScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
     const user = auth.currentUser;
+    const { blockUser } = useContext(BlockContext); 
     
     const initialExpertId = (params.expertId as string) || (params.expertID as string) || (params.hostId as string); 
     const [expertIdState, setExpertIdState] = useState<string | undefined>(initialExpertId);
@@ -104,7 +105,6 @@ export default function VideoCallScreen() {
     const [remoteUid, setRemoteUid] = useState<number | null>(null);
     const [isMuted, setIsMuted] = useState(false);
     
-    // 🔥 SATTI NEW STATE FOR Pro FILTER
     const [isProEnabled, setIsProEnabled] = useState(false);
 
     const [isCallAccepted, setIsCallAccepted] = useState(role === 'user'); 
@@ -158,7 +158,6 @@ export default function VideoCallScreen() {
 
     const [remoteDisconnected, setRemoteDisconnected] = useState(false);
 
-    // 🔥 SATTI FIX: Added states for Premium Gift Overlay
     const [activeGiftOverlay, setActiveGiftOverlay] = useState<any>(null);
     const [expertThemeBeans, setExpertThemeBeans] = useState<number>(0);
 
@@ -378,7 +377,7 @@ export default function VideoCallScreen() {
                         if (pic && !expertProfilePic) setExpertProfilePic(pic); 
                         
                         const totalBeans = eData.totalBeansEarned || eData.totalBeans || 0;
-                        setExpertThemeBeans(totalBeans); // 🔥 SATTI FIX: Save beans for the Premium overlay
+                        setExpertThemeBeans(totalBeans); 
 
                         let finalUserPaymentRate = 0;
 
@@ -509,7 +508,7 @@ export default function VideoCallScreen() {
                 if (data.lastGift && data.lastGift.timestamp > (Date.now() - 5000)) {
                     setActiveGiftType(data.lastGift.type);
                     setGiftRainVisible(true);
-                    setActiveGiftOverlay(data.lastGift); // 🔥 SATTI FIX: Triggers the new premium overlay!
+                    setActiveGiftOverlay(data.lastGift); 
                 }
 
                 if (data.totalGiftsDiamonds !== undefined) {
@@ -733,7 +732,6 @@ export default function VideoCallScreen() {
         }
     };
 
-    // 🔥 SATTI FIX: Added giftName parameter for GiftOverlay functionality 🔥
     const handleSendGift = async (amount: number, type: string, giftName: string = 'Gift') => {
         if (!user) return;
         const targetUserIdForLog = realCallerId || params.callerId || user?.uid || 'unknown';
@@ -807,7 +805,6 @@ export default function VideoCallScreen() {
                 });
             }
             
-            // 🔥 SATTI FIX: Appended giftName & senderName for the Animated Premium Overlay 🔥
             await updateDoc(doc(db, "calls", callId), {
                 lastGift: { 
                     type, 
@@ -849,18 +846,32 @@ export default function VideoCallScreen() {
         handleCallEnd(false, 'missed');
     };
 
+    // 🔥 SATTI UPDATE: Block User Function works for BOTH User & Expert
     const handleBlockUser = async () => {
-        let targetUserId = realCallerId || params.callerId as string;
+        let targetUserId = '';
+        
+        // If expert is blocking user, take callerId. If user is blocking expert, take expertId.
+        if (role === 'expert') {
+            targetUserId = realCallerId || (params.callerId as string);
+        } else {
+            targetUserId = safeExpertId;
+        }
+
         if (!targetUserId && callId) {
             const snap = await getDoc(doc(db, "calls", callId));
-            if (snap.exists()) targetUserId = snap.data().callerId;
+            if (snap.exists()) {
+                targetUserId = role === 'expert' ? snap.data().callerId : snap.data().expertId;
+            }
         }
+        
         if (!targetUserId) return;
+        
         Alert.alert("Restrict User", "Do you want to permanently restrict this user?", [
             { text: "Cancel", style: "cancel" },
             { text: "Confirm", style: "destructive", onPress: async () => {
                 try {
-                    await updateDoc(doc(db, "users", auth.currentUser!.uid), { blockedUsers: arrayUnion(targetUserId) });
+                    // Call the Context function which adds to UI & saves to Firebase
+                    blockUser(targetUserId); 
                     handleCallEnd(true, 'ended');
                 } catch (error) {}
             }}
@@ -1102,7 +1113,6 @@ export default function VideoCallScreen() {
 
             <GiftRain visible={giftRainVisible} giftType={activeGiftType} onComplete={() => setGiftRainVisible(false)} />
 
-            {/* 🔥 SATTI FIX: GIFT OVERLAY COMPONENT ADDED HERE TO SHOW PREMIUM ANIMATED GIFTS DURING THE VIDEO CALL 🔥 */}
             <GiftOverlay 
                 giftData={activeGiftOverlay} 
                 onComplete={() => setActiveGiftOverlay(null)} 
@@ -1128,26 +1138,27 @@ export default function VideoCallScreen() {
             {isCallAccepted && !showSummary && (
                 <View style={styles.topHeader}>
                     <View style={styles.headerContent}>
+                        {/* 🔥 SATTI FIX: Added flex: 1 and paddingRight so it doesn't push the button out 🔥 */}
                         <View style={styles.headerInfo}>
                             <View style={styles.headerAvatarWrapper}>
                                 <Image source={{ uri: topHeaderProfilePic }} style={styles.headerAvatarPic} />
                             </View>
-                            <View style={{ marginLeft: 12 }}>
+                            <View style={{ marginLeft: 12, flex: 1 }}>
                                 <View style={styles.statusBadge}>
                                     <View style={styles.liveDot} />
                                     <Text style={styles.liveText}>{formatTime(secondsElapsed)}</Text>
                                     {isFreeModeActive && <Text style={styles.freeBadgeText}> COMPLIMENTARY</Text>}
                                 </View>
-                                <Text style={styles.callerNameText}>{role === 'expert' ? (callerDisplayName || "User") : expertName}</Text>
+                                {/* 🔥 SATTI FIX: Added numberOfLines={1} to truncate long names 🔥 */}
+                                <Text style={styles.callerNameText} numberOfLines={1}>{role === 'expert' ? (callerDisplayName || "User") : expertName}</Text>
                             </View>
                         </View>
                         
-                        {role === 'expert' && (
-                            <TouchableOpacity style={styles.topRightBlockBtn} onPress={handleBlockUser} activeOpacity={0.7}>
-                                <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
-                                <Text style={styles.blockBtnText}>RESTRICT</Text>
-                            </TouchableOpacity>
-                        )}
+                        {/* 🔥 SATTI UPDATE: Block button now available for BOTH User & Expert 🔥 */}
+                        <TouchableOpacity style={styles.topRightBlockBtn} onPress={handleBlockUser} activeOpacity={0.7}>
+                            <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
+                            <Text style={styles.blockBtnText}>RESTRICT</Text>
+                        </TouchableOpacity>
                     </View>
                 </View>
             )}
@@ -1218,15 +1229,23 @@ const styles = StyleSheet.create({
     innerVideo: { flex: 1 },
     topHeader: { position: 'absolute', top: 40, left: 20, right: 20, zIndex: 150 },
     headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: width - 40 },
-    headerInfo: { flexDirection: 'row', alignItems: 'center' },
+    
+    /* 🔥 SATTI FIX: Added flex: 1 and paddingRight to lock the layout 🔥 */
+    headerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 },
+    
     headerAvatarWrapper: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden', backgroundColor: '#000' },
     headerAvatarPic: { width: '100%', height: '100%' },
     statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25, alignSelf: 'flex-start' },
     liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 10 },
     liveText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
     freeBadgeText: { color: '#FBBF24', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-    callerNameText: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4, textShadowColor: '#000', textShadowRadius: 15 },
-    topRightBlockBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 5, zIndex: 999 },
+    
+    /* 🔥 SATTI FIX: Added flexShrink: 1 to ensure long names shrink gracefully 🔥 */
+    callerNameText: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4, textShadowColor: '#000', textShadowRadius: 15, flexShrink: 1 },
+    
+    /* 🔥 SATTI FIX: Added flexShrink: 0 so button never gets squeezed or pushed off 🔥 */
+    topRightBlockBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 5, zIndex: 999, flexShrink: 0 },
+    
     blockBtnText: { color: '#EF4444', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
     waitingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     waitingText: { color: '#FFF', fontSize: 14, fontWeight: '600', marginTop: 15, opacity: 0.8 },

@@ -32,7 +32,7 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'], glow: '#06B6D4' };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'], glow: '#10B981' };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'], glow: '#EAB308' };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8' };
+    if (beans >= 300000 )   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8' };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent' };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent' };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent' };
@@ -74,13 +74,15 @@ export default function ExpertPassbookDetail() {
     const [totalGiftsBeans, setTotalGiftsBeans] = useState<number>(0);
     const [totalEarningsCalculated, setTotalEarningsCalculated] = useState<number>(0);
     const [totalWithdrawnCalculated, setTotalWithdrawnCalculated] = useState<number>(0);
+    const [flags, setFlags] = useState<any[]>([]); // 🔥 SATTI UPDATE: Added Flag State
     
     const [breakdown, setBreakdown] = useState({
         calls: 0, liveGifts: 0, partyGifts: 0, callGifts: 0, liveGames: 0, partyGames: 0, totalDeepGifts: 0
     });
 
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'STATS' | 'HISTORY'>('STATS');
+    // 🔥 SATTI UPDATE: Added 'FLAGS' tab to the main tabs state
+    const [activeTab, setActiveTab] = useState<'STATS' | 'HISTORY' | 'FLAGS'>('STATS');
     
     // 🔥 NEW: History Sub-Tab State from Memory
     const [activeHistoryTab, setActiveHistoryTab] = useState<'video_call' | 'live_gift' | 'party_gift' | 'call_gift' | 'live_game_bonus' | 'party_game_bonus'>('video_call');
@@ -478,7 +480,37 @@ export default function ExpertPassbookDetail() {
             processAllExpertLogs();
         });
 
-        return () => { unsubUser(); unsubWithdrawals(); unsubGifts(); unsubCalls(); };
+        // 🔥 SATTI UPDATE: FLAG LISTENER ENGINE FOR EXPERT 🔥
+        const qFlags = query(
+            collection(db, "admin_alerts"), 
+            where("expertId", "==", id), // Check for reports AGAINST this expert
+            where("type", "==", "USER_BLOCKED_EXPERT")
+        );
+        const unsubFlags = onSnapshot(qFlags, async (snap) => {
+            const list = await Promise.all(snap.docs.map(async (d) => {
+                const data = d.data() as any;
+                let fetchedPic = data.userImage || data.profilePic || '';
+                
+                if (!fetchedPic && data.userId) {
+                    try {
+                        const userDoc = await getDoc(doc(db, 'users', data.userId));
+                        if (userDoc.exists()) {
+                            const uData = userDoc.data() as any;
+                            fetchedPic = uData.profilePic || uData.image || ''; 
+                        }
+                    } catch (e) {
+                        console.log("Error fetching user picture:", e);
+                    }
+                }
+                
+                return { alertId: d.id, fetchedUserPic: fetchedPic, ...data };
+            }));
+
+            list.sort((a: any, b: any) => (b.timestamp?.seconds || 0) - (a.timestamp?.seconds || 0));
+            setFlags(list);
+        });
+
+        return () => { unsubUser(); unsubWithdrawals(); unsubGifts(); unsubCalls(); unsubFlags(); };
     }, [id]);
 
     if (loading) return (
@@ -646,8 +678,32 @@ export default function ExpertPassbookDetail() {
         );
     };
 
-    // 🔥 FIXED: Direct fetch from deep array without merging duplicates!
     const filteredTransactions = allTransactions.filter(t => t.type === activeHistoryTab);
+
+    // 🔥 THIS COMPONENT REPLACES THE LIST EMPTY COMPONENT 🔥
+    const renderListFooter = () => (
+        <View style={styles.footerContainer}>
+            {/* 🔥 SATTI UPDATE: FLAG BUTTON LAST LA BOTTOM LA VECHACHU! 🔥 */}
+            <TouchableOpacity 
+                style={[styles.bottomFlagBtn, flags.length > 0 ? {backgroundColor: '#EF4444'} : {backgroundColor: 'rgba(255,255,255,0.05)'}]}
+                onPress={() => setActiveTab('FLAGS')}
+                activeOpacity={0.8}
+            >
+                <MaterialCommunityIcons name={flags.length > 0 ? "alert-octagon" : "shield-check"} size={20} color={flags.length > 0 ? "#FFF" : "#10B981"} />
+                <Text style={[styles.bottomFlagText, {color: flags.length > 0 ? "#FFF" : "#10B981"}]}>
+                    {flags.length > 0 ? `VIEW SECURITY FLAGS (${flags.length})` : 'CLEAN RECORD (0 FLAGS)'}
+                </Text>
+            </TouchableOpacity>
+
+            <View style={styles.footer}>
+              <Text style={styles.verText}>TALKPE OS • SECURE_LEDGER</Text>
+              <View style={[styles.secureNode, { borderColor: 'rgba(255,255,255,0.08)' }]}>
+                  <MaterialCommunityIcons name="shield-check" size={12} color={theme.primary} />
+                  <Text style={[styles.secureText, { color: theme.primary }]}>Encrypted Data Node</Text>
+              </View>
+            </View>
+        </View>
+    );
 
     return (
         <SafeAreaView style={styles.container}>
@@ -668,12 +724,12 @@ export default function ExpertPassbookDetail() {
             </View>
 
             <FlatList 
-                // 🔥 FIXED: Passes filteredTransactions!
                 data={activeTab === 'HISTORY' ? filteredTransactions : []}
-              keyExtractor={(item, index) => `${item.id}_${item.type}_${index}`}
+                keyExtractor={(item, index) => `${item.id}_${item.type}_${index}`}
                 renderItem={activeHistoryTab === 'video_call' ? renderCallItem : renderGiftItem}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 50 }}
+                ListFooterComponent={renderListFooter} // 🔥 Added the combined footer here so it scrolls
                 ListHeaderComponent={
                     <View style={{ paddingHorizontal: 20 }}>
                         
@@ -936,22 +992,59 @@ export default function ExpertPassbookDetail() {
                             </View>
                         )}
                         
+                        {/* 🔥 SATTI UPDATE: NEW FLAGS TAB CONTENT 🔥 */}
+                        {activeTab === 'FLAGS' && (
+                            <View style={{ marginTop: 20 }}>
+                                <View style={styles.talktimeHighlight}>
+                                     <Text style={[styles.totalTalkLabel, { color: '#EF4444', marginBottom: 15 }]}>USER REPORTS AUDIT LOG: {flags.length} SECURE FLAGS</Text>
+                                </View>
+                                {loading ? (
+                                    <ActivityIndicator size="large" color="#EF4444" style={{ marginTop: 40 }} />
+                                ) : flags.length > 0 ? (
+                                    flags.map((item, index) => {
+                                        // Fetching the user's profile picture that was synced from the admin_alerts query
+                                        const userPic = item.fetchedUserPic || item.userImage || item.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.userName || 'User')}&background=EF4444&color=fff&bold=true`;
+                                        return (
+                                            <Animated.View key={item.alertId || index} style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
+                                                <View style={styles.stealthHistoryCard}>
+                                                    <View style={[styles.quadBorderUI, { borderLeftColor: '#EF4444', borderRightColor: '#EF4444', borderTopColor: 'rgba(239, 68, 68, 0.2)', borderBottomColor: 'rgba(239, 68, 68, 0.2)' }]} />
+                                                    <View style={[styles.sessionBadge, { backgroundColor: '#EF4444' }]}>
+                                                         <MaterialCommunityIcons name="alert-circle" size={10} color="#FFF" />
+                                                         <Text style={styles.sessionTypeText}>REPORTED_LOG</Text>
+                                                    </View>
+                                                    <View style={styles.cardHeaderUI}>
+                                                        <View style={[styles.expertThumbRing, { borderColor: '#EF4444', shadowColor: '#EF4444', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                                                            <Image source={{ uri: userPic }} style={styles.expertThumb} />
+                                                        </View>
+                                                        <View style={styles.expertInfo}>
+                                                            <Text style={styles.expertName} numberOfLines={1}>USER: {(item.userName || 'Unknown User').toUpperCase()}</Text>
+                                                            <Text style={styles.callDateText} numberOfLines={1}>
+                                                                {item.timestamp?.seconds 
+                                                                ? new Date(item.timestamp.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
+                                                                : 'RECENT FLAG'}
+                                                            </Text>
+                                                        </View>
+                                                    </View>
+                                                    <View style={[styles.statsRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
+                                                        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '900' }}>REASON FOR BLOCK:</Text>
+                                                        <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700' }}>{item.reason || 'No specific reason documented by the user.'}</Text>
+                                                    </View>
+                                                </View>
+                                            </Animated.View>
+                                        )
+                                    })
+                                ) : (
+                                    <View style={styles.emptyCenter}>
+                                        <MaterialCommunityIcons name="shield-check" size={60} color="#10B981" />
+                                        <Text style={[styles.emptyTitleText, { color: '#10B981', marginTop: 15 }]}>Clean Record</Text>
+                                        <Text style={{color: '#475569', fontSize: 13, marginTop: 5}}>No user reports found against this host.</Text>
+                                    </View>
+                                )}
+                            </View>
+                        )}
+                        
                     </View>
                 }
-                ListEmptyComponent={() => {
-                    if (activeTab === 'HISTORY') {
-                        return (
-                          <View style={styles.emptyCenter}>
-                            <View style={[styles.emptyIconCircle, { borderColor: theme.primary + '20' }]}>
-                                <MaterialCommunityIcons name="database-off" size={60} color={theme.primary + '30'} />
-                            </View>
-                            <Text style={styles.emptyTitleText}>No Activity Found</Text>
-                            <Text style={{color: '#475569', fontSize: 13, marginTop: 10, textAlign: 'center'}}>Earning records will appear here after synchronization.</Text>
-                          </View>
-                        );
-                    }
-                    return null;
-                }}
             />
         </SafeAreaView>
     );
@@ -979,12 +1072,12 @@ const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionic
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#020617' },
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
-    loaderText: { marginTop: 12, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+    loaderText: { color: '#6366F1', marginTop: 12, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, gap: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
     backBtn: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
     headerTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 0.5 },
     headerSub: { color: '#FB7185', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
-    passbookCard: { borderRadius: 24, padding: 25, marginTop: 15, borderWidth: 1, elevation: 20, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, marginBottom: 25 },
+    passbookCard: { borderRadius: 24, padding: 25, marginTop: 5, borderWidth: 1, elevation:100, shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.2, shadowRadius: 20, marginBottom: 25 },
     cardTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 25 },
     cardHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     cardType: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
@@ -999,13 +1092,13 @@ const styles = StyleSheet.create({
     uidValueLarge: { fontSize: 13, fontWeight: '900', letterSpacing: 1 },
     joinedLabel: { color: '#64748B', fontSize: 8, fontWeight: '900', letterSpacing: 1.5, marginBottom: 4 },
     joinedValue: { color: '#FFF', fontSize: 13, fontWeight: '800' },
-    tabsRow: { flexDirection: 'row', backgroundColor: '#0F172A', padding: 5, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#1E293B', justifyContent: 'space-between' },
+    tabsRow: { flexDirection: 'row', backgroundColor: '#0F172A', padding: 5, borderRadius: 12, marginBottom: 20, borderWidth: 1, borderColor: '#1E293B' },
     tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8 },
     tabBtnActive: { backgroundColor: '#334155' },
     tabText: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
     tabTextActive: { color: '#FFF' },
     
-    // Core Stats Screen Styles 
+    // Core Stats Screen Styles
     shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
     subHeading: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 3, marginBottom: 15, marginTop: 40, textTransform: 'uppercase' },
     eliteHeroWrapper: { width: '100%', marginTop: 10 },
@@ -1114,5 +1207,35 @@ const styles = StyleSheet.create({
     receivedText: { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
     emptyCenter: { justifyContent: 'center', alignItems: 'center', padding: 40 },
     emptyIconCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.02)', justifyContent: 'center', alignItems: 'center', marginBottom: 25, borderWidth: 1 },
-    emptyTitleText: { color: '#FFF', fontSize: 22, fontWeight: '900' }
+    emptyTitleText: { color: '#FFF', fontSize: 22, fontWeight: '900' },
+
+    // 🔥 SATTI UPDATE: Footer List Component Styles 🔥
+    footerContainer: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, paddingTop: 10 },
+    bottomFlagBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 25, width: '100%', gap: 10, elevation: 5, shadowColor: '#EF4444', shadowOpacity: 0.3, shadowRadius: 10 },
+    bottomFlagText: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
+    talktimeHighlight: { alignItems: 'center' },
+    totalTalkLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
+    
+    // 🔥 SATTI FIX: MISSING STYLES FOR THE FLAGS TAB ADDED HERE 🔥
+    cardContainerUI: { marginBottom: 20 },
+    stealthHistoryCard: { backgroundColor: 'rgba(5,5,5,0.7)', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
+    quadBorderUI: { ...StyleSheet.absoluteFillObject, borderLeftWidth: 4, borderRightWidth: 4, borderTopWidth: 1.2, borderBottomWidth: 1.2, borderRadius: 24, opacity: 0.8 },
+    sessionBadge: { position: 'absolute', top: 0, right: 18, paddingHorizontal: 10, paddingVertical: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4, zIndex: 10 },
+    sessionTypeText: { color: '#FFF', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
+    cardHeaderUI: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, zIndex: 10 },
+    expertThumbRing: { width: 54, height: 54, borderRadius: 18, borderWidth: 1.5, padding: 2, elevation: 10, shadowOpacity: 0.5, shadowRadius: 8 },
+    expertThumb: { width: '100%', height: '100%', borderRadius: 15 },
+    expertInfo: { flex: 1, marginLeft: 15, overflow: 'hidden' },
+    expertName: { color: '#FFF', fontSize: 14, fontWeight: '900', marginBottom: 4, letterSpacing: 0.5 },
+    callDateText: { color: '#475569', fontSize: 10, fontWeight: '800' },
+    costContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 10 },
+    costText: { fontSize: 17, fontWeight: '900' },
+    statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12, zIndex: 10, width: '100%' },
+    statItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' },
+    statValueText: { color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
+    
+    footer: { alignItems: 'center', marginTop: 25 },
+    verText: { color: 'rgba(255,255,255,0.15)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+    secureNode: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 15, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 25, borderWidth: 1 },
+    secureText: { fontSize: 9, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.5 },
 });

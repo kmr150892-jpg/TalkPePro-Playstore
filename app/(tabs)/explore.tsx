@@ -217,25 +217,21 @@ export default function CinematicExploreScreen() {
     const [incomingTimer, setIncomingTimer] = useState(12);
     const incomingPulse = useRef(new Animated.Value(1)).current;
 
-    // 🔥 Check User Trial Status on Load
+    // 🔥 Check User Trial Status & Ghost Data on Load (SATTI FIX: Realtime onSnapshot)
     useEffect(() => {
-        const fetchTrialStatus = async () => {
-            if (user) {
-                try {
-                    const uSnap = await getDoc(doc(db, "users", user.uid));
-                    if (uSnap.exists()) {
-                        const data = uSnap.data();
-                        setUserData(data); // Save local user/expert data for profilePic fallback
-                        if (data.freeMinsRemaining && data.freeMinsRemaining > 0) {
-                            setHasTrialMins(true);
-                        } else {
-                            setHasTrialMins(false);
-                        }
-                    }
-                } catch (e) {}
+        if (!user) return;
+        const unsubUser = onSnapshot(doc(db, "users", user.uid), (uSnap) => {
+            if (uSnap.exists()) {
+                const data = uSnap.data();
+                setUserData(data); // Save local user/expert data for profilePic fallback & blocked array
+                if (data.freeMinsRemaining && data.freeMinsRemaining > 0) {
+                    setHasTrialMins(true);
+                } else {
+                    setHasTrialMins(false);
+                }
             }
-        };
-        fetchTrialStatus();
+        });
+        return () => unsubUser();
     }, [user]);
 
     useEffect(() => {
@@ -520,12 +516,23 @@ export default function CinematicExploreScreen() {
         }
     };
 
+    // ==========================================
+    // 🔥 CORE GHOST FILTER APPLICATION (DIRECT SYNC) 🔥
+    // ==========================================
+    const currentBlocked = userData?.blockedUsers || [];
+    const safeExperts = experts.filter((expert) => {
+        const hostBlockedUsers = expert.blockedUsers || [];
+        const notBlockedByMe = !currentBlocked.includes(expert.id);
+        const notBlockedByHost = !hostBlockedUsers.includes(user?.uid);
+        return notBlockedByMe && notBlockedByHost;
+    });
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             
             <FlatList
-                data={experts}
+                data={safeExperts}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item, index }) => (
                     <ExpertVideoCard 
