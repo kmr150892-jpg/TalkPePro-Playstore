@@ -120,7 +120,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                // 🔥 SATTI FIX: using update() to fix failed-precondition error
                 transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
@@ -128,13 +127,96 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 
                 transaction.update(roomRef, { players: updatedPlayers });
 
-                const txRef = doc(db, 'transactions', `${uid}_auto_refund_${Date.now()}`);
+                const txId = `${uid}_auto_refund_${liveId}`;
+                const txRef = doc(db, 'transactions', txId);
                 transaction.set(txRef, {
                     userId: uid, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Arena Auto Refund (Host Left)', timestamp: serverTimestamp()
+                });
+
+                // 🔥 SATTI FIX: Strict 1:1 ID lock to prevent double activity logs 🔥
+                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
+                transaction.set(activityRef, {
+                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'REFLEX BLITZ ARENA',
+                    sessionId: 'reflex_arena', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                    title: 'Arena Auto Refund (Host Left)', timestamp: serverTimestamp()
                 });
             });
         } catch (e) {
             console.log("Auto refund error:", e);
+        }
+    };
+
+    // 🔥 SATTI FIX: PARENT ROOM LISTENER FOR HOST FORCE-CLOSE AUTO REFUND 🔥
+    useEffect(() => {
+        if (!liveId || !visible || isHost) return;
+        const parentRoomRef = doc(db, actualCollection, liveId);
+        
+        const unsubParent = onSnapshot(parentRoomRef, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                // If parent room ends (Host force close / network cut), trigger refund safely!
+                if (data.status === 'ended' || data.status === 'CANCELLED') {
+                    forceRefundOnHostDrop();
+                }
+            }
+        });
+
+        return () => unsubParent();
+    }, [liveId, visible, isHost, actualCollection]);
+
+    // 🔥 SATTI FIX: BACKUP FORCE REFUND LOGIC IF HOST DISCONNECTS ABRUPTLY 🔥
+    const forceRefundOnHostDrop = async () => {
+        if (!auth.currentUser || isProcessing) return;
+        const uid = auth.currentUser.uid;
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(roomRef);
+                const userRef = doc(db, 'users', uid);
+                const userSnap = await transaction.get(userRef);
+
+                if (!gameSnap.exists() || !userSnap.exists()) return;
+                const gameData = gameSnap.data();
+
+                // If game is already finished or formally refunded, skip to prevent double addition
+                if (gameData.status === 'FINISHED' || gameData.status === 'CANCELLED' || gameData.refunded) return;
+
+                const currentPlayers = gameData.players || [];
+                const myPlayerObj = currentPlayers.find((p: any) => p.id === uid);
+                if (!myPlayerObj) return; // You are not in the game, nothing to refund
+
+                const roomFee = Number(gameData.entryFee) || 0;
+                if (roomFee === 0) return;
+
+                const uData = userSnap.data();
+                const safeBal = Number(uData.balance) || 0;
+                const safeWalletBal = Number(uData.walletBalance) || 0;
+
+                const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
+
+                transaction.update(userRef, { 
+                    balance: safeBal + roomFee,
+                    walletBalance: safeWalletBal + roomFee
+                });
+                
+                transaction.update(roomRef, { players: updatedPlayers });
+
+                const txId = `${uid}_force_refund_${liveId}`;
+                const txRef = doc(db, 'transactions', txId);
+                transaction.set(txRef, {
+                    userId: uid, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Arena Refund (Host Disconnected)', timestamp: serverTimestamp()
+                });
+
+                // 🔥 SATTI FIX: Strict 1:1 ID lock to prevent double activity logs 🔥
+                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
+                transaction.set(activityRef, {
+                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'REFLEX BLITZ ARENA',
+                    sessionId: 'reflex_arena', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                    title: 'Arena Refund (Host Disconnected)', timestamp: serverTimestamp()
+                });
+            });
+            onClose(); // Auto close the modal since room is dead
+        } catch (e) {
+            console.log("Force refund error:", e);
         }
     };
 
@@ -151,7 +233,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                         isFeeLocked: false,
                         hostId: auth.currentUser?.uid, 
                         players: [], 
-                        refunded: false, // 🔥 SATTI FIX: Added refunded: false as initial lock state
+                        refunded: false, 
                         createdAt: serverTimestamp() 
                     });
                     setMatchResults(null);
@@ -192,7 +274,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     if (!isHost) {
                         handleAutoRefundOnCancel();
                     }
-                    // 🔥 SATTI FIX: If game is cancelled in background, modal should force close for everyone to prevent zombie UI
                     onClose(); 
                 }
             }
@@ -379,7 +460,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 if (currentPlayers.length >= MAX_PLAYERS) throw "Arena Full";
                 if (effectiveBalance < roomFee) throw `Insufficient Balance. You need ${roomFee} 💎 to join.`;
 
-                // 🔥 SATTI FIX: using update() to fix failed-precondition error
                 transaction.update(userRef, { 
                     balance: Math.max(0, safeBal - roomFee),
                     walletBalance: Math.max(0, safeWalletBal - roomFee)
@@ -430,7 +510,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                // 🔥 SATTI FIX: using update() to fix failed-precondition error
                 transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
@@ -438,9 +517,18 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 
                 transaction.update(roomRef, { players: updatedPlayers });
 
-                const txRef = doc(db, 'transactions', `${uid}_refund_${Date.now()}`);
+                const txId = `${uid}_refund_${liveId}_${Date.now()}`; // Manual exit needs timestamp to allow re-joining
+                const txRef = doc(db, 'transactions', txId);
                 transaction.set(txRef, {
                     userId: uid, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Reflex Arena Refund', timestamp: serverTimestamp()
+                });
+
+                // 🔥 SATTI FIX: Strict 1:1 ID lock to prevent double activity logs 🔥
+                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
+                transaction.set(activityRef, {
+                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'REFLEX BLITZ ARENA',
+                    sessionId: 'reflex_arena', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                    title: 'Reflex Arena Refund', timestamp: serverTimestamp()
                 });
             });
             Alert.alert("Refunded 🎖️", "You left the arena. Access Requirement has been refunded to your wallet.");
@@ -465,7 +553,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 if(!roomSnap.exists()) return;
                                 const data = roomSnap.data();
 
-                                // 🔥 SATTI FIX: DOUBLE REFUND BLOCKER 🔥
                                 if (data.status === 'CANCELLED' || data.refunded === true) {
                                     return; 
                                 }
@@ -483,17 +570,24 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                         const safeBal = Number(uData.balance) || 0;
                                         const safeWalletBal = Number(uData.walletBalance) || 0;
                                         
-                                        // 🔥 SATTI FIX: using update() to fix failed-precondition error
                                         transaction.update(uSnap.ref, { 
                                             balance: safeBal + roomFee,
                                             walletBalance: safeWalletBal + roomFee
                                         });
                                         
-                                        const txRef = doc(db, 'transactions', `${p.id}_host_refund_${Date.now()}`);
+                                        const txId = `${p.id}_host_cancel_${liveId}`;
+                                        const txRef = doc(db, 'transactions', txId);
                                         transaction.set(txRef, { userId: p.id, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Host Cancelled Refund', timestamp: serverTimestamp() });
+
+                                        // 🔥 SATTI FIX: Strict 1:1 ID lock to prevent double activity logs 🔥
+                                        const activityRef = doc(db, 'users', p.id, 'activityHistory', txId);
+                                        transaction.set(activityRef, {
+                                            type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'REFLEX BLITZ ARENA',
+                                            sessionId: 'reflex_arena', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                                            title: 'Host Cancelled Refund', timestamp: serverTimestamp()
+                                        });
                                     }
                                 });
-                                // 🔥 SATTI FIX: Save panrappa 'refunded: true' lock podurom 🔥
                                 transaction.update(roomRef, { status: 'CANCELLED', players: [], refunded: true });
                             });
                             onClose();
@@ -545,7 +639,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                         p.id === uid ? { ...p, score: finalScore, hasFinished: true } : p
                     );
                     
-                    // 🔥 SATTI FIX: using update() to fix failed-precondition error
                     transaction.update(roomRef, { players: updatedPlayers });
                 });
             } catch (e) {
@@ -600,7 +693,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     expertSnap = { snap: await transaction.get(eRef), ref: eRef };
                 }
                 
-                // 🔥 SATTI FIX: Fetching liveRef dynamically using actualCollection 🔥
                 if (liveId && actualHostId) {
                     const lRef = doc(db, actualCollection, liveId);
                     liveSnap = { snap: await transaction.get(lRef), ref: lRef };
@@ -613,7 +705,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                         const currentSafeBalance = Number(wData.balance) || 0;
                         const currentSafeWallet = Number(wData.walletBalance) || 0;
                         
-                        // 🔥 SATTI FIX: using update() to fix failed-precondition error
                         transaction.update(wSnap.ref, { 
                             balance: currentSafeBalance + rewardPerWinner,
                             walletBalance: currentSafeWallet + rewardPerWinner
@@ -639,7 +730,6 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                     const safeBeansBal = Number(eData.beansBalance) || 0;
                     const safeTotalEarned = Number(eData.totalBeansEarned) || 0;
 
-                    // 🔥 SATTI FIX: using update() to fix failed-precondition error
                     transaction.update(expertSnap.ref, { 
                         beans: safeEBeans + expertBeans,
                         balance: safeEBalance + expertBeans,
@@ -663,11 +753,9 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                 if (liveSnap && liveSnap.snap.exists()) {
                     const lData = liveSnap.snap.data() || {};
                     const safeEarned = Number(lData.earnedBeans) || 0;
-                    // 🔥 SATTI FIX: using update() to fix failed-precondition error
                     transaction.update(liveSnap.ref, { earnedBeans: safeEarned + expertBeans });
                 }
 
-                // 🔥 SATTI FIX: using update() to fix failed-precondition error
                 transaction.update(roomRef, {
                     status: 'FINISHED',
                     rankedPlayers: ranked, 
@@ -723,6 +811,18 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                         </TouchableOpacity>
                     </View>
 
+                    {/* 🔥 SATTI FIX: GAME DISCONNECT POLICY WARNING 🔥 */}
+                    {(gameStatus === 'WAITING' || gameStatus === 'PLAYING') && (
+                        <View style={styles.warningBanner}>
+                            <Ionicons name="warning" size={16} color="#F59E0B" />
+                            <Text style={styles.warningText}>
+                                {isHost 
+                                    ? "HOST WARNING: Do not close app from recent tabs. Users will lose diamonds, and action will be taken against your account."
+                                    : "NOTE: Do not close app during gameplay. Refunds apply ONLY for verified host disconnections."}
+                            </Text>
+                        </View>
+                    )}
+
                     {/* MATCHMAKING */}
                     {gameStatus === 'WAITING' && (
                         <View style={styles.lobbyStateWrapper}>
@@ -733,7 +833,8 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                                 <Text style={styles.feeValueText}>🪙 {entryFee} Diamonds</Text>
                             </View>
 
-                            <ScrollView style={{width: '100%', maxHeight: 150}} showsVerticalScrollIndicator={false}>
+                            {/* 🔥 SATTI FIX: Increased maxHeight to fit perfectly with taller modal 🔥 */}
+                            <ScrollView style={{width: '100%', maxHeight: 220}} showsVerticalScrollIndicator={false}>
                                 <View style={styles.playerPoolRow}>
                                     {[...Array(MAX_PLAYERS)].map((_, idx) => {
                                         const p = players[idx];
@@ -906,7 +1007,7 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                             {!isHost && matchResults.winnerIds?.includes(auth.currentUser?.uid) && (
                                 <View style={[StyleSheet.absoluteFill, { zIndex: 999 }]} pointerEvents="none">
                                     <LottieView
-                                        source={require('../assets/images/fireworks.json')} // Ensure this path matches your downloaded asset!
+                                        source={require('../assets/images/fireworks.json')} 
                                         autoPlay
                                         loop={false}
                                         style={{ width: '100%', height: '100%' }}
@@ -958,6 +1059,12 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
                             </TouchableOpacity>
                         </View>
                     )}
+
+                    {/* 🔥 SATTI FIX: Bottom Drag Handle Pinned to absolute bottom 🔥 */}
+                    <View {...panResponder.panHandlers} style={[styles.dragHandleContainer, { position: 'absolute', bottom: 15, alignSelf: 'center', width: '100%', height: 30 }]}>
+                        <View style={styles.dragPill} />
+                    </View>
+
                 </Animated.View>
             </View>
         </Modal>
@@ -966,16 +1073,21 @@ export default function LiveGameSheet({ visible, onClose, liveId, isHost, userWa
 
 const styles = StyleSheet.create({
     sheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2, 6, 23, 0.5)' },
-    arcadeContentCard: { width: width, height: height * 0.72, borderTopLeftRadius: 40, borderTopRightRadius: 40, borderWidth: 2, borderColor: 'rgb(0, 241, 254)', overflow: 'hidden', padding: 25, paddingTop: 10, paddingBottom: 35 },
+    // 🔥 SATTI FIX: Increased height from 0.78 to 0.85 so banner & players list fits nicely without cutting UI 🔥
+    arcadeContentCard: { width: width, height: height * 0.85, borderTopLeftRadius: 40, borderTopRightRadius: 40, borderWidth: 2, borderColor: 'rgb(0, 241, 254)', overflow: 'hidden', padding: 25, paddingTop: 10, paddingBottom: 50 },
     
     dragHandleContainer: { width: '100%', height: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
     dragPill: { width: 50, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.3)' },
 
-    sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+    sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     titleIconBadge: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     mainTitleText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
     closeRoundBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     
+    // 🔥 SATTI FIX: COMPACT WARNING BANNER STYLES 🔥
+    warningBanner: { flexDirection: 'row', backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', marginBottom: 15, alignItems: 'center' },
+    warningText: { color: '#F59E0B', fontSize: 10, fontWeight: '700', marginLeft: 8, flex: 1, lineHeight: 14 },
+
     lobbyStateWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     lobbyHelperText: { color: '#94A3B8', fontSize: 11, fontWeight: '900', letterSpacing: 3, marginBottom: 10 },
     entryFeeContainer: { backgroundColor: 'rgba(0, 242, 254, 0.08)', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)', marginBottom: 20 },

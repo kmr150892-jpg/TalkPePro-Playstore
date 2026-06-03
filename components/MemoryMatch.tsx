@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { doc, getDoc, onSnapshot, runTransaction, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
-import LottieView from 'lottie-react-native'; // 🔥 SATTI UPDATE: Lottie Animation Imported
+import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Dimensions, FlatList, Image, Modal, PanResponder, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../firebaseConfig';
@@ -22,7 +22,7 @@ const ENTRY_FEES = [500, 1000, 5000, 10000, 25000, 50000];
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 10;
 
-// 🔥 UPDATE 3 & 4: 15 Pairs (13 Normal, 1 Jackpot, 1 Trap) for the 30-Card Grid 🔥
+// 🔥 15 Pairs (13 Normal, 1 Jackpot, 1 Trap) for the 30-Card Grid 🔥
 const EMOJI_PAIRS = ['🍎', '🍌', '🍇', '🍉', '🍓', '🍒', '🍍', '🥝', '🥑', '🥕', '🌽', '🍩', '🍕', '💎', '☠️'];
 
 interface GlassPathProps {
@@ -35,7 +35,7 @@ interface GlassPathProps {
     collectionName?: string; 
 }
 
-// 🔥 SATTI UPDATE: Optimized PlayerItem Component outside to fix VirtualizedList Warning 🔥
+// 🔥 Optimized PlayerItem Component outside to fix VirtualizedList Warning 🔥
 const PlayerItem = React.memo(({ item }: { item: any }) => (
     <View style={{ alignItems: 'center', marginRight: 15 }}>
         <View style={[styles.playerAvatarWrapper, (item.status === 'eliminated' || item.status === 'time_up') && styles.eliminatedAvatar, { marginRight: 0 }]}>
@@ -83,7 +83,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
     const hasJoined = players.some(p => p.id === auth.currentUser?.uid);
 
-    // 🔥 SATTI FIX: Auto-detect forum vs live based on ID, and change 'glass_path' to 'memory_match' 🔥
+    // 🔥 SATTI FIX: Auto-detect forum vs live based on ID 🔥
     const actualCollection = liveId?.startsWith('forum_') ? 'forum_rooms' : collectionName;
     const roomRef = doc(db, actualCollection, liveId, 'games', 'memory_match');
 
@@ -105,6 +105,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         })
     ).current;
 
+    // 🔥 SATTI FIX: SELF-HEALING AUTO REFUND WITH PROPER WALLET SYNC & LOGGING 🔥
     const handleAutoRefundOnCancel = async () => {
         if (!auth.currentUser) return;
         const uid = auth.currentUser.uid;
@@ -132,7 +133,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                // 🔥 SATTI FIX: use update() instead of set({merge: true}) to fix failed-precondition error
                 transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
@@ -140,13 +140,90 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 
                 transaction.update(roomRef, { players: updatedPlayers });
 
-                const txRef = doc(db, 'transactions', `${uid}_auto_refund_${Date.now()}`);
+                const txId = `${uid}_auto_refund_${liveId}`;
+                const txRef = doc(db, 'transactions', txId);
                 transaction.set(txRef, {
                     userId: uid, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Arena Auto Refund (Host Left)', timestamp: serverTimestamp()
+                });
+
+                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
+                transaction.set(activityRef, {
+                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
+                    sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                    title: 'Arena Auto Refund (Host Left)', timestamp: serverTimestamp()
                 });
             });
         } catch (e) {
             console.log("Auto refund error:", e);
+        }
+    };
+
+    useEffect(() => {
+        if (!liveId || !visible || isHost) return;
+        const parentRoomRef = doc(db, actualCollection, liveId);
+        
+        const unsubParent = onSnapshot(parentRoomRef, (snap) => {
+            if (snap.exists()) {
+                const data = snap.data();
+                if (data.status === 'ended' || data.status === 'CANCELLED') {
+                    forceRefundOnHostDrop();
+                }
+            }
+        });
+
+        return () => unsubParent();
+    }, [liveId, visible, isHost, actualCollection]);
+
+    const forceRefundOnHostDrop = async () => {
+        if (!auth.currentUser || isProcessing) return;
+        const uid = auth.currentUser.uid;
+        try {
+            await runTransaction(db, async (transaction) => {
+                const gameSnap = await transaction.get(roomRef);
+                const userRef = doc(db, 'users', uid);
+                const userSnap = await transaction.get(userRef);
+
+                if (!gameSnap.exists() || !userSnap.exists()) return;
+                const gameData = gameSnap.data();
+
+                if (gameData.status === 'FINISHED' || gameData.status === 'CANCELLED' || gameData.refunded) return;
+
+                const currentPlayers = gameData.players || [];
+                const myPlayerObj = currentPlayers.find((p: any) => p.id === uid);
+                if (!myPlayerObj) return; 
+
+                const roomFee = Number(gameData.entryFee) || 0;
+                if (roomFee === 0) return;
+
+                const uData = userSnap.data();
+                const safeBal = Number(uData.balance) || 0;
+                const safeWalletBal = Number(uData.walletBalance) || 0;
+
+                const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
+
+                transaction.update(userRef, { 
+                    balance: safeBal + roomFee,
+                    walletBalance: safeWalletBal + roomFee
+                });
+                
+                transaction.update(roomRef, { players: updatedPlayers });
+
+                const txId = `${uid}_force_refund_${liveId}`;
+                const txRef = doc(db, 'transactions', txId);
+                transaction.set(txRef, {
+                    userId: uid, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Arena Refund (Host Disconnected)', timestamp: serverTimestamp()
+                });
+
+                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
+                transaction.set(activityRef, {
+                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
+                    sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                    title: 'Arena Refund (Host Disconnected)', timestamp: serverTimestamp()
+                });
+            });
+            onClose(); 
+        } catch (e) {
+            console.log("Force refund error:", e);
         }
     };
 
@@ -256,7 +333,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         return () => { if(interval) clearInterval(interval); }
     }, [gameStatus, isFeeLocked, visible]);
 
-    // 🔥 THE 60-SECOND PANIC TIMER
     useEffect(() => {
         let playTimer: ReturnType<typeof setInterval>;
         if (gameStatus === 'PLAYING') {
@@ -326,7 +402,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 if (currentPlayers.length >= MAX_PLAYERS) throw "Arena Full";
                 if (effectiveBalance < roomFee) throw `Insufficient Balance. You need ${roomFee} 💎 to join.`;
 
-                // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
                 transaction.update(userRef, { 
                     balance: Math.max(0, safeBal - roomFee),
                     walletBalance: Math.max(0, safeWalletBal - roomFee)
@@ -377,7 +452,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
 
-                // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
                 transaction.update(userRef, { 
                     balance: safeBal + roomFee,
                     walletBalance: safeWalletBal + roomFee
@@ -385,9 +459,17 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 
                 transaction.update(roomRef, { players: updatedPlayers });
 
-                const txRef = doc(db, 'transactions', `${uid}_refund_${Date.now()}`);
+                const txId = `${uid}_refund_${liveId}_${Date.now()}`; 
+                const txRef = doc(db, 'transactions', txId);
                 transaction.set(txRef, {
                     userId: uid, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Memory Match Arena Refund', timestamp: serverTimestamp()
+                });
+
+                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
+                transaction.set(activityRef, {
+                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
+                    sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                    title: 'Memory Match Arena Refund', timestamp: serverTimestamp()
                 });
             });
             Alert.alert("Refunded 🎖️", "You left the arena. Access Requirement has been refunded to your wallet.");
@@ -427,14 +509,21 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                         const safeBal = Number(uData.balance) || 0;
                                         const safeWalletBal = Number(uData.walletBalance) || 0;
                                         
-                                        // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
                                         transaction.update(uSnap.ref, { 
                                             balance: safeBal + roomFee,
                                             walletBalance: safeWalletBal + roomFee
                                         });
                                         
-                                        const txRef = doc(db, 'transactions', `${p.id}_host_refund_${Date.now()}`);
+                                        const txId = `${p.id}_host_cancel_${liveId}`;
+                                        const txRef = doc(db, 'transactions', txId);
                                         transaction.set(txRef, { userId: p.id, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Host Cancelled Refund', timestamp: serverTimestamp() });
+
+                                        const activityRef = doc(db, 'users', p.id, 'activityHistory', txId);
+                                        transaction.set(activityRef, {
+                                            type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
+                                            sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
+                                            title: 'Host Cancelled Refund', timestamp: serverTimestamp()
+                                        });
                                     }
                                 });
                                 transaction.update(roomRef, { status: 'CANCELLED', players: [], refunded: true });
@@ -494,7 +583,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
             
             if (allFinished) {
                 updates.status = 'FINISHED';
-                // 🔥 SCORE BASED WINNER CHECK 🔥
                 const maxScore = Math.max(...freshPlayersList.map((p: any) => p.score || 0));
                 
                 if (maxScore > 0) { 
@@ -527,14 +615,12 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
             const card2 = deck[newOpen[1]];
 
             if (card1 === card2) {
-                // 🔥 MATCH! 🔥
                 setConsecutiveMistakes(0);
                 const newMatched = [...myMatchedPairs, card1];
                 setMyMatchedPairs(newMatched);
                 setMyOpenCards([]);
                 setIsChecking(false);
 
-                // Jackpot, Trap, Combo System
                 let addedScore = 0;
                 let newCombo = myCombo;
 
@@ -568,7 +654,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                             freshPlayers[mIndex].progress = newMatched.length;
                             freshPlayers[mIndex].score = newScore;
                             
-                            // Win Check
                             if (newMatched.length === 15) {
                                 const finalWinScore = newScore + 1000;
                                 freshPlayers[mIndex].score = finalWinScore;
@@ -596,7 +681,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     const mistakes = prev + 1;
                     if (mistakes >= 5) {
                         setIsFrozen(true);
-                        setTimeout(() => { setIsFrozen(false); setConsecutiveMistakes(0); }, 3000); // 3 sec freeze!
+                        setTimeout(() => { setIsFrozen(false); setConsecutiveMistakes(0); }, 3000); 
                     }
                     return mistakes;
                 });
@@ -630,7 +715,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 const winnerRefs = winnerIds.map((id: string) => doc(db, 'users', id));
                 const hostRef = actualHostId ? doc(db, 'users', actualHostId) : null;
                 
-                // 🔥 SATTI FIX: Fetching liveRef dynamically using the actual auto-detected collectionName 🔥
                 const liveRef = (liveId && actualHostId) ? doc(db, actualCollection, liveId) : null;
 
                 const winnerSnaps = await Promise.all(winnerRefs.map((ref: any) => transaction.get(ref)));
@@ -655,7 +739,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     adminCommission = totalPool - expertBeans; 
                 }
 
-                // Sorting based on SCORE for Leaderboard
                 const ranked = [...currentPlayers].sort((a, b) => {
                     if (a.status === 'won' && b.status !== 'won') return -1;
                     if (b.status === 'won' && a.status !== 'won') return 1;
@@ -670,7 +753,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                             const currentSafeBalance = Number(wData.balance) || 0;
                             const currentSafeWallet = Number(wData.walletBalance) || 0;
                             
-                            // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
                             transaction.update(wSnap.ref, { 
                                 balance: currentSafeBalance + rewardPerWinner,
                                 walletBalance: currentSafeWallet + rewardPerWinner
@@ -690,7 +772,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     const safeBeansBal = Number(eData.beansBalance) || 0;
                     const safeTotalEarned = Number(eData.totalBeansEarned) || 0;
 
-                    // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
                     transaction.update(hostSnap.ref, { 
                         beans: safeEBeans + expertBeans,
                         balance: safeEBalance + expertBeans,
@@ -706,11 +787,9 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 if (liveSnap && liveSnap.exists()) {
                     const lData = liveSnap.data() || {};
                     const safeEarned = Number(lData.earnedBeans) || 0;
-                    // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
                     transaction.update(liveSnap.ref, { earnedBeans: safeEarned + expertBeans });
                 }
 
-                // 🔥 SATTI FIX: Using update() to fix Firebase failed-precondition error
                 transaction.update(roomRef, {
                     payoutProcessed: true,
                     rankedPlayers: ranked, 
@@ -745,7 +824,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 >
                     <LinearGradient colors={['#0F172A', '#020617']} style={StyleSheet.absoluteFill} />
                     
-                    {/* Top Drag Handle */}
                     <View {...panResponder.panHandlers} style={styles.dragHandleContainer}>
                         <View style={styles.dragPill} />
                     </View>
@@ -762,15 +840,15 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                     {/* MATCHMAKING / LOBBY */}
                     {gameStatus === 'WAITING' && (
-                        <View style={styles.lobbyStateWrapper}>
-                            <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR HOST TO LOCK ARENA PASS...'}</Text>
-                            
-                            <View style={styles.entryFeeContainer}>
-                                <Text style={styles.feeLabel}>ARENA PASS:</Text>
-                                <Text style={styles.feeValueText}>🪙 {entryFee} Diamonds</Text>
-                            </View>
+                        <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
+                            <View style={styles.lobbyStateWrapper}>
+                                <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR HOST TO LOCK ARENA PASS...'}</Text>
+                                
+                                <View style={styles.entryFeeContainer}>
+                                    <Text style={styles.feeLabel}>ARENA PASS:</Text>
+                                    <Text style={styles.feeValueText}>🪙 {entryFee} Diamonds</Text>
+                                </View>
 
-                            <ScrollView style={{width: '100%', maxHeight: 150}} showsVerticalScrollIndicator={false}>
                                 <View style={styles.playerPoolRow}>
                                     {[...Array(MAX_PLAYERS)].map((_, idx) => {
                                         const p = players[idx];
@@ -799,71 +877,82 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                         }
                                     })}
                                 </View>
-                            </ScrollView>
 
-                            {isHost && !isFeeLocked && (
-                                <View style={{ width: '100%', marginBottom: 20 }}>
-                                    <Text style={[styles.feeLabel, { marginBottom: 10 }]}>SELECT ARENA PASS (DIAMONDS)</Text>
-                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 5 }}>
-                                        {ENTRY_FEES.map(fee => (
-                                            <TouchableOpacity 
-                                                key={fee} 
-                                                onPress={() => updateRoomFee(fee)} 
-                                                style={[styles.feeChip, entryFee === fee && styles.feeChipActive]}
-                                            >
-                                                <Text style={[styles.feeChipText, entryFee === fee && styles.feeChipTextActive]}>{fee} 💎</Text>
-                                            </TouchableOpacity>
-                                        ))}
-                                    </ScrollView>
-                                    <TouchableOpacity onPress={lockRoomFee} style={[styles.arcadeLaunchBtn, { width: '100%', marginTop: 20 }]}>
-                                        <LinearGradient colors={['#A855F7', '#7E22CE']} style={StyleSheet.absoluteFill} />
-                                        <Text style={[styles.launchBtnLabel, { color: '#FFF' }]}>🔒 LOCK {entryFee}💎 & OPEN ARENA</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            )}
-                            
-                            {isHost && isFeeLocked && (
-                                <View style={{ width: '100%', marginBottom: 20, alignItems: 'center' }}>
-                                    <Text style={[styles.feeLabel, { marginBottom: 10, color: '#F59E0B' }]}>🔒 ARENA PASS LOCKED</Text>
-                                    <TouchableOpacity onPress={launchLiveMatch} style={styles.arcadeLaunchBtn}>
-                                        <LinearGradient colors={['#00F2FE', '#059669']} style={StyleSheet.absoluteFill} />
-                                        <Text style={styles.launchBtnLabel}>START 60s MEMORY MATCH</Text>
-                                    </TouchableOpacity>
-                                    
-                                    {players.length === 0 && (
-                                        <TouchableOpacity onPress={unlockRoomFee} style={{marginTop: 15, padding: 10}}>
-                                            <Text style={{color: '#94A3B8', fontWeight: 'bold', fontSize: 12}}>🔓 UNLOCK & EDIT PASS</Text>
+                                {isHost && !isFeeLocked && (
+                                    <View style={{ width: '100%', marginBottom: 20 }}>
+                                        <Text style={[styles.feeLabel, { marginBottom: 10 }]}>SELECT ARENA PASS (DIAMONDS)</Text>
+                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 5 }}>
+                                            {ENTRY_FEES.map(fee => (
+                                                <TouchableOpacity 
+                                                    key={fee} 
+                                                    onPress={() => updateRoomFee(fee)} 
+                                                    style={[styles.feeChip, entryFee === fee && styles.feeChipActive]}
+                                                >
+                                                    <Text style={[styles.feeChipText, entryFee === fee && styles.feeChipTextActive]}>{fee} 💎</Text>
+                                                </TouchableOpacity>
+                                            ))}
+                                        </ScrollView>
+                                        <TouchableOpacity onPress={lockRoomFee} style={[styles.arcadeLaunchBtn, { width: '100%', marginTop: 20 }]}>
+                                            <LinearGradient colors={['#A855F7', '#7E22CE']} style={StyleSheet.absoluteFill} />
+                                            <Text style={[styles.launchBtnLabel, { color: '#FFF' }]}>🔒 LOCK {entryFee}💎 & OPEN ARENA</Text>
                                         </TouchableOpacity>
-                                    )}
-                                </View>
-                            )}
+                                    </View>
+                                )}
+                                
+                                {isHost && isFeeLocked && (
+                                    <View style={{ width: '100%', marginBottom: 20, alignItems: 'center' }}>
+                                        <Text style={[styles.feeLabel, { marginBottom: 10, color: '#F59E0B' }]}>🔒 ARENA PASS LOCKED</Text>
+                                        <TouchableOpacity onPress={launchLiveMatch} style={styles.arcadeLaunchBtn}>
+                                            <LinearGradient colors={['#00F2FE', '#059669']} style={StyleSheet.absoluteFill} />
+                                            <Text style={styles.launchBtnLabel}>START 60s MEMORY MATCH</Text>
+                                        </TouchableOpacity>
+                                        
+                                        {players.length === 0 && (
+                                            <TouchableOpacity onPress={unlockRoomFee} style={{marginTop: 15, padding: 10}}>
+                                                <Text style={{color: '#94A3B8', fontWeight: 'bold', fontSize: 12}}>🔓 UNLOCK & EDIT PASS</Text>
+                                            </TouchableOpacity>
+                                        )}
+                                    </View>
+                                )}
 
-                            {!isHost && isFeeLocked && !hasJoined && (
-                                <TouchableOpacity onPress={handleJoinArena} disabled={isProcessing} style={styles.arcadeLaunchBtn}>
-                                    <LinearGradient colors={['#F59E0B', '#D97706']} style={StyleSheet.absoluteFill} />
-                                    <Text style={styles.launchBtnLabel}>{isProcessing ? 'PROCESSING...' : `JOIN ARENA (${entryFee} 💎)`}</Text>
-                                </TouchableOpacity>
-                            )}
-
-                            {!isHost && !isFeeLocked && (
-                                <Text style={[styles.waitServerSignalText, { color: '#F59E0B' }]}>⏳ Waiting for host to lock arena pass...</Text>
-                            )}
-
-                            {!isHost && hasJoined && (
-                                <View style={{ alignItems: 'center', width: '100%' }}>
-                                    <Text style={styles.waitServerSignalText}>You are in! Awaiting expert to launch... ({lobbyTimeLeft}s)</Text>
-                                    <TouchableOpacity onPress={handleExitArena} disabled={isProcessing} style={[styles.arcadeLaunchBtn, { marginTop: 15, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#EF4444', elevation: 0 }]}>
-                                        <Text style={[styles.launchBtnLabel, { color: '#EF4444' }]}>{isProcessing ? 'WAIT...' : 'EXIT & REFUND'}</Text>
+                                {!isHost && isFeeLocked && !hasJoined && (
+                                    <TouchableOpacity onPress={handleJoinArena} disabled={isProcessing} style={styles.arcadeLaunchBtn}>
+                                        <LinearGradient colors={['#F59E0B', '#D97706']} style={StyleSheet.absoluteFill} />
+                                        <Text style={styles.launchBtnLabel}>{isProcessing ? 'PROCESSING...' : `JOIN ARENA (${entryFee} 💎)`}</Text>
                                     </TouchableOpacity>
+                                )}
+
+                                {!isHost && !isFeeLocked && (
+                                    <Text style={[styles.waitServerSignalText, { color: '#F59E0B' }]}>⏳ Waiting for host to lock arena pass...</Text>
+                                )}
+
+                                {!isHost && hasJoined && (
+                                    <View style={{ alignItems: 'center', width: '100%' }}>
+                                        <Text style={styles.waitServerSignalText}>You are in! Awaiting expert to launch... ({lobbyTimeLeft}s)</Text>
+                                        <TouchableOpacity onPress={handleExitArena} disabled={isProcessing} style={[styles.arcadeLaunchBtn, { marginTop: 15, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#EF4444', elevation: 0 }]}>
+                                            <Text style={[styles.launchBtnLabel, { color: '#EF4444' }]}>{isProcessing ? 'WAIT...' : 'EXIT & REFUND'}</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                )}
+                                
+                                {/* 🔥 SATTI FIX: Warning moved to bottom of Lobby ScrollView 🔥 */}
+                                <View style={[styles.warningBanner, { marginTop: 20 }]}>
+                                    <Ionicons name="warning" size={14} color="#F59E0B" />
+                                    <Text style={styles.warningText}>
+                                        {isHost 
+                                            ? "HOST WARNING: Do not close app from recent tabs. Users will lose diamonds, and action will be taken against your account."
+                                            : "NOTE: Do not close app during gameplay. Refunds apply ONLY for verified host disconnections."}
+                                    </Text>
                                 </View>
-                            )}
-                        </View>
+                            </View>
+                        </ScrollView>
                     )}
 
                     {/* LIVE MEMORY MATCH ENGINE (30 CARDS FLATLIST) */}
                     {(gameStatus === 'SHUFFLING' || gameStatus === 'PLAYING') && (
                         <View style={styles.activeEngineMainContainer}>
                             
+                            {/* 🔥 SATTI FIX: Reduced spacing here to fit grid perfectly 🔥 */}
                             <View style={[
                                 styles.statusPill, 
                                 gameStatus === 'SHUFFLING' && styles.shufflingPill,
@@ -879,13 +968,11 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 </Text>
                             </View>
 
-                            {/* 🔥 UPDATE 3 & 4: LEGEND FOR JACKPOT & TRAP POINTS 🔥 */}
-                            <View style={{ flexDirection: 'row', gap: 20, marginBottom: 5 }}>
-                                <Text style={{ color: '#FFD700', fontSize: 11, fontWeight: '900', textShadowColor: 'rgba(255,215,0,0.5)', textShadowRadius: 5 }}>💎 JACKPOT: +300</Text>
-                                <Text style={{ color: '#EF4444', fontSize: 11, fontWeight: '900', textShadowColor: 'rgba(239,68,68,0.5)', textShadowRadius: 5 }}>☠️ TRAP: -200</Text>
+                            <View style={{ flexDirection: 'row', gap: 20, marginBottom: 2 }}>
+                                <Text style={{ color: '#FFD700', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(255,215,0,0.5)', textShadowRadius: 5 }}>💎 JACKPOT: +300</Text>
+                                <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(239,68,68,0.5)', textShadowRadius: 5 }}>☠️ TRAP: -200</Text>
                             </View>
 
-                            {/* 🔥 LIVE HUD SCORE & COMBO 🔥 */}
                             {!isHost && myStatus === 'playing' && (
                                 <View style={styles.liveHudContainer}>
                                     <Text style={styles.hudScoreText}>SCORE: {myScore}</Text>
@@ -895,7 +982,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                             <View style={styles.playersContainer}>
                                 <Text style={styles.playersTitle}>SURVIVORS & SCORE ({players.filter(p=>p.status!=='eliminated' && p.status!=='time_up').length}/{players.length})</Text>
-                                {/* 🔥 SATTI UPDATE: Optimized FlatList 🔥 */}
                                 <FlatList
                                     data={players}
                                     horizontal
@@ -913,17 +999,26 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 />
                             </View>
 
-                            {/* 🔥 UNIQUE CARD BOARD DESIGN (30 CARDS) 🔥 */}
                             <View style={styles.gridContainerWrapper}>
                                 <FlatList 
                                     data={deck}
                                     numColumns={5}
                                     keyExtractor={(_, index) => index.toString()}
                                     style={{ width: '100%' }}
-                                    // 🔥 UPDATE 1: ADDED PADDING BOTTOM 50 SO BOARD DOESNT CUT AT BOTTOM 🔥
                                     contentContainerStyle={styles.gridContainer}
                                     columnWrapperStyle={styles.columnWrapper}
                                     showsVerticalScrollIndicator={false}
+                                    /* 🔥 SATTI FIX: Added Warning Banner at the bottom of the grid list 🔥 */
+                                    ListFooterComponent={() => (
+                                        <View style={[styles.warningBanner, { marginTop: 15, width: '95%', alignSelf: 'center' }]}>
+                                            <Ionicons name="warning" size={14} color="#F59E0B" />
+                                            <Text style={styles.warningText}>
+                                                {isHost 
+                                                    ? "HOST WARNING: Do not close app from recent tabs. Users will lose diamonds, and action will be taken against your account."
+                                                    : "NOTE: Do not close app during gameplay. Refunds apply ONLY for verified host disconnections."}
+                                            </Text>
+                                        </View>
+                                    )}
                                     renderItem={({ item, index }) => {
                                         const isFlipped = myOpenCards.includes(index) || myMatchedPairs.includes(item);
                                         const isMatched = myMatchedPairs.includes(item);
@@ -945,14 +1040,14 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                                         style={styles.boxGradient}
                                                     >
                                                         {isMatched ? (
-                                                            <Ionicons name="checkmark-done" size={24} color="#10B981" />
+                                                            <Ionicons name="checkmark-done" size={20} color="#10B981" />
                                                         ) : (
                                                             <Text style={styles.cardEmojiText}>{item}</Text>
                                                         )}
                                                     </LinearGradient>
                                                 ) : (
                                                     <View style={styles.cardBack}>
-                                                        <MaterialCommunityIcons name="hexagon-slice-6" size={24} color="rgba(255,255,255,0.1)" />
+                                                        <MaterialCommunityIcons name="hexagon-slice-6" size={20} color="rgba(255,255,255,0.1)" />
                                                     </View>
                                                 )}
                                             </TouchableOpacity>
@@ -960,7 +1055,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                     }}
                                 />
 
-                                {/* 🔥 TRAP BLIND BLACKOUT OVERLAY 🔥 */}
                                 {isBlackout && (
                                     <View style={styles.blackoutOverlay}>
                                         <Ionicons name="skull" size={80} color="#EF4444" style={{ shadowColor: '#EF4444', shadowRadius: 20, shadowOpacity: 1 }} />
@@ -969,7 +1063,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                     </View>
                                 )}
 
-                                {/* 🔥 JACKPOT GOLDEN FLASH OVERLAY 🔥 */}
                                 {showJackpotFlash && (
                                     <View style={styles.jackpotFlash}>
                                         <Text style={{ fontSize: 80 }}>💎</Text>
@@ -978,7 +1071,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                     </View>
                                 )}
 
-                                {/* 🔥 MASS FREEZE OVERLAY TWIST (5 Mistakes) 🔥 */}
                                 {isFrozen && !isBlackout && !showJackpotFlash && (
                                     <View style={styles.massFreezeOverlay}>
                                         <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
@@ -1001,11 +1093,10 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     {gameStatus === 'FINISHED' && matchResults && (
                         <View style={styles.terminalStateWrapper}>
                             
-                            {/* 🔥 SATTI UPDATE: MASS CELEBRATION FOR WINNERS ONLY 🔥 */}
                             {!isHost && matchResults.winnerIds?.includes(auth.currentUser?.uid) && (
                                 <View style={[StyleSheet.absoluteFill, { zIndex: 999 }]} pointerEvents="none">
                                     <LottieView
-                                        source={require('../assets/images/fireworks.json')} // Explicit Path given by Satti
+                                        source={require('../assets/images/fireworks.json')} 
                                         autoPlay
                                         loop={false}
                                         style={{ width: '100%', height: '100%' }}
@@ -1018,7 +1109,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                             
                             <Text style={styles.terminalTitle} numberOfLines={1} adjustsFontSizeToFit>{getWinnerText()}</Text>
                             
-                            {/* 🔥 UPDATE 5: EXPANDED LEADERBOARD CONTAINER SO IT WON'T CUT FOR 10 PLAYERS 🔥 */}
                             <View style={styles.leaderboardContainer}>
                                 <Text style={styles.leaderboardTitle}>🏆 ARENA SURVIVAL BOARD</Text>
                                 <ScrollView style={{ flex: 1, width: '100%' }} showsVerticalScrollIndicator={false}>
@@ -1047,7 +1137,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                     <Text style={styles.resultValue}>{matchResults.totalPool} 💎</Text>
                                 </View>
                                 
-                                {/* 🔥 NEW UPDATE: SHOW HOST REWARD ONLY FOR HOST 🔥 */}
                                 {isHost && (
                                     <View style={styles.resultRow}>
                                         <Text style={[styles.resultLabel, { color: '#F59E0B' }]}>Host Bonus (10%):</Text>
@@ -1055,7 +1144,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                     </View>
                                 )}
                             </View>
-
+                            
                             <TouchableOpacity onPress={onClose} style={[styles.arcadeLaunchBtn, { marginTop: 10, height: 50 }]}>
                                 <LinearGradient colors={['#334155', '#0F172A']} style={StyleSheet.absoluteFill} />
                                 <Text style={[styles.launchBtnLabel, { color: '#FFF' }]}>EXIT ARENA</Text>
@@ -1063,8 +1152,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                         </View>
                     )}
 
-                    {/* 🔥 NEW UPDATE: BOTTOM DRAG CONTROL SO THEY CAN SWIPE DOWN FROM THE BOTTOM TOO 🔥 */}
-                    <View {...panResponder.panHandlers} style={styles.bottomDragHandleContainer}>
+                    <View {...panResponder.panHandlers} style={[styles.dragHandleContainer, { position: 'absolute', bottom: 15, alignSelf: 'center', width: '100%', height: 30 }]}>
                         <View style={styles.dragPill} />
                     </View>
 
@@ -1076,10 +1164,9 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
 const styles = StyleSheet.create({
     sheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2, 6, 23, 0.7)' },
-    arcadeContentCard: { width: width, height: height * 0.90, borderTopLeftRadius: 40, borderTopRightRadius: 40, borderWidth: 2, borderColor: 'rgba(168, 85, 247, 0.4)', overflow: 'hidden', padding: 20, paddingTop: 10, paddingBottom: 10 },
+    arcadeContentCard: { width: width, height: height * 0.85, borderTopLeftRadius: 40, borderTopRightRadius: 40, borderWidth: 2, borderColor: 'rgba(168, 85, 247, 0.4)', overflow: 'hidden', padding: 20, paddingTop: 10, paddingBottom: 40 },
     
     dragHandleContainer: { width: '100%', height: 30, justifyContent: 'center', alignItems: 'center', marginBottom: 5 },
-    bottomDragHandleContainer: { width: '100%', height: 30, justifyContent: 'center', alignItems: 'center', marginTop: 15, paddingBottom: 10 },
     dragPill: { width: 50, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.4)' },
 
     sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
@@ -1088,7 +1175,11 @@ const styles = StyleSheet.create({
     mainTitleText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 1.5, textShadowColor: '#A855F7', textShadowRadius: 8, flexShrink: 1 },
     closeRoundBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     
-    lobbyStateWrapper: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    // 🔥 SATTI FIX: COMPACT WARNING BANNER STYLES 🔥
+    warningBanner: { flexDirection: 'row', backgroundColor: 'rgba(245, 158, 11, 0.1)', padding: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.3)', alignItems: 'center' },
+    warningText: { color: '#F59E0B', fontSize: 8.5, fontWeight: '700', marginLeft: 8, flex: 1, lineHeight: 12 },
+
+    lobbyStateWrapper: { flex: 1, alignItems: 'center' },
     lobbyHelperText: { color: '#94A3B8', fontSize: 11, fontWeight: '900', letterSpacing: 3, marginBottom: 10 },
     entryFeeContainer: { backgroundColor: 'rgba(168, 85, 247, 0.1)', paddingHorizontal: 25, paddingVertical: 12, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(168, 85, 247, 0.3)', marginBottom: 20 },
     feeLabel: { color: '#A855F7', fontSize: 10, fontWeight: '900', textAlign: 'center', marginBottom: 4 },
@@ -1106,17 +1197,17 @@ const styles = StyleSheet.create({
 
     activeEngineMainContainer: { flex: 1, alignItems: 'center', paddingTop: 0 },
     
-    statusPill: { backgroundColor: 'rgba(168, 85, 247, 0.1)', paddingHorizontal: 20, paddingVertical: 8, borderRadius: 25, borderWidth: 1, borderColor: '#A855F7', marginBottom: 8, shadowColor: '#A855F7', shadowOpacity: 0.4, shadowRadius: 10 },
+    // 🔥 SATTI FIX: REDUCED VERTICAL PADDINGS SO GRID FITS PERFECTLY 🔥
+    statusPill: { backgroundColor: 'rgba(168, 85, 247, 0.1)', paddingHorizontal: 20, paddingVertical: 5, borderRadius: 25, borderWidth: 1, borderColor: '#A855F7', marginBottom: 5, shadowColor: '#A855F7', shadowOpacity: 0.4, shadowRadius: 10 },
     shufflingPill: { borderColor: '#A855F7', backgroundColor: 'rgba(168, 85, 247, 0.1)' },
     statusText: { color: '#A855F7', fontWeight: '900', fontSize: 13, letterSpacing: 1.5 },
 
-    // 🔥 LIVE HUD STYLES 🔥
-    liveHudContainer: { flexDirection: 'row', justifyContent: 'space-between', width: '95%', backgroundColor: 'rgba(15,23,42,0.8)', paddingVertical: 10, paddingHorizontal: 20, borderRadius: 15, borderWidth: 1, borderColor: '#334155', marginBottom: 10 },
+    liveHudContainer: { flexDirection: 'row', justifyContent: 'space-between', width: '95%', backgroundColor: 'rgba(15,23,42,0.8)', paddingVertical: 6, paddingHorizontal: 20, borderRadius: 15, borderWidth: 1, borderColor: '#334155', marginBottom: 5 },
     hudScoreText: { color: '#00F2FE', fontSize: 16, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0, 242, 254, 0.6)', textShadowRadius: 8 },
     hudComboText: { color: '#FFD700', fontSize: 16, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(255, 215, 0, 0.6)', textShadowRadius: 8 },
 
-    playersContainer: { width: '100%', paddingHorizontal: 10, height: 60, marginBottom: 10 },
-    playersTitle: { color: '#94A3B8', fontSize: 11, fontWeight: '800', marginBottom: 8, letterSpacing: 1.5 },
+    playersContainer: { width: '100%', paddingHorizontal: 10, height: 55, marginBottom: 5 },
+    playersTitle: { color: '#94A3B8', fontSize: 11, fontWeight: '800', marginBottom: 3, letterSpacing: 1.5 },
     playerAvatarWrapper: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: '#10B981', overflow: 'hidden' },
     eliminatedAvatar: { borderColor: '#EF4444', opacity: 0.4 },
     playerAvatar: { width: '100%', height: '100%' },
@@ -1125,23 +1216,24 @@ const styles = StyleSheet.create({
     scoreText: { color: '#A855F7', fontSize: 10, fontWeight: '900', marginTop: 4 },
     crossOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
 
-    // NEON CARD GRID - 🔥 Perfect Fit Setup 🔥
     gridContainerWrapper: { flex: 1, width: '100%' },
-    gridContainer: { paddingBottom: 50, alignItems: 'center' },
+    gridContainer: { paddingBottom: 20, alignItems: 'center' },
+    
+    // 🔥 SATTI FIX: NEW MATH FOR ENLARGED CARDS 🔥
     columnWrapper: { gap: 8, justifyContent: 'center', marginBottom: 8 },
     card: { 
-        width: Math.floor((width - 80) / 5.7), 
-        height: Math.floor((width - 80) / 5.7), 
-        borderRadius: 12, 
+        width: Math.floor((width - 80) / 5.8), // Makes card significantly larger and fits exactly 5 columns
+        height: Math.floor((width - 80) / 5.8), 
+        borderRadius: 8, 
         borderWidth: 2, 
         borderColor: 'rgb(253, 178, 3)', 
         overflow: 'hidden',
         backgroundColor: '#000000',
         elevation: 8,
         shadowColor: '#00F2FE',
-        shadowOffset: { width: 0, height: 4 },
+        shadowOffset: { width: 0, height: 2 },
         shadowOpacity: 0.3,
-        shadowRadius: 5,
+        shadowRadius: 3,
     },
     cardBack: {
         flex: 1,
@@ -1150,17 +1242,15 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(30, 41, 59, 0.9)',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.05)',
-        borderRadius: 10,
+        borderRadius: 6,
         borderStyle: 'dashed'
     },
     boxGradient: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    cardEmojiText: { fontSize: 22 },
+    cardEmojiText: { fontSize: 24 }, // Increased emoji size for bigger cards
 
-    // Dynamic Neon Glows
     neonGlowGreen: { borderColor: '#10B981', shadowColor: '#10B981', shadowOpacity: 0.8, shadowRadius: 10, elevation: 15 },
     neonGlowBlue: { borderColor: '#00F2FE', shadowColor: '#00F2FE', shadowOpacity: 0.8, shadowRadius: 10, elevation: 15 },
 
-    // 🔥 TRAP & JACKPOT OVERLAYS 🔥
     blackoutOverlay: {
         ...StyleSheet.absoluteFillObject,
         backgroundColor: 'rgba(0,0,0,0.95)',
@@ -1178,7 +1268,6 @@ const styles = StyleSheet.create({
         zIndex: 200
     },
 
-    // 🔥 MASS FREEZE OVERLAY 🔥
     massFreezeOverlay: {
         ...StyleSheet.absoluteFillObject,
         borderRadius: 20,
@@ -1198,7 +1287,7 @@ const styles = StyleSheet.create({
     summaryTrophyIcon: { marginBottom: 10, shadowColor: '#FFD700', shadowOpacity: 0.6, shadowRadius: 20 },
     terminalTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 1.5, marginBottom: 15, textAlign: 'center', textShadowColor: 'rgba(255,215,0,0.6)', textShadowRadius: 15 },
     
-    leaderboardContainer: { flex: 1, width: '100%', backgroundColor: 'rgba(15,23,42,0.9)', borderRadius: 20, padding: 15, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+    leaderboardContainer: { flex: 1, width: '100%', backgroundColor: 'rgba(15,23,42,0.9)', borderRadius: 20, padding: 5, marginBottom: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
     leaderboardTitle: { color: '#94A3B8', fontSize: 12, fontWeight: '900', marginBottom: 12, textAlign: 'center', letterSpacing: 1.5 },
     leaderboardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.08)', padding: 12, borderRadius: 10, marginBottom: 8 },
     leaderboardRowWinner: { backgroundColor: 'rgba(16, 185, 129, 0.2)', borderColor: 'rgba(16, 185, 129, 0.4)', borderWidth: 1 },

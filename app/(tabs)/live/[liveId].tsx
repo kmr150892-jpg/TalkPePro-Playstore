@@ -1,15 +1,15 @@
-import { FontAwesome5, Ionicons } from '@expo/vector-icons';
+import { FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
-import { addDoc, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 // 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
 import { getDatabase, onValue, ref } from 'firebase/database';
 import React, { useEffect, useRef, useState } from 'react';
 // 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, RtcSurfaceView } from 'react-native-agora';
+import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, LighteningContrastLevel, RtcSurfaceView } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GiftOverlay from '../../../components/GiftOverlay';
 import LiveGameSheet from '../../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA IMPORTED
@@ -156,6 +156,17 @@ export default function UserLiveViewScreen() {
     const navigatingToCallRef = useRef(false);
     // 🔥 SATTI FIX: CALL TIMER REF 🔥
     const callTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 🔥 NEW: USER BLOCK AND REPORT ACTION SHEET STATES 🔥
+    const [actionSheetVisible, setActionSheetVisible] = useState(false);
+    const [reportSheetVisible, setReportSheetVisible] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<any>(null);
+
+    // 🔥 NEW: MUTE AND BEAUTY FILTER STATES 🔥
+    const [isMuted, setIsMuted] = useState(false);
+    const [showProSettings, setShowProSettings] = useState(false);
+    const [ProLevel, setProLevel] = useState({ light: 0.7, smooth: 0.8 });
+    const [isProEnabled, setIsProEnabled] = useState(false);
 
     useEffect(() => {
         isCallingRef.current = isCalling;
@@ -563,7 +574,8 @@ export default function UserLiveViewScreen() {
             snap.docChanges().forEach((change) => {
                 if (change.type === "added") {
                     const data = change.doc.data();
-                    if (data.amount >= 1000) {
+                    // 🔥 SATTI FIX: Changed condition to >= 100 so Cake (500) and Chocolate (100) will also display the overlay!
+                    if (data.amount >= 100) {
                         setActiveGrandGift(data);
                     }
                 }
@@ -721,13 +733,6 @@ export default function UserLiveViewScreen() {
         }
     };
 
-    // Clear timeout if user exits component during ringing
-    useEffect(() => {
-        return () => {
-            if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current);
-        };
-    }, []);
-
     const triggerGiftAnim = () => {
         Animated.sequence([
             Animated.timing(giftAnim, { toValue: 1, duration: 600, useNativeDriver: true, easing: Easing.back(1.5) }),
@@ -811,6 +816,78 @@ export default function UserLiveViewScreen() {
         setTimeout(() => {
             setReactions((prev) => prev.filter((r) => r.id !== newReaction.id));
         }, 3000);
+    };
+
+    // 🔥 NEW: USER CLICK HANDLER FROM CHAT 🔥
+    const handleUserClick = (userItem: any, isFromChat = false) => {
+        const normalizedUser = {
+            id: isFromChat ? userItem.senderId : userItem.id,
+            name: isFromChat ? userItem.senderName : userItem.name,
+            image: isFromChat ? null : (userItem.photoURL || userItem.profilePic)
+        };
+        if (normalizedUser.id === auth.currentUser?.uid) return; 
+        setSelectedUser(normalizedUser);
+        setActionSheetVisible(true);
+    };
+
+    // 🔥 NEW: BLOCK LOGIC FOR USER SIDE 🔥
+    const handleBlockUser = async (showAlert = true) => {
+        if (!selectedUser || !auth.currentUser) return;
+        try {
+            await updateDoc(doc(db, "users", auth.currentUser.uid), {
+                blockedUsers: arrayUnion(selectedUser.id)
+            });
+            if (showAlert) Alert.alert("Blocked", `${selectedUser.name} has been permanently blocked.`);
+        } catch (e) { console.log(e); }
+        setActionSheetVisible(false);
+    };
+
+    // 🔥 NEW: REPORT MODAL TRIGGER 🔥
+    const handleReportUser = () => {
+        setActionSheetVisible(false); 
+        setTimeout(() => {
+            setReportSheetVisible(true); 
+        }, 300); 
+    };
+
+    // 🔥 NEW: SUBMIT ACTUAL REPORT TO ADMIN & TRIGGER BLOCK 🔥
+    const submitReport = async (reason: string) => {
+        if (!selectedUser) return;
+        try {
+            await addDoc(collection(db, "reports"), {
+                reportedUserId: selectedUser.id,
+                reportedUserName: selectedUser.name,
+                reportedBy: auth.currentUser?.uid,
+                reason: reason,
+                timestamp: serverTimestamp(),
+                liveId: liveId
+            });
+            
+            await handleBlockUser(false);
+            
+            Alert.alert("Reported & Blocked", `User reported to Admin for: ${reason} and has been removed.`);
+        } catch (e) { console.log(e); }
+        setReportSheetVisible(false);
+    };
+
+    // 🔥 NEW: MUTE TOGGLE FUNCTION 🔥
+    const toggleMute = () => {
+        engine.current?.muteAllRemoteAudioStreams(!isMuted); 
+        setIsMuted(!isMuted);
+    };
+
+    // 🔥 NEW: BEAUTY FILTER FUNCTION 🔥
+    const updatePro = (type: 'light' | 'smooth', val: number) => {
+        const newLevels = { ...ProLevel, [type]: val };
+        setProLevel(newLevels);
+        engine.current?.setBeautyEffectOptions(true, {
+            lighteningContrastLevel: LighteningContrastLevel.LighteningContrastNormal,
+            lighteningLevel: newLevels.light,
+            smoothnessLevel: newLevels.smooth,
+            rednessLevel: 0.5,
+            sharpnessLevel: 0.3
+        });
+        setIsProEnabled(true);
     };
 
     const leaveChannel = () => { 
@@ -1034,6 +1111,36 @@ export default function UserLiveViewScreen() {
 
                     {/* 🔥 SATTI FIX: FLEX INTERACTION AREA FOR KEYBOARD FIX 🔥 */}
                     <View style={styles.interactionArea} pointerEvents="box-none">
+                        
+                        {/* 🔥 NEW: BEAUTY SETTINGS UI ADDED ABOVE CHAT 🔥 */}
+                        {showProSettings && (
+                            <View style={styles.ProSettingsBar}>
+                                <View style={styles.settingGroup}>
+                                    <Text style={styles.settingLabel}>BRIGHTNESS</Text>
+                                    <View style={styles.chipRow}>
+                                        <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
+                                            <Text style={styles.chipText}>High</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
+                                            <Text style={styles.chipText}>Low</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                                <View style={styles.settingDivider} />
+                                <View style={styles.settingGroup}>
+                                    <Text style={styles.settingLabel}>SMOOTHNESS</Text>
+                                    <View style={styles.chipRow}>
+                                        <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
+                                            <Text style={styles.chipText}>Max</Text>
+                                        </TouchableOpacity>
+                                        <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
+                                            <Text style={styles.chipText}>Natural</Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            </View>
+                        )}
+
                         <FlatList
                             data={messages}
                             keyExtractor={(item) => item.id}
@@ -1061,12 +1168,12 @@ export default function UserLiveViewScreen() {
                                     );
                                 }
 
-                                // Normal User Message
+                                // Normal User Message (🔥 NOW CLICKABLE TO OPEN PROFILE 🔥)
                                 const msgBorder = index % 2 === 0 ? borderType1 : borderType2;
                                 return (
-                                    <View style={[styles.chatBubble, msgBorder]}>
+                                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleUserClick(item, true)} style={[styles.chatBubble, msgBorder]}>
                                         <Text style={styles.chatName}>{item.senderName}: <Text style={styles.chatMessage}>{item.text}</Text></Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 );
                             }}
                             style={styles.chatList}
@@ -1083,9 +1190,17 @@ export default function UserLiveViewScreen() {
                                 onChangeText={setInputText}
                                 editable={!isLiveEndedWaiting}
                             />
-                            <TouchableOpacity onPress={addReaction} disabled={isLiveEndedWaiting} style={[styles.reactionBtn, { backgroundColor: userTier.secondaryColor, shadowColor: userTier.secondaryColor }]}>
-                                <Ionicons name="heart" size={24} color="#FFF" />
+                            
+                            {/* 🔥 NEW: BEAUTY FILTER BUTTON (Moved down slightly with marginTop) 🔥 */}
+                            <TouchableOpacity onPress={() => setShowProSettings(!showProSettings)} disabled={isLiveEndedWaiting} style={[styles.iconAction, showProSettings && styles.activePro, { marginTop: 6 }]}>
+                                <MaterialCommunityIcons name="face-man-shimmer" size={20} color={showProSettings ? "#FFF" : userTier.color} />
                             </TouchableOpacity>
+
+                            {/* 🔥 NEW: MUTE BUTTON (Moved down slightly with marginTop) 🔥 */}
+                            <TouchableOpacity onPress={toggleMute} disabled={isLiveEndedWaiting} style={[styles.iconAction, isMuted && styles.activeIcon, { marginTop: 6 }]}>
+                                <Ionicons name={isMuted ? "volume-mute" : "volume-medium"} size={20} color={isMuted ? "#FFF" : userTier.color} />
+                            </TouchableOpacity>
+
                             <TouchableOpacity onPress={sendMessage} disabled={isLiveEndedWaiting} style={[styles.sendBtn, { backgroundColor: userTier.color, shadowColor: userTier.color }]}>
                                 <Ionicons name="paper-plane" size={20} color="#FFF" />
                             </TouchableOpacity>
@@ -1179,6 +1294,78 @@ export default function UserLiveViewScreen() {
                             </TouchableOpacity>
                         </View>
                     </BlurView>
+                </View>
+            </Modal>
+
+            {/* 🔥 NEW: PREMIUM ACTION SHEET: USER MINI-PROFILE (Over Live Stream) 🔥 */}
+            <Modal visible={actionSheetVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setActionSheetVisible(false)} />
+                    <View style={styles.actionSheetContainer}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        
+                        <View style={styles.actionSheetProfileHeader}>
+                            {selectedUser?.image ? (
+                                <Image source={{ uri: selectedUser.image }} style={styles.actionSheetAvatar} />
+                            ) : (
+                                <View style={styles.actionSheetAvatarPlaceholder}>
+                                    <Text style={styles.actionSheetAvatarText}>
+                                        {selectedUser?.name ? selectedUser.name.charAt(0).toUpperCase() : "U"}
+                                    </Text>
+                                </View>
+                            )}
+                            <Text style={styles.actionSheetTitle}>{selectedUser?.name || "User"}</Text>
+                        </View>
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={handleReportUser}>
+                            <Ionicons name="shield-half-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#EF4444' }]}>Block and Report</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionSheetCancelBtn} onPress={() => setActionSheetVisible(false)}>
+                            <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* 🔥 NEW: REPORT REASONS MODAL 🔥 */}
+            <Modal visible={reportSheetVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setReportSheetVisible(false)} />
+                    <View style={styles.actionSheetContainer}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        <Text style={[styles.actionSheetTitle, { marginBottom: 15 }]}>Select Report Reason</Text>
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Bad Words / Harassment")}>
+                            <Ionicons name="chatbubbles-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Bad Words / Harassment</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Nudity / Sexual Content")}>
+                            <Ionicons name="eye-off-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Nudity / Sexual Content</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Spam / Scam")}>
+                            <Ionicons name="alert-circle-outline" size={22} color="#F59E0B" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Spam / Scam</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Other Violations")}>
+                            <Ionicons name="flag-outline" size={22} color="#94A3B8" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Other Violations</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionSheetCancelBtn} onPress={() => setReportSheetVisible(false)}>
+                            <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
                 </View>
             </Modal>
 
@@ -1278,5 +1465,37 @@ const styles = StyleSheet.create({
     busyCard: { width: width * 0.85, padding: 35, borderRadius: 35, alignItems: 'center', overflow: 'hidden' },
     busyIconCircle: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', marginBottom: 25 },
     busyTitle: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
-    busySub: { color: '#94A3B8', fontSize: 15, textAlign: 'center', lineHeight: 24 }
+    busySub: { color: '#94A3B8', fontSize: 15, textAlign: 'center', lineHeight: 24 },
+
+    // 🔥 NEW: NEW STYLES FOR MUTE, BEAUTY SETTINGS & MODALS 🔥
+    iconAction: { width: 40, height: 40, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    activeIcon: { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
+    activePro: { backgroundColor: 'rgba(0, 242, 254, 0.2)', borderColor: '#feb200' },
+    
+    ProSettingsBar: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderRadius: 25, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
+    settingGroup: { flex: 1, alignItems: 'center' },
+    settingLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', marginBottom: 10, letterSpacing: 1.5 },
+    chipRow: { flexDirection: 'row', gap: 10 },
+    chip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    activeChip: { backgroundColor: 'rgba(0, 242, 254, 0.1)', borderColor: '#00F2FE' },
+    chipText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
+    settingDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 15 },
+
+    // 🔥 NEW: ACTION SHEET STYLES 🔥
+    actionSheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+    actionSheetDismiss: { flex: 1 },
+    actionSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)', borderBottomWidth: 0 },
+    actionSheetHandle: { width: 40, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 20 },
+    
+    actionSheetProfileHeader: { alignItems: 'center', marginBottom: 25 },
+    actionSheetAvatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 2, borderColor: '#00F2FE', marginBottom: 10 },
+    actionSheetAvatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#1E293B', borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    actionSheetAvatarText: { color: '#FFF', fontSize: 28, fontWeight: '900' },
+    actionSheetTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+
+    actionSheetBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 10 },
+    actionSheetBtnText: { fontSize: 16, fontWeight: '700', marginLeft: 15, letterSpacing: 0.5 },
+    actionSheetDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', width: '100%' },
+    actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
+    actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 });

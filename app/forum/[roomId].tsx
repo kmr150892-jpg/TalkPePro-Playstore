@@ -5,6 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDatabase, onValue, ref } from 'firebase/database';
 import {
     addDoc,
+    arrayUnion,
     collection,
     doc,
     getDoc,
@@ -128,6 +129,11 @@ export default function PartyRoomScreen() {
     const [isCallingState, setIsCallingState] = useState(false); 
     const navigatingToCallRef = useRef(false);
 
+    // 🔥 NEW: USER BLOCK AND REPORT ACTION SHEET STATES 🔥
+    const [actionSheetVisible, setActionSheetVisible] = useState(false);
+    const [reportSheetVisible, setReportSheetVisible] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<any>(null);
+
     useEffect(() => { userDataRef.current = userData; }, [userData]);
     useEffect(() => { mySeatIndexRef.current = mySeatIndex; }, [mySeatIndex]);
     useEffect(() => { roomDataRef.current = roomData; }, [roomData]);
@@ -250,6 +256,15 @@ export default function PartyRoomScreen() {
             }
         });
 
+        // 🔥 SATTI FIX: INSTANT RTDB KICK LISTENER 🔥
+        const kickRef = ref(rtdb, `forum_rooms/${roomId}/kicked_users/${user.uid}`);
+        const unsubKick = onValue(kickRef, (snap) => {
+            if (snap.val() === true) {
+                Alert.alert("Removed", "You have been blocked and removed by the host.");
+                handleLeaveParty(); 
+            }
+        });
+
         const unsubUser = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
@@ -261,6 +276,14 @@ export default function PartyRoomScreen() {
         const unsubRoom = onSnapshot(doc(db, "forum_rooms", roomId), (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
+
+                // 🔥 DOUBLE KICK SAFETY: Firestore Banned Users Check 🔥
+                if (data.bannedUsers && data.bannedUsers.includes(user.uid)) {
+                    Alert.alert("Removed", "You have been blocked and removed by the host.");
+                    handleLeaveParty();
+                    return; 
+                }
+
                 // 🔥 Shield: Don't end room if we are routing to a call!
                 if (data.status === 'ended') {
                     if (!isCallingRef.current && !navigatingToCallRef.current) {
@@ -313,6 +336,7 @@ export default function PartyRoomScreen() {
 
         return () => { 
             unsubPresence();
+            unsubKick();
             unsubRoom(); 
             unsubUser(); 
             unsubGifts(); 
@@ -600,6 +624,59 @@ export default function PartyRoomScreen() {
         return () => unsubCall();
     }, []);
 
+    // 🔥 SATTI FIX: USER CLICK HANDLER - PREVENTING "System" CLICK 🔥
+    const handleUserClick = (userItem: any) => {
+        if (userItem.isSystem || userItem.uid === 'system' || userItem.senderId === 'system_msg') return;
+
+        const normalizedUser = {
+            id: userItem.uid || userItem.senderId,
+            name: userItem.name || userItem.senderName,
+            image: userItem.image || userItem.profilePic || userItem.photoURL || null
+        };
+        if (normalizedUser.id === user?.uid) return; 
+        setSelectedUser(normalizedUser);
+        setActionSheetVisible(true);
+    };
+
+    // 🔥 SATTI FIX: BLOCK LOGIC FOR USER SIDE 🔥
+    const handleBlockUser = async (showAlert = true) => {
+        if (!selectedUser || !user) return;
+        try {
+            await updateDoc(doc(db, "users", user.uid), {
+                blockedUsers: arrayUnion(selectedUser.id)
+            });
+            if (showAlert) Alert.alert("Blocked", `${selectedUser.name} has been permanently blocked.`);
+        } catch (e) { console.log(e); }
+        setActionSheetVisible(false);
+    };
+
+    // 🔥 NEW: REPORT MODAL TRIGGER 🔥
+    const handleReportUser = () => {
+        setActionSheetVisible(false); 
+        setTimeout(() => {
+            setReportSheetVisible(true); 
+        }, 300); 
+    };
+
+    // 🔥 NEW: SUBMIT ACTUAL REPORT TO ADMIN & TRIGGER BLOCK 🔥
+    const submitReport = async (reason: string) => {
+        if (!selectedUser) return;
+        try {
+            await addDoc(collection(db, "reports"), {
+                reportedUserId: selectedUser.id,
+                reportedUserName: selectedUser.name,
+                reportedBy: user?.uid,
+                reason: reason,
+                timestamp: serverTimestamp(),
+                forumId: roomId
+            });
+            
+            await handleBlockUser(false);
+            Alert.alert("Reported & Blocked", `User reported to Admin for: ${reason}.`);
+        } catch (e) { console.log(e); }
+        setReportSheetVisible(false);
+    };
+
     if (isLoading || !roomData) return null;
 
     return (
@@ -700,12 +777,12 @@ export default function PartyRoomScreen() {
                                     );
                                 }
 
-                                // Normal User Message
+                                // Normal User Message (🔥 NOW CLICKABLE TO OPEN PROFILE 🔥)
                                 return (
-                                    <View style={styles.chatBubble}>
+                                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleUserClick(item)} style={styles.chatBubble}>
                                         <Text style={styles.chatName}>{item.name}: </Text>
                                         <Text style={styles.chatText}>{item.text}</Text>
-                                    </View>
+                                    </TouchableOpacity>
                                 );
                             }}
                             contentContainerStyle={{ paddingVertical: 10 }}
@@ -848,6 +925,79 @@ export default function PartyRoomScreen() {
                     </View>
                 </TouchableOpacity>
             </Modal>
+
+            {/* 🔥 NEW: PREMIUM ACTION SHEET: USER MINI-PROFILE (Over Forum Room) 🔥 */}
+            <Modal visible={actionSheetVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setActionSheetVisible(false)} />
+                    <View style={styles.actionSheetContainer}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        
+                        <View style={styles.actionSheetProfileHeader}>
+                            {selectedUser?.image ? (
+                                <Image source={{ uri: selectedUser.image }} style={styles.actionSheetAvatar} />
+                            ) : (
+                                <View style={styles.actionSheetAvatarPlaceholder}>
+                                    <Text style={styles.actionSheetAvatarText}>
+                                        {selectedUser?.name ? selectedUser.name.charAt(0).toUpperCase() : "U"}
+                                    </Text>
+                                </View>
+                            )}
+                            <Text style={styles.actionSheetTitle}>{selectedUser?.name || "User"}</Text>
+                        </View>
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={handleReportUser}>
+                            <Ionicons name="shield-half-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#EF4444' }]}>Block and Report</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionSheetCancelBtn} onPress={() => setActionSheetVisible(false)}>
+                            <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* 🔥 NEW: REPORT REASONS MODAL 🔥 */}
+            <Modal visible={reportSheetVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setReportSheetVisible(false)} />
+                    <View style={styles.actionSheetContainer}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        <Text style={[styles.actionSheetTitle, { marginBottom: 15 }]}>Select Report Reason</Text>
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Bad Words / Harassment")}>
+                            <Ionicons name="chatbubbles-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Bad Words / Harassment</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Nudity / Sexual Content")}>
+                            <Ionicons name="eye-off-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Nudity / Sexual Content</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Spam / Scam")}>
+                            <Ionicons name="alert-circle-outline" size={22} color="#F59E0B" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Spam / Scam</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Other Violations")}>
+                            <Ionicons name="flag-outline" size={22} color="#94A3B8" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Other Violations</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionSheetCancelBtn} onPress={() => setReportSheetVisible(false)}>
+                            <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
         </View>
     );
 }
@@ -915,5 +1065,23 @@ const styles = StyleSheet.create({
     premiumGiftCard: { width: (width - 30) / 4, alignItems: 'center', marginVertical: 10 },
     premiumGiftIconBox: { width: 55, height: 55, borderRadius: 27.5, justifyContent: 'center', alignItems: 'center' },
     premiumPriceText: { color: '#3B82F6', fontSize: 10, fontWeight: '900', marginTop: 5 },
-    premiumNameText: { color: '#94A3B8', fontSize: 9, fontWeight: '700' }
+    premiumNameText: { color: '#94A3B8', fontSize: 9, fontWeight: '700' },
+
+    // 🔥 NEW: ACTION SHEET STYLES 🔥
+    actionSheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+    actionSheetDismiss: { flex: 1 },
+    actionSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)', borderBottomWidth: 0 },
+    actionSheetHandle: { width: 40, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 20 },
+    
+    actionSheetProfileHeader: { alignItems: 'center', marginBottom: 25 },
+    actionSheetAvatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 2, borderColor: '#00F2FE', marginBottom: 10 },
+    actionSheetAvatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#1E293B', borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    actionSheetAvatarText: { color: '#FFF', fontSize: 28, fontWeight: '900' },
+    actionSheetTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+
+    actionSheetBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 10 },
+    actionSheetBtnText: { fontSize: 16, fontWeight: '700', marginLeft: 15, letterSpacing: 0.5 },
+    actionSheetDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', width: '100%' },
+    actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
+    actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 });

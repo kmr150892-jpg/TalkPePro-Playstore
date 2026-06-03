@@ -6,6 +6,7 @@ import * as ScreenCapture from 'expo-screen-capture';
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import {
     addDoc,
+    arrayUnion, // 🔥 SATTI UPDATE: Added arrayUnion for Block Logic
     collection,
     doc, getDoc,
     increment, onSnapshot, orderBy, query,
@@ -13,6 +14,7 @@ import {
 } from 'firebase/firestore';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import {
+    ActivityIndicator, // 🔥 SATTI UPDATE: Added for loading state
     Alert,
     Animated,
     AppState,
@@ -20,6 +22,7 @@ import {
     Easing,
     Image,
     KeyboardAvoidingView,
+    Modal, // 🔥 SATTI UPDATE: Added Modal for Report Screen
     PanResponder,
     PermissionsAndroid,
     Platform,
@@ -160,6 +163,17 @@ export default function VideoCallScreen() {
 
     const [activeGiftOverlay, setActiveGiftOverlay] = useState<any>(null);
     const [expertThemeBeans, setExpertThemeBeans] = useState<number>(0);
+
+    // 🔥 SATTI UPDATE: Block & Report Modal State Variables
+    const [blockModalVisible, setBlockModalVisible] = useState(false);
+    const [isBlocking, setIsBlocking] = useState(false);
+    const blockReasons = [
+        "Abusive Language / Harassment",
+        "Inappropriate Behavior / Nudity",
+        "Scam / Spam / Phishing",
+        "Threatening / Aggressive",
+        "Other Unwanted Contact"
+    ];
 
     const pan = useRef(new Animated.ValueXY({ x: width - 120, y: 110 })).current;
     const panResponder = useRef(
@@ -846,8 +860,13 @@ export default function VideoCallScreen() {
         handleCallEnd(false, 'missed');
     };
 
-    // 🔥 SATTI UPDATE: Block User Function works for BOTH User & Expert
-    const handleBlockUser = async () => {
+    // 🔥 SATTI UPDATE: New Block UI Trigger
+    const handleBlockUser = () => {
+        setBlockModalVisible(true);
+    };
+
+    // 🔥 SATTI UPDATE: Execution Logic with Database Storage
+    const handleReasonSelect = async (reason: string) => {
         let targetUserId = '';
         
         if (role === 'expert') {
@@ -865,16 +884,54 @@ export default function VideoCallScreen() {
         
         if (!targetUserId) return;
         
-        Alert.alert("Restrict User", "Do you want to permanently restrict this user?", [
-            { text: "Cancel", style: "cancel" },
-            { text: "Confirm", style: "destructive", onPress: async () => {
-                try {
-                    blockUser(targetUserId); 
-                    // 🔥 SATTI FIX: Call handleCallEnd with deduction forced to TRUE to save amounts before kicking to summary 🔥
-                    handleCallEnd(true, 'ended');
-                } catch (error) {}
-            }}
-        ]);
+        Alert.alert(
+            "CONFIRM BLOCK",
+            `Are you sure you want to restrict this user?\n\nReason: ${reason}`,
+            [
+                { text: "CANCEL", style: "cancel" },
+                { 
+                    text: "BLOCK & REPORT", 
+                    style: "destructive", 
+                    onPress: () => executeBlockUser(reason, targetUserId) 
+                }
+            ]
+        );
+    };
+
+    // 🔥 SATTI UPDATE: Core Block & Database Logic matching Profile Model
+    const executeBlockUser = async (reason: string, targetUserId: string) => {
+        if (!user || !targetUserId) return;
+        setIsBlocking(true);
+        const currentUserId = user.uid;
+
+        try {
+            // 1. Array Union to blockedUsers (Invisible matching)
+            await updateDoc(doc(db, "users", currentUserId), { blockedUsers: arrayUnion(targetUserId) });
+            
+            // 2. Increment block count
+            await updateDoc(doc(db, "users", targetUserId), { expertBlockCount: increment(1) });
+            
+            // 3. Admin Alert Data Push
+            await addDoc(collection(db, "admin_alerts"), {
+                type: role === 'expert' ? 'EXPERT_BLOCKED_USER' : 'USER_BLOCKED_EXPERT', 
+                expertId: role === 'expert' ? currentUserId : targetUserId, 
+                userId: role === 'expert' ? targetUserId : currentUserId, 
+                reporterRole: role,
+                reason: reason,
+                timestamp: serverTimestamp(), 
+                status: 'unread'
+            });
+
+            blockUser(targetUserId); // Context block connection
+            handleCallEnd(true, 'ended'); // Force deduct current call
+            
+            Alert.alert("USER RESTRICTED", "The user has been blocked and reported to safety moderation.");
+        } catch (error) {
+            Alert.alert("SYSTEM ERROR", "Unable to complete blocking protocol.");
+        } finally {
+            setIsBlocking(false); 
+            setBlockModalVisible(false);
+        }
     };
 
     const handleCallEnd = async (shouldDeduct = true, finalStatus = 'completed', isRemoteKill = false) => {
@@ -890,8 +947,6 @@ export default function VideoCallScreen() {
 
         const duration = localDurationRef.current;
 
-        // 🔥 SATTI FIX: If the user is blocked, DO NOT exit early just because the status is 'ended'!
-        // Let the user process their deduction if the call actually happened!
         if (role === 'user' && !isRemoteKill && finalStatus === 'completed') {
             try { await updateDoc(doc(db, "calls", callId), { status: "user_ended" }); } catch (e) {}
             if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
@@ -954,7 +1009,6 @@ export default function VideoCallScreen() {
                     dbCallerName = cData.callerName || dbCallerName;
                 }
 
-                // 🔥 SATTI FIX: User will also run this calculation locally if they initiate the block (isBiller is overridden)
                 if (isBiller || finalStatus === 'ended') {
                     const targetCallerId = (role === 'user' ? user?.uid : dbCallerId);
                     const exactCallMins = duration / 60; 
@@ -1043,7 +1097,6 @@ export default function VideoCallScreen() {
                         userId: targetCallerId || 'unknown', expertId: safeExpertId, diamonds: uiFinalUserAmount, beans: expertEarningsBeans, duration, type: 'video_call', status: 'completed', timestamp: serverTimestamp() 
                     });
 
-                    // 🔥 SATTI FIX: The amounts are correctly populated so the UI won't show 0 🔥
                     setFinalDuration(duration);
                     setFinalAmount(role === 'expert' ? expertEarningsBeans : uiFinalUserAmount); 
                 }
@@ -1064,7 +1117,7 @@ export default function VideoCallScreen() {
             try { updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
         }
 
-        if (['missed', 'rejected', 'cancelled'].includes(finalStatus)) { // Removed 'blocked' so it goes to summary
+        if (['missed', 'rejected', 'cancelled'].includes(finalStatus)) { 
             router.replace(role === 'expert' ? '/expert/dashboard' : '/(tabs)');
         } else {
             setShowSummary(true);
@@ -1141,7 +1194,6 @@ export default function VideoCallScreen() {
             {isCallAccepted && !showSummary && (
                 <View style={styles.topHeader}>
                     <View style={styles.headerContent}>
-                        {/* 🔥 SATTI FIX: Added flex: 1 and paddingRight so it doesn't push the button out 🔥 */}
                         <View style={styles.headerInfo}>
                             <View style={styles.headerAvatarWrapper}>
                                 <Image source={{ uri: topHeaderProfilePic }} style={styles.headerAvatarPic} />
@@ -1152,12 +1204,10 @@ export default function VideoCallScreen() {
                                     <Text style={styles.liveText}>{formatTime(secondsElapsed)}</Text>
                                     {isFreeModeActive && <Text style={styles.freeBadgeText}> COMPLIMENTARY</Text>}
                                 </View>
-                                {/* 🔥 SATTI FIX: Added numberOfLines={1} to truncate long names 🔥 */}
                                 <Text style={styles.callerNameText} numberOfLines={1}>{role === 'expert' ? (callerDisplayName || "User") : expertName}</Text>
                             </View>
                         </View>
                         
-                        {/* 🔥 SATTI UPDATE: Block button now available for BOTH User & Expert 🔥 */}
                         <TouchableOpacity style={styles.topRightBlockBtn} onPress={handleBlockUser} activeOpacity={0.7}>
                             <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
                             <Text style={styles.blockBtnText}>RESTRICT</Text>
@@ -1219,6 +1269,53 @@ export default function VideoCallScreen() {
                     )}
                 </View>
             </KeyboardAvoidingView>
+
+            {/* 🔥 SATTI UPDATE: New Reporting Modal UI Added at the bottom */}
+            <Modal
+                visible={blockModalVisible}
+                transparent={true}
+                animationType="slide"
+                onRequestClose={() => setBlockModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalContainer}>
+                        <View style={{ alignItems: 'center', marginBottom: 15 }}>
+                            <View style={styles.modalIconRing}>
+                                <MaterialCommunityIcons name="shield-off-outline" size={32} color="#EF4444" />
+                            </View>
+                            <Text style={styles.modalTitle}>REPORT & BLOCK</Text>
+                            <Text style={styles.modalSubText}>
+                                Restrict this user from contacting you. This action will be reported for safety moderation and the call will end immediately.
+                            </Text>
+                        </View>
+
+                        <Text style={styles.modalLabel}>REASON FOR REPORTING:</Text>
+                        {blockReasons.map((reason, idx) => (
+                            <TouchableOpacity 
+                                key={idx} 
+                                style={styles.reasonBtn}
+                                onPress={() => handleReasonSelect(reason)}
+                                disabled={isBlocking}
+                            >
+                                <Text style={styles.reasonText}>{reason}</Text>
+                                <Ionicons name="chevron-forward" size={16} color="#3B82F6" />
+                            </TouchableOpacity>
+                        ))}
+
+                        {isBlocking && (
+                            <ActivityIndicator size="small" color="#EF4444" style={{ marginTop: 10 }} />
+                        )}
+
+                        <TouchableOpacity 
+                            style={styles.cancelBtn} 
+                            onPress={() => setBlockModalVisible(false)}
+                            disabled={isBlocking}
+                        >
+                            <Text style={styles.cancelBtnText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
         </SafeAreaView>
     );
 }
@@ -1232,27 +1329,31 @@ const styles = StyleSheet.create({
     innerVideo: { flex: 1 },
     topHeader: { position: 'absolute', top: 40, left: 20, right: 20, zIndex: 150 },
     headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: width - 40 },
-    
-    /* 🔥 SATTI FIX: Added flex: 1 and paddingRight to lock the layout 🔥 */
     headerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 },
-    
     headerAvatarWrapper: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden', backgroundColor: '#000' },
     headerAvatarPic: { width: '100%', height: '100%' },
     statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25, alignSelf: 'flex-start' },
     liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981', marginRight: 10 },
     liveText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
     freeBadgeText: { color: '#FBBF24', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
-    
-    /* 🔥 SATTI FIX: Added flexShrink: 1 to ensure long names shrink gracefully 🔥 */
     callerNameText: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4, textShadowColor: '#000', textShadowRadius: 15, flexShrink: 1 },
-    
-    /* 🔥 SATTI FIX: Added flexShrink: 0 so button never gets squeezed or pushed off 🔥 */
     topRightBlockBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 5, zIndex: 999, flexShrink: 0 },
-    
     blockBtnText: { color: '#EF4444', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
     waitingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     waitingText: { color: '#FFF', fontSize: 14, fontWeight: '600', marginTop: 15, opacity: 0.8 },
     warningContainer: { position: 'absolute', top: '40%', alignSelf: 'center', zIndex: 120, alignItems: 'center' },
     warningTimerText: { color: '#FFF', fontSize: 100, fontWeight: '900', textShadowColor: '#EF4444', textShadowRadius: 30 },
-    warningSubText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', backgroundColor: 'rgba(239, 68, 68, 0.8)', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 15, overflow: 'hidden', marginTop: -10 }
+    warningSubText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', backgroundColor: 'rgba(239, 68, 68, 0.8)', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 15, overflow: 'hidden', marginTop: -10 },
+    
+    /* 🔥 SATTI UPDATE: Modal Styles Added */
+    modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+    modalContainer: { backgroundColor: '#0F172A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1, borderColor: '#3B82F6', borderBottomWidth: 0 },
+    modalIconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 15, backgroundColor: 'rgba(239, 68, 68, 0.1)' },
+    modalTitle: { color: '#EF4444', fontSize: 20, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
+    modalSubText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
+    modalLabel: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
+    reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: 'rgba(59, 130, 246, 0.4)' },
+    reasonText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+    cancelBtn: { marginTop: 15, padding: 16, alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
+    cancelBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '900', letterSpacing: 1 }
 });

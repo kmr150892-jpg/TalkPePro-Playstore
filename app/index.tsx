@@ -1,3 +1,4 @@
+import { Ionicons } from '@expo/vector-icons'; // 🔥 SATTI UPDATE: Checkbox icon kaaga add panniyachu
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { BlurView } from 'expo-blur';
@@ -45,6 +46,9 @@ export default function LoginScreen() {
   
   const [showLoginUI, setShowLoginUI] = useState(false);
   
+  // 🔥 SATTI UPDATE: EULA Checkbox Tracker State
+  const [eulaAccepted, setEulaAccepted] = useState(false); 
+
   const router = useRouter();
 
   useEffect(() => {
@@ -173,6 +177,16 @@ export default function LoginScreen() {
   });
 
   const handleLogin = async (selectedRole: 'user' | 'expert') => {
+    // 🔥 SATTI UPDATE: Safety EULA Check block start 🔥
+    if (!eulaAccepted) {
+        Alert.alert(
+            "Agreement Required", 
+            "You must agree to our strict safety policies regarding No Nudity & Harassment before continuing."
+        );
+        return;
+    }
+    // 🔥 SATTI UPDATE: Safety EULA Check block end 🔥
+
     setLoading(true);
     await AsyncStorage.setItem('@is_logging_in', 'true');
     await AsyncStorage.setItem('@intended_role', selectedRole);
@@ -531,7 +545,16 @@ export default function LoginScreen() {
                   </View>
                 ) : (
                   <>
-                    <Text style={[styles.instructionCenter, { marginBottom: 5 }]}>SELECT YOUR PROFESSIONAL ROLE</Text>
+                    <Text style={[styles.instructionCenter, { marginBottom: 12 }]}>CHOOSE YOUR PROFILE</Text>
+
+                    {/* 🔥 SATTI UPDATE: EULA Checkbox UI Start 🔥 */}
+                    <TouchableOpacity style={styles.eulaContainer} onPress={() => setEulaAccepted(!eulaAccepted)} activeOpacity={0.8}>
+                        <Ionicons name={eulaAccepted ? "checkbox" : "square-outline"} size={25} color={eulaAccepted ? "#02fa0a" : "#CBD5E1"} />
+                        <Text style={styles.eulaText}>
+                            I agree to the strict no-nudity, no-harassment <Text style={styles.eulaLink} onPress={() => Alert.alert("Terms & Conditions", "Strict Policies:\n\n1. No Nudity or Sexual Content.\n2. No Harassment or Abuse.\n3. Respect all users.\n\nViolators will be permanently banned from TalkPe Pro.")}>Terms & Conditions</Text>. Violators will be banned.
+                        </Text>
+                    </TouchableOpacity>
+                    {/* 🔥 SATTI UPDATE: EULA Checkbox UI End 🔥 */}
                     
                     <TouchableOpacity onPress={() => handleLogin('user')} activeOpacity={0.8}>
                       <LinearGradient colors={['#7B2FF7', '#F43F8D', '#F97316']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={[styles.btnMass, { marginTop: 12, paddingVertical: 12 }]}>
@@ -547,7 +570,6 @@ export default function LoginScreen() {
                   </>
                 )}
               </View>
-              <Text style={[styles.footerText, { marginTop: 8}]}>🛡️ END-TO-END ENCRYPTED ACCESS</Text>
             </BlurView>
           )}
 
@@ -601,5 +623,10 @@ const styles = StyleSheet.create({
   btnTextExpert: { color: '#FFFFFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 12 },
   
   footerText: { textAlign: 'center', marginTop: 15, color: 'rgba(249, 249, 250, 0.4)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
-  footerTextFloating: { textAlign: 'center', marginTop: 10, marginBottom: 5, color: 'rgba(255, 255, 255, 0.8)', fontSize: 10, fontWeight: '900', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 8 } 
+  footerTextFloating: { textAlign: 'center', marginTop: 10, marginBottom: 5, color: 'rgba(255, 255, 255, 0.8)', fontSize: 10, fontWeight: '900', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.9)', textShadowRadius: 8 },
+
+  // 🔥 SATTI UPDATE: EULA Styles added below 🔥
+  eulaContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 5, marginBottom: 5, paddingHorizontal: 5 },
+  eulaText: { color: '#CBD5E1', fontSize: 10, marginLeft: 8, flex: 1, lineHeight: 14, fontWeight: '600' },
+  eulaLink: { color: '#F97316', fontWeight: 'bold', textDecorationLine: 'underline' }
 });

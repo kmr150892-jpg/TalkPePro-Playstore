@@ -2,34 +2,30 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-// 🔥 SATTI FIX: Added getDoc to fetch game status securely
-import { addDoc, collection, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
-// 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
+// 🔥 SATTI FIX: Added deleteDoc, arrayUnion for Kick and Block logic
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-// 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
 import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
     IRtcEngine,
     LighteningContrastLevel,
-    RtcTextureView, // 🔥 SATTI FIX: CHANGED TO TEXTURE VIEW FOR ANDROID BLACK SCREEN FIX
+    RtcTextureView,
 } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
 import { checkAndRequestCallPermissions } from '../../utils/permissions';
 
-// --- NEW: Security Import ---
 import * as ScreenCapture from 'expo-screen-capture';
 import GiftOverlay from '../../components/GiftOverlay';
-import LiveGameSheet from '../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA
-import MemoryMatch from '../../components/MemoryMatch'; // ✅ MEMORY MATCH
+import LiveGameSheet from '../../components/LiveGameSheet';
+import MemoryMatch from '../../components/MemoryMatch';
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80';
 
-// ✅ ACCURATE THEME & LEVEL CONFIG (L0 TO L10) - LOCKED COLORS
 const getLevelConfig = (beans: number) => {
     if (beans >= 100000000) return { lvl: 10, label: 'LEGEND L10', colors: ['#ff0404', '#F59E0B', '#df03ee'] as const, glow: '#F59E0B', next: 0, prev: 50000000, rate: 8000 };
     if (beans >= 50000000) return { lvl: 9, label: 'MYTHIC L9', colors: ['#f40691', '#dbc0c0', '#0a0303'] as const, glow: '#EC4899', next: 100000000, prev: 30000000, rate: 7000 };
@@ -52,13 +48,9 @@ export default function LiveStreamScreen() {
     const shimmerAnim = useRef(new Animated.Value(0)).current;
     const isNavigatingToCall = useRef(false);
     
-    // 🔥 SATTI FIX: Ref to prevent double triggering of AppState close logic
     const isAppClosing = useRef(false);
-    
-    // 🔥 SATTI FIX: Block summary popping up when OS requests Camera/Mic permissions
     const isRequestingPermissions = useRef(true);
 
-    // --- Existing States ---
     const [joined, setJoined] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
     const [isFrontCamera, setIsFrontCamera] = useState(true);
@@ -66,7 +58,6 @@ export default function LiveStreamScreen() {
     const [inputText, setInputText] = useState('');
     const [viewerCount, setViewerCount] = useState(0);
 
-    // --- Feature States ---
     const [seconds, setSeconds] = useState(0);
     const [showSummary, setShowSummary] = useState(false);
     const [earnings, setEarnings] = useState(0);
@@ -77,64 +68,45 @@ export default function LiveStreamScreen() {
     const [hostImage, setHostImage] = useState<string>("");
     const [hostName, setHostName] = useState<string>("");
     
-    // ✅ Dynamic Level & Theme States
     const [hostLevel, setHostLevel] = useState<string>("BEGINNER");
     const [hostConfig, setHostConfig] = useState<any>(getLevelConfig(0));
     
-    // ✅ New State for Active Viewers List
     const [activeViewers, setActiveViewers] = useState<any[]>([]);
-
-    // --- Pro Settings State ---
     const [showProSettings, setShowProSettings] = useState(false);
     const [ProLevel, setProLevel] = useState({ light: 0.7, smooth: 0.8 });
 
-    // Unique Live ID
     const [currentLiveId] = useState(params.liveId as string || `live_${auth.currentUser?.uid}_${Date.now()}`);
 
-    // --- 🟢 NEW: Call Request State & Blocked Users ---
     const [incomingCall, setIncomingCall] = useState<any>(null);
     const [blockedUsers, setBlockedUsers] = useState<string[]>([]);
-    
-    // ✅ NEW: Active Gift State for Festival Animation
     const [activeGift, setActiveGift] = useState<any>(null);
 
-    // 🔥 GAME FEATURE STATE
-    const [gameVisible, setGameVisible] = useState(false); // ✅ REFLEX STATE
-    const [glassVisible, setGlassVisible] = useState(false); // ✅ GLASS PATH STATE
-    const [roomData, setRoomData] = useState<any>(null); // ✅ Tracking Room data
+    const [gameVisible, setGameVisible] = useState(false);
+    const [glassVisible, setGlassVisible] = useState(false);
+    const [roomData, setRoomData] = useState<any>(null);
     const [myWalletBalance, setMyWalletBalance] = useState(0);
 
-    // 🔥 NEW: Total Beans Earned from Game in this Live Session (For Summary)
     const [gameBeansSummary, setGameBeansSummary] = useState(0);
-
-    // 🔥 SATTI FIX: Added state to track Exact Current Session Beans (Gifts + Game Commission)
     const [sessionEarnedBeans, setSessionEarnedBeans] = useState(0);
 
-    // 🔥 SATTI FIX: NEW DYNAMIC BORDER STYLE FOR FULL WIDTH HEADER 🔥
+    // 🔥 NEW: PLAY STORE REPORT & KICK ACTION SHEET STATES 🔥
+    const [actionSheetVisible, setActionSheetVisible] = useState(false);
+    // 🔥 SATTI FIX: NEW STATE FOR REPORT REASON SELECTION 🔥
+    const [reportSheetVisible, setReportSheetVisible] = useState(false);
+    const [selectedUser, setSelectedUser] = useState<any>(null);
+
     const borderType1 = {
-        borderLeftWidth: 2,
-        borderRightWidth: 2,
-        borderTopWidth: 0.5,
-        borderBottomWidth: 0.5,
-        borderLeftColor: hostConfig.colors[0],
-        borderRightColor: hostConfig.colors[0],
-        borderTopColor: hostConfig.colors[2] + '80',
-        borderBottomColor: hostConfig.colors[2] + '80',
+        borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0.5, borderBottomWidth: 0.5,
+        borderLeftColor: hostConfig.colors[0], borderRightColor: hostConfig.colors[0],
+        borderTopColor: hostConfig.colors[2] + '80', borderBottomColor: hostConfig.colors[2] + '80',
     };
 
-    // 🔥 SATTI FIX: ADDED MISSING BORDERTYPE2 HERE 🔥
     const borderType2 = {
-        borderLeftWidth: 2,
-        borderRightWidth: 2,
-        borderTopWidth: 0.5,
-        borderBottomWidth: 0.5,
-        borderLeftColor: hostConfig.colors[2],
-        borderRightColor: hostConfig.colors[2],
-        borderTopColor: hostConfig.colors[0] + '80',
-        borderBottomColor: hostConfig.colors[0] + '80',
+        borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0.5, borderBottomWidth: 0.5,
+        borderLeftColor: hostConfig.colors[2], borderRightColor: hostConfig.colors[2],
+        borderTopColor: hostConfig.colors[0] + '80', borderBottomColor: hostConfig.colors[0] + '80',
     };
 
-    // 🔥 SATTI FIX: Room paths changed from 'global_games' to current session 'lives' collection 🔥
     const checkGameActive = async () => {
         try {
             const gameSnap = await getDoc(doc(db, "lives", currentLiveId, "games", "reflex_arena"));
@@ -145,7 +117,6 @@ export default function LiveStreamScreen() {
         return false;
     };
 
-    // 🔥 SATTI FIX: NEW STRICT FUNCTION TO CANCEL GAME & WAIT FOR REFUND BEFORE ENDING LIVE 🔥
     const safeCancelGameForAudienceRefund = async () => {
         try {
             const roomRef = doc(db, "lives", currentLiveId, "games", "reflex_arena");
@@ -154,7 +125,6 @@ export default function LiveStreamScreen() {
                 const data = snap.data();
                 if (data.status === 'PLAYING' || data.status === 'WAITING') {
                     await updateDoc(roomRef, { status: 'CANCELLED' });
-                    // ⏳ Give 1.5 seconds for Firebase to trigger audience refund locally before ending Live completely
                     await new Promise(resolve => setTimeout(resolve, 1500));
                 }
             }
@@ -176,43 +146,34 @@ export default function LiveStreamScreen() {
         } catch (e) { console.log(e); }
     };
 
-    // 🔥 STRICT FIX: APPSTATE LISTENER TO HANDLE FORCE CLOSE WAITING LOGIC 🔥
     useEffect(() => {
         if (!currentLiveId) return;
         
         const handleAppStateChange = async (nextAppState: string) => {
-            // 🔥 SATTI FIX: App background poitu thirumba ulla (active) varum pothu ghost UI-a wipe pandrom 🔥
             if (nextAppState === 'active') {
                 setGameVisible(false);
                 setGlassVisible(false);
                 isAppClosing.current = false;
             }
 
-            // 🔥 SATTI FIX: Added !isRequestingPermissions.current to stop false triggers during OS Permission Request 🔥
             if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current && !isRequestingPermissions.current) {
                 isAppClosing.current = true;
                 
-                // 🔥 SATTI FIX: Force close background ghost game modal
                 setGameVisible(false);
                 setGlassVisible(false);
 
-                // 🔥 SATTI FIX: INSTANT AGORA KILL 🔥 Viewers side udaney cut aagidum!
                 if (engine.current) {
                     engine.current.leaveChannel();
                 }
                 
-                // UI-aiyu udaney summary-ku mathidrom
                 setJoined(false);
                 setShowSummary(true);
 
                 try {
-                    // 🔥 METHOD 1: Instant RTDB Update (Native WebSocket Level) 🔥
                     const rtdb = getDatabase();
                     set(ref(rtdb, `presence_lives/${currentLiveId}`), "ended").catch(()=>{});
                     set(ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`), "CANCELLED").catch(()=>{});
 
-                    // 🔥 SATTI FIX: DIRECT FIRESTORE UPDATES WITHOUT BATCHING/AWAITING
-                    // This ensures the payload is queued instantly to the Native Bridge before JS Thread suspends!
                     updateDoc(doc(db, "lives", currentLiveId), {
                         status: "ended",
                         endTime: serverTimestamp()
@@ -227,7 +188,6 @@ export default function LiveStreamScreen() {
                     if (auth.currentUser) {
                         updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false }).catch(()=>{});
                     }
-
                 } catch (error) {
                     console.log("Force close cleanup log:", error);
                 }
@@ -240,12 +200,10 @@ export default function LiveStreamScreen() {
 
     useEffect(() => {
         const init = async () => {
-            // --- 🔒 Security Start: Prevent Screen Capture ---
             if (Platform.OS !== 'web') {
                 await ScreenCapture.preventScreenCaptureAsync();
             }
 
-            // 🔥 SATTI FIX: Camera permission check won't trigger AppState closing logic anymore 🔥
             isRequestingPermissions.current = true;
             const hasPermission = await checkAndRequestCallPermissions();
             isRequestingPermissions.current = false;
@@ -263,7 +221,6 @@ export default function LiveStreamScreen() {
         const unsubListeners = listenToStreamData();
         const timer = setInterval(() => setSeconds(s => s + 1), 1000);
 
-        // Pulser for mass animations
         Animated.loop(
             Animated.sequence([
                 Animated.timing(pulseAnim, { toValue: 1.05, duration: 1000, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
@@ -278,7 +235,6 @@ export default function LiveStreamScreen() {
             ])
         ).start();
 
-        // 🔥 1. FIRESTORE CLEANUP: GHOST ROOM KILLER 🔥
         const cleanupGhostRooms = async () => {
             if (!auth.currentUser) return;
             try {
@@ -289,17 +245,13 @@ export default function LiveStreamScreen() {
                         await updateDoc(doc(db, "lives", roomDoc.id), { status: "ended" });
                     }
                 });
-            } catch (error) {
-                console.log("Ghost room cleanup error:", error);
-            }
+            } catch (error) { console.log(error); }
         };
         cleanupGhostRooms();
 
-        // 🔥 2. RTDB PRESENCE: FORCE CLOSE DETECTOR 🔥
         const rtdb = getDatabase();
         const connectedRef = ref(rtdb, ".info/connected");
         const livePresenceRef = ref(rtdb, `presence_lives/${currentLiveId}`);
-        // 🔥 SATTI FIX: App force close aana odane game auto-cancel aaga hook add paniten
         const gamePresenceRef = ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`);
 
         const unsubPresence = onValue(connectedRef, (snap) => {
@@ -307,13 +259,10 @@ export default function LiveStreamScreen() {
                 onDisconnect(livePresenceRef).set("ended").then(() => {
                     set(livePresenceRef, "active");
                 });
-                
-                // 🔥 SATTI FIX: Disconnect aanal game CANCELLED nu marum
                 onDisconnect(gamePresenceRef).set("CANCELLED");
             }
         });
 
-        // --- 🛡️ UPDATED: Listen for incoming calls with GHOST CALL FILTER ---
         const callQuery = query(
             collection(db, "calls"),
             where("expertId", "==", auth.currentUser?.uid || ""),
@@ -322,7 +271,6 @@ export default function LiveStreamScreen() {
 
         const unsubCalls = onSnapshot(callQuery, async (snap) => {
             if (!snap.empty) {
-                // 🔥 THE FIX: Filter out ghost/old calls stuck in database
                 let validDocSnap = null;
                 
                 for (const docSnap of snap.docs) {
@@ -330,11 +278,10 @@ export default function LiveStreamScreen() {
                     const now = Date.now();
                     const callTime = data.createdAt?.toMillis ? data.createdAt.toMillis() : now;
                     
-                    if (now - callTime <= 30000) { // Call must be less than 30 seconds old
+                    if (now - callTime <= 30000) { 
                         validDocSnap = docSnap;
-                        break; // Found a valid fresh ringing call
+                        break; 
                     } else {
-                        // Auto-clean old ghost calls to 'missed' so they never bother again
                         updateDoc(doc(db, "calls", docSnap.id), { status: 'missed' }).catch(()=>{});
                     }
                 }
@@ -356,7 +303,6 @@ export default function LiveStreamScreen() {
                     return;
                 }
 
-                // ✅ FORCE FETCH ACTUAL NAME & IMAGE FOR ULTRA PREMIUM MODAL
                 let callerPic = null;
                 let fetchedName = data.userName || data.callerName || "USER";
 
@@ -384,7 +330,6 @@ export default function LiveStreamScreen() {
         }
 
         return () => {
-            // --- 🔓 Security End: Allow Screen Capture ---
             if (Platform.OS !== 'web') {
                 ScreenCapture.allowScreenCaptureAsync();
             }
@@ -395,14 +340,11 @@ export default function LiveStreamScreen() {
             unsubWallet();
             
             unsubPresence();
-            set(livePresenceRef, "ended"); // Normal back button cleanup
-            set(gamePresenceRef, "CANCELLED"); // 🔥 SATTI FIX: Cleanup on unmount
+            set(livePresenceRef, "ended"); 
+            set(gamePresenceRef, "CANCELLED"); 
 
-            // 🔥 SATTI FIX: Remove player from Reflex if they unmount
             removePlayerFromReflex();
 
-            // 🔥 SATTI FIX: GHOST LIVE ROOM KILLED ON EXIT 🔥
-            // Forcefully update Firestore so room doesn't stay 'live' when host completely unmounts
             if (currentLiveId) {
                 updateDoc(doc(db, 'lives', currentLiveId), {
                     status: 'ended',
@@ -423,7 +365,6 @@ export default function LiveStreamScreen() {
             const userData = userSnap.data();
             let name = userData.name || auth.currentUser.displayName || "Host";
             
-            // ✅ THE ARUVI UPDATE CHECK
             if (name === "ARUVI MULTIVERSE") {
                 name = "Aruvi";
             }
@@ -472,13 +413,12 @@ export default function LiveStreamScreen() {
         } catch (e) { console.error(e); }
     };
 
-    // 🔥 CRITICAL FIX: handleCallAction Logic
     const handleCallAction = async (action: 'accepted' | 'rejected') => {
         if (!incomingCall || !auth.currentUser) return;
         
         try {
             if (action === 'accepted') {
-                isNavigatingToCall.current = true; // Prevents Agora from unmounting in useEffect cleanup
+                isNavigatingToCall.current = true; 
                 
                 await updateDoc(doc(db, "lives", currentLiveId), {
                     status: 'ended',
@@ -490,8 +430,8 @@ export default function LiveStreamScreen() {
                 const callRef = doc(db, "calls", incomingCall.id);
                 await updateDoc(callRef, {
                     status: 'accepted',
-                    expertName: hostName || "Host", // 🔥 SATTI FIX: NAME MAP
-                    expertImage: hostImage || "",     // 🔥 SATTI FIX: IMAGE MAP
+                    expertName: hostName || "Host", 
+                    expertImage: hostImage || "",     
                     callerName: incomingCall.userName || "User",
                     expertId: auth.currentUser.uid,
                     acceptedAt: serverTimestamp()
@@ -514,15 +454,14 @@ export default function LiveStreamScreen() {
                     params: {
                         callId: incomingCall.id,
                         expertId: auth.currentUser.uid,
-                        expertName: hostName || "Host", // 🔥 SATTI FIX: EXPERT PARAMS
-                        expertImage: hostImage || "",     // 🔥 SATTI FIX: EXPERT PARAMS
+                        expertName: hostName || "Host", 
+                        expertImage: hostImage || "",     
                         callerName: incomingCall.userName || "User",
                         callerId: incomingCall.callerId,
                         role: 'expert'
                     }
                 });
             } else {
-                // 🔥 REJECT LOGIC: Only update call status to rejected, Do not touch Agora or leave Live
                 await updateDoc(doc(db, "calls", incomingCall.id), { status: 'rejected' });
                 setIncomingCall(null);
             }
@@ -540,7 +479,7 @@ export default function LiveStreamScreen() {
         const unsubDoc = onSnapshot(doc(db, "lives", currentLiveId), (snap) => {
             if (snap.exists()) {
                 const data = snap.data();
-                setRoomData(data); // ✅ Tracking Room data
+                setRoomData(data); 
                 setViewerCount(data.viewerCount || 0);
                 setPinnedMessage(data.pinnedMessage || null);
                 setGameBeansSummary(data.gameBeansCollected || 0);
@@ -600,7 +539,6 @@ export default function LiveStreamScreen() {
                                 totalDiamondsReceived: increment(diamondAmount)
                             });
 
-                            // 🔥 SATTI FIX: Current session document la exact gift tracking
                             await updateDoc(doc(db, "lives", currentLiveId), {
                                 earnedBeans: increment(beanAmount)
                             }).catch(e => console.log(e));
@@ -629,8 +567,6 @@ export default function LiveStreamScreen() {
     const updateLiveStatus = async (status: string, manualName?: string, manualImage?: string, level?: string, price?: number) => {
         if (!auth.currentUser) return;
 
-        // 🔥 SATTI FIX: updateData-va status-ku munnadiye initialize panitom. 
-        // Live 'ended' aagumpothu hostName update aaga kudathu, ilana pazhaya empty string "Host" nu overwrite aaidum.
         const updateData: any = {
             status: status,
             currentLiveId: currentLiveId,
@@ -639,7 +575,6 @@ export default function LiveStreamScreen() {
         if (status === 'live') {
             let finalName = manualName || hostName || "Host";
             
-            // ✅ THE ARUVI UPDATE CHECK FOR ROOM CREATION
             if (finalName === "ARUVI MULTIVERSE") {
                 finalName = "Aruvi";
             }
@@ -651,9 +586,9 @@ export default function LiveStreamScreen() {
             updateData.viewerCount = 0;
             updateData.currentLevel = level || "BEGINNER";
             updateData.pricePerMin = price || 0;
-            updateData.earnedBeans = 0; // 🔥 SATTI FIX: Live start aagum pothu session tracking initialize panren
+            updateData.earnedBeans = 0; 
             
-            await updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: true, isBusy: false }); // Made sure isBusy is false on start
+            await updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: true, isBusy: false }); 
         }
 
         try {
@@ -705,12 +640,10 @@ export default function LiveStreamScreen() {
         return `${m}:${sec < 10 ? '0' : ''}${sec}`;
     };
 
-    // 🔥 SATTI FIX: MANUAL CLOSE WAITING LOGIC 🔥
     const leaveChannel = async () => {
         const isGamePlaying = await checkGameActive();
         
         if (isGamePlaying) {
-            // 🔥 SATTI FIX: Muthalla game cancel aagi refund aanathukku apparam Live end aagum
             await safeCancelGameForAudienceRefund();
         } else {
             await removePlayerFromReflex();
@@ -732,7 +665,7 @@ export default function LiveStreamScreen() {
     };
 
     const confirmExit = async () => {
-        await removePlayerFromReflex(); // Safety cleanup
+        await removePlayerFromReflex(); 
         await updateDoc(doc(db, "lives", currentLiveId), { viewerCount: 0 });
         if (engine.current) {
             engine.current.leaveChannel();
@@ -740,6 +673,86 @@ export default function LiveStreamScreen() {
             engine.current = null;
         }
         router.back();
+    };
+
+    // 🔥 NEW: UNIVERSAL USER CLICK TRIGGER (List & Chat) 🔥
+    const handleUserClick = (userItem: any, isFromChat = false) => {
+        const normalizedUser = {
+            id: isFromChat ? userItem.senderId : userItem.id,
+            name: isFromChat ? userItem.senderName : userItem.name,
+            image: isFromChat ? null : (userItem.photoURL || userItem.profilePic)
+        };
+        if (normalizedUser.id === auth.currentUser?.uid) return; // Ignore self
+        setSelectedUser(normalizedUser);
+        setActionSheetVisible(true);
+    };
+
+    // 🔥 SATTI FIX: KICK USER FROM LIVE WITH INSTANT DISCONNECT SIGNAL 🔥
+    const handleKickUser = async (showAlert = true) => {
+        if (!selectedUser) return;
+        try {
+            // 1. Array Update for blocked users
+            await updateDoc(doc(db, "lives", currentLiveId), {
+                bannedViewers: arrayUnion(selectedUser.id)
+            });
+            // 2. Remove from local list
+            await deleteDoc(doc(db, "lives", currentLiveId, "activeViewers", selectedUser.id));
+
+            // 🔥 3. THE MAGIC FIX: Send a direct RTDB Kick Signal that the Viewer's App will catch and force close!
+            const rtdb = getDatabase();
+            await set(ref(rtdb, `lives/${currentLiveId}/kicked_users/${selectedUser.id}`), true);
+
+            // 4. Chat Notification
+            await addDoc(collection(db, "lives", currentLiveId, "messages"), {
+                text: `${selectedUser.name} was kicked from the stream.`,
+                senderName: "System",
+                isSystem: true,
+                timestamp: serverTimestamp()
+            });
+            if (showAlert) Alert.alert("Kicked", `${selectedUser.name} has been removed from live.`);
+        } catch(e) { console.log(e); }
+        setActionSheetVisible(false);
+    };
+
+    // 🔥 NEW: BLOCK USER (Blocks permanently + Kicks from live) 🔥
+    const handleBlockUser = async (showAlert = true) => {
+        if (!selectedUser || !auth.currentUser) return;
+        try {
+            await updateDoc(doc(db, "users", auth.currentUser.uid), {
+                blockedUsers: arrayUnion(selectedUser.id)
+            });
+            await handleKickUser(false); // Boot them out too without second alert
+            if (showAlert) Alert.alert("Blocked", `${selectedUser.name} has been permanently blocked.`);
+        } catch (e) { console.log(e); }
+        setActionSheetVisible(false);
+    };
+
+    // 🔥 SATTI FIX: REPORT TRIGGER MODAL 🔥
+    const handleReportUser = () => {
+        setActionSheetVisible(false); // Close mini-profile
+        setReportSheetVisible(true); // Open specific reasons
+    };
+
+    // 🔥 SATTI FIX: SUBMIT ACTUAL REPORT TO ADMIN & TRIGGER BLOCK/KICK 🔥
+    const submitReport = async (reason: string) => {
+        if (!selectedUser) return;
+        try {
+            // 1. Submit Report
+            await addDoc(collection(db, "reports"), {
+                reportedUserId: selectedUser.id,
+                reportedUserName: selectedUser.name,
+                reportedBy: auth.currentUser?.uid,
+                reason: reason,
+                timestamp: serverTimestamp(),
+                liveId: currentLiveId
+            });
+            
+            // 2. Trigger Block & Kick Silently behind the scenes
+            await handleBlockUser(false);
+            
+            Alert.alert("Reported & Blocked", `User reported to Admin for: ${reason} and has been removed.`);
+        } catch (e) { console.log(e); }
+        setReportSheetVisible(false);
     };
 
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
@@ -753,17 +766,13 @@ export default function LiveStreamScreen() {
             <View style={styles.videoContainer}>
                 {joined && (
                     <View style={styles.videoGrid}>
-                        {/* 🔥 SATTI FIX: Android-la SurfaceView use panna LinearGradient pinnadi video poyi full black aagidum. Athunala RtcTextureView ku mathitten! Ippo pakkaava theriyum! 🔥 */}
                         <RtcTextureView canvas={{ uid: 0 }} style={guestUid ? styles.halfVideo : styles.fullVideo} />
-                        
-                        {/* GUEST VIDEO */}
                         {guestUid && <RtcTextureView canvas={{ uid: guestUid }} style={styles.halfVideo} />}
                     </View>
                 )}
                 {!joined && <Text style={styles.loadingText}>Connecting...</Text>}
             </View>
 
-            {/* 🔥 SATTI FIX: HEADER STYLING TO FULLY COVER ELEMENTS 🔥 */}
             <View style={styles.headerContainer}>
                 <BlurView intensity={90} tint="dark" style={[styles.fullWidthCard, borderType1]}>
                     <View style={styles.topRow}>
@@ -800,10 +809,7 @@ export default function LiveStreamScreen() {
                             </View>
                         </View>
 
-                        {/* ✅ TWO COMPACT GAME BUTTONS WITH MASS SYMBOLS */}
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            
-                            {/* Reflex Game Icon - 4 Boxes */}
                             <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00f2ff', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
                                 <View style={{ width: 16, height: 16 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
@@ -817,7 +823,6 @@ export default function LiveStreamScreen() {
                                 </View>
                             </TouchableOpacity>
 
-                            {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
                             <TouchableOpacity
                                 onPress={() => setGlassVisible(true)}
                                 style={[styles.closeIcon, {
@@ -843,7 +848,6 @@ export default function LiveStreamScreen() {
                                 </View>
                             </TouchableOpacity>
 
-                            {/* Leave Channel */}
                             <TouchableOpacity onPress={leaveChannel} style={[styles.closeIcon, { borderColor: hostConfig.colors[2] + '40', borderWidth: 1 }]}>
                                 <Ionicons name="close" size={22} color="#FFF" />
                             </TouchableOpacity>
@@ -859,7 +863,8 @@ export default function LiveStreamScreen() {
                         keyExtractor={(item) => item.id}
                         showsHorizontalScrollIndicator={false}
                         renderItem={({ item }) => (
-                            <View style={styles.viewerItem}>
+                            // 🔥 NEW: Viewer List Item is now Clickable to show Profile Menu 🔥
+                            <TouchableOpacity style={styles.viewerItem} activeOpacity={0.8} onPress={() => handleUserClick(item, false)}>
                                 {item.photoURL ? (
                                     <Image source={{ uri: item.photoURL }} style={styles.viewerAvatar} />
                                 ) : (
@@ -867,7 +872,7 @@ export default function LiveStreamScreen() {
                                         <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '900' }}>{item.name?.charAt(0).toUpperCase()}</Text>
                                     </View>
                                 )}
-                            </View>
+                            </TouchableOpacity>
                         )}
                     />
                 </View>
@@ -930,16 +935,11 @@ export default function LiveStreamScreen() {
                 </View>
             )}
 
-            {/* 🔥 SATTI FIX: KEYBOARD AVOIDING VIEW WRAPS ENTIRE SCREEN 🔥 */}
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} pointerEvents="box-none">
-                
-                {/* SPACER TO PUSH CHAT TO BOTTOM */}
                 <View style={{ flex: 1 }} pointerEvents="none" />
 
-                {/* 🔥 SATTI FIX: FLEX INTERACTION AREA FOR KEYBOARD FIX 🔥 */}
                 <View style={styles.interactionArea} pointerEvents="box-none">
 
-                    {/* 🔥 SATTI FIX: MOVED PRO SETTINGS BAR HERE SO IT DOESN'T HIDE BEHIND HEADER 🔥 */}
                     {showProSettings && (
                         <View style={styles.ProSettingsBar}>
                             <View style={styles.settingGroup}>
@@ -973,7 +973,6 @@ export default function LiveStreamScreen() {
                         keyExtractor={(item) => item.id}
                         inverted={true}
                         renderItem={({ item, index }) => {
-                            // 🔥 SATTI FIX: ROYAL GIFT MESSAGE RENDER IN CHAT 🔥
                             if (item.isGift) {
                                 return (
                                     <LinearGradient
@@ -986,7 +985,6 @@ export default function LiveStreamScreen() {
                                 );
                             }
 
-                            // Normal System Message (Join/Leave)
                             if (item.isSystem) {
                                 return (
                                     <View style={[styles.chatBubble, { backgroundColor: 'rgba(16, 185, 129, 0.1)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6 }]}>
@@ -995,12 +993,12 @@ export default function LiveStreamScreen() {
                                 );
                             }
 
-                            // Normal User Message
                             const msgBorder = index % 2 === 0 ? borderType1 : borderType2;
                             return (
-                                <View style={[styles.chatBubble, msgBorder]}>
+                                // 🔥 NEW: Chat Message is now Clickable too 🔥
+                                <TouchableOpacity activeOpacity={0.8} style={[styles.chatBubble, msgBorder]} onPress={() => handleUserClick(item, true)}>
                                     <Text style={styles.chatName}>{item.senderName}: <Text style={styles.chatMessage}>{item.text}</Text></Text>
-                                </View>
+                                </TouchableOpacity>
                             );
                         }}
                         style={styles.chatList}
@@ -1036,7 +1034,6 @@ export default function LiveStreamScreen() {
                 </View>
             </KeyboardAvoidingView>
 
-            {/* ✅ DYNAMIC GAME RENDERER */}
             <LiveGameSheet
                 visible={gameVisible}
                 onClose={() => setGameVisible(false)}
@@ -1062,7 +1059,6 @@ export default function LiveStreamScreen() {
                             <View style={styles.statItem}><Text style={styles.statVal}>{formatTime(seconds)}</Text><Text style={styles.statLabel}>Duration</Text></View>
                             <View style={styles.statItem}><Text style={styles.statVal}>{viewerCount}</Text><Text style={styles.statLabel}>Viewers</Text></View>
                             <View style={styles.statItem}>
-                                {/* 🔥 SATTI FIX: Bean Symbol removed and /Reward Symbol added 🔥 */}
                                 <Text style={styles.statVal}>{sessionEarnedBeans} 🎖️</Text>
                                 <Text style={styles.statLabel}>Rewards Accrued</Text>
                             </View>
@@ -1076,6 +1072,80 @@ export default function LiveStreamScreen() {
                     </View>
                 </View>
             </Modal>
+
+            {/* 🔥 PREMIUM ACTION SHEET: USER MINI-PROFILE (Over Live Stream) 🔥 */}
+            <Modal visible={actionSheetVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setActionSheetVisible(false)} />
+                    <View style={styles.actionSheetContainer}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        
+                        <View style={styles.actionSheetProfileHeader}>
+                            {selectedUser?.image ? (
+                                <Image source={{ uri: selectedUser.image }} style={styles.actionSheetAvatar} />
+                            ) : (
+                                <View style={styles.actionSheetAvatarPlaceholder}>
+                                    <Text style={styles.actionSheetAvatarText}>
+                                        {selectedUser?.name ? selectedUser.name.charAt(0).toUpperCase() : "U"}
+                                    </Text>
+                                </View>
+                            )}
+                            <Text style={styles.actionSheetTitle}>{selectedUser?.name || "User"}</Text>
+                        </View>
+
+                        {/* 🔥 BLOCK AND REPORT ARE MERGED INTO THIS BUTTON 🔥 */}
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={handleReportUser}>
+                            <Ionicons name="shield-half-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#EF4444' }]}>Block User</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionSheetCancelBtn} onPress={() => setActionSheetVisible(false)}>
+                            <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
+            {/* 🔥 SATTI FIX: REPORT REASONS MODAL 🔥 */}
+            <Modal visible={reportSheetVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setReportSheetVisible(false)} />
+                    <View style={styles.actionSheetContainer}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        <Text style={[styles.actionSheetTitle, { marginBottom: 15 }]}>Select Report Reason</Text>
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Bad Words / Harassment")}>
+                            <Ionicons name="chatbubbles-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Bad Words / Harassment</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Nudity / Sexual Content")}>
+                            <Ionicons name="eye-off-outline" size={22} color="#EF4444" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Nudity / Sexual Content</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Spam / Scam")}>
+                            <Ionicons name="alert-circle-outline" size={22} color="#F59E0B" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Spam / Scam</Text>
+                        </TouchableOpacity>
+                        <View style={styles.actionSheetDivider} />
+
+                        <TouchableOpacity style={styles.actionSheetBtn} onPress={() => submitReport("Other Violations")}>
+                            <Ionicons name="flag-outline" size={22} color="#94A3B8" />
+                            <Text style={[styles.actionSheetBtnText, { color: '#FFF' }]}>Other Violations</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity style={styles.actionSheetCancelBtn} onPress={() => setReportSheetVisible(false)}>
+                            <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </View>
+            </Modal>
+
         </SafeAreaView>
     );
 }
@@ -1088,9 +1158,8 @@ const styles = StyleSheet.create({
     halfVideo: { flex: 0.5, borderBottomWidth: 1, borderColor: '#1E293B' },
     loadingText: { color: '#00F2FE', alignSelf: 'center', marginTop: '50%', fontWeight: '900', letterSpacing: 2 },
     
-    // 🔥 SATTI FIX: HEADER STYLING TO FULLY COVER ELEMENTS 🔥
     headerContainer: { position: 'absolute', top: 50, left: 15, right: 15, zIndex: 10 },
-    fullWidthCard: { padding: 18, borderRadius: 30, backgroundColor: 'rgba(2, 6, 23, 0.85)', overflow: 'hidden' }, // Deep solid background
+    fullWidthCard: { padding: 18, borderRadius: 30, backgroundColor: 'rgba(2, 6, 23, 0.85)', overflow: 'hidden' },
     topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     profileInfoSide: { flexDirection: 'row', alignItems: 'center', flex: 1 },
     avatarWrapper: { position: 'relative' },
@@ -1106,7 +1175,6 @@ const styles = StyleSheet.create({
     viewerBadgeMass: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0, 242, 254, 0.1)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
     viewerCountTextMass: { color: '#00F2FE', fontSize: 11, fontWeight: '900' },
     
-    // 🔥 SATTI FIX: NEW GAME PILL STYLES 🔥
     gameBadgePill: { flexDirection: 'row', alignItems: 'center', height: 38, borderRadius: 19, paddingHorizontal: 12, gap: 8, justifyContent: 'center' },
     gameBadgeText: { color: '#00F2FE', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
     
@@ -1137,7 +1205,6 @@ const styles = StyleSheet.create({
     pinnedBox: { position: 'absolute', top: 185, left: 20, right: 20, backgroundColor: 'rgba(15, 23, 42, 0.7)', padding: 12, borderRadius: 15, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 5, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
     pinnedText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
     
-    // 🔥 SATTI FIX: INTERACTION AREA CHANGED TO FLEX FOR KEYBOARD FIX 🔥
     interactionArea: { height: height * 0.45, paddingHorizontal: 20, paddingBottom: 15, justifyContent: 'flex-end' },
     chatList: { flex: 1, marginBottom: 15 },
     chatBubble: { backgroundColor: 'rgba(15, 23, 42, 0.6)', padding: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '85%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
@@ -1145,11 +1212,9 @@ const styles = StyleSheet.create({
     chatMessage: { color: '#FFF', fontWeight: '600', fontSize: 12 },
     chatText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600' },
     
-    // 🔥 SATTI FIX: ROYAL GIFT BUBBLE STYLES 🔥
     giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)' },
     giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 11, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 },
 
-    // 🔥 SATTI FIX: UPDATED SIZES AND SPACING 🔥
     bottomBar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     input: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 25, height: 44, color: '#FFF', paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     iconAction: { width: 40, height: 40, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
@@ -1175,4 +1240,22 @@ const styles = StyleSheet.create({
     exitBtn: { backgroundColor: '#00F2FE', width: '100%', padding: 18, borderRadius: 20, alignItems: 'center', elevation: 5, shadowColor: '#00F2FE', shadowOpacity: 0.5, shadowRadius: 10 },
     exitBtnText: { color: '#020617', fontWeight: '900', fontSize: 14, letterSpacing: 2 },
     shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+
+    // 🔥 NEW: ACTION SHEET STYLES 🔥
+    actionSheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
+    actionSheetDismiss: { flex: 1 },
+    actionSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)', borderBottomWidth: 0 },
+    actionSheetHandle: { width: 40, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 20 },
+    
+    actionSheetProfileHeader: { alignItems: 'center', marginBottom: 25 },
+    actionSheetAvatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 2, borderColor: '#00F2FE', marginBottom: 10 },
+    actionSheetAvatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#1E293B', borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    actionSheetAvatarText: { color: '#FFF', fontSize: 28, fontWeight: '900' },
+    actionSheetTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
+
+    actionSheetBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 10 },
+    actionSheetBtnText: { fontSize: 16, fontWeight: '700', marginLeft: 15, letterSpacing: 0.5 },
+    actionSheetDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', width: '100%' },
+    actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
+    actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 });
