@@ -1,10 +1,17 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+
 import { useIsFocused } from '@react-navigation/native';
+
 import { BlurView } from 'expo-blur';
+
 import { LinearGradient } from 'expo-linear-gradient';
+
 import { useRouter } from 'expo-router';
+
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
+
 import React, { useEffect, useRef, useState } from 'react';
+
 import {
     ActivityIndicator,
     Alert,
@@ -13,6 +20,7 @@ import {
     Easing,
     FlatList,
     Image,
+    Modal,
     StatusBar,
     StyleSheet,
     Text,
@@ -20,16 +28,27 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+
 import { SafeAreaView } from 'react-native-safe-area-context';
+
 import LevelAvatar from '../../components/LevelAvatar';
+
 import { LivePreview } from '../../components/LivePreview';
+
 import WelcomeRewardModal from '../../components/WelcomeRewardModal';
+
 import { auth, db } from '../../firebaseConfig';
+
+
 
 const { height, width } = Dimensions.get('window');
 
+
+
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
+
 const calculateUserLevel = (totalSpent: number) => {
+
   if (totalSpent >= 500000001) return { 
       lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000']
   }; 
@@ -57,22 +76,32 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
+
+
 // 🔥 EXPERT THEME LOGIC (SYNCED)
+
 const getLevelTheme = (totalBeans: number = 0) => {
+
     if (totalBeans >= 10000000) return { color: '#F59E0B', label: 'MASTER' };
     if (totalBeans >= 5000000) return { color: '#EC4899', label: 'MYTHIC' };
     if (totalBeans >= 1000000) return { color: '#10B981', label: 'DIAMOND' };
     return { color: '#94A3B8', label: 'AGENT' };
 };
 
+
+
 const getExpertThemeColor = (earned: number) => {
+
     if (earned >= 10000000) return '#F59E0B';
     if (earned >= 5000000) return '#EC4899';
     if (earned >= 1000000) return '#10B981';
     return '#94A3B8';
 };
 
+
+
 export default function UserHome() {
+
     const router = useRouter();
     const user = auth.currentUser;
     const isFocused = useIsFocused();
@@ -84,6 +113,14 @@ export default function UserHome() {
     const [loading, setLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [activeLiveId, setActiveLiveId] = useState<string | null>(null);
+    
+    // 🔥 NEW STATES FOR PLAY STORE SAVER POP-UP 🔥
+    const [showPolicyModal, setShowPolicyModal] = useState(false);
+    const [dontShowToday, setDontShowToday] = useState(false);
+
+    // 🔥 NEW STATE FOR DYNAMIC ONLINE COUNT FLUCTUATION 🔥
+    const [dynamicOffset, setDynamicOffset] = useState(42);
+
 
     // 🌀 MASTER ANIMATION ENGINE
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -94,27 +131,49 @@ export default function UserHome() {
     const trailX = useRef(new Animated.Value(-width)).current;
     const shimmerAnim = useRef(new Animated.Value(0)).current; 
 
+
+
     const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
+
     const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
         if (viewableItems && viewableItems.length > 0) setActiveLiveId(viewableItems[0].item.id);
     }).current;
 
+
+
+    // 🔥 DYNAMIC ONLINE COUNT EFFECT
     useEffect(() => {
+        const interval = setInterval(() => {
+            // Generates a random number between 38 and 62 to make the online count look real and constantly updating
+            setDynamicOffset(Math.floor(Math.random() * 25) + 38);
+        }, 3500); 
+        return () => clearInterval(interval);
+    }, []);
+
+
+
+    useEffect(() => {
+
         Animated.loop(Animated.timing(mainLoop, { toValue: 1, duration: 4500, easing: Easing.linear, useNativeDriver: true })).start();
+
         Animated.loop(Animated.sequence([
             Animated.timing(floatAnim, { toValue: -10, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
             Animated.timing(floatAnim, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
         ])).start();
+
         Animated.loop(Animated.sequence([
             Animated.timing(scaleAnim, { toValue: 1.04, duration: 1500, useNativeDriver: true }),
             Animated.timing(scaleAnim, { toValue: 1, duration: 1500, useNativeDriver: true })
         ])).start();
+
         Animated.loop(Animated.sequence([
             Animated.timing(shakeAnim, { toValue: 2, duration: 45, useNativeDriver: true }),
             Animated.timing(shakeAnim, { toValue: -2, duration: 45, useNativeDriver: true }),
             Animated.timing(shakeAnim, { toValue: 0, duration: 45, useNativeDriver: true }),
             Animated.delay(2000)
         ])).start();
+
+
 
         // 🔥 Start Ambient Shimmer (SMOOTH FLOATING SEQUENCE)
         Animated.loop(
@@ -134,38 +193,60 @@ export default function UserHome() {
             ])
         ).start();
 
+
+
         const runTrail = () => {
             trailX.setValue(-width);
             Animated.timing(trailX, { toValue: width, duration: 3500, useNativeDriver: true }).start(() => runTrail());
         };
         runTrail();
 
+
+
         if (!user) { setLoading(false); return; }
 
+
+
         const q = query(collection(db, 'users'), where('role', '==', 'expert'));
+
         const unsubExperts = onSnapshot(q, (snap) => {
             setExperts(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
             setLoading(false);
         });
 
+
+
         const liveQuery = query(collection(db, 'lives'), where('status', '==', 'live'));
+
         const unsubLives = onSnapshot(liveQuery, (snap) => {
             setActiveLives(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
+
+
         // 🔥 FIX: FETCH ACTIVE FORUMS FROM 'forum_rooms' COLLECTION 🔥
+
         const partyQuery = query(collection(db, 'forum_rooms'), where('status', '==', 'active'));
+
         const unsubParties = onSnapshot(partyQuery, (snap) => {
             setActiveParties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
+
+
         const userRef = doc(db, 'users', user.uid);
+
         const unsubUser = onSnapshot(userRef, (docSnap) => {
             if (docSnap.exists()) setUserData(docSnap.data());
         });
 
+
+
         return () => { unsubExperts(); unsubLives(); unsubUser(); unsubParties(); };
+
     }, [user]);
+
+
 
     // 🔥 SATTI FIX: Fetching the Maximum of DIAMOND/RECHARGE fields only for accurate Home Screen Level
     const userDiamonds = Math.max(
@@ -173,15 +254,22 @@ export default function UserHome() {
         userData?.walletBalance || 0,
         userData?.balance || 0
     );
+
     const userRank = calculateUserLevel(userDiamonds);
+
     const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=020617&color=fff&bold=true`;
+
+
 
     const parallaxAura = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -50], extrapolate: 'clamp' });
     const cardScale = scrollY.interpolate({ inputRange: [-100, 0, 100], outputRange: [1.05, 1, 0.98], extrapolate: 'clamp' });
 
+
+
     // ==========================================
     // 🔥 CORE GHOST FILTER APPLICATION (DIRECT SYNC) 🔥
     // ==========================================
+
     const currentBlocked = userData?.blockedUsers || [];
     
     // 1. Filter Experts (Two-Way Block Check)
@@ -192,6 +280,8 @@ export default function UserHome() {
         return notBlockedByMe && notBlockedByHost;
     });
 
+
+
     // 2. Filter Lives (Two-Way Block Check)
     const safeLives = activeLives.filter(live => {
         const hostProfile = experts.find(e => e.id === live.hostId);
@@ -200,6 +290,8 @@ export default function UserHome() {
         const notBlockedByHost = !hostBlockedUsers.includes(user?.uid);
         return notBlockedByMe && notBlockedByHost;
     });
+
+
 
     // 3. Filter Parties/Forums (Two-Way Block Check)
     const safeParties = activeParties.filter(party => {
@@ -210,8 +302,12 @@ export default function UserHome() {
         return notBlockedByMe && notBlockedByHost;
     });
 
+
+
     // 4. Spotlight (Featured) inherits from already filtered safeExperts
     const spotlightExperts = safeExperts.filter(e => (e.rating || 5.0) >= 4.0);
+
+
 
     const getWalletStyle = () => {
         switch(userRank.anim) {
@@ -224,10 +320,14 @@ export default function UserHome() {
         }
     };
 
+
+
     const orbTranslateY = shimmerAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [0, -40]
     });
+
+
 
     // 🔥 ALTERNATING BORDER STYLES (FLUID, 2px)
     const borderType1 = {
@@ -242,6 +342,8 @@ export default function UserHome() {
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
 
+
+
     const borderType2 = {
         borderLeftWidth: 2,
         borderRightWidth: 2,
@@ -253,6 +355,8 @@ export default function UserHome() {
         borderBottomColor: userRank.color + '80',
         backgroundColor: 'rgba(15, 23, 42, 0.65)',
     };
+
+
 
     // 🔥 NEW DIRECT CALL ROUTING LOGIC 🔥
     const handleExpertCallClick = (expert: any, liveSession: any) => {
@@ -271,12 +375,52 @@ export default function UserHome() {
         }
     };
 
+
+
     return (
         <View style={styles.mainContainer}>
+
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             
             {/* 🔥 IDHO UNGA WELCOME SPIN MODAL! */}
             <WelcomeRewardModal />
+            
+            {/* 🔥 HIGH-END PREMIUM POLICY WARNING MODAL 🔥 */}
+            <Modal transparent visible={showPolicyModal} animationType="slide">
+                <BlurView intensity={60} tint="dark" style={styles.policyModalContainer}>
+                    <View style={styles.premiumModalBorder}>
+                        <LinearGradient colors={['#1e0b24', '#0f0202', '#020617']} style={styles.policyModalBox}>
+                            
+                            <View style={styles.policyHeaderGlow}>
+                                <LinearGradient colors={['#EF4444', '#9333EA']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.iconGradientBg}>
+                                    <Ionicons name="shield-checkmark" size={36} color="#FFF" />
+                                </LinearGradient>
+                            </View>
+                            
+                            <Text style={styles.policyTitle}>COMMUNITY STANDARDS</Text>
+                            <Text style={styles.policyText}>
+                                By proceeding, you agree to adhere to our strict community guidelines. Any form of harassment, nudity, explicit content, or inappropriate behavior will result in an immediate and permanent account BAN. Please keep the community safe.
+                            </Text>
+                            
+                            <TouchableOpacity style={styles.checkboxRow} activeOpacity={0.8} onPress={() => setDontShowToday(!dontShowToday)}>
+                                <View style={[styles.checkbox, dontShowToday && { backgroundColor: '#a855f7', borderColor: '#a855f7' }]}>
+                                    {dontShowToday && <Ionicons name="checkmark" size={16} color="#FFF" />}
+                                </View>
+                                <Text style={styles.checkboxLabel}>Don't show again today</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity activeOpacity={0.9} onPress={() => {
+                                setShowPolicyModal(false);
+                                router.push('/explore-experts' as any);
+                            }} style={styles.agreeBtnWrapper}>
+                                <LinearGradient colors={['#EF4444', '#F59E0B']} start={{x: 0, y: 0}} end={{x: 1, y: 1}} style={styles.agreeBtn}>
+                                    <Text style={styles.agreeBtnText}>I AGREE & PROCEED</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
+                        </LinearGradient>
+                    </View>
+                </BlurView>
+            </Modal>
             
             {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
             <LinearGradient colors={userRank.themeBg as any} style={StyleSheet.absoluteFill} />
@@ -284,6 +428,8 @@ export default function UserHome() {
             {/* 🔥 FLOATING SHIMMER ORBS */}
             <Animated.View style={[styles.shimmerOrb, { top: 100, left: -60, backgroundColor: userRank.color, transform: [{ translateY: orbTranslateY }] }]} />
             <Animated.View style={[styles.shimmerOrb, { bottom: 200, right: -60, backgroundColor: userRank.color, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+
+
 
             <SafeAreaView style={styles.topSection} edges={['top']}>
                 <View style={styles.topEliteHeader}>
@@ -301,6 +447,8 @@ export default function UserHome() {
                          </View>
                     </TouchableOpacity>
                 </View>
+
+
 
                 <Animated.View style={[styles.walletArea, getWalletStyle(), { scaleX: cardScale, scaleY: cardScale }]}>
                     <View style={[styles.stealthBoxBase, borderType1]}>
@@ -329,11 +477,27 @@ export default function UserHome() {
                     </View>
                 </Animated.View>
 
-                {/* 🔥 QUICK Discover BUTTON */}
+
+
+                {/* 🔥 QUICK Discover BUTTON WITH LEVEL RESTRICTION & POLICY MODAL 🔥 */}
                 <TouchableOpacity 
                     activeOpacity={0.9} 
-                    // 🔥 SATTI FIX: EXPO ROUTER STANDARD NAME FIXED HERE 🔥
-                    onPress={() => router.push('/explore-experts' as any)}
+                    onPress={() => {
+                        if (userRank.lvl === 1) {
+                            // 🔥 strict Alert update when clicked 🔥
+                            Alert.alert(
+                                "🔒 UNLOCK AT LEVEL 2", 
+                                "Level 1 Agents cannot access Quick Connect. Please upgrade to Level 2 (GOLD OPERATIVE) by topping up diamonds to unlock this feature!"
+                            );
+                        } else {
+                            // Level 2+ Proceed (Check if Policy was accepted for the session)
+                            if (dontShowToday) {
+                                router.push('/explore-experts' as any);
+                            } else {
+                                setShowPolicyModal(true);
+                            }
+                        }
+                    }}
                     style={[styles.DiscoverTriggerMass, { shadowColor: userRank.color }]}
                 >
                     <LinearGradient 
@@ -346,10 +510,13 @@ export default function UserHome() {
                         <Text style={styles.DiscoverBtnText}>QUICK CONNECT</Text>
                         <View style={styles.liveIndicatorDiscover}>
                             <View style={styles.liveDotDiscover} />
-                            <Text style={styles.liveCountDiscover}>{safeLives.length + safeExperts.length + 42} Online</Text>
+                            {/* 🔥 NUMBER CHANGED TO USE DYNAMIC STATE 🔥 */}
+                            <Text style={styles.liveCountDiscover}>{safeLives.length + safeExperts.length + dynamicOffset} Online</Text>
                         </View>
                     </LinearGradient>
                 </TouchableOpacity>
+
+
 
                 <View style={styles.searchSection}>
                     <BlurView intensity={10} tint="dark" style={[styles.searchBarMass, borderType2]}>
@@ -358,6 +525,8 @@ export default function UserHome() {
                     </BlurView>
                 </View>
             </SafeAreaView>
+
+
 
             <Animated.ScrollView 
                 showsVerticalScrollIndicator={false} 
@@ -390,6 +559,8 @@ export default function UserHome() {
                         />
                     </View>
                 )}
+
+
 
                 {/* 🔥 NEW: VIP Session ARENAS SECTION 🔥 */}
                 {safeParties.length > 0 && (
@@ -424,6 +595,8 @@ export default function UserHome() {
                     </View>
                 )}
 
+
+
                 <View style={styles.sectionArea}>
                     <View style={styles.sectionHeaderMass}>
                         <Text style={styles.sectionTitleMass}>FEATURED HOSTS</Text>
@@ -441,6 +614,8 @@ export default function UserHome() {
                         }}
                     />
                 </View>
+
+
 
                 <View style={styles.listArea}>
                     <Text style={styles.sectionTitleMass}>RECOMMENDED HOSTS</Text>
@@ -487,7 +662,10 @@ export default function UserHome() {
     );
 }
 
+
+
 const styles = StyleSheet.create({
+
     mainContainer: { flex: 1, backgroundColor: '#020617' },
     // 🔥 DESIGN: AMBIENT SHIMMER ORBS
     shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15 },
@@ -567,4 +745,21 @@ const styles = StyleSheet.create({
     nodeName: { color: '#FFF', fontWeight: '900', fontSize: 16, letterSpacing: 0.2 },
     nodeRateText: { fontSize: 12, fontWeight: '900', marginTop: 3 },
     nodeCallBtn: { width: 48, height: 48, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 12 },
+
+    // ==========================================
+    // 🔥 NEW HIGH-END PREMIUM POLICY MODAL STYLES 🔥
+    // ==========================================
+    policyModalContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
+    premiumModalBorder: { width: '100%', padding: 2, borderRadius: 32, backgroundColor: 'rgba(239, 68, 68, 0.4)', shadowColor: '#EF4444', shadowRadius: 25, shadowOpacity: 0.6, elevation: 15 },
+    policyModalBox: { width: '100%', borderRadius: 30, padding: 25, alignItems: 'center' },
+    policyHeaderGlow: { marginBottom: 20 },
+    iconGradientBg: { width: 70, height: 70, borderRadius: 35, justifyContent: 'center', alignItems: 'center', shadowColor: '#9333EA', shadowRadius: 15, shadowOpacity: 0.8, elevation: 10 },
+    policyTitle: { color: '#FFF', fontSize: 19, fontWeight: '900', letterSpacing: 2, textAlign: 'center', marginBottom: 15, textShadowColor: 'rgba(239, 68, 68, 0.8)', textShadowRadius: 10 },
+    policyText: { color: '#CBD5E1', fontSize: 13, lineHeight: 22, textAlign: 'center', marginBottom: 25, fontWeight: '600' },
+    checkboxRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 25 },
+    checkbox: { width: 22, height: 22, borderWidth: 2, borderColor: '#64748B', borderRadius: 6, marginRight: 12, justifyContent: 'center', alignItems: 'center' },
+    checkboxLabel: { color: '#E2E8F0', fontSize: 12, fontWeight: '800' },
+    agreeBtnWrapper: { width: '100%', shadowColor: '#F59E0B', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.4, shadowRadius: 12, elevation: 10 },
+    agreeBtn: { paddingVertical: 18, borderRadius: 25, alignItems: 'center', justifyContent: 'center' },
+    agreeBtnText: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 2 }
 });

@@ -850,7 +850,6 @@ export default function VideoCallScreen() {
     const handleBlockUser = async () => {
         let targetUserId = '';
         
-        // If expert is blocking user, take callerId. If user is blocking expert, take expertId.
         if (role === 'expert') {
             targetUserId = realCallerId || (params.callerId as string);
         } else {
@@ -870,8 +869,8 @@ export default function VideoCallScreen() {
             { text: "Cancel", style: "cancel" },
             { text: "Confirm", style: "destructive", onPress: async () => {
                 try {
-                    // Call the Context function which adds to UI & saves to Firebase
                     blockUser(targetUserId); 
+                    // 🔥 SATTI FIX: Call handleCallEnd with deduction forced to TRUE to save amounts before kicking to summary 🔥
                     handleCallEnd(true, 'ended');
                 } catch (error) {}
             }}
@@ -891,6 +890,8 @@ export default function VideoCallScreen() {
 
         const duration = localDurationRef.current;
 
+        // 🔥 SATTI FIX: If the user is blocked, DO NOT exit early just because the status is 'ended'!
+        // Let the user process their deduction if the call actually happened!
         if (role === 'user' && !isRemoteKill && finalStatus === 'completed') {
             try { await updateDoc(doc(db, "calls", callId), { status: "user_ended" }); } catch (e) {}
             if (safeExpertId && safeExpertId !== "UNKNOWN_EXPERT") {
@@ -953,7 +954,8 @@ export default function VideoCallScreen() {
                     dbCallerName = cData.callerName || dbCallerName;
                 }
 
-                if (isBiller) {
+                // 🔥 SATTI FIX: User will also run this calculation locally if they initiate the block (isBiller is overridden)
+                if (isBiller || finalStatus === 'ended') {
                     const targetCallerId = (role === 'user' ? user?.uid : dbCallerId);
                     const exactCallMins = duration / 60; 
                     const today = new Date().toISOString().split('T')[0];
@@ -1041,6 +1043,7 @@ export default function VideoCallScreen() {
                         userId: targetCallerId || 'unknown', expertId: safeExpertId, diamonds: uiFinalUserAmount, beans: expertEarningsBeans, duration, type: 'video_call', status: 'completed', timestamp: serverTimestamp() 
                     });
 
+                    // 🔥 SATTI FIX: The amounts are correctly populated so the UI won't show 0 🔥
                     setFinalDuration(duration);
                     setFinalAmount(role === 'expert' ? expertEarningsBeans : uiFinalUserAmount); 
                 }
@@ -1061,7 +1064,7 @@ export default function VideoCallScreen() {
             try { updateDoc(doc(db, "users", safeExpertId), { isBusy: false }); } catch (e) {}
         }
 
-        if (['missed', 'rejected', 'cancelled', 'blocked'].includes(finalStatus)) {
+        if (['missed', 'rejected', 'cancelled'].includes(finalStatus)) { // Removed 'blocked' so it goes to summary
             router.replace(role === 'expert' ? '/expert/dashboard' : '/(tabs)');
         } else {
             setShowSummary(true);
