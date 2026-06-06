@@ -478,7 +478,7 @@ export default function EditProfileScreen() {
                     {isDeleting ? <ActivityIndicator color="#EF4444" /> : (
                         <>
                             <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                            <Text style={styles.deleteBtnText}>DELETE PERMANENTLY</Text>
+                            <Text style={styles.deleteBtnText}>DELETE ACCOUNT</Text>
                         </>
                     )}
                 </TouchableOpacity>

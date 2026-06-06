@@ -12,7 +12,7 @@ import {
     Dimensions,
     Easing,
     Image,
-    Modal, // 🔥 SATTI FIX: Added Modal to imports 🔥
+    Modal,
     ScrollView,
     StyleSheet,
     Text,
@@ -49,7 +49,6 @@ const calculateLevel = (d: number) => {
     return "Godlike";
 };
 
-// 🔥 SATTI UPDATE: Added 'daily_bonus' to TABS array 🔥
 const TABS = [
     { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
     { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
@@ -65,7 +64,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState<any>(null);
     
-    // 🔥 SATTI FIX: Added LEADERBOARD tab to the main menu state 🔥
     const [mainTab, setMainTab] = useState<'STATS' | 'MONTHLY' | 'LEADERBOARD'>('STATS'); 
     const [activeTab, setActiveTab] = useState(0); 
 
@@ -80,7 +78,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     const [expandedYear, setExpandedYear] = useState<string | null>(null);
     const [expandedMonth, setExpandedMonth] = useState<string | null>(null);
 
-    // 🔥 SATTI FIX: LEADERBOARD STATES 🔥
     const [leaderboardData, setLeaderboardData] = useState<any[]>([]);
     const [isLeaderboardLoading, setIsLeaderboardLoading] = useState(false);
 
@@ -123,7 +120,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         ] as const 
     };
 
-    // 🔥 SATTI FIX: Added memory lock to prevent 5 times trigger loop
     const bonusLock = useRef(false);
 
     const evaluateAndResetDailyStats = async (expertId: string, currentData: any) => {
@@ -134,16 +130,14 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         if (currentData.lastBonusDate && currentData.lastBonusDate !== localDateStr) {
             
             if (bonusLock.current) return;
-            bonusLock.current = true; // Lock the execution immediately!
+            bonusLock.current = true; 
 
-            // Storage check to 100% kill any duplicate loops across refreshes
             const storageKey = `@daily_reset_${localDateStr}_${expertId}`;
             const hasClaimedLocally = await AsyncStorage.getItem(storageKey);
             if (hasClaimedLocally === 'true') return; 
 
             await AsyncStorage.setItem(storageKey, 'true');
 
-            // 🔥 SATTI FIX: Safely handling the 'highestAchievedMilestone' null check 🔥
             let bonusEarned = 0;
             let earnedLabel = "";
             const yesterdayBeans = Number(currentData.todayBeans) || 0;
@@ -160,7 +154,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 const updates: any = {
                     todayBeans: 0, todayMinutes: 0, todayCalls: 0, 
                     lastBonusDate: localDateStr, topVipSupporter: { name: 'None', amount: 0, date: localDateStr },
-                    currentDailyMilestone: "" // Clears old milestone so it resets cleanly
+                    currentDailyMilestone: "" 
                 };
 
                 if (bonusEarned > 0) {
@@ -171,7 +165,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                 await updateDoc(doc(db, "users", expertId), updates);
 
-                // Creates transaction ONLY if a milestone was reached
                 if (bonusEarned > 0) {
                     await addDoc(collection(db, "transactions"), {
                         userId: expertId,
@@ -192,13 +185,12 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 }
             } catch (e) {
                 console.error("Failed to auto-reset stats:", e);
-                bonusLock.current = false; // Unlock if failed
+                bonusLock.current = false; 
                 await AsyncStorage.removeItem(storageKey);
             }
         }
     };
 
-    // 🔥 SATTI FIX: LEADERBOARD FETCH EFFECT 🔥
     useEffect(() => {
         if (mainTab === 'LEADERBOARD' && leaderboardData.length === 0) {
             fetchLeaderboard();
@@ -216,7 +208,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 .map(doc => ({ id: doc.id, ...doc.data() }))
                 .filter((u: any) => (u.isExpert === true || u.role === 'expert') && (u.totalBeansEarned > 0));
                 
-            experts = experts.slice(0, 10); // Safe Top 10
+            experts = experts.slice(0, 10); 
             setLeaderboardData(experts);
         } catch (error) {
             console.error("Leaderboard fetch error:", error);
@@ -246,7 +238,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                 // 2. TRANSACTIONS (Fallback & Daily Bonus)
                 try {
-                    // 🔥 SATTI FIX: We explicitly query BOTH expertId and userId to catch all Gifts & System Rewards 🔥
                     const userQ = query(collection(db, "transactions"), where("userId", "==", user.uid));
                     const expertQ = query(collection(db, "transactions"), where("expertId", "==", user.uid));
                     
@@ -257,10 +248,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     for (const docSnap of uniqueDocs) {
                         const d = docSnap.data();
                         
-                        // Ignore video calls since they are handled above
                         if (d.type === 'video_call') continue; 
                         
-                        // 🔥 SATTI FIX: Explicit logic to fetch the specific Daily Bonus for Monthly Logs 🔥
                         if (d.type === 'mission_bonus' || d.title?.includes('Daily Mission') || (d.title?.includes('Bonus') && !d.title?.includes('Arena'))) {
                             const bonusAmount = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Number(d.amount) || 0;
                             if (bonusAmount > 0) {
@@ -277,16 +266,26 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     timestamp: d.timestamp || d.createdAt || { seconds: 0 }
                                 });
                             }
-                            continue; // Move to next transaction
+                            continue; 
                         }
 
-                        // 🔥 SATTI FIX: Explicit check mapping 'gift' to 'call_gift' 🔥
-                        let tType = 'call_gift';
-                        if (d.type === 'gift' || d.source === 'call') tType = 'call_gift'; 
-                        if (d.source === 'Session' || d.source === 'forum') tType = 'party_gift';
-                        if (d.source === 'live') tType = 'live_gift';
+                        // 🔥 SATTI FIX: Strict check to avoid fake private rewards 🔥
+                        let tType = '';
+                        
+                        // Ignore withdrawals, payouts, or deductions so they don't count as earnings!
+                        if (d.type === 'withdrawal' || d.type === 'payout' || d.status === 'deducted' || d.amount < 0) continue;
+
                         if (d.type?.includes('game') || d.source?.includes('game')) {
                             tType = (d.source === 'Session' || d.source === 'forum') ? 'party_game_bonus' : 'live_game_bonus';
+                        } else if (d.source === 'Session' || d.source === 'forum') {
+                            tType = 'party_gift';
+                        } else if (d.source === 'live') {
+                            tType = 'live_gift';
+                        } else if (d.type === 'gift' || d.source === 'call') {
+                            tType = 'call_gift';
+                        } else {
+                            // Unhandled transaction types (like system deductions) are ignored.
+                            continue;
                         }
 
                         const bns = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Math.floor((Number(d.diamonds) || Number(d.amount) || 0) / 2);
@@ -1321,4 +1320,4 @@ const styles = StyleSheet.create({
     reasonText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
     cancelBtn: { marginTop: 15, padding: 16, alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
     cancelBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '900', letterSpacing: 1 }
-}); 
+});

@@ -1,4 +1,3 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import React, { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
@@ -38,6 +37,9 @@ export default function CallSummary({ role, finalDurationFormatted, finalAmount,
     
     // 🔥 SATTI FIX: Added safe 'host' checks to prevent UI breaking if role changes in backend
     const isConsultant = role === 'expert' || role === 'host';
+
+    // 🔥 SYMBOL LOGIC: Rewards for Host, Diamonds for User
+    const currencySymbol = isConsultant ? '🎖️' : '💎';
 
     const theme = {
         // If it's the user view, fallback to standard blue. If expert/host, use their deep-glow colors.
@@ -84,13 +86,12 @@ export default function CallSummary({ role, finalDurationFormatted, finalAmount,
             <Animated.View style={[styles.shimmerOrb, { bottom: '10%', left: -50, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
             <View style={[styles.summaryCard, borderType1]}>
+                
+                {/* 🔥 DYNAMIC ICON BASED ON ROLE */}
                 <View style={[styles.iconContainer, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '40', borderWidth: 1 }]}>
-                    <MaterialCommunityIcons 
-                        name={isConsultant ? "seed" : "diamond-stone"} 
-                        size={50} 
-                        color={theme.primary} 
-                    />
+                    <Text style={{ fontSize: 45 }}>{currencySymbol}</Text>
                 </View>
+                
                 <Text style={styles.summaryTitle}>Session Summary</Text>
                 
                 {/* ⏳ Total Duration Row - Accurate From DB */}
@@ -99,27 +100,27 @@ export default function CallSummary({ role, finalDurationFormatted, finalAmount,
                     <Text style={styles.summaryValue}>{finalDurationFormatted}</Text>
                 </View>
 
-                {/* 🎖️ Call Charge Row */}
+                {/* 💎/🎖️ Call Charge Row */}
                 <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>{isConsultant ? 'Session Rewards' : 'Session Cost'}</Text>
-                    <Text style={styles.summaryValue}>{finalAmount}</Text>
+                    <Text style={styles.summaryValue}>{finalAmount} {currencySymbol}</Text>
                 </View>
 
                 {/* 🎁 Gift Row (Only shows if gifts were sent) */}
                 <View style={styles.summaryRow}>
                     <Text style={styles.summaryLabel}>{isConsultant ? 'Gift Rewards' : 'Bonuses Sent'}</Text>
                     <Text style={[styles.summaryValue, { color: '#FBBF24' }]}>
-                        {giftAmount > 0 ? `+${giftAmount}` : '0'}
+                        {giftAmount > 0 ? `+${giftAmount} ${currencySymbol}` : `0 ${currencySymbol}`}
                     </Text>
                 </View>
                 
                 {/* 🏆 Grand Total Row */}
                 <View style={[styles.summaryRow, styles.totalRow]}>
                     <Text style={styles.summaryLabel}>
-                        {isConsultant ? 'Net Rewards Accrued' : 'Total Diamonds Deducted'}
+                        {isConsultant ? 'Net Rewards Accrued' : 'Total Deducted'}
                     </Text>
                     <Text style={[styles.summaryValue, { color: theme.primary, fontSize: 22, textShadowColor: theme.primary + '80', textShadowRadius: 10 }]}>
-                        {totalEarningsOrSpent}
+                        {totalEarningsOrSpent} {currencySymbol}
                     </Text>
                 </View>
             </View>

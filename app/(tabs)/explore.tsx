@@ -787,10 +787,10 @@ const styles = StyleSheet.create({
         bottom: 0,
         left: 0,
         right: 0,
-        height: height * 0.45, // Reduced from 0.55 so it covers less of the top video
+        height: height * 0.5, // Reduced from 0.55 so it covers less of the top video
         justifyContent: 'flex-end',
         paddingHorizontal: 20,
-        paddingBottom: 95, // Dropped from 145 to 95 to move content much lower to the bottom edge
+        paddingBottom: 150, // Dropped from 145 to 95 to move content much lower to the bottom edge
     },
     contentWrapper: {
         gap: 15,

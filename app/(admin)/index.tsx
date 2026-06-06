@@ -102,7 +102,7 @@ const AdminPanel = () => {
         Animated.timing(fadeAnim, { toValue: 1, duration: 300, useNativeDriver: true }).start();
     }, [activeTab]);
 
-    // ✅ SECURE ADMIN LOGOUT LOGIC (INSTANT EJECT FIX)
+    // ✅ SECURE ADMIN LOGOUT LOGIC (ABSOLUTE ROUTER FLUSH)
     const handleAdminLogout = () => {
         Alert.alert(
             "System Logout",
@@ -114,23 +114,34 @@ const AdminPanel = () => {
                     style: "destructive",
                     onPress: async () => {
                         try {
-                            // 1. 🔥 INSTANT EJECT: Mudhalla UI-ah Login page-ku mathiduvom (No freeze!)
-                            router.replace('/' as any);
-                            
-                            // 2. Background-la memory clear panrom
+                            // 1. Background-la memory clear panrom
                             await AsyncStorage.clear();
                             
-                            // 3. Google session-ah safe-ah close panrom
+                            // 2. Google session-ah safe-ah close panrom
                             try {
                                 await GoogleSignin.signOut();
                             } catch (e) {
                                 console.log("Google sign out skipped");
                             }
                             
-                            // 4. Kadasiya Firebase Logout pandrom
+                            // 3. Kadasiya Firebase Logout pandrom
                             await signOut(auth);
+
+                            // 🔥 SATTI'S MASTER FIX: Stack wipe & proper redirect delay
+                            setTimeout(() => {
+                                if (router.canDismiss()) {
+                                    router.dismissAll();
+                                }
+                                router.replace('/'); // auth-guard will push to login automatically from '/'
+                            }, 300);
+
                         } catch (error) {
                             console.error("Logout Error:", error);
+                            // Fallback Force Eject
+                            if (router.canDismiss()) {
+                                router.dismissAll();
+                            }
+                            router.replace('/');
                         }
                     } 
                 }

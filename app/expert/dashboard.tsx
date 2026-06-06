@@ -733,7 +733,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row', 
         width: 'auto', 
         marginHorizontal: 10, 
-        marginBottom: Platform.OS === 'ios' ? 35 : 25, 
+        marginBottom: Platform.OS === 'ios' ? 45 : 30, 
         paddingVertical: 5, 
         borderRadius: 35, 
         justifyContent: 'space-around', 

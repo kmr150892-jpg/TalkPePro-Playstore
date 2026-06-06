@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as KeepAwake from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router';
+import { Redirect, Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router'; // 🔥 SATTI UPDATE: Imported Redirect
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, getDoc, limit, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -11,7 +11,7 @@ import { ActivityIndicator, Alert, Image, LayoutAnimation, LogBox, Modal, Platfo
 import MaintenanceScreen from '../components/.MaintenanceScreen';
 import UpdateAlert from '../components/UpdateAlert';
 import { auth, db } from '../firebaseConfig';
-import { BlockProvider } from '../utils/context/BlockContext'; // 🔥 SATTI UPDATE: BlockProvider Imported Here
+import { BlockProvider } from '../utils/context/BlockContext';
 
 LogBox.ignoreLogs([
   'BloomFilter error',
@@ -135,8 +135,6 @@ export default function RootLayout() {
           if (docSnap.exists()) {
             const data = docSnap.data();
 
-            // 🔥 SATTI FIX: Removed 'forceLogout' & 'status === Blocked' check. 
-            // We ONLY trust 'isBlocked === true' to prevent stuck loops!
             if (data.isBlocked === true) {
                 if (docSnap.metadata.fromCache) {
                     console.log("Cached block detected, waiting for server to confirm...");
@@ -184,9 +182,8 @@ export default function RootLayout() {
         setInitializing(false);
         setIsEjecting(false); 
         
-        setTimeout(() => {
-            router.replace('/' as any);
-        }, 0);
+        // 🔥 SATTI UPDATE 1: Removed manual router.replace() here.
+        // It was causing a "Navigation Deadlock". We now let <Redirect /> handle it flawlessly below.
       }
     });
 
@@ -412,9 +409,8 @@ export default function RootLayout() {
         if (inVideoCall) return;
 
         if (!user) {
-          if (inAuthGroup || (firstSegment !== '' && firstSegment !== 'index' && firstSegment !== 'expert-register')) {
-            router.replace('/' as any); 
-          }
+          // 🔥 SATTI UPDATE 2: Removed imperative logic here to prevent deadlock.
+          // <Redirect /> below takes care of everything when user is null.
           return;
         }
 
@@ -498,10 +494,19 @@ export default function RootLayout() {
     );
   }
 
-  // 🔥 SATTI FIX: Determining User Level & Theme strictly based on Diamonds/Recharge
+  // 🔥 SATTI ULTIMATE FIX 3: DECLARATIVE AUTH EJECTION 🔥
+  // Ithu thaan magic! User null aagitta, entha function-ukkum wait pannama direct-ah DOM reset aagi '/' (Login) ku thooki potrum.
+  // Ithu Expo Router deadlock-ah permanently solve pannidum.
+  if (!user) {
+      const firstSegment = segments[0] || '';
+      if (firstSegment !== '' && firstSegment !== 'index' && firstSegment !== 'expert-register') {
+          console.log("🔥 FORCE EJECT: Declarative Redirect to Login triggered.");
+          return <Redirect href="/" />;
+      }
+  }
+
   const userTheme = incomingCallData ? calculateUserLevel(incomingCallData.callerDiamonds || 0) : calculateUserLevel(0);
 
-  // 🔥 SATTI UPDATE: Wrapped the entire return inside <BlockProvider>
   return (
     <BlockProvider>
       <StatusBar barStyle="light-content" backgroundColor="#020617" />
@@ -527,7 +532,6 @@ export default function RootLayout() {
             <View style={styles.incomingCallOverlay}>
                 <BlurView intensity={95} tint="dark" style={StyleSheet.absoluteFill} />
                 
-                {/* Glowing Orb Behind the Card based on Level Primary Color */}
                 <View style={[styles.glowOrb, { backgroundColor: userTheme.color }]} />
 
                 <View style={[styles.incomingCallCard, { borderColor: userTheme.secondaryColor }]}>

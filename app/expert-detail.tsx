@@ -824,7 +824,7 @@ const styles = StyleSheet.create({
     expertMainAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#020617' },
     avatarLevelBadge: { position: 'absolute', bottom: -8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 2, borderColor: '#020617' },
     avatarLevelText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-    navRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 55, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
+    navRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 5, paddingTop: 30, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
     iconCircle: { backgroundColor: 'rgba(2, 6, 23, 0.4)', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     infoContent: { padding: 25, paddingTop: 65, minHeight: height },
     nameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },

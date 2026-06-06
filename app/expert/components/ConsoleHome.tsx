@@ -681,8 +681,8 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
           <TouchableOpacity style={styles.homeDeleteBtn} onPress={handleTerminateExpert} disabled={isDeleting}>
               {isDeleting ? <ActivityIndicator color="#EF4444" /> : (
                   <>
-                      <Ionicons name="trash-outline" size={14} color="#EF4444" />
-                      <Text style={styles.homeDeleteText}>TERMINATE IDENTITY</Text>
+                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
+                      <Text style={styles.homeDeleteText}>DELETE ACCOUNT</Text>
                   </>
               )}
           </TouchableOpacity>
