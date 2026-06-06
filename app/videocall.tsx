@@ -746,9 +746,12 @@ export default function VideoCallScreen() {
         }
     };
 
+    // 🔥 SATTI FIX: FULLY BULLETPROOF GIFT ENGINE 🔥
     const handleSendGift = async (amount: number, type: string, giftName: string = 'Gift') => {
         if (!user) return;
-        const targetUserIdForLog = realCallerId || params.callerId || user?.uid || 'unknown';
+        // Ensuring all variables are explicitly cast as strings to prevent undefined crashes
+        const targetUserIdForLog = String(realCallerId || params.callerId || user?.uid || 'unknown');
+        const targetExpertId = String(safeExpertId || "UNKNOWN_EXPERT");
 
         try {
             const userRef = doc(db, "users", user.uid);
@@ -758,7 +761,7 @@ export default function VideoCallScreen() {
 
             const dbBalance = Number(userSnap.data().balance || 0);
 
-            const activeRate = diamondRateRef.current;
+            const activeRate = Number(diamondRateRef.current || 1200);
             const accruedCallCost = isFreeModeActive ? 0 : Math.floor(localDurationRef.current * (activeRate / 60));
             
             const realAvailableBalance = dbBalance - accruedCallCost;
@@ -782,16 +785,19 @@ export default function VideoCallScreen() {
             
             await updateDoc(userRef, { balance: increment(-amount) });
             
-            const expertRef = doc(db, "users", safeExpertId); 
+            const expertRef = doc(db, "users", targetExpertId); 
             const expertSnap = await getDoc(expertRef);
             
+            let eName = String(expertName || "Host");
+
             if (expertSnap.exists()) {
                 const eData = expertSnap.data();
+                eName = eData.name || eData.userName || eData.displayName || eName;
                 const isNewDay = eData.lastBonusDate !== today;
                 
                 let currentTopVip = eData.topVipSupporter || { name: 'None', amount: 0, date: '' };
-                if (isNewDay || amount > currentTopVip.amount) {
-                     currentTopVip = { name: userData?.name || callerDisplayName, amount: amount, date: today };
+                if (isNewDay || amount > (Number(currentTopVip.amount) || 0)) {
+                     currentTopVip = { name: userData?.name || callerDisplayName || "User", amount: amount, date: today };
                 }
 
                 const updatedTodayBeans = isNewDay ? expertBeans : (Number(eData.todayBeans) || 0) + expertBeans;
@@ -811,26 +817,44 @@ export default function VideoCallScreen() {
                     lastBonusDate: today
                 });
                 
+                // 🔥 SATTI FIX: Guaranteed AddDoc with fully validated fields! No more missing records
                 await addDoc(collection(db, "transactions"), {
-                    userId: targetUserIdForLog, expertId: safeExpertId, expertName, 
-                    diamonds: amount, beans: expertBeans,
-                    type: 'gift', status: 'completed', giftType: type,
-                    timestamp: serverTimestamp()
+                    userId: targetUserIdForLog, 
+                    expertId: targetExpertId, 
+                    expertName: eName, 
+                    senderName: userData?.name || callerDisplayName || "User",
+                    senderId: targetUserIdForLog,
+                    diamonds: amount || 0, 
+                    beans: expertBeans || 0,
+                    amount: amount || 0, // Fallback for some queries
+                    type: 'gift', 
+                    source: 'call', // 🔥 CRUCIAL FIX FOR EXPERT STATS FILTER
+                    status: 'completed', 
+                    giftType: type || 'gift',
+                    giftName: giftName || 'Gift',
+                    timestamp: serverTimestamp(),
+                    createdAt: serverTimestamp()
                 });
             }
             
-            await updateDoc(doc(db, "calls", callId), {
-                lastGift: { 
-                    type, 
-                    amount, 
-                    timestamp: Date.now(), 
-                    giftName, 
-                    senderName: userData?.name || callerDisplayName || "User" 
-                },
-                totalGiftsDiamonds: increment(amount),
-                totalGiftsBeans: increment(expertBeans)
-            });
-        } catch (error) { console.error("Gift error:", error); }
+            if (callId) {
+                // Merge ensures we don't crash if callDoc is temporarily missing
+                await setDoc(doc(db, "calls", String(callId)), {
+                    lastGift: { 
+                        type: type || 'gift', 
+                        amount: amount || 0, 
+                        timestamp: Date.now(), 
+                        giftName: giftName || 'Gift', 
+                        senderName: userData?.name || callerDisplayName || "User" 
+                    },
+                    totalGiftsDiamonds: increment(amount),
+                    totalGiftsBeans: increment(expertBeans)
+                }, { merge: true });
+            }
+        } catch (error) { 
+            console.error("Gift error:", error); 
+            Alert.alert("Network Issue", "Failed to process gift completely. Please try again.");
+        }
     };
 
     const onAcceptCall = async () => {

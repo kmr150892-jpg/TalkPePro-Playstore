@@ -217,11 +217,11 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.95)', 
     borderRadius: 25, 
     // 👇👇 Increased Height & Padding for better fit 👇👇
-    height: Platform.OS === 'ios' ? 85 : 75, 
-    borderTopWidth: 0,
+    height: Platform.OS === 'ios' ? 120 : 90, 
+    borderTopWidth: 2,
     elevation: 10, 
-    paddingBottom: Platform.OS === 'ios' ? 30 : 15, 
-    paddingTop: 10,
+    paddingBottom: Platform.OS === 'ios' ? 35 : 15, 
+    paddingTop: 5,
     borderWidth: 1, 
     borderColor: 'rgba(255, 255, 255, 0.05)',
   },
@@ -231,8 +231,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   pulseButton: {
-    width: 44, // Fit perfectly inside the tab bar
-    height: 44,
+    width: 30, // Fit perfectly inside the tab bar
+    height: 30,
     borderRadius: 22,
     alignItems: 'center',
     justifyContent: 'center',
@@ -242,8 +242,8 @@ const styles = StyleSheet.create({
   },
   centerGlowEffect: {
     position: 'absolute',
-    width: 50,
-    height: 50,
+    width: 40,
+    height: 40,
     borderRadius: 25,
     opacity: 0.25,
     shadowOpacity: 1,

@@ -7,12 +7,14 @@ import {
 
 
 
+
   // @ts-ignore
   getReactNativePersistence,
   initializeAuth
 } from "firebase/auth";
 // 🔥 SATTI UPDATE: Imported enableNetwork and disableNetwork 🔥
-import { disableNetwork, enableNetwork, getFirestore } from "firebase/firestore";
+// 🔥 SATTI FIX: Replaced getFirestore with initializeFirestore for stable connection
+import { disableNetwork, enableNetwork, initializeFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 import { Platform } from "react-native";
 
@@ -51,7 +53,10 @@ try {
 
 export { auth };
 
-export const db = getFirestore(app);
+// 🔥 SATTI FIX: Long Polling enabled to prevent Firestore WebChannel RPC Connection Drops 🔥
+export const db = initializeFirestore(app, {
+  experimentalAutoDetectLongPolling: true,
+});
 export const storage = getStorage(app); 
 
 // 🔥 SATTI UPDATE: Exporting network control functions for AppState handling 🔥

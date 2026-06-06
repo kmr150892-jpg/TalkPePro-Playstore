@@ -246,9 +246,15 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                 // 2. TRANSACTIONS (Fallback & Daily Bonus)
                 try {
-                    // 🔥 SATTI FIX: We explicitly query by userId here so the system rewards don't get missed 🔥
-                    const transSnap = await getDocs(query(collection(db, "transactions"), where("userId", "==", user.uid)));
-                    for (const docSnap of transSnap.docs) {
+                    // 🔥 SATTI FIX: We explicitly query BOTH expertId and userId to catch all Gifts & System Rewards 🔥
+                    const userQ = query(collection(db, "transactions"), where("userId", "==", user.uid));
+                    const expertQ = query(collection(db, "transactions"), where("expertId", "==", user.uid));
+                    
+                    const [transSnapUser, transSnapExpert] = await Promise.all([getDocs(userQ), getDocs(expertQ)]);
+                    const mergedDocs = [...transSnapUser.docs, ...transSnapExpert.docs];
+                    const uniqueDocs = Array.from(new Map(mergedDocs.map(doc => [doc.id, doc])).values());
+
+                    for (const docSnap of uniqueDocs) {
                         const d = docSnap.data();
                         
                         // Ignore video calls since they are handled above
@@ -274,7 +280,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             continue; // Move to next transaction
                         }
 
+                        // 🔥 SATTI FIX: Explicit check mapping 'gift' to 'call_gift' 🔥
                         let tType = 'call_gift';
+                        if (d.type === 'gift' || d.source === 'call') tType = 'call_gift'; 
                         if (d.source === 'Session' || d.source === 'forum') tType = 'party_gift';
                         if (d.source === 'live') tType = 'live_gift';
                         if (d.type?.includes('game') || d.source?.includes('game')) {
@@ -283,7 +291,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                         const bns = Number(d.expertBeans) || Number(d.expertBean) || Number(d.beans) || Math.floor((Number(d.diamonds) || Number(d.amount) || 0) / 2);
                         if (bns > 0) { 
-                            rawData.push({ id: docSnap.id, type: tType, beans: bns, timestamp: d.timestamp || { seconds: 0 }, senderName: d.senderName || d.userName || d.name || "User", userId: d.userId || d.senderId });
+                            rawData.push({ id: docSnap.id, type: tType, beans: bns, timestamp: d.timestamp || d.createdAt || { seconds: 0 }, senderName: d.senderName || d.userName || d.name || "User", userId: d.userId || d.senderId });
                         }
                     }
                 } catch(e) { console.log('Transactions fetch error', e); }
@@ -1313,4 +1321,4 @@ const styles = StyleSheet.create({
     reasonText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
     cancelBtn: { marginTop: 15, padding: 16, alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
     cancelBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '900', letterSpacing: 1 }
-});
+}); 

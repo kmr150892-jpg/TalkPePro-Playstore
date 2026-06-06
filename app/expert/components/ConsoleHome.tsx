@@ -1,28 +1,27 @@
 import { Feather, FontAwesome5, Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { deleteUser } from 'firebase/auth';
-import { addDoc, arrayUnion, collection, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { arrayUnion, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  Image,
-  Modal,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    Modal,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
@@ -192,93 +191,8 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     return () => unsub();
   }, [user?.uid]);
 
-  // 🔥 SATTI FIX: 🚀 BULLETPROOF ANTI-LOOP DAILY BONUS ENGINE 🚀 🔥
-  const bonusLock = useRef(false); // 🔥 Prevents instant React concurrent loops
-
-  useEffect(() => {
-    const checkAndAwardDailyBonus = async () => {
-        if (!user?.uid || !expertData) return;
-
-        const today = new Date();
-        const offset = today.getTimezoneOffset() * 60000;
-        const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
-
-        const lastBonusDate = expertData.lastBonusDate || "";
-        const milestoneStr = String(expertData.currentDailyMilestone || "").toUpperCase();
-
-        if (lastBonusDate !== localDateStr && milestoneStr) {
-            
-            // 🔥 SATTI FIX: INSTANT SYNCHRONOUS LOCK BEFORE ANY AWAIT CAUSES RACE CONDITION
-            if (bonusLock.current) return; 
-            bonusLock.current = true; 
-
-            // 🔥 2nd Layer Lock (AsyncStorage)
-            const storageKey = `@bonus_claimed_${localDateStr}_${user.uid}`;
-            const hasClaimedLocally = await AsyncStorage.getItem(storageKey);
-            
-            if (hasClaimedLocally === 'true') return; 
-            
-            await AsyncStorage.setItem(storageKey, 'true'); // Instantly locks the gate locally
-
-            let bonusEarned = 0;
-            
-            if (milestoneStr.includes('1M')) bonusEarned = 30000;
-            else if (milestoneStr.includes('500K')) bonusEarned = 15000;
-            else if (milestoneStr.includes('300K')) bonusEarned = 9000;
-            else if (milestoneStr.includes('100K')) bonusEarned = 3000;
-            else if (milestoneStr.includes('50K')) bonusEarned = 1500;
-            else if (milestoneStr.includes('10K')) bonusEarned = 300;
-
-            try {
-                const currentWallet = expertData.walletBalance ?? expertData.beansBalance ?? 0;
-                const currentLifetime = expertData.totalBeansEarned ?? expertData.beans ?? 0;
-                
-                const newWalletBalance = currentWallet + bonusEarned;
-                const newTotalBeans = currentLifetime + bonusEarned;
-
-                // Update Database Securely
-                // 🔥 SATTI FIX: Cleared currentDailyMilestone so it resets for the new day
-                await updateDoc(doc(db, "users", user.uid), {
-                    walletBalance: newWalletBalance,
-                    beansBalance: newWalletBalance,
-                    totalBeansEarned: newTotalBeans,
-                    beans: newTotalBeans,
-                    lastBonusDate: localDateStr,
-                    currentDailyMilestone: "" 
-                });
-
-                if (bonusEarned > 0) {
-                    await addDoc(collection(db, "transactions"), {
-                        userId: user.uid,
-                        type: 'mission_bonus',
-                        title: `Daily Mission Reward: ${milestoneStr}`,
-                        amount: bonusEarned,
-                        beans: bonusEarned,
-                        expertBeans: bonusEarned,
-                        timestamp: serverTimestamp(),
-                        createdAt: serverTimestamp(),
-                        status: 'completed'
-                    });
-
-                    Alert.alert(
-                        "🎉 Daily Milestone Reached! 💸", 
-                        `Awesome work! You received ${bonusEarned.toLocaleString()} rewards for completing the ${milestoneStr} mission yesterday!\n\nIt has been credited to your wallet.`
-                    );
-                }
-            } catch (e) {
-                console.error("Bonus Award Error: ", e);
-                bonusLock.current = false; 
-                await AsyncStorage.removeItem(storageKey); // Unlock if DB failed so it can retry
-            }
-        }
-    };
-
-    const timer = setTimeout(() => {
-        checkAndAwardDailyBonus();
-    }, 3500);
-
-    return () => clearTimeout(timer);
-  }, [expertData?.lastBonusDate]); 
+  // 🔥 SATTI FIX: Removed the buggy 'checkAndAwardDailyBonus' Effect entirely. 
+  // ExpertStats.tsx will now securely handle all daily milestones using the correct updated logic without double-triggering!
 
   useEffect(() => {
       if (expertData && user?.uid) {

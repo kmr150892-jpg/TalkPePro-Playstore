@@ -592,7 +592,7 @@ export default function ExpertDashboard() {
                         <NavButton id="DASH" icon="grid-outline" label="Home" active={activeTab} onPress={setActiveTab} theme={theme} />
                         <NavButton id="WALLET" icon="wallet-outline" label="Wallet" active={activeTab} onPress={setActiveTab} theme={theme} />
                         <NavButton id="MESSAGES" icon="chatbubbles-outline" label="Chat" active={activeTab} onPress={setActiveTab} theme={theme} />
-                        <NavButton id="LEVELS" icon="ribbon-outline" label="Rank" active={activeTab} onPress={setActiveTab} theme={theme} />
+                        <NavButton id="LEVELS" icon="ribbon-outline" label="Level" active={activeTab} onPress={setActiveTab} theme={theme} />
                         <NavButton id="STATS" icon="bar-chart-outline" label="Stats" active={activeTab} onPress={setActiveTab} theme={theme} />
                     </BlurView>
                 </View>
@@ -728,13 +728,13 @@ const styles = StyleSheet.create({
     previewVideoContainer: { width: width * 0.85, height: height * 0.7, borderRadius: 30, overflow: 'hidden', borderWidth: 2, elevation: 20, shadowOpacity: 0.5, shadowRadius: 20, backgroundColor: '#000' },
     previewVideo: { width: '100%', height: '100%' },
     
-    floatingNavWrapper: { position: 'absolute', bottom: 0, left: 0, right: 0 },
+    floatingNavWrapper: { position: 'absolute', bottom: 12, left: 0, right: 0 },
     glassNav: { 
         flexDirection: 'row', 
         width: 'auto', 
-        marginHorizontal: 15, 
+        marginHorizontal: 10, 
         marginBottom: Platform.OS === 'ios' ? 35 : 25, 
-        paddingVertical: 12, 
+        paddingVertical: 5, 
         borderRadius: 35, 
         justifyContent: 'space-around', 
         overflow: 'hidden' 

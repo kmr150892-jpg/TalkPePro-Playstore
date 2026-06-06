@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     Alert,
@@ -216,6 +216,10 @@ export default function CinematicExploreScreen() {
     const [incomingCall, setIncomingCall] = useState<any>(null);
     const [incomingTimer, setIncomingTimer] = useState(12);
     const incomingPulse = useRef(new Animated.Value(1)).current;
+
+    // 🔥 NEW STATES: REPORT MODAL 🔥
+    const [reportModalVisible, setReportModalVisible] = useState(false);
+    const [expertToReport, setExpertToReport] = useState<any>(null);
 
     // 🔥 Check User Trial Status & Ghost Data on Load (SATTI FIX: Realtime onSnapshot)
     useEffect(() => {
@@ -527,6 +531,40 @@ export default function CinematicExploreScreen() {
         return notBlockedByMe && notBlockedByHost;
     });
 
+    // 🔥 REPORT & BLOCK ACTION HANDLER 🔥
+    const openReportModal = (expert: any) => {
+        if (!expert) return;
+        setExpertToReport(expert);
+        setReportModalVisible(true);
+    };
+
+    const submitReport = async (reason: string) => {
+        if (!user || !expertToReport) return;
+        try {
+            // 1. Alert to Admin Collection
+            await addDoc(collection(db, 'admin_alerts'), {
+                reportedBy: user.uid,
+                reportedUserId: expertToReport.id,
+                reportedUserName: expertToReport.name || 'Host',
+                reason: reason,
+                type: 'feed_video_report',
+                status: 'pending',
+                timestamp: serverTimestamp()
+            });
+
+            // 2. Block the user in current user's document instantly
+            await updateDoc(doc(db, 'users', user.uid), {
+                blockedUsers: arrayUnion(expertToReport.id)
+            });
+
+            setReportModalVisible(false);
+            setExpertToReport(null);
+            Alert.alert("Restricted & Reported", "This host has been removed from your feed and reported to the Admin team.");
+        } catch (error) {
+            Alert.alert("Error", "Could not submit report.");
+        }
+    };
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -556,10 +594,51 @@ export default function CinematicExploreScreen() {
             <View style={styles.topHeader}>
                 {/* 🔥 SATTI FIX: Header Text Overflow Fix (numberOfLines & adjustsFontSizeToFit) 🔥 */}
                 <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>FEATURED HOSTS</Text>
-                <TouchableOpacity style={styles.searchBtn}>
-                    <Ionicons name="search" size={24} color="#FFF" />
-                </TouchableOpacity>
+                
+                {/* 🔥 NEW: Header Right Actions with Restrict & Search side-by-side 🔥 */}
+                <View style={styles.headerRightControls}>
+                    {safeExperts.length > 0 && safeExperts[activeIndex] && (
+                        <TouchableOpacity style={styles.reportBtnGlobal} onPress={() => openReportModal(safeExperts[activeIndex])} activeOpacity={0.8}>
+                            <Ionicons name="shield-checkmark" size={16} color="#EF4444" />
+                            <Text style={styles.reportBtnText}>RESTRICT</Text>
+                        </TouchableOpacity>
+                    )}
+                    <TouchableOpacity style={styles.searchBtn}>
+                        <Ionicons name="search" size={24} color="#FFF" />
+                    </TouchableOpacity>
+                </View>
             </View>
+
+            {/* 🔥 NEW: BLOCK & REPORT MODAL 🔥 */}
+            <Modal visible={reportModalVisible} transparent animationType="fade">
+                <BlurView intensity={90} tint="dark" style={styles.reportOverlay}>
+                    <View style={styles.reportCard}>
+                        <View style={styles.reportHeader}>
+                            <Ionicons name="warning" size={28} color="#EF4444" />
+                            <Text style={styles.reportTitle}>RESTRICT & REPORT</Text>
+                        </View>
+                        <Text style={styles.reportSub}>Why are you reporting {expertToReport?.name || 'this host'}?</Text>
+
+                        {/* 🔥 SATTI UPDATE: SPOTLIGHT / VIDEO FEED SPECIFIC REPORT REASONS 🔥 */}
+                        {[
+                            'Inappropriate Video Content / Nudity',
+                            'Fake Profile / Impersonation',
+                            'Misleading Services / False Claims',
+                            'Offensive Profile Details / Bio',
+                            'Other Violation'
+                        ].map((reason, idx) => (
+                            <TouchableOpacity key={idx} style={styles.reasonBtn} onPress={() => submitReport(reason)} activeOpacity={0.7}>
+                                <Text style={styles.reasonBtnText}>{reason}</Text>
+                                <Ionicons name="chevron-forward" size={16} color="#64748B" />
+                            </TouchableOpacity>
+                        ))}
+
+                        <TouchableOpacity style={styles.cancelReportBtn} onPress={() => setReportModalVisible(false)}>
+                            <Text style={styles.cancelReportText}>CANCEL</Text>
+                        </TouchableOpacity>
+                    </View>
+                </BlurView>
+            </Modal>
 
             {/* 🔥 SATTI FIX: EXPERT INCOMING CALL OVERLAY 🔥 */}
             {incomingCall && (
@@ -659,6 +738,30 @@ const styles = StyleSheet.create({
         textShadowRadius: 10,
         flexShrink: 1, // Ensure it shrinks if needed
     },
+    // 🔥 NEW STYLES: Header Right Controls (Search + Restrict side-by-side) 🔥
+    headerRightControls: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    reportBtnGlobal: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(239, 68, 68, 0.2)',
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 20,
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.4)',
+        elevation: 5,
+        marginRight: 10, // Added margin right to keep space before search button
+    },
+    reportBtnText: {
+        color: '#EF4444',
+        fontWeight: 'bold',
+        marginLeft: 6,
+        fontSize: 10,
+        letterSpacing: 1
+    },
     searchBtn: {
         width: 44,
         height: 44,
@@ -668,7 +771,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
-        marginLeft: 10, // Adds some space between text and button
     },
     cardContainer: {
         width: width,
@@ -679,16 +781,16 @@ const styles = StyleSheet.create({
     video: {
         ...StyleSheet.absoluteFillObject,
     },
-    // 🔥 SATTI FIX: Added more paddingBottom & height to prevent Connect button clipping 🔥
+    // 🔥 SATTI FIX: Bottom UI Pushed Down (height lowered & padding reduced) 🔥
     bottomGradient: {
         position: 'absolute',
         bottom: 0,
         left: 0,
         right: 0,
-        height: height * 0.55, // Increased height
+        height: height * 0.45, // Reduced from 0.55 so it covers less of the top video
         justifyContent: 'flex-end',
         paddingHorizontal: 20,
-        paddingBottom: 145, // Increased padding to lift the button higher
+        paddingBottom: 95, // Dropped from 145 to 95 to move content much lower to the bottom edge
     },
     contentWrapper: {
         gap: 15,
@@ -803,6 +905,17 @@ const styles = StyleSheet.create({
         fontSize: 16,
         fontWeight: '900',
     },
+
+    // 🔥 NEW STYLES: REPORT MODAL 🔥
+    reportOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+    reportCard: { width: '85%', backgroundColor: '#0F172A', borderRadius: 25, padding: 25, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 15 },
+    reportHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+    reportTitle: { color: '#EF4444', fontSize: 18, fontWeight: '900', letterSpacing: 1 },
+    reportSub: { color: '#94A3B8', fontSize: 12, marginBottom: 20 },
+    reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 12, marginBottom: 10 },
+    reasonBtnText: { color: '#E2E8F0', fontSize: 14, fontWeight: '600' },
+    cancelReportBtn: { marginTop: 10, padding: 15, alignItems: 'center' },
+    cancelReportText: { color: '#64748B', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
 
     // 🔥 SATTI FIX: RINGING UI STYLES (USER OUTGOING) 🔥
     ringingOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },

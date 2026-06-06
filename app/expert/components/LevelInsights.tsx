@@ -202,7 +202,7 @@ import { db } from '../../../firebaseConfig';
                                     <Text style={styles.heroTitle}>{currentLevelInfo.label}</Text>
                                     <View style={styles.expertVerifiedRow}>
                                         <MaterialCommunityIcons name="check-decagram" size={14} color={theme.primary} />
-                                        <Text style={[styles.expertType, { color: theme.primary }]}>OFFICIAL TALKPE EXPERT</Text>
+                                        <Text style={[styles.expertType, { color: theme.primary }]}>OFFICIAL TALKPE PRO HOST</Text>
                                     </View>
                                 </View>
                                 {/* 🔥 Fluid Hexagon instead of sharp box */}

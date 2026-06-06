@@ -69,7 +69,7 @@ const getLevelConfig = (userData: any) => {
     if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4' };
     if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981' };
     if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308' };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8' };
+    if (beans >= 30000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8' };
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent' };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent' };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent' };
@@ -101,12 +101,14 @@ export default function MasterClassScreen() {
     // 🔥 Video Showcase States
     const [teaserUploading, setTeaserUploading] = useState(false);
     const [showPreviewModal, setShowPreviewModal] = useState(false);
+    const [showWarningModal, setShowWarningModal] = useState(false); // 🔥 SATTI NEW: Modal State for Play Store Safe Warning
     const [teaserVideo, setTeaserVideo] = useState<string | null>(null);
-    const videoRef = useRef<any>(null); // 🔥 SATTI FIX: Added ref for expo-av Video
-// Itha MasterclassScreen function-kulla add pannunga
-const player = useVideoPlayer(teaserVideo || null, (player) => {
-    player.loop = true;
-});
+    const videoRef = useRef<any>(null); 
+
+    const player = useVideoPlayer(teaserVideo || null, (player) => {
+        player.loop = true;
+    });
+
     // 🔥 Animations
     const shimmerAnim = useRef(new Animated.Value(0)).current;
 
@@ -172,8 +174,14 @@ const player = useVideoPlayer(teaserVideo || null, (player) => {
         borderBottomColor: theme.primary + '80',
     };
 
-    // 🔥 CLOUDINARY TEASER UPLOAD LOGIC
-    const uploadTeaserVideo = async () => {
+    // 🔥 BUTTON CLICK INTERCEPTOR
+    const handleUploadClick = () => {
+        setShowWarningModal(true); // Open the warning modal first
+    };
+
+    // 🔥 CLOUDINARY TEASER UPLOAD LOGIC (Proceed after warning)
+    const proceedToUpload = async () => {
+        setShowWarningModal(false); // Close the modal
         if (!user?.uid) return;
         
         try {
@@ -305,9 +313,9 @@ const player = useVideoPlayer(teaserVideo || null, (player) => {
                         <Text style={[styles.sectionTitle, { color: theme.primary }]}>30-SEC SKILL SHOWCASE</Text>
                         
                         <View style={styles.actionCardRow}>
-                            {/* UPLOAD CARD */}
+                            {/* UPLOAD CARD 🔥 Changed onPress to handleUploadClick 🔥 */}
                             <TouchableOpacity 
-                                onPress={uploadTeaserVideo} 
+                                onPress={handleUploadClick} 
                                 disabled={teaserUploading}
                                 style={[styles.largeActionCard, borderType2]}
                             >
@@ -315,7 +323,7 @@ const player = useVideoPlayer(teaserVideo || null, (player) => {
                                     {teaserUploading ? <ActivityIndicator color={theme.primary} /> : <Ionicons name="cloud-upload" size={32} color={theme.primary} />}
                                 </View>
                                 <Text style={styles.actionCardTitle}>
-                                    {teaserVideo ? "UPDATE" : "UPLOAD\nSHOWCASE"}
+                                    {teaserVideo ? "UPDATE\nSHOWCASE" : "UPLOAD\nSHOWCASE"}
                                 </Text>
                                 <Text style={styles.actionCardSub}>Max 30 seconds</Text>
                             </TouchableOpacity>
@@ -406,6 +414,35 @@ const player = useVideoPlayer(teaserVideo || null, (player) => {
                 </ScrollView>
             </KeyboardAvoidingView>
 
+            {/* 🔥 SATTI FIX: PLAY STORE SAFE & PROFESSIONAL GUIDELINES MODAL 🔥 */}
+            <Modal visible={showWarningModal} transparent animationType="fade" onRequestClose={() => setShowWarningModal(false)}>
+                <BlurView intensity={90} tint="dark" style={styles.previewModalOverlay}>
+                    <View style={[styles.premiumWarningBox, { width: '85%', marginHorizontal: 0, backgroundColor: 'rgba(15, 23, 42, 0.95)', borderColor: theme.primary }]}>
+                        <View style={styles.warningHeader}>
+                            <MaterialCommunityIcons name="star-shooting" size={24} color={theme.primary} />
+                            <Text style={[styles.warningTitle, { fontSize: 14, color: theme.primary }]}>PREMIUM SHOWCASE GUIDELINES</Text>
+                        </View>
+                        <Text style={[styles.warningText, { fontSize: 13, marginTop: 10, marginBottom: 20, color: '#E2E8F0' }]}>
+                            Attract more users by uploading a high-energy, engaging video demonstrating your skills!
+                            {"\n\n"}
+                            <Text style={{color: '#10B981', fontWeight: 'bold'}}>✅ Show your real personality</Text>{"\n"}
+                            <Text style={{color: '#10B981', fontWeight: 'bold'}}>✅ Ensure good lighting & clear audio</Text>{"\n"}
+                            <Text style={{color: '#10B981', fontWeight: 'bold'}}>✅ Keep it highly engaging & respectful</Text>
+                            {"\n\n"}
+                            <Text style={{color: '#EF4444', fontSize: 11}}>⚠️ Note: Explicit, abusive, or copyrighted content is strictly prohibited and will result in account restriction.</Text>
+                        </Text>
+                        <View style={{ flexDirection: 'row', gap: 10 }}>
+                            <TouchableOpacity style={[styles.modalActionBtn, { flex: 1, backgroundColor: 'rgba(255,255,255,0.1)' }]} onPress={() => setShowWarningModal(false)}>
+                                <Text style={[styles.btnText, { color: '#FFF', fontSize: 12 }]}>CANCEL</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity style={[styles.modalActionBtn, { flex: 1.5, backgroundColor: theme.primary }]} onPress={proceedToUpload}>
+                                <Text style={[styles.btnText, { color: '#FFF', fontSize: 12 }]}>I UNDERSTAND</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </BlurView>
+            </Modal>
+
             {/* 🔥 SATTI FIX: VIDEO PREVIEW MODAL USING expo-av 🔥 */}
             <Modal visible={showPreviewModal} transparent animationType="slide" onRequestClose={() => setShowPreviewModal(false)}>
                 <BlurView intensity={95} tint="dark" style={styles.previewModalOverlay}>
@@ -415,10 +452,10 @@ const player = useVideoPlayer(teaserVideo || null, (player) => {
                     <View style={[styles.previewVideoContainer, { borderColor: theme.primary }]}>
                         {teaserVideo && (
                            <VideoView 
-    player={player} 
-    style={styles.previewVideo} 
-    contentFit="cover" 
-/>
+                                player={player} 
+                                style={styles.previewVideo} 
+                                contentFit="cover" 
+                            />
                         )}
                     </View>
                 </BlurView>
@@ -440,6 +477,41 @@ const styles = StyleSheet.create({
     
     marginSection: { marginTop: 10 },
     sectionTitle: { fontSize: 12, fontWeight: '900', marginHorizontal: 24, marginBottom: 15, letterSpacing: 1 },
+
+    // 🔥 VIBE CHECK MODAL STYLES 🔥
+    premiumWarningBox: {
+        marginHorizontal: 24,
+        marginBottom: 15,
+        backgroundColor: 'rgba(239, 68, 68, 0.05)',
+        padding: 20,
+        borderRadius: 20,
+        borderWidth: 2,
+        borderColor: 'rgba(239, 68, 68, 0.3)',
+    },
+    warningHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 6,
+    },
+    warningTitle: {
+        color: '#EF4444',
+        fontSize: 10,
+        fontWeight: '900',
+        letterSpacing: 1.5,
+    },
+    warningText: {
+        color: '#94A3B8',
+        fontSize: 11,
+        fontWeight: '600',
+        lineHeight: 18,
+    },
+    modalActionBtn: {
+        paddingVertical: 14,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center'
+    },
     
     // 🔥 NEW LARGE ACTION CARDS
     actionCardRow: { flexDirection: 'row', gap: 15, marginHorizontal: 24 },
@@ -462,7 +534,6 @@ const styles = StyleSheet.create({
     
     largeInput: { backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 20, paddingVertical: 20, borderRadius: 20, color: '#FFF', fontWeight: '700', fontSize: 16, borderWidth: 1 },
     
-    // 🔥 AUTO-LOCKED REWARD CARD (Now converted to Algorithm Boost)
     lockedRevenueCard: { marginTop: 25, padding: 20, borderRadius: 20, borderWidth: 1 },
     revenueHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
     revenueTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },

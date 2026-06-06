@@ -135,9 +135,14 @@ export default function ExpertHistory() {
         }
 
         // 2. FETCH TRANSACTIONS (For Call Gifts & DAILY BONUS)
-        // 🔥 SATTI FIX: Query checking "userId" instead of "expertId" to catch system rewards 🔥
-        const transSnap = await getDocs(query(collection(db, "transactions"), where("userId", "==", user.uid)));
-        for (const docSnap of transSnap.docs) {
+        // 🔥 SATTI FIX: Querying BOTH expertId and userId to catch Private Call Gifts AND Daily Bonus! 🔥
+        const transSnapUser = await getDocs(query(collection(db, "transactions"), where("userId", "==", user.uid)));
+        const transSnapExpert = await getDocs(query(collection(db, "transactions"), where("expertId", "==", user.uid)));
+        
+        const mergedDocs = [...transSnapUser.docs, ...transSnapExpert.docs];
+        const uniqueDocs = Array.from(new Map(mergedDocs.map(doc => [doc.id, doc])).values());
+
+        for (const docSnap of uniqueDocs) {
             const d = docSnap.data();
             if (d.type === 'video_call') continue; 
             
