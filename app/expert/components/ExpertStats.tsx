@@ -71,6 +71,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         calls: 0, liveGifts: 0, partyGifts: 0, callGifts: 0, liveGames: 0, partyGames: 0, totalDeepGifts: 0
     });
 
+    // 🔥 SATTI FIX: NEW STATE TO OVERRIDE CORRUPTED DATABASE COUNTERS 🔥
+    const [realTodayStats, setRealTodayStats] = useState<{calls: number, mins: number, beans: number} | null>(null);
+
     const [historyLogs, setHistoryLogs] = useState<any[]>([]); 
     const [historyLoading, setHistoryLoading] = useState(true);
     
@@ -127,7 +130,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const offset = today.getTimezoneOffset() * 60000;
         const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
         
-        // 🔥 SATTI FIX: Removed the "currentData.lastBonusDate &&" check to ensure it ALWAYS runs on a new day
         if (currentData.lastBonusDate !== localDateStr) {
             
             if (bonusLock.current) return;
@@ -224,15 +226,41 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             if (!user) return;
             try {
                 let rawData: any[] = [];
+                
+                // 🔥 REAL-TIME DAILY CALCULATION VARIABLES 🔥
+                let calcTodayCalls = 0;
+                let calcTodayMins = 0;
+                const today = new Date();
+                const offset = today.getTimezoneOffset() * 60000;
+                const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
 
                 // 1. VIDEO CALLS
                 try {
                     const callsSnap = await getDocs(query(collection(db, "calls"), where("expertId", "==", user.uid)));
                     for (const docSnap of callsSnap.docs) {
                         const d = docSnap.data();
+
+                        // 🔥 ACCURATE TODAY STATS CALCULATION (Bypasses Corrupted DB Counters) 🔥
+                        const timeVal = d.endedAt || d.createdAt;
+                        if (timeVal) {
+                            let logDate = new Date();
+                            if (timeVal.toDate) logDate = timeVal.toDate();
+                            else if (timeVal.seconds) logDate = new Date(timeVal.seconds * 1000);
+                            else if (typeof timeVal === 'number') logDate = new Date(timeVal < 10000000000 ? timeVal * 1000 : timeVal);
+
+                            const logDateStr = (new Date(logDate.getTime() - offset)).toISOString().split('T')[0];
+                            if (logDateStr === localDateStr) {
+                                // Only count calls that actually ended/connected
+                                if (d.status === 'ended' || d.status === 'completed' || d.duration > 0) {
+                                    calcTodayCalls++;
+                                    calcTodayMins += (Number(d.duration) || Number(d.callDuration) || 0) / 60;
+                                }
+                            }
+                        }
+
                         const expertEarnings = Number(d.expertEarnings) || 0;
                         if (expertEarnings > 0) { 
-                            rawData.push({ id: docSnap.id, type: 'video_call', expertEarnings: expertEarnings, timestamp: d.endedAt || d.createdAt || { seconds: 0 }, callerName: d.callerName, userId: d.callerId });
+                            rawData.push({ id: docSnap.id, type: 'video_call', expertEarnings: expertEarnings, timestamp: timeVal || { seconds: 0 }, callerName: d.callerName, userId: d.callerId });
                         }
                     }
                 } catch(e) { console.log('Calls fetch error', e); }
@@ -270,10 +298,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             continue; 
                         }
 
-                        // 🔥 SATTI FIX: Strict check to avoid fake private rewards 🔥
                         let tType = '';
-                        
-                        // Ignore withdrawals, payouts, or deductions so they don't count as earnings!
                         if (d.type === 'withdrawal' || d.type === 'payout' || d.status === 'deducted' || d.amount < 0) continue;
 
                         if (d.type?.includes('game') || d.source?.includes('game')) {
@@ -285,7 +310,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         } else if (d.type === 'gift' || d.source === 'call') {
                             tType = 'call_gift';
                         } else {
-                            // Unhandled transaction types (like system deductions) are ignored.
                             continue;
                         }
 
@@ -419,6 +443,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 }
 
                 let calls = 0, liveGifts = 0, partyGifts = 0, callGifts = 0, liveGames = 0, partyGames = 0;
+                let todayCalculatedBeans = 0; // 🔥 NEW DAILY TOTAL TRACKER
+
                 uniqueData.forEach(t => {
                     if (t.type === 'video_call') calls += (t.expertEarnings || 0);
                     else if (t.type === 'live_gift') liveGifts += (t.beans || 0);
@@ -426,6 +452,22 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     else if (t.type === 'call_gift') callGifts += (t.beans || 0);
                     else if (t.type === 'live_game_bonus') liveGames += (t.beans || 0);
                     else if (t.type === 'party_game_bonus') partyGames += (t.beans || 0);
+
+                    // 🔥 EXACT DAILY EARNINGS CALCULATION 🔥
+                    const rawT = t.timestamp || t.createdAt;
+                    if (rawT) {
+                        let logDate = new Date();
+                        if (rawT.toDate) logDate = rawT.toDate();
+                        else if (rawT.seconds) logDate = new Date(rawT.seconds * 1000);
+                        else if (typeof rawT === 'number') logDate = new Date(rawT < 10000000000 ? rawT * 1000 : rawT);
+                        else if (typeof rawT === 'string') logDate = new Date(rawT);
+
+                        const logDateStr = (new Date(logDate.getTime() - offset)).toISOString().split('T')[0];
+                        if (logDateStr === localDateStr) {
+                            if (t.type === 'video_call') todayCalculatedBeans += (Number(t.expertEarnings) || 0);
+                            else todayCalculatedBeans += (Number(t.beans) || Number(t.expertEarnings) || 0);
+                        }
+                    }
                 });
 
                 setBreakdown({
@@ -448,6 +490,13 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 });
                 
                 setHistoryLogs(uniqueData);
+
+                // 🔥 COMMIT REAL TODAY STATS TO STATE 🔥
+                setRealTodayStats({
+                    calls: calcTodayCalls,
+                    mins: calcTodayMins,
+                    beans: todayCalculatedBeans
+                });
 
                 const yearMap: Record<string, { total: number, months: Record<string, { total: number, logs: any[] }> }> = {};
 
@@ -522,7 +571,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             if (snap.exists()) {
                 const d = snap.data();
 
-                // 🔥 SATTI FIX: Validate if it's a new day before evaluating reset
                 const today = new Date();
                 const offset = today.getTimezoneOffset() * 60000;
                 const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
@@ -539,7 +587,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 const longestSecs = Number(d.longestCallDuration) || 0; 
                 const longestCallMinutes = Math.floor(longestSecs / 60);
 
-                // 🔥 SATTI FIX: If it's a new day, visually force UI to 0 instantly instead of waiting for DB sync delay
                 const todaysEarnings = isNewDay ? 0 : (Number(d.todayBeans) || 0);
                 const displayTodayCalls = isNewDay ? 0 : (Number(d.todayCalls) || 0);
                 const displayTodayMins = isNewDay ? '0' : Math.round(Number(d.todayMinutes) || 0).toString();
@@ -812,9 +859,14 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         </View>
     );
 
+    // 🔥 MAP REAL-TIME CALCULATIONS TO OVERRIDE CORRUPTED FIREBASE COUNTERS 🔥
+    const finalTodayCalls = realTodayStats !== null ? realTodayStats.calls : stats?.todayCalls;
+    const finalTodayMins = realTodayStats !== null ? Math.round(realTodayStats.mins).toString() : stats?.todayMins;
+    const finalTodayBeans = realTodayStats !== null ? realTodayStats.beans : stats?.todayBeans;
+
     const currentMilestone = milestones[activeTab] || milestones[0];
-    const progress = Math.min(stats?.todayBeans / currentMilestone.target, 1);
-    const isCompleted = stats?.todayBeans >= currentMilestone.target;
+    const progress = Math.min((finalTodayBeans || 0) / currentMilestone.target, 1);
+    const isCompleted = (finalTodayBeans || 0) >= currentMilestone.target;
 
     return (
         <View style={{ flex: 1, backgroundColor: '#020617' }}>
@@ -883,8 +935,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 <Text style={styles.subHeading}>PERFORMANCE MATRIX</Text>
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="time-outline" label="Today Session" value={`${stats?.todayMins}m`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="people-outline" label="Today Calls" value={stats?.todayCalls} color={theme.primary} borderStyle={borderType1} />
+                                        <MatrixBox icon="time-outline" label="Today Session" value={`${finalTodayMins}m`} color={theme.primary} borderStyle={borderType2} />
+                                        <MatrixBox icon="people-outline" label="Today Calls" value={finalTodayCalls} color={theme.primary} borderStyle={borderType1} />
                                     </View>
                                     <View style={styles.matrixRow}>
                                         <MatrixBox icon="stats-chart-outline" label="Total Time" value={`${stats?.displayMins}m`} color={theme.primary} borderStyle={borderType1} />
@@ -998,9 +1050,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                             />
                                         </View>
                                         <View style={styles.quantumFooter}>
-                                            <Text style={styles.quantumCollected}>{stats?.todayBeans?.toLocaleString()} / {currentMilestone.target.toLocaleString()}</Text>
+                                            <Text style={styles.quantumCollected}>{(finalTodayBeans || 0).toLocaleString()} / {currentMilestone.target.toLocaleString()}</Text>
                                             <Text style={[styles.quantumRemaining, isCompleted && { color: '#10B981' }]}>
-                                                {isCompleted ? 'TRANSMISSION COMPLETE' : `${(currentMilestone.target - stats?.todayBeans).toLocaleString()} REWARDS REMAINING`}
+                                                {isCompleted ? 'TRANSMISSION COMPLETE' : `${(currentMilestone.target - (finalTodayBeans || 0)).toLocaleString()} REWARDS REMAINING`}
                                             </Text>
                                         </View>
                                     </View>

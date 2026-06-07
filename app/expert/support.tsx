@@ -59,42 +59,42 @@ const FAQS = [
     {
         id: 1,
         question: "When will I receive my Redeem ACTIVITY_REWARD?",
-        answer: "Withdrawals are processed manually by our admin team within 5-7 working days. Ensure your bank details in the Wallet System are 100% accurate to avoid payment delays."
+        answer: "Withdrawals are processed manually by our admin team within 5-7 working days. Admins strictly verify game and call logs to ensure fair play before releasing funds. Ensure your bank details are 100% accurate."
     },
     {
         id: 2,
         question: "How does the Premium Spotlight (Algorithm Boost) work?",
-        answer: "Activating Premium Spotlight pushes your profile to the top of the user feed. Our algorithm guarantees higher visibility by prioritizing your profile to active users on the platform."
+        answer: "Premium Spotlight pushes your profile up. Note: All Spotlight videos are subject to strict UGC guidelines. Users can report videos, which triggers a mandatory 24-hour admin review to ensure platform safety."
     },
     {
         id: 3,
         question: "What is the minimum Redeem limit?",
-        answer: "The minimum limit is set dynamically based on platform rules (e.g., 50,000 Rewards). You can initiate a secure Redeem directly from your Wallet dashboard once this milestone is reached."
+        answer: "The limit is dynamically set (e.g., 50,000 Rewards). Remember, TalkPe Pro strictly prohibits gambling. Rewards are earned purely through your time and skill-based game interactions with users."
     },
     {
         id: 4,
         question: "Why am I not receiving any Discover requests?",
-        answer: "1. Check if your status is set to 'ONLINE' in the console.\n2. Ensure you have good lighting and a clear professional picture.\n3. Keep your app updated to the latest Play Store version."
+        answer: "1. Check your 'ONLINE' status.\n2. Ensure your profile picture is professional and strictly 18+ compliant (no explicit content).\n3. Keep your app updated to the latest Play Store version."
     },
     {
         id: 5,
         question: "How do Broadcast & Forum Activity Platform Share work?",
-        answer: "Whenever users participate in digital activities in your Broadcast or Forum room, you earn a platform-defined Platform Share on the total virtual assets they spend, credited as Rewards."
+        answer: "You earn a Platform Share from virtual assets spent by users. In case of a user network disconnect during skill-based games, our system automatically resolves the match to protect your legitimate earnings."
     },
     {
         id: 6,
         question: "My account is showing as restricted. What do I do?",
-        answer: "Accounts are restricted automatically for strict policy violations (e.g., sharing personal contact details, off-platform transactions). Contact support immediately via Email to appeal your restriction. Admins review appeals within 24-48 hours."
+        answer: "Accounts are restricted automatically for strict policy violations. Contact support to appeal. Additionally, as per data safety rules, you retain full rights to use the 'Delete Account' option to permanently wipe your data at any time."
     },
     {
         id: 7,
         question: "How to handle abusive or misbehaving users?",
-        answer: "Your safety is our priority. Disconnect the call immediately and use the 'Block & Report' feature from the Chat screen. Our Trust & Safety team will permanently ban the user within 24 hours."
+        answer: "Your safety is our priority. Disconnect immediately and use the in-call 'Block & Report' feature. Our Trust & Safety team reviews all reports within 24 hours to enforce permanent bans on violators."
     },
     {
         id: 8,
         question: "Can I change my Call Rate?",
-        answer: "Yes! Based on your Tier Level, you have a maximum allowed rate. You can adjust your 'Rewards per Minute' rate from your Command Center once every 30 minutes."
+        answer: "Yes! Based on your Tier, you can adjust your 'Rewards per Minute' rate every 30 minutes. Rest assured, for your absolute privacy, TalkPe Pro operates under a Zero Recording Policy—private calls are NEVER recorded."
     }
 ];
 

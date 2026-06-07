@@ -150,20 +150,20 @@ export default function LegalScreen() {
                             <ContentSection 
                                 icon="shield-account"
                                 color="#6366F1"
-                                title="1. Community Guidelines" 
-                                text="TalkPe Pro is a premium live interaction and calling platform. All participants must engage with respect and decorum. Any form of harassment or misuse of the service will lead to immediate account suspension as per our zero-tolerance policy." 
+                                title="1. Community Guidelines (18+ ONLY)" 
+                                text="TalkPe Pro is a premium live interaction platform strictly restricted to users aged 18 and above. All participants must engage with respect. Any form of harassment or policy violation will lead to immediate account suspension under our zero-tolerance policy." 
                             />
                             <ContentSection 
-                                icon="diamond-stone"
+                                icon="gamepad-variant"
                                 color="#0EA5E9"
-                                title="2. Digital Assets & No Cashout Policy" 
-                                text="Our internal ecosystem utilizes Diamonds to connect with hosts. Diamonds are purely virtual in-app assets with NO real-world monetary value. Under no circumstances can user Diamonds be withdrawn, cashed out, or exchanged for real money. All purchases are securely processed through official payment gateways and are strictly non-refundable." 
+                                title="2. Digital Assets & Skill Games" 
+                                text="Diamonds are virtual in-app assets used to connect with hosts and as Entry Fees for skill-based games (Reflex Arena, Memory Match). Diamonds have NO real-world monetary value and cannot be cashed out. We strictly prohibit gambling. All purchases are non-refundable." 
                             />
                             <ContentSection 
-                                icon="phone-cancel"
+                                icon="alert-octagon"
                                 color="#F43F5E"
-                                title="3. Interaction Safety" 
-                                text="Both the host and the user maintain the right to end a call if safety protocols are compromised. TalkPe Pro reserves the right to review reported violations to ensure network integrity." 
+                                title="3. Interaction Safety & Reporting" 
+                                text="Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, and on profiles. All user reports are reviewed by our moderation team within 24 hours to ensure platform integrity." 
                             />
                             <ContentSection 
                                 icon="security"
@@ -174,17 +174,23 @@ export default function LegalScreen() {
                             <ContentSection 
                                 icon="gavel"
                                 color="#F59E0B"
-                                title="5. Content Moderation" 
-                                text="We maintain strict User-Generated Content (UGC) policies. Any user found violating community guidelines, engaging in abusive behavior, or attempting off-platform transactions will face immediate account termination without any refund of digital assets." 
+                                title="5. Content Moderation & Spotlight" 
+                                text="We maintain strict User-Generated Content (UGC) policies. Spotlight videos can be reported and will be hidden pending a 24-hour administrator review. Violating content will result in permanent account termination without refunds." 
+                            />
+                            <ContentSection 
+                                icon="wifi-off"
+                                color="#8B5CF6"
+                                title="6. Game Disconnect Policy" 
+                                text="In the event of a network disconnection during skill-based games, our system evaluates the match state to prevent unfair Diamond loss. Validated disconnections or server errors will be resolved automatically to protect your digital assets." 
                             />
                         </View>
                     ) : (
                         <View style={styles.glassCard}>
                             <ContentSection 
-                                icon="fountain-pen-tip"
+                                icon="microphone-off"
                                 color="#A855F7"
-                                title="1. Communication Privacy" 
-                                text="All live interactions are powered by Agora SDK with industry-standard encryption. We operate under a zero-knowledge framework; your private calls are confidential and are never recorded or monitored by TalkPe Pro." 
+                                title="1. Communication Privacy & No Recording" 
+                                text="All live interactions (Quick Connect, Live Rooms) utilize industry-standard encryption. We operate under a strict zero-knowledge framework; your private video and audio calls are NEVER recorded, stored, or monitored by TalkPe Pro." 
                             />
                             <ContentSection 
                                 icon="database-lock"
@@ -196,7 +202,7 @@ export default function LegalScreen() {
                                 icon="credit-card-chip"
                                 color="#F59E0B"
                                 title="3. Transaction Protection" 
-                                text="Financial details are processed via secure Google Play Billing and payment vaults. Sensitive information like CVV or banking passwords never pass through or get stored within the TalkPe Pro local system." 
+                                text="Financial details are processed exclusively via secure Google Play Billing and verified payment vaults. Sensitive information like CVV or banking passwords never pass through or get stored within the TalkPe Pro local system." 
                             />
                             <ContentSection 
                                 icon="eye-off"
@@ -208,7 +214,7 @@ export default function LegalScreen() {
                                 icon="delete-sweep"
                                 color="#14B8A6"
                                 title="5. Data Deletion Rights" 
-                                text="In strict compliance with Google Play Developer Policies, users retain full rights over their data. You can request complete deletion of your account and associated data through the app settings at any time, which will wipe your identity from our servers." 
+                                text="In strict compliance with Google Play Developer Policies, users retain full rights over their data. You can request complete deletion of your account and associated data through the app settings at any time, which will permanently wipe your identity from our servers." 
                             />
                         </View>
                     )}
@@ -248,8 +254,8 @@ const styles = StyleSheet.create({
     backBtn: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     tabContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', marginHorizontal: 20, borderRadius: 25, padding: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
     tab: { flex: 1, paddingVertical: 15, alignItems: 'center', borderRadius: 20 },
-    activeTabTerms: { backgroundColor: '#6366F1' }, // Maintained strictly to avoid line loss
-    activeTabPrivacy: { backgroundColor: '#A855F7' }, // Maintained strictly to avoid line loss
+    activeTabTerms: { backgroundColor: '#6366F1' }, 
+    activeTabPrivacy: { backgroundColor: '#A855F7' }, 
     tabText: { color: '#475569', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
     activeTabText: { color: '#FFF' },
     scrollContent: { padding: 20 },

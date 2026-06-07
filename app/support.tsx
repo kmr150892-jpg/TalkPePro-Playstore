@@ -94,42 +94,42 @@ export default function SupportScreen() {
         { 
             id: 1, 
             q: "Diamond recharge not reflected?", 
-            a: "Recharge status usually synchronizes within 2-5 minutes. If your balance hasn't updated after a successful transaction, please contact our support team via email for manual verification." 
+            a: "Recharge status usually synchronizes within 2-5 minutes. If your virtual diamonds haven't updated, please contact support. Note: Diamonds are virtual assets with no real-world monetary value." 
         },
         { 
             id: 2, 
             q: "Experiencing call disconnections?", 
-            a: "Our system is optimized for low-latency connections. Please ensure you are on a stable 4G/5G or Wi-Fi network. We monitor link stability to ensure your diamonds are only utilized for active call time." 
+            a: "If a network disconnect occurs during a live call or a skill-based game, our system automatically evaluates the match state to ensure fair play and protect your diamond balance from unfair loss." 
         },
         { 
             id: 3, 
             q: "How to locate specific hosts?", 
-            a: "You can find verified hosts by using the search feature on the home screen. Filter by expertise tags to find the professional best suited for your requirements." 
+            a: "You can find verified, strictly 18+ compliant hosts by using the search feature. Filter by expertise tags to find the professional best suited for your interactive requirements." 
         },
         { 
             id: 4, 
             q: "Is my privacy protected?", 
-            a: "TalkPe Pro utilizes end-to-end encryption protocols. Your private calls are secured, ensuring that no third party, including TalkPe Pro, can access or record your sessions." 
+            a: "TalkPe Pro strictly enforces a Zero Recording Policy. Your private video and audio calls are secured with end-to-end encryption. They are NEVER recorded, monitored, or stored by us." 
         },
         { 
             id: 5, 
             q: "What is the Refund Policy for Diamonds?", 
-            a: "All digital diamond purchases are final and non-refundable as per Play Store guidelines. However, if a transaction fails or a call drops due to our server error, please contact Support within 24 hours for a review." 
+            a: "All purchases are final. TalkPe Pro strictly prohibits gambling. Diamonds are used solely for interactions and as entry fees for skill games. They cannot be cashed out or refunded for real money." 
         },
         { 
             id: 6, 
             q: "How to report abusive behavior?", 
-            a: "User safety is our top priority. You can use the 'Report' button during any active session or email our Trust & Safety Desk directly. We take strict administrative action within 24 hours against any policy violations." 
+            a: "Safety is our priority. Use the 'Block & Report' button immediately during any active session or profile visit. Our team reviews all reports to take definitive admin action within 24 hours." 
         },
         { 
             id: 7, 
             q: "How can I delete my account & data?", 
-            a: "You have full control over your data. To permanently delete your account and wipe all personal data from our servers, navigate to Profile > Edit Profile > Delete Account Permanently." 
+            a: "In strict compliance with Data Safety policies, you have full control. To permanently wipe your identity and delete your account from our servers, navigate to Profile > Edit Profile > Delete Account." 
         },
         { 
             id: 8, 
             q: "How can I use my Diamonds?", 
-            a: "Diamonds act as your premium digital access keys. You can use them exclusively within the app to initiate live 1-on-1 video/audio calls with verified hosts, engage in premium live & forum activities, and unlock exclusive platform features." 
+            a: "Diamonds are your premium access keys. Use them exclusively within the app for live 1-on-1 calls, or to play our skill-based games. We operate a strictly secure, no-gambling digital ecosystem." 
         }
     ];
 

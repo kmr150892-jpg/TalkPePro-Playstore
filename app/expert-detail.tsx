@@ -681,7 +681,7 @@ export default function ExpertDetail() {
                         </View>
                     )}
 
-                    <Text style={[styles.sectionTitle, { marginTop: 15, color: theme.color }]}>Professional Overview</Text>
+                    <Text style={[styles.sectionTitle, { marginTop: 15, color: theme.color }]}>Host Overview</Text>
                     <View style={[styles.bioContainer, borderType2]}>
                         <MaterialCommunityIcons name="format-quote-open" size={24} color={theme.color + '40'} style={styles.quoteIcon} />
                         <Text style={styles.bioText}>{expert?.bio || "Professional host dedicated to providing high-quality guidance and support."}</Text>
