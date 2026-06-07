@@ -63,19 +63,42 @@ const GIFTS = [
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😂', '👏', '🙌', '💯'];
 
-// ✅ ACCURATE THEME & LEVEL CONFIG (L0 TO L10) - LOCKED COLORS
-const getLevelConfig = (beans: number) => {
-    if (beans >= 100000000) return { lvl: 10, label: 'LEGEND L10', colors: ['#ff0404', '#F59E0B', '#df03ee'] as const, glow: '#F59E0B', next: 0, prev: 50000000, rate: 8000 };
-    if (beans >= 50000000) return { lvl: 9, label: 'MYTHIC L9', colors: ['#f40691', '#dbc0c0', '#0a0303'] as const, glow: '#EC4899', next: 100000000, prev: 30000000, rate: 7000 };
-    if (beans >= 30000000) return { lvl: 8, label: 'ELITE L8', colors: ['#660aee', '#d4cfdf', '#d40808'] as const, glow: '#8B5CF6', next: 50000000, prev: 10000000, rate: 5400 };
-    if (beans >= 10000000) return { lvl: 7, label: 'MASTER L7', colors: ['#0af635', '#ca0bf5', '#fd068a'] as const, glow: '#3B82F6', next: 30000000, prev: 5000000, rate: 4800 };
-    if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
-    if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
-    if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 300000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'] as const, glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
-    if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
-    if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
-    return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
+// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2) 🔥
+const calculateUserLevel = (totalSpent: number) => {
+    if (totalSpent >= 500000001) return { lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000'], hasVipEntry: true, entryMessage: 'The Almighty Titan Overseer has arrived!' }; 
+    if (totalSpent >= 100000001) return { lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000'], hasVipEntry: true, entryMessage: 'Bow down, Mythic Ruler entered the room!' }; 
+    if (totalSpent >= 50000000) return { lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000'], hasVipEntry: true, entryMessage: 'A Grandmaster stepped into the forum!' };
+    if (totalSpent >= 10000000) return { lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000'], hasVipEntry: true, entryMessage: 'Elite Veteran is here!' };
+    if (totalSpent >= 5000000) return { lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000'], hasVipEntry: true, entryMessage: 'Legendary Node is here!' };
+    // 🔥 SATTI FIX: ENABLED VIP ENTRY & MESSAGES FOR LEVELS 1 TO 3 🔥
+    if (totalSpent >= 1000000) return { lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000'], hasVipEntry: true, entryMessage: 'Diamond Core activated the grid!' };
+    if (totalSpent >= 200001) return { lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000'], hasVipEntry: true, entryMessage: 'Gold Operative secured the perimeter!' };
+    return { lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000'], hasVipEntry: true, entryMessage: 'Silver Agent deployed into action!' };
+};
+
+// 🔥 SATTI FIX: DYNAMIC LOCAL BADGE FETCHER MAPPED TO SCREENSHOT 🔥
+const getBadgeLocalImage = (lvl: number) => {
+    switch(lvl) {
+        case 8: return require('../../assets/badge/TITAN OVERSEER.png');
+        case 7: return require('../../assets/badge/MYTHIC RULER.png');
+        case 6: return require('../../assets/badge/GRANDMASTER.png');
+        case 5: return require('../../assets/badge/ELITE VETERAN.png');
+        case 4: return require('../../assets/badge/LEGENDARY NODE.png');
+        case 3: return require('../../assets/badge/DIAMOND CORE.png');
+        case 2: return require('../../assets/badge/GOLD OPERATIVE.png');
+        case 1: return require('../../assets/badge/SILVER AGENT.png');
+        default: return null;
+    }
+};
+
+// 🔥 SATTI FIX: EXACT RANK CALCULATION FROM PROFILE SCREEN 🔥
+const getHighestBalanceForRank = (userRecord: any) => {
+    if (!userRecord) return 0;
+    return Math.max(
+        userRecord.totalDiamonds || 0,
+        userRecord.walletBalance || 0,
+        userRecord.balance || 0
+    );
 };
 
 export default function PartyRoomScreen() {
@@ -133,6 +156,11 @@ export default function PartyRoomScreen() {
     const [actionSheetVisible, setActionSheetVisible] = useState(false);
     const [reportSheetVisible, setReportSheetVisible] = useState(false);
     const [selectedUser, setSelectedUser] = useState<any>(null);
+
+    // 🔥 VIP USER ENTRY STATES 🔥
+    const [vipEntry, setVipEntry] = useState<any>(null);
+    const vipAnimX = useRef(new Animated.Value(-width)).current;
+    const hasFiredVipEntry = useRef(false); // 🔥 SATTI FIX: PREVENTS DUPLICATE VIP BANNER ON MOUNT 🔥
 
     useEffect(() => { userDataRef.current = userData; }, [userData]);
     useEffect(() => { mySeatIndexRef.current = mySeatIndex; }, [mySeatIndex]);
@@ -304,7 +332,20 @@ export default function PartyRoomScreen() {
 
         const msgQuery = query(collection(db, 'forum_rooms', roomId, 'messages'), orderBy('timestamp', 'desc'), limit(20));
         const unsubMsgs = onSnapshot(msgQuery, (snap) => {
-            setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse());
+            // 🔥 SATTI FIX: REMOVED .reverse() SO NEW MESSAGES APPEAR AT THE TOP (MELA VARANUM)
+            setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+            // 🔥 VIP ENTRY TRIGGER LOGIC 🔥
+            snap.docChanges().forEach((change) => {
+                if (change.type === 'added') {
+                    const data = change.doc.data();
+                    const isRecent = data.timestamp ? (Date.now() - data.timestamp.toMillis() < 5000) : true;
+                    // Detect VIP Entry Message and trigger Banner Animation
+                    if (isRecent && data.isVipEntry) {
+                        triggerVipBanner(data);
+                    }
+                }
+            });
         });
 
         const giftQuery = query(collection(db, 'forum_rooms', roomId, 'gifts'), orderBy('timestamp', 'desc'), limit(1));
@@ -345,6 +386,32 @@ export default function PartyRoomScreen() {
         };
     }, [roomId, user]);
 
+    // 🔥 SATTI FIX: AUTOMATIC VIP ENTRY TRIGGER WHEN CURRENT USER ENTERS 🔥
+    useEffect(() => {
+        if (userData && user && roomId && !hasFiredVipEntry.current) {
+            hasFiredVipEntry.current = true;
+            // 🔥 RANK CALCULATION EXACTLY AS PROFILE SCREEN 🔥
+            const userTotalSpent = getHighestBalanceForRank(userData);
+            const levelData = calculateUserLevel(userTotalSpent);
+            
+            if (levelData.hasVipEntry) {
+                addDoc(collection(db, "forum_rooms", roomId, "messages"), {
+                    uid: user.uid,
+                    name: userData.name || userData.displayName || "User",
+                    text: levelData.entryMessage,
+                    timestamp: serverTimestamp(),
+                    isVipEntry: true,
+                    lvl: levelData.lvl,
+                    label: levelData.label,
+                    color: levelData.color,
+                    themeBg: levelData.themeBg,
+                    entryMessage: levelData.entryMessage,
+                    image: userData.profilePic || userData.photoURL || null
+                }).catch(e => console.log(e));
+            }
+        }
+    }, [userData, user, roomId]);
+
     // 🔥 SATTI FIX: AUTOMATIC JOIN NOTIFICATION (DEPENDENCIES LOCKED TO PREVENT SPAM) 🔥
     useEffect(() => {
         if (isAgoraJoined && userData && !hasAnnouncedJoin.current) {
@@ -358,6 +425,18 @@ export default function PartyRoomScreen() {
             }).catch(e => console.log(e));
         }
     }, [isAgoraJoined, userData, roomId]);
+
+    const triggerVipBanner = (data: any) => {
+        setVipEntry(data);
+        Animated.sequence([
+            Animated.timing(vipAnimX, { toValue: 0, duration: 600, easing: Easing.out(Easing.back(1.2)), useNativeDriver: true }),
+            Animated.delay(4000), // Keep on screen for 4 seconds
+            Animated.timing(vipAnimX, { toValue: width, duration: 500, easing: Easing.in(Easing.ease), useNativeDriver: true })
+        ]).start(() => {
+            setVipEntry(null);
+            vipAnimX.setValue(-width);
+        });
+    };
 
     const triggerGiftAnimation = () => {
         giftAnimY.setValue(50);
@@ -461,11 +540,19 @@ export default function PartyRoomScreen() {
     const handleSendChat = async () => {
         if (!chatInput.trim() || !user) return;
         try {
+            // 🔥 User's V2 level applied to chat 🔥
+            const userTotalSpent = getHighestBalanceForRank(userData);
+            const levelData = calculateUserLevel(userTotalSpent);
+
             await addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: user.uid,
                 name: userData?.name || "Guest",
                 text: chatInput.trim(),
-                timestamp: serverTimestamp()
+                timestamp: serverTimestamp(),
+                // 🔥 SATTI FIX: DO NOT SEND LEVEL DATA IF IT'S JUST A REGULAR MESSAGE 🔥
+                lvl: 0, 
+                label: '',
+                color: ''
             });
             setChatInput('');
         } catch (e) { console.log(e); }
@@ -755,6 +842,9 @@ export default function PartyRoomScreen() {
                             keyExtractor={item => item.id}
                             showsVerticalScrollIndicator={false}
                             renderItem={({ item }) => {
+                                // 🔥 SATTI FIX: HIDE VIP LEVEL ENTRY MESSAGE FROM CHAT (Banner only) 🔥
+                                if (item.isVipEntry) return null;
+
                                 // 🔥 SATTI FIX: ROYAL GIFT MESSAGE RENDER 🔥
                                 if (item.isGift) {
                                     return (
@@ -768,7 +858,7 @@ export default function PartyRoomScreen() {
                                     );
                                 }
 
-                                // Normal System Message (Join/Leave)
+                                // Normal System Message (Join/Leave) -> Keeps ONLY "Joined Room" here
                                 if (item.isSystem) {
                                     return (
                                         <View style={[styles.chatBubble, { backgroundColor: 'rgba(16, 185, 129, 0.1)', alignSelf: 'center', paddingHorizontal: 15 }]}>
@@ -777,11 +867,13 @@ export default function PartyRoomScreen() {
                                     );
                                 }
 
-                                // Normal User Message (🔥 NOW CLICKABLE TO OPEN PROFILE 🔥)
+                                // Normal User Message (🔥 VIP V2 CHAT STYLE REMOVED SO NO LEVEL LABEL 🔥)
                                 return (
-                                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleUserClick(item)} style={styles.chatBubble}>
-                                        <Text style={styles.chatName}>{item.name}: </Text>
-                                        <Text style={styles.chatText}>{item.text}</Text>
+                                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleUserClick(item)} 
+                                        style={[styles.chatBubble]}
+                                    >
+                                        <Text style={[styles.chatName]}>{item.name}: </Text>
+                                        <Text style={[styles.chatText]}>{item.text}</Text>
                                     </TouchableOpacity>
                                 );
                             }}
@@ -791,11 +883,6 @@ export default function PartyRoomScreen() {
 
                     <View style={styles.bottomArea}>
                         <View style={styles.reactionRow}>
-                            {/* 🔥 SPEAKER MUTE BUTTON POSITIONED HERE 🔥 */}
-                            <TouchableOpacity onPress={toggleSpeaker} style={[styles.reactionBtn, { backgroundColor: isSpeakerMuted ? 'rgba(239,68,68,0.2)' : 'rgba(59,130,246,0.15)' }]}>
-                                <Ionicons name={isSpeakerMuted ? "volume-mute" : "volume-medium"} size={20} color={isSpeakerMuted ? "#EF4444" : "#3B82F6"} />
-                            </TouchableOpacity>
-
                             {REACTION_EMOJIS.map(emoji => (
                                 <TouchableOpacity key={emoji} onPress={() => handleReaction(emoji)} style={styles.reactionBtn}>
                                     <Text style={{fontSize: 20}}>{emoji}</Text>
@@ -862,6 +949,8 @@ export default function PartyRoomScreen() {
                                 <TouchableOpacity style={styles.giftBtnSmall} onPress={() => setShowGiftModal(true)}>
                                     <Ionicons name="gift" size={22} color="#EC4899" />
                                 </TouchableOpacity>
+
+                                {/* 🔥 SATTI FIX: ORIGINAL MIC BUTTON IS RETAINED HERE 🔥 */}
                                 {(isHost || mySeatIndex !== null) && (
                                     <TouchableOpacity style={[styles.actionBtnSmall, { backgroundColor: isMuted ? 'rgba(239,68,68,0.2)' : 'rgba(16,185,129,0.2)' }]} onPress={toggleMic}>
                                         <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#EF4444" : "#10B981"} />
@@ -872,6 +961,36 @@ export default function PartyRoomScreen() {
                     </View>
                 </SafeAreaView>
             </KeyboardAvoidingView>
+
+            {/* 🔥 VIP USER ENTRY ANIMATION BANNER (FULL SCREEN MODE) 🔥 */}
+            {vipEntry && (
+                <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 9999, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.7)', transform: [{ translateX: vipAnimX }] }]} pointerEvents="none">
+                    <View style={styles.vipEntryBannerContainer}>
+                        <LinearGradient colors={vipEntry.themeBg || ['#0A001A', '#000000']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.vipBannerGradient}>
+                            <Image 
+                                source={vipEntry.lvl ? getBadgeLocalImage(vipEntry.lvl) : { uri: vipEntry.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(vipEntry.name || 'VIP')}&background=0A001A&color=FFF` }} 
+                                style={[styles.vipBannerAvatar, vipEntry.lvl ? { borderWidth: 0, borderRadius: 0 } : { borderColor: vipEntry.color || '#F59E0B' }]} 
+                                resizeMode="contain"
+                            />
+                            <View style={{ alignItems: 'center', marginTop: 15, paddingHorizontal: 10 }}>
+                                <Text style={[styles.vipBannerLabel, { color: vipEntry.color || '#F59E0B' }]}>✨ {vipEntry.label || 'VIP MEMBER'} ✨</Text>
+                                
+                                {/* 🔥 NEW: ADDED LEVEL DISPLAY TO BANNER 🔥 */}
+                                {vipEntry.lvl && (
+                                    <View style={{ backgroundColor: vipEntry.color || '#F59E0B', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, marginBottom: 8, marginTop: 5 }}>
+                                        <Text style={{ color: '#000', fontSize: 11, fontWeight: '900', letterSpacing: 1 }}>LEVEL {vipEntry.lvl}</Text>
+                                    </View>
+                                )}
+
+                                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5, textAlign: 'center' }}>
+                                    {vipEntry.name}
+                                </Text>
+                                <Text style={styles.vipBannerName}>{vipEntry.entryMessage || `has joined the arena!`}</Text>
+                            </View>
+                        </LinearGradient>
+                    </View>
+                </Animated.View>
+            )}
 
             <View style={styles.topOverlayLayer} pointerEvents="none">
                 <View style={StyleSheet.absoluteFill}>
@@ -1084,4 +1203,11 @@ const styles = StyleSheet.create({
     actionSheetDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', width: '100%' },
     actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
     actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+
+    // 🔥 VIP ENTRY STYLES 🔥
+    vipEntryBannerContainer: { width: width * 0.9, alignSelf: 'center', borderRadius: 25, elevation: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.8, shadowRadius: 20 },
+    vipBannerGradient: { alignItems: 'center', padding: 25, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
+    vipBannerAvatar: { width: 240, height: 240 },
+    vipBannerLabel: { fontSize: 18, fontWeight: '900', letterSpacing: 2, textAlign: 'center', marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 10 },
+    vipBannerName: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 24, paddingHorizontal: 10 }
 });

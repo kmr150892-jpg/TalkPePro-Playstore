@@ -127,7 +127,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const offset = today.getTimezoneOffset() * 60000;
         const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
         
-        if (currentData.lastBonusDate && currentData.lastBonusDate !== localDateStr) {
+        // 🔥 SATTI FIX: Removed the "currentData.lastBonusDate &&" check to ensure it ALWAYS runs on a new day
+        if (currentData.lastBonusDate !== localDateStr) {
             
             if (bonusLock.current) return;
             bonusLock.current = true; 
@@ -520,6 +521,13 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const unsub = onSnapshot(doc(db, "users", expertId), async (snap) => {
             if (snap.exists()) {
                 const d = snap.data();
+
+                // 🔥 SATTI FIX: Validate if it's a new day before evaluating reset
+                const today = new Date();
+                const offset = today.getTimezoneOffset() * 60000;
+                const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
+                const isNewDay = d.lastBonusDate !== localDateStr;
+
                 await evaluateAndResetDailyStats(expertId, d);
 
                 const totalBeans = Number(d.walletBalance) || 0; 
@@ -531,7 +539,10 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 const longestSecs = Number(d.longestCallDuration) || 0; 
                 const longestCallMinutes = Math.floor(longestSecs / 60);
 
-                const todaysEarnings = Number(d.todayBeans) || 0;
+                // 🔥 SATTI FIX: If it's a new day, visually force UI to 0 instantly instead of waiting for DB sync delay
+                const todaysEarnings = isNewDay ? 0 : (Number(d.todayBeans) || 0);
+                const displayTodayCalls = isNewDay ? 0 : (Number(d.todayCalls) || 0);
+                const displayTodayMins = isNewDay ? '0' : Math.round(Number(d.todayMinutes) || 0).toString();
                 
                 if (todaysEarnings >= 300000) setActiveTab(2);
                 else if (todaysEarnings >= 100000) setActiveTab(1);
@@ -543,10 +554,10 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     totalBeansEarned: Number(d.totalBeansEarned) || 0, 
                     todayBeans: todaysEarnings,
                     totalCalls: Number(d.totalCalls) || 0,
-                    todayCalls: Number(d.todayCalls) || 0, 
+                    todayCalls: displayTodayCalls, 
                     totalWithdrawn: Number(d.totalWithdrawnRs) || 0,
                     displayMins: Math.round(Number(d.totalMinutes) || 0).toString(),
-                    todayMins: Math.round(Number(d.todayMinutes) || 0).toString(),
+                    todayMins: displayTodayMins,
                     longestCallDisplay: longestCallMinutes.toString(), 
                     topFanName: eliteFan,
                     lastCaller: lastCallerName,

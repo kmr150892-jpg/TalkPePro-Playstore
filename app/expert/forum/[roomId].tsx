@@ -2,12 +2,9 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-// 🔥 ADDED getDoc & increment FOR TODAY BEANS SYNC 🔥
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
-// 🔥 SATTI FIX: Added arrayUnion for Block logic 🔥
 import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-// 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
 import { ActivityIndicator, Alert, Animated, AppState, BackHandler, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -15,28 +12,37 @@ import LottieView from 'lottie-react-native';
 import { ChannelProfileType, ClientRoleType, createAgoraRtcEngine, IRtcEngine } from 'react-native-agora';
 import { auth, db } from '../../../firebaseConfig';
 
-// 🔥 IMPORT GAME COMPONENT 🔥
 import LiveGameSheet from '../../../components/LiveGameSheet';
-import MemoryMatch from '../../../components/MemoryMatch'; // ✅ MEMORY MATCH IMPORTED
+import MemoryMatch from '../../../components/MemoryMatch';
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = "718cedc3c47e44d1bfa4853d6ac6cd80"; 
 
 const REACTION_EMOJIS = ['❤️', '🔥', '😂', '👏', '🙌', '💯'];
 
-// ✅ ACCURATE THEME & LEVEL CONFIG (L0 TO L10) - LOCKED COLORS
-const getLevelConfig = (beans: number) => {
-    if (beans >= 100000000) return { lvl: 10, label: 'LEGEND L10', colors: ['#ff0404', '#F59E0B', '#df03ee'] as const, glow: '#F59E0B', next: 0, prev: 50000000, rate: 8000 };
-    if (beans >= 50000000) return { lvl: 9, label: 'MYTHIC L9', colors: ['#f40691', '#dbc0c0', '#0a0303'] as const, glow: '#EC4899', next: 100000000, prev: 30000000, rate: 7000 };
-    if (beans >= 30000000) return { lvl: 8, label: 'ELITE L8', colors: ['#660aee', '#d4cfdf', '#d40808'] as const, glow: '#8B5CF6', next: 50000000, prev: 10000000, rate: 5400 };
-    if (beans >= 10000000) return { lvl: 7, label: 'MASTER L7', colors: ['#0af635', '#ca0bf5', '#fd068a'] as const, glow: '#3B82F6', next: 30000000, prev: 5000000, rate: 4800 };
-    if (beans >= 5000000)  return { lvl: 6, label: 'DIAMOND L6', colors: ['#f70606', '#fdec05', '#fad906'] as const, glow: '#06B6D4', next: 10000000, prev: 3000000, rate: 4200 };
-    if (beans >= 3000000)  return { lvl: 5, label: 'PLATINUM L5', colors: ['#136a3e', '#10B981', '#f6085b'] as const, glow: '#10B981', next: 5000000, prev: 1000000, rate: 3600 };
-    if (beans >= 1000000)  return { lvl: 4, label: 'GOLD L4', colors: ['#ffd001', '#EAB308', '#1d00f9'] as const, glow: '#EAB308', next: 3000000, prev: 300000, rate: 3000 };
-    if (beans >= 30000)   return { lvl: 3, label: 'SILVER L3', colors: ['#bababa', '#74706f', '#bc0e08'], glow: '#94A3B8', next: 1000000, prev: 100000, rate: 2400 };
-    if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
-    if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
-    return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
+const calculateUserLevel = (totalSpent: number) => {
+    if (totalSpent >= 500000001) return { lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000'], hasVipEntry: true, entryMessage: 'The Almighty Titan Overseer has arrived!' }; 
+    if (totalSpent >= 100000001) return { lvl: 7, label: 'MYTHIC RULER', status: 'ASCENDED BEING', color: '#ff0dba', secondaryColor: '#a50606', anim: 'mythic', themeBg: ['#15001A', '#000000'], hasVipEntry: true, entryMessage: 'Bow down, Mythic Ruler entered the room!' }; 
+    if (totalSpent >= 50000000) return { lvl: 6, label: 'GRANDMASTER', status: 'ELITE COMMANDER', color: '#f6f60d', secondaryColor: '#02fa0a', anim: 'grandmaster', themeBg: ['#08001A', '#000000'], hasVipEntry: true, entryMessage: 'A Grandmaster stepped into the forum!' };
+    if (totalSpent >= 10000000) return { lvl: 5, label: 'ELITE VETERAN', status: 'TACTICAL EXPERT', color: '#00F2FE', secondaryColor: '#f52b6092', anim: 'explosion', themeBg: ['#00101A', '#000000'], hasVipEntry: true, entryMessage: 'Elite Veteran is here!' };
+    if (totalSpent >= 5000000) return { lvl: 4, label: 'LEGENDARY NODE', status: 'NEBULA COMMANDER', color: '#d0630a', secondaryColor: '#5f0bf0', anim: 'nebula', themeBg: ['#0A001A', '#000000'], hasVipEntry: true, entryMessage: 'Legendary Node is here!' };
+    if (totalSpent >= 1000000) return { lvl: 3, label: 'DIAMOND CORE', status: 'NUCLEAR ASSET', color: '#bcde4a', secondaryColor: '#09bbf1fe', anim: 'diamond', themeBg: ['#001A0A', '#000000'], hasVipEntry: true, entryMessage: 'Diamond Core activated the grid!' };
+    if (totalSpent >= 200001) return { lvl: 2, label: 'GOLD OPERATIVE', status: 'ROYAL STRIKER', color: '#ffae00', secondaryColor: '#ac4a4a', anim: 'sparkle', themeBg: ['#1A0B00', '#000000'], hasVipEntry: true, entryMessage: 'Gold Operative secured the perimeter!' };
+    return { lvl: 1, label: 'SILVER AGENT', status: 'STAR FAME', color: '#0f33e7', secondaryColor: '#6b0402', anim: 'wave', themeBg: ['#050505', '#000000'], hasVipEntry: true, entryMessage: 'Silver Agent deployed into action!' };
+};
+
+const getBadgeLocalImage = (lvl: number) => {
+    switch(lvl) {
+        case 8: return require('../../../assets/badge/TITAN OVERSEER.png');
+        case 7: return require('../../../assets/badge/MYTHIC RULER.png');
+        case 6: return require('../../../assets/badge/GRANDMASTER.png');
+        case 5: return require('../../../assets/badge/ELITE VETERAN.png');
+        case 4: return require('../../../assets/badge/LEGENDARY NODE.png');
+        case 3: return require('../../../assets/badge/DIAMOND CORE.png');
+        case 2: return require('../../../assets/badge/GOLD OPERATIVE.png');
+        case 1: return require('../../../assets/badge/SILVER AGENT.png');
+        default: return null;
+    }
 };
 
 export default function ExpertForumRoomScreen() {
@@ -49,8 +55,8 @@ export default function ExpertForumRoomScreen() {
     const [expertData, setExpertData] = useState<any>(null);
     const [mySeatIndex, setMySeatIndex] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [isGameVisible, setIsGameVisible] = useState(false); // 🔥 GAME MODAL STATE
-    const [glassVisible, setGlassVisible] = useState(false); // ✅ MEMORY MATCH STATE
+    const [isGameVisible, setIsGameVisible] = useState(false);
+    const [glassVisible, setGlassVisible] = useState(false);
 
     const [messages, setMessages] = useState<any[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -73,11 +79,20 @@ export default function ExpertForumRoomScreen() {
     const pulseAnim = useRef(new Animated.Value(1)).current;
     
     const hasJoinedFired = useRef(false);
+    const hasFiredVipEntry = useRef(false);
 
-    // 🔥 NEW: USER BLOCK AND REPORT ACTION SHEET STATES 🔥
     const [actionSheetVisible, setActionSheetVisible] = useState(false);
     const [reportSheetVisible, setReportSheetVisible] = useState(false);
     const [selectedUser, setSelectedUser] = useState<any>(null);
+
+    const [vipEntry, setVipEntry] = useState<any>(null);
+    const vipAnimX = useRef(new Animated.Value(-width)).current;
+    const vipProgress = useRef(new Animated.Value(0)).current;
+
+    const roomDataRef = useRef<any>(null);
+    useEffect(() => {
+        roomDataRef.current = roomData;
+    }, [roomData]);
 
     const requestMicrophonePermission = async () => {
         if (Platform.OS === 'android') {
@@ -180,7 +195,22 @@ export default function ExpertForumRoomScreen() {
 
         const msgQuery = query(collection(db, 'forum_rooms', roomId, 'messages'), orderBy('timestamp', 'desc'), limit(20));
         const unsubMsgs = onSnapshot(msgQuery, (snap) => {
-            setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })).reverse());
+            // SATTI FIX: Removed .reverse() so the latest message appears at the top (MELA VARANUM)
+            setMessages(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+            snap.docChanges().forEach((change) => {
+                if (change.type === 'added') {
+                    const data = change.doc.data();
+                    const isRecent = data.timestamp ? (Date.now() - data.timestamp.toMillis() < 5000) : true;
+                    
+                    if (isRecent && data.isVipEntry) {
+                        const currentHostId = roomDataRef.current?.hostId;
+                        if (data.uid !== currentHostId) {
+                            triggerVipBanner(data);
+                        }
+                    }
+                }
+            });
         });
 
         const giftQuery = query(collection(db, 'forum_rooms', roomId, 'gifts'), orderBy('timestamp', 'desc'), limit(1));
@@ -190,7 +220,6 @@ export default function ExpertForumRoomScreen() {
                     const data = change.doc.data();
                     const isRecent = data.timestamp ? (Date.now() - data.timestamp.toMillis() < 5000) : true;
                     if (isRecent) {
-                        // 🔥 SATTI FIX: Fetch sender image using senderId 🔥
                         let fetchedSenderImage = data.senderImage || data.userImage || null;
                         if (!fetchedSenderImage && data.senderId) {
                             try {
@@ -265,6 +294,36 @@ export default function ExpertForumRoomScreen() {
     }, [roomId, user]);
 
     useEffect(() => {
+        if (expertData && user && roomId && roomData && !hasFiredVipEntry.current) {
+            hasFiredVipEntry.current = true;
+            
+            const isHost = user.uid === roomData.hostId;
+            
+            if (!isHost) {
+                const userTotalSpent = expertData.totalDiamondsSpent || 0; 
+                const levelData = calculateUserLevel(userTotalSpent);
+                
+                if (levelData.hasVipEntry) {
+                    addDoc(collection(db, "forum_rooms", roomId, "messages"), {
+                        uid: user.uid,
+                        name: expertData.name || expertData.userName || "User",
+                        text: levelData.entryMessage,
+                        timestamp: serverTimestamp(),
+                        isVipEntry: true,
+                        lvl: levelData.lvl,
+                        label: levelData.label,
+                        color: levelData.color,
+                        themeBg: levelData.themeBg,
+                        anim: levelData.anim,
+                        entryMessage: levelData.entryMessage,
+                        image: expertData.profilePic || expertData.photoURL || null
+                    }).catch(e => console.log(e));
+                }
+            }
+        }
+    }, [expertData, user, roomId, roomData]);
+
+    useEffect(() => {
         if (isAgoraJoined && expertData && !hasJoinedFired.current) {
             hasJoinedFired.current = true;
             addDoc(collection(db, "forum_rooms", roomId, "messages"), {
@@ -280,7 +339,6 @@ export default function ExpertForumRoomScreen() {
     useEffect(() => {
         if (!user?.uid) return;
 
-        // 🔥 SATTI FIX: Listen for calling, ringing, AND pending to guarantee notification pops up 🔥
         const callsQuery = query(
             collection(db, "calls"),
             where("expertId", "==", user.uid),
@@ -406,10 +464,69 @@ export default function ExpertForumRoomScreen() {
                     expertName: expertData?.name || "Host",
                     callId: callId,
                     role: 'expert',
-                    isAccepted: 'true' // 🔥 SATTI FIX: BYPASS DOUBLE RING IN VIDEOCALL 🔥
+                    isAccepted: 'true' 
                 }
             });
         } catch (e) {}
+    };
+
+    const triggerVipBanner = (data: any) => {
+        setVipEntry(data);
+        vipProgress.setValue(0);
+        Animated.sequence([
+            Animated.timing(vipProgress, { toValue: 1, duration: 900, easing: Easing.out(Easing.back(1.4)), useNativeDriver: true }),
+            Animated.delay(4500), 
+            Animated.timing(vipProgress, { toValue: 0, duration: 600, easing: Easing.in(Easing.ease), useNativeDriver: true })
+        ]).start(() => {
+            setVipEntry(null);
+        });
+    };
+
+    const getVipTransform = (animType: string) => {
+        switch(animType) {
+            case 'titan': 
+                return [
+                    { translateY: vipProgress.interpolate({ inputRange: [0, 1], outputRange: [-height, 0] }) },
+                    { scale: vipProgress.interpolate({ inputRange: [0, 0.8, 1], outputRange: [0.3, 1.2, 1] }) }
+                ];
+            case 'mythic': 
+                return [
+                    { scale: vipProgress },
+                    { rotateY: vipProgress.interpolate({ inputRange: [0, 1], outputRange: ['-180deg', '0deg'] }) }
+                ];
+            case 'grandmaster': 
+                return [
+                    { translateY: vipProgress.interpolate({ inputRange: [0, 1], outputRange: [height, 0] }) },
+                    { rotateZ: vipProgress.interpolate({ inputRange: [0, 1], outputRange: ['15deg', '0deg'] }) }
+                ];
+            case 'explosion': 
+                return [
+                    { scale: vipProgress.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1.4, 1] }) }
+                ];
+            case 'nebula': 
+                return [
+                    { scale: vipProgress.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
+                    { translateX: vipProgress.interpolate({ inputRange: [0, 1], outputRange: [width, 0] }) },
+                    { translateY: vipProgress.interpolate({ inputRange: [0, 1], outputRange: [100, 0] }) }
+                ];
+            case 'diamond': 
+                return [
+                    { scale: vipProgress },
+                    { rotateX: vipProgress.interpolate({ inputRange: [0, 1], outputRange: ['90deg', '0deg'] }) },
+                    { rotateZ: vipProgress.interpolate({ inputRange: [0, 1], outputRange: ['-45deg', '0deg'] }) }
+                ];
+            case 'sparkle': 
+                return [
+                    { scale: vipProgress },
+                    { rotate: vipProgress.interpolate({ inputRange: [0, 1], outputRange: ['270deg', '0deg'] }) }
+                ];
+            case 'wave': 
+                return [
+                    { translateX: vipProgress.interpolate({ inputRange: [0, 1], outputRange: [-width, 0] }) },
+                    { scale: vipProgress.interpolate({ inputRange: [0, 1], outputRange: [0.8, 1] }) }
+                ];
+            default: return [{ scale: vipProgress }];
+        }
     };
 
     const triggerGiftAnimation = () => {
@@ -472,11 +589,17 @@ export default function ExpertForumRoomScreen() {
     const handleSendChat = async () => {
         if (!chatInput.trim() || !user) return;
         try {
+            const hostTotalSpent = expertData?.totalDiamondsSpent || 0; 
+            const hostLevelData = calculateUserLevel(hostTotalSpent);
+
             await addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: user.uid,
                 name: expertData?.name || "Host",
                 text: chatInput.trim(),
-                timestamp: serverTimestamp()
+                timestamp: serverTimestamp(),
+                lvl: hostLevelData.lvl,
+                label: hostLevelData.label,
+                color: hostLevelData.color
             });
             setChatInput('');
         } catch (e) { console.log(e); }
@@ -491,22 +614,21 @@ export default function ExpertForumRoomScreen() {
     const handleSeatClick = async (index: number) => {
         if (!roomData) return;
         const seat = roomData.seats[index];
+        
         if (seat.uid === user?.uid) {
             Alert.alert("Step Down?", "Vacate this position?", [{ text: "Confirm", onPress: async () => {
                 const updatedSeats = [...roomData.seats];
                 updatedSeats[index] = { uid: null, name: null, image: null, isMuted: false };
                 await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
-            }}, { text: "Cancel" }]);
+            }}, { text: "Cancel", style: "cancel" }]);
             return;
         }
+        
         if (seat.uid) {
-            Alert.alert("Host Controls 👑", `Disconnect ${seat.name}?`, [{ text: "Confirm", style: "destructive", onPress: async () => {
-                const updatedSeats = [...roomData.seats];
-                updatedSeats[index] = { uid: null, name: null, image: null, isMuted: false };
-                await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
-            }}, { text: "Cancel" }]);
+            handleUserClick(seat);
             return;
         }
+        
         if (mySeatIndex !== null) return;
         try {
             const updatedSeats = [...roomData.seats];
@@ -523,6 +645,21 @@ export default function ExpertForumRoomScreen() {
         } catch (e) { console.log(e); }
     };
 
+    const handleDisconnectUser = async (targetUid: string) => {
+        if (!roomData || !targetUid) return;
+        const seatIndex = roomData.seats?.findIndex((s: any) => s.uid === targetUid);
+        if (seatIndex !== -1) {
+            Alert.alert("Host Controls 👑", `Disconnect ${selectedUser?.name}?`, [{ text: "Confirm", style: "destructive", onPress: async () => {
+                const updatedSeats = [...roomData.seats];
+                updatedSeats[seatIndex] = { uid: null, name: null, image: null, isMuted: false };
+                await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
+                setActionSheetVisible(false);
+            }}, { text: "Cancel" }]);
+        } else {
+            setActionSheetVisible(false);
+        }
+    };
+
     const handleEndForum = () => {
         Alert.alert("Close Forum?", "This will terminate the session.", [
             { text: "Cancel", style: "cancel" },
@@ -533,9 +670,7 @@ export default function ExpertForumRoomScreen() {
         ]);
     };
 
-    // 🔥 SATTI FIX: USER CLICK HANDLER - PREVENTING "System" CLICK 🔥
     const handleUserClick = (userItem: any) => {
-        // Stop if it is a system user id
         if (userItem.isSystem || userItem.uid === 'system' || userItem.senderId === 'system_msg') return;
 
         const normalizedUser = {
@@ -548,21 +683,17 @@ export default function ExpertForumRoomScreen() {
         setActionSheetVisible(true);
     };
 
-    // 🔥 SATTI FIX: BLOCK LOGIC COMBINED WITH KICK AND CHAT MSG 🔥
     const handleBlockUser = async (showAlert = true) => {
         if (!selectedUser || !user) return;
         try {
-            // 1. Add to blockedUsers array
             await updateDoc(doc(db, "users", user.uid), {
                 blockedUsers: arrayUnion(selectedUser.id)
             });
 
-            // 🔥 NEW: Add to bannedUsers in Forum Room (Double Kick Safety for User side) 🔥
             await updateDoc(doc(db, "forum_rooms", roomId), {
                 bannedUsers: arrayUnion(selectedUser.id)
             });
 
-            // 2. Remove from seat if they are on one
             if (roomData && roomData.seats) {
                 const seatIndex = roomData.seats.findIndex((s: any) => s.uid === selectedUser.id);
                 if (seatIndex !== -1) {
@@ -572,11 +703,9 @@ export default function ExpertForumRoomScreen() {
                 }
             }
 
-            // 3. Send RTDB Kick Signal to force close their screen
             const rtdb = getDatabase();
             await set(ref(rtdb, `forum_rooms/${roomId}/kicked_users/${selectedUser.id}`), true);
 
-            // 4. Add System Message to Chat
             await addDoc(collection(db, "forum_rooms", roomId, "messages"), {
                 uid: "system",
                 name: "System",
@@ -590,7 +719,6 @@ export default function ExpertForumRoomScreen() {
         setActionSheetVisible(false);
     };
 
-    // 🔥 NEW: REPORT MODAL TRIGGER 🔥
     const handleReportUser = () => {
         setActionSheetVisible(false); 
         setTimeout(() => {
@@ -598,7 +726,6 @@ export default function ExpertForumRoomScreen() {
         }, 300); 
     };
 
-    // 🔥 NEW: SUBMIT ACTUAL REPORT TO ADMIN & TRIGGER BLOCK 🔥
     const submitReport = async (reason: string) => {
         if (!selectedUser) return;
         try {
@@ -657,7 +784,7 @@ export default function ExpertForumRoomScreen() {
                                         {seat.uid && <View style={styles.seatStatusDot} />}
                                         {seat.uid && seat.isMuted && <View style={styles.muteOverlay}><Ionicons name="mic-off" size={14} color="#FFF" /></View>}
                                     </View>
-                                    <Text style={[styles.seatName, seat.uid === user?.uid && { color: '#4F46E5', fontWeight: '900' }]} numberOfLines={1}>{seat.uid === user?.uid ? "YOU" : (seat.uid ? seat.name : `Node ${index + 1}`)}</Text>
+                                    <Text style={[styles.seatName, seat.uid === user?.uid && { color: '#4F46E5', fontWeight: '900' }]} numberOfLines={1}>{seat.uid === user?.uid ? "YOU" : (seat.uid ? seat.name : `Seat ${index + 1}`)}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>
@@ -668,17 +795,26 @@ export default function ExpertForumRoomScreen() {
                             data={messages}
                             keyExtractor={item => item.id}
                             showsVerticalScrollIndicator={false}
-                            renderItem={({ item }) => (
-                                // 🔥 SATTI FIX: System chat messages are now ALSO clickable to open Profile Action Sheet 🔥
-                                <TouchableOpacity 
-                                    activeOpacity={0.8} 
-                                    onPress={() => handleUserClick(item)}
-                                    style={[styles.chatBubble, item.isSystem && { backgroundColor: 'rgba(16, 185, 129, 0.1)', alignSelf: 'center', paddingHorizontal: 15 }]}
-                                >
-                                    {!item.isSystem && <Text style={styles.chatName}>{item.name}: </Text>}
-                                    <Text style={[styles.chatText, item.isSystem && { color: '#10B981', fontWeight: 'bold' }]}>{item.text}</Text>
-                                </TouchableOpacity>
-                            )}
+                            renderItem={({ item }) => {
+                                return (
+                                    <TouchableOpacity 
+                                        activeOpacity={0.8} 
+                                        onPress={() => handleUserClick(item)}
+                                        style={[
+                                            styles.chatBubble, 
+                                            item.isSystem && { backgroundColor: 'rgba(16, 185, 129, 0.1)', alignSelf: 'center', paddingHorizontal: 15 },
+                                            { maxWidth: '95%' }
+                                        ]}
+                                    >
+                                        {!item.isSystem && (
+                                            <Text style={styles.chatName}>
+                                                {item.name}: 
+                                            </Text>
+                                        )}
+                                        <Text style={[styles.chatText, item.isSystem && { color: '#10B981', fontWeight: 'bold', textAlign: 'center' }]}>{item.text}</Text>
+                                    </TouchableOpacity>
+                                );
+                            }}
                             contentContainerStyle={{ paddingVertical: 10 }}
                         />
                     </View>
@@ -711,7 +847,6 @@ export default function ExpertForumRoomScreen() {
                                 <TouchableOpacity style={styles.actionBtnSmall} onPress={toggleMic}>
                                     <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#EF4444" : "#4F46E5"} />
                                 </TouchableOpacity>
-                                {/* 🔥 CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
                                 <TouchableOpacity style={[styles.gameLaunchButton, { backgroundColor: 'rgb(0, 0, 0)', borderColor: 'rgb(0, 229, 255)', borderWidth: 1 }]} onPress={() => setIsGameVisible(true)}>
                                     <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -725,23 +860,11 @@ export default function ExpertForumRoomScreen() {
                                     </View>
                                 </TouchableOpacity>
 
-                                {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
                                 <TouchableOpacity 
                                     onPress={() => setGlassVisible(true)} 
-                                    style={[styles.gameLaunchButton, { 
-                                        borderColor: '#A855F7', 
-                                        borderWidth: 1.5, 
-                                        backgroundColor: 'rgba(168, 85, 247, 0.2)' 
-                                    }]}
+                                    style={[styles.gameLaunchButton, { borderColor: '#A855F7', borderWidth: 1.5, backgroundColor: 'rgba(168, 85, 247, 0.2)' }]}
                                 >
-                                    <View style={{ 
-                                        width: 24, 
-                                        height: 24, 
-                                        flexDirection: 'row', 
-                                        flexWrap: 'wrap', 
-                                        justifyContent: 'center', 
-                                        alignItems: 'center' 
-                                    }}>
+                                    <View style={{ width: 24, height: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
                                         <Text style={{ fontSize: 9 }}>🍎</Text>
                                         <Text style={{ fontSize: 9 }}>🍌</Text>
                                         <Text style={{ fontSize: 9 }}>🍇</Text>
@@ -754,6 +877,34 @@ export default function ExpertForumRoomScreen() {
                     </View>
                 </KeyboardAvoidingView>
             </SafeAreaView>
+
+            {vipEntry && (
+                <Animated.View style={[StyleSheet.absoluteFillObject, { zIndex: 9999, justifyContent: 'center', alignItems: 'center', backgroundColor: vipProgress.interpolate({ inputRange: [0, 1], outputRange: ['rgba(0,0,0,0)', 'rgba(0,0,0,0.7)'] }) }]} pointerEvents="none">
+                    <Animated.View style={[styles.vipEntryBannerContainer, { transform: getVipTransform(vipEntry.anim) }]}>
+                        <LinearGradient colors={vipEntry.themeBg || ['#0A001A', '#000000']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.vipBannerGradient}>
+                            <Image 
+                                source={vipEntry.lvl ? getBadgeLocalImage(vipEntry.lvl) : { uri: vipEntry.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(vipEntry.name || 'VIP')}&background=0A001A&color=FFF` }} 
+                                style={[styles.vipBannerAvatar, vipEntry.lvl ? { borderWidth: 0, borderRadius: 0 } : { borderColor: vipEntry.color || '#F59E0B' }]} 
+                                resizeMode="contain"
+                            />
+                            <View style={{ alignItems: 'center', marginTop: 15, paddingHorizontal: 10 }}>
+                                <Text style={[styles.vipBannerLabel, { color: vipEntry.color || '#F59E0B' }]}>✨ {vipEntry.label || 'VIP MEMBER'} ✨</Text>
+                                
+                                {vipEntry.lvl && (
+                                    <View style={{ backgroundColor: vipEntry.color || '#F59E0B', paddingHorizontal: 10, paddingVertical: 3, borderRadius: 12, marginBottom: 8 }}>
+                                        <Text style={{ color: '#000', fontSize: 11, fontWeight: '900', letterSpacing: 1 }}>LEVEL {vipEntry.lvl}</Text>
+                                    </View>
+                                )}
+
+                                <Text style={{ color: '#FFF', fontSize: 22, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 5, textAlign: 'center' }}>
+                                    {vipEntry.name}
+                                </Text>
+                                <Text style={styles.vipBannerName}>{vipEntry.entryMessage || `has joined the arena!`}</Text>
+                            </View>
+                        </LinearGradient>
+                    </Animated.View>
+                </Animated.View>
+            )}
 
             <View style={styles.topOverlayLayer} pointerEvents="none">
                 <View style={StyleSheet.absoluteFill}>
@@ -773,7 +924,6 @@ export default function ExpertForumRoomScreen() {
                         <Animated.View style={[styles.giftAnimationContainer, { transform: [{ translateY: giftAnimY }, { scale: scaleAnim }] }]}>
                             <Text style={styles.giftAnimIcon}>{currentGift.icon || '🎁'}</Text>
                             <LinearGradient colors={['rgba(0,0,0,0.85)', 'rgba(0,0,0,0.5)', 'transparent']} style={styles.giftAnimLabel}>
-                                {/* 🔥 SATTI FIX: Sender Avatar added to Gift UI 🔥 */}
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5 }}>
                                     <Image 
                                         source={{ uri: currentGift.senderImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentGift.senderName || 'U')}&background=F59E0B&color=fff` }} 
@@ -788,7 +938,6 @@ export default function ExpertForumRoomScreen() {
                 )}
             </View>
 
-            {/* 🔥 GAME MODAL 🔥 */}
             <LiveGameSheet 
                 visible={isGameVisible} 
                 onClose={() => setIsGameVisible(false)} 
@@ -797,7 +946,6 @@ export default function ExpertForumRoomScreen() {
                 userWalletBalance={myWalletBalance}
             />
 
-            {/* 🔥 MEMORY MATCH GAME 🔥 */}
             <MemoryMatch 
                 visible={glassVisible} 
                 onClose={() => setGlassVisible(false)} 
@@ -839,7 +987,6 @@ export default function ExpertForumRoomScreen() {
                 </BlurView>
             </Modal>
 
-            {/* 🔥 NEW: PREMIUM ACTION SHEET: USER MINI-PROFILE (Over Forum Room) 🔥 */}
             <Modal visible={actionSheetVisible} transparent animationType="slide">
                 <View style={styles.actionSheetOverlay}>
                     <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setActionSheetVisible(false)} />
@@ -860,6 +1007,16 @@ export default function ExpertForumRoomScreen() {
                             <Text style={styles.actionSheetTitle}>{selectedUser?.name || "User"}</Text>
                         </View>
 
+                        {roomData?.seats?.some((s: any) => s.uid === selectedUser?.id) && (
+                            <>
+                                <TouchableOpacity style={styles.actionSheetBtn} onPress={() => handleDisconnectUser(selectedUser?.id)}>
+                                    <Ionicons name="mic-off-circle-outline" size={22} color="#F59E0B" />
+                                    <Text style={[styles.actionSheetBtnText, { color: '#F59E0B' }]}>Remove from Seat</Text>
+                                </TouchableOpacity>
+                                <View style={styles.actionSheetDivider} />
+                            </>
+                        )}
+
                         <TouchableOpacity style={styles.actionSheetBtn} onPress={handleReportUser}>
                             <Ionicons name="shield-half-outline" size={22} color="#EF4444" />
                             <Text style={[styles.actionSheetBtnText, { color: '#EF4444' }]}>Block and Report</Text>
@@ -872,7 +1029,6 @@ export default function ExpertForumRoomScreen() {
                 </View>
             </Modal>
 
-            {/* 🔥 NEW: REPORT REASONS MODAL 🔥 */}
             <Modal visible={reportSheetVisible} transparent animationType="slide">
                 <View style={styles.actionSheetOverlay}>
                     <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setReportSheetVisible(false)} />
@@ -947,9 +1103,9 @@ const styles = StyleSheet.create({
     muteOverlay: { position: 'absolute', backgroundColor: 'rgba(0,0,0,0.6)', width: '100%', height: '100%', borderRadius: 27.5, justifyContent: 'center', alignItems: 'center' },
     seatName: { color: '#94A3B8', fontSize: 9, fontWeight: '700', marginTop: 5, textAlign: 'center' },
     chatArea: { flex: 1, paddingHorizontal: 20, marginBottom: 5 },
-    chatBubble: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 12, marginBottom: 6, alignSelf: 'flex-start' },
+    chatBubble: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 12, marginBottom: 6, alignSelf: 'flex-start', flexWrap: 'wrap' },
     chatName: { color: '#F59E0B', fontWeight: '900', fontSize: 12 },
-    chatText: { color: '#CBD5E1', fontSize: 12, fontWeight: '600' },
+    chatText: { color: '#CBD5E1', fontSize: 12, fontWeight: '600', flexShrink: 1 },
     bottomArea: { paddingHorizontal: 15, paddingBottom: 20 },
     reactionRow: { flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginBottom: 10 },
     reactionBtn: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 6, borderRadius: 15 },
@@ -977,21 +1133,24 @@ const styles = StyleSheet.create({
     ringActionRow: { flexDirection: 'row', gap: 40 },
     ringActionBtn: { width: 72, height: 72, borderRadius: 36, justifyContent: 'center', alignItems: 'center', elevation: 15, shadowOpacity: 0.6, shadowRadius: 15 },
 
-    // 🔥 NEW: ACTION SHEET STYLES 🔥
     actionSheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
     actionSheetDismiss: { flex: 1 },
     actionSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)', borderBottomWidth: 0 },
     actionSheetHandle: { width: 40, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 20 },
-    
     actionSheetProfileHeader: { alignItems: 'center', marginBottom: 25 },
     actionSheetAvatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 2, borderColor: '#00F2FE', marginBottom: 10 },
     actionSheetAvatarPlaceholder: { width: 70, height: 70, borderRadius: 35, backgroundColor: '#1E293B', borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
     actionSheetAvatarText: { color: '#FFF', fontSize: 28, fontWeight: '900' },
     actionSheetTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', textAlign: 'center', letterSpacing: 1 },
-
     actionSheetBtn: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, paddingHorizontal: 10 },
     actionSheetBtnText: { fontSize: 16, fontWeight: '700', marginLeft: 15, letterSpacing: 0.5 },
     actionSheetDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', width: '100%' },
     actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
     actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+
+    vipEntryBannerContainer: { width: width * 0.95, alignSelf: 'center', borderRadius: 30, elevation: 25, shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.8, shadowRadius: 20 },
+    vipBannerGradient: { alignItems: 'center', padding: 25, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
+    vipBannerAvatar: { width: 250, height: 250, marginBottom: 10 }, 
+    vipBannerLabel: { fontSize: 18, fontWeight: '900', letterSpacing: 2, textAlign: 'center', marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 10 },
+    vipBannerName: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 24, paddingHorizontal: 10 }
 });
