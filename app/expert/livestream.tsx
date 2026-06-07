@@ -6,7 +6,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+// 🔥 SATTI FIX: Added ScrollView to imports for the Disclaimer Modal
+import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
@@ -83,6 +84,12 @@ export default function LiveStreamScreen() {
 
     const [gameVisible, setGameVisible] = useState(false);
     const [glassVisible, setGlassVisible] = useState(false);
+    
+    // 🔥 NEW: HOST GAMING DISCLAIMER MODAL STATES 🔥
+    const [disclaimerVisible, setDisclaimerVisible] = useState(false);
+    const [disclaimerChecked, setDisclaimerChecked] = useState(false);
+    const [pendingGameType, setPendingGameType] = useState<'reflex' | 'memory' | null>(null);
+
     const [roomData, setRoomData] = useState<any>(null);
     const [myWalletBalance, setMyWalletBalance] = useState(0);
 
@@ -810,7 +817,8 @@ export default function LiveStreamScreen() {
                         </View>
 
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: '#00f2ff', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
+                            {/* 🔥 SATTI FIX: REPLACED DIRECT GAME LAUNCH WITH DISCLAIMER TRIGGER 🔥 */}
+                            <TouchableOpacity onPress={() => { setPendingGameType('reflex'); setDisclaimerVisible(true); }} style={[styles.closeIcon, { borderColor: '#00f2ff', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
                                 <View style={{ width: 16, height: 16 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
                                         <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
@@ -823,8 +831,9 @@ export default function LiveStreamScreen() {
                                 </View>
                             </TouchableOpacity>
 
+                            {/* 🔥 SATTI FIX: REPLACED DIRECT GAME LAUNCH WITH DISCLAIMER TRIGGER 🔥 */}
                             <TouchableOpacity
-                                onPress={() => setGlassVisible(true)}
+                                onPress={() => { setPendingGameType('memory'); setDisclaimerVisible(true); }}
                                 style={[styles.closeIcon, {
                                     borderColor: '#A855F7',
                                     borderWidth: 1.5,
@@ -1146,6 +1155,61 @@ export default function LiveStreamScreen() {
                 </View>
             </Modal>
 
+            {/* 🔥 NEW: PLAY STORE COMPLIANT HOST SKILL GAMING DISCLAIMER MODAL 🔥 */}
+            <Modal visible={disclaimerVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <View style={[styles.actionSheetContainer, { paddingBottom: Platform.OS === 'ios' ? 40 : 30 }]}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        <Text style={[styles.actionSheetTitle, { marginBottom: 15, color: '#F59E0B' }]}>🛡️ Host Skill Gaming Policy</Text>
+
+                        <ScrollView style={{ maxHeight: height * 0.35, marginBottom: 15 }} showsVerticalScrollIndicator={false}>
+                            <Text style={styles.disclaimerBodyText}>Welcome to TalkPe Pro Games! As a Host, please acknowledge your responsibilities:</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🎮 <Text style={styles.disclaimerBold}>Host Role:</Text> You can only host the games (Reflex Arena & Memory Match) to engage your audience. Hosts cannot participate as players.</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🏆 <Text style={styles.disclaimerBold}>Host Reward:</Text> You will receive a 10% platform bonus based on the total diamonds spent by users playing your hosted game.</Text>
+
+                            <Text style={styles.disclaimerBullet}>⚠️ <Text style={styles.disclaimerBold}>Do Not Force Close:</Text> Never close or minimize the app while a game is active. This disrupts the session for users.</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🧠 <Text style={styles.disclaimerBold}>Skill & Entertainment Only:</Text> These are strictly skill-based interactive features. Diamonds are virtual assets and users cannot cash them out.</Text>
+                        </ScrollView>
+
+                        <TouchableOpacity 
+                            style={styles.checkboxContainer} 
+                            activeOpacity={0.8}
+                            onPress={() => setDisclaimerChecked(!disclaimerChecked)}
+                        >
+                            <Ionicons name={disclaimerChecked ? "checkbox" : "square-outline"} size={24} color={disclaimerChecked ? "#10B981" : "#94A3B8"} />
+                            <Text style={styles.checkboxText}>I confirm that I understand my role as a Host, the 10% bonus structure, and agree not to disrupt active games.</Text>
+                        </TouchableOpacity>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 20, paddingBottom: 20 }}>
+                            <TouchableOpacity 
+                                style={[styles.actionSheetCancelBtn, { flex: 1, marginTop: 0 }]} 
+                                onPress={() => { setDisclaimerVisible(false); setDisclaimerChecked(false); setPendingGameType(null); }}
+                            >
+                                <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={[styles.actionSheetBtn, { flex: 1, justifyContent: 'center', backgroundColor: disclaimerChecked ? '#10B981' : 'rgba(16, 185, 129, 0.2)', borderRadius: 15, paddingVertical: 15 }]} 
+                                disabled={!disclaimerChecked}
+                                onPress={() => {
+                                    setDisclaimerVisible(false);
+                                    setDisclaimerChecked(false);
+                                    if (pendingGameType === 'reflex') setGameVisible(true);
+                                    if (pendingGameType === 'memory') setGlassVisible(true);
+                                    setPendingGameType(null);
+                                }}
+                            >
+                                <Text style={[styles.actionSheetBtnText, { color: disclaimerChecked ? '#FFF' : 'rgba(255,255,255,0.4)', marginLeft: 0 }]}>AGREE & HOST</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
         </SafeAreaView>
     );
 }
@@ -1258,4 +1322,11 @@ const styles = StyleSheet.create({
     actionSheetDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', width: '100%' },
     actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
     actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+
+    // 🔥 NEW: DISCLAIMER STYLES 🔥
+    disclaimerBodyText: { color: '#CBD5E1', fontSize: 13, lineHeight: 20, marginBottom: 15 },
+    disclaimerBullet: { color: '#CBD5E1', fontSize: 13, lineHeight: 22, marginBottom: 10 },
+    disclaimerBold: { fontWeight: 'bold', color: '#FFF' },
+    checkboxContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 12 },
+    checkboxText: { color: '#94A3B8', fontSize: 11, marginLeft: 10, flex: 1, lineHeight: 18 },
 });

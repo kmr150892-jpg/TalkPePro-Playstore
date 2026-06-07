@@ -2,10 +2,13 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
+// 🔥 FIXED: Added getDocs and limit to the import statement
 import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+// 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
+import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Animated, AppState, BackHandler, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+// 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
+import { ActivityIndicator, Alert, Animated, AppState, BackHandler, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import LottieView from 'lottie-react-native';
@@ -55,8 +58,13 @@ export default function ExpertForumRoomScreen() {
     const [expertData, setExpertData] = useState<any>(null);
     const [mySeatIndex, setMySeatIndex] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
+    
+    // 🔥 NEW: DISCLAIMER MODAL STATES FOR HOST 🔥
     const [isGameVisible, setIsGameVisible] = useState(false);
     const [glassVisible, setGlassVisible] = useState(false);
+    const [disclaimerVisible, setDisclaimerVisible] = useState(false);
+    const [disclaimerChecked, setDisclaimerChecked] = useState(false);
+    const [pendingGameType, setPendingGameType] = useState<'reflex' | 'memory' | null>(null);
 
     const [messages, setMessages] = useState<any[]>([]);
     const [chatInput, setChatInput] = useState('');
@@ -140,7 +148,8 @@ export default function ExpertForumRoomScreen() {
             try {
                 const q = query(collection(db, "forum_rooms"), where("hostId", "==", user.uid), where("status", "==", "active"));
                 const querySnapshot = await getDocs(q);
-                querySnapshot.forEach(async (roomDoc) => {
+                // 🔥 FIXED: Added 'any' type to roomDoc
+                querySnapshot.forEach(async (roomDoc: any) => {
                     if (roomDoc.id !== roomId) {
                         await updateDoc(doc(db, "forum_rooms", roomDoc.id), { status: "ended" });
                     }
@@ -847,7 +856,9 @@ export default function ExpertForumRoomScreen() {
                                 <TouchableOpacity style={styles.actionBtnSmall} onPress={toggleMic}>
                                     <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#EF4444" : "#4F46E5"} />
                                 </TouchableOpacity>
-                                <TouchableOpacity style={[styles.gameLaunchButton, { backgroundColor: 'rgb(0, 0, 0)', borderColor: 'rgb(0, 229, 255)', borderWidth: 1 }]} onPress={() => setIsGameVisible(true)}>
+                                
+                                {/* 🔥 NEW: TRIGGER DISCLAIMER FOR REFLEX ARENA INSTEAD OF DIRECT LAUNCH 🔥 */}
+                                <TouchableOpacity style={[styles.gameLaunchButton, { backgroundColor: 'rgb(0, 0, 0)', borderColor: 'rgb(0, 229, 255)', borderWidth: 1 }]} onPress={() => { setPendingGameType('reflex'); setDisclaimerVisible(true); }}>
                                     <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
                                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                             <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
@@ -860,8 +871,9 @@ export default function ExpertForumRoomScreen() {
                                     </View>
                                 </TouchableOpacity>
 
+                                {/* 🔥 NEW: TRIGGER DISCLAIMER FOR MEMORY MATCH INSTEAD OF DIRECT LAUNCH 🔥 */}
                                 <TouchableOpacity 
-                                    onPress={() => setGlassVisible(true)} 
+                                    onPress={() => { setPendingGameType('memory'); setDisclaimerVisible(true); }} 
                                     style={[styles.gameLaunchButton, { borderColor: '#A855F7', borderWidth: 1.5, backgroundColor: 'rgba(168, 85, 247, 0.2)' }]}
                                 >
                                     <View style={{ width: 24, height: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
@@ -1067,6 +1079,61 @@ export default function ExpertForumRoomScreen() {
                 </View>
             </Modal>
 
+            {/* 🔥 NEW: PLAY STORE COMPLIANT HOST SKILL GAMING DISCLAIMER MODAL 🔥 */}
+            <Modal visible={disclaimerVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <View style={[styles.actionSheetContainer, { paddingBottom: Platform.OS === 'ios' ? 50 : 40 }]}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        <Text style={[styles.actionSheetTitle, { marginBottom: 15, color: '#F59E0B' }]}>🛡️ Host Skill Gaming Policy</Text>
+
+                        <ScrollView style={{ maxHeight: height * 0.35, marginBottom: 15 }} showsVerticalScrollIndicator={false}>
+                            <Text style={styles.disclaimerBodyText}>Welcome to TalkPe Pro Games! As a Host, please acknowledge your responsibilities:</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🎮 <Text style={styles.disclaimerBold}>Host Role:</Text> You can only host the games (Reflex Arena & Memory Match) to engage your audience. Hosts cannot participate as players.</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🏆 <Text style={styles.disclaimerBold}>Host Reward:</Text> You will receive a 10% platform bonus based on the total diamonds spent by users playing your hosted game.</Text>
+
+                            <Text style={styles.disclaimerBullet}>⚠️ <Text style={styles.disclaimerBold}>Do Not Force Close:</Text> Never close or minimize the app while a game is active. This disrupts the session for users.</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🧠 <Text style={styles.disclaimerBold}>Skill & Entertainment Only:</Text> These are strictly skill-based interactive features. Diamonds are virtual assets and users cannot cash them out.</Text>
+                        </ScrollView>
+
+                        <TouchableOpacity 
+                            style={styles.checkboxContainer} 
+                            activeOpacity={0.8}
+                            onPress={() => setDisclaimerChecked(!disclaimerChecked)}
+                        >
+                            <Ionicons name={disclaimerChecked ? "checkbox" : "square-outline"} size={24} color={disclaimerChecked ? "#10B981" : "#94A3B8"} />
+                            <Text style={styles.checkboxText}>I confirm that I understand my role as a Host, the 10% bonus structure, and agree not to disrupt active games.</Text>
+                        </TouchableOpacity>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 20, paddingBottom: 20 }}>
+                            <TouchableOpacity 
+                                style={[styles.actionSheetCancelBtn, { flex: 1, marginTop: 0 }]} 
+                                onPress={() => { setDisclaimerVisible(false); setDisclaimerChecked(false); setPendingGameType(null); }}
+                            >
+                                <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={[styles.actionSheetBtn, { flex: 1, justifyContent: 'center', backgroundColor: disclaimerChecked ? '#10B981' : 'rgba(16, 185, 129, 0.2)', borderRadius: 15, paddingVertical: 15 }]} 
+                                disabled={!disclaimerChecked}
+                                onPress={() => {
+                                    setDisclaimerVisible(false);
+                                    setDisclaimerChecked(false);
+                                    if (pendingGameType === 'reflex') setIsGameVisible(true);
+                                    if (pendingGameType === 'memory') setGlassVisible(true);
+                                    setPendingGameType(null);
+                                }}
+                            >
+                                <Text style={[styles.actionSheetBtnText, { color: disclaimerChecked ? '#FFF' : 'rgba(255,255,255,0.4)', marginLeft: 0 }]}>AGREE & HOST</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
         </View>
     );
 }
@@ -1152,5 +1219,12 @@ const styles = StyleSheet.create({
     vipBannerGradient: { alignItems: 'center', padding: 25, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)' },
     vipBannerAvatar: { width: 250, height: 250, marginBottom: 10 }, 
     vipBannerLabel: { fontSize: 18, fontWeight: '900', letterSpacing: 2, textAlign: 'center', marginBottom: 10, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 10 },
-    vipBannerName: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 24, paddingHorizontal: 10 }
+    vipBannerName: { color: '#FFF', fontSize: 16, fontWeight: 'bold', textAlign: 'center', lineHeight: 24, paddingHorizontal: 10 },
+
+    // 🔥 NEW: DISCLAIMER STYLES 🔥
+    disclaimerBodyText: { color: '#CBD5E1', fontSize: 13, lineHeight: 20, marginBottom: 15 },
+    disclaimerBullet: { color: '#CBD5E1', fontSize: 13, lineHeight: 22, marginBottom: 10 },
+    disclaimerBold: { fontWeight: 'bold', color: '#FFF' },
+    checkboxContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 12 },
+    checkboxText: { color: '#94A3B8', fontSize: 11, marginLeft: 10, flex: 1, lineHeight: 18 },
 });

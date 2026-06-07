@@ -8,7 +8,7 @@ import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, increment, onSn
 import { getDatabase, onValue, ref } from 'firebase/database';
 import React, { useEffect, useRef, useState } from 'react';
 // 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
-import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, LighteningContrastLevel, RtcSurfaceView } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import GiftOverlay from '../../../components/GiftOverlay';
@@ -177,6 +177,11 @@ export default function UserLiveViewScreen() {
     const [glassPathVisible, setGlassPathVisible] = useState(false); // 🔥 NEW: GLASS PATH STATE
     const [myWalletBalance, setMyWalletBalance] = useState(0);
 
+    // 🔥 NEW: DISCLAIMER MODAL STATES FOR PLAY STORE SAFETY 🔥
+    const [disclaimerVisible, setDisclaimerVisible] = useState(false);
+    const [disclaimerChecked, setDisclaimerChecked] = useState(false);
+    const [pendingGameType, setPendingGameType] = useState<'reflex' | 'memory' | null>(null);
+
     // 🔥 FIX: Use refs to avoid stale closure issues during Graceful Exit
     const gameVisibleRef = useRef(false);
     
@@ -247,6 +252,7 @@ export default function UserLiveViewScreen() {
         setGameVisible(false); // Instantly close the game modal
         setGlassPathVisible(false); // 🔥 Close Glass Path modal
         setShowGiftModal(false);
+        setDisclaimerVisible(false); // Close disclaimer if open
         setActiveGrandGift(null);
         setShowBusyStatus(false);
         
@@ -1010,7 +1016,7 @@ export default function UserLiveViewScreen() {
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                     {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
                                     <TouchableOpacity 
-                                        onPress={() => setGlassPathVisible(true)} 
+                                        onPress={() => { setPendingGameType('memory'); setDisclaimerVisible(true); }} 
                                         style={[styles.closeIcon, { 
                                             borderColor: '#A855F7', 
                                             borderWidth: 1.5, 
@@ -1035,7 +1041,7 @@ export default function UserLiveViewScreen() {
                                     </TouchableOpacity>
 
                                     {/* 🔥 SATTI FIX: CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
-                                    <TouchableOpacity onPress={() => setGameVisible(true)} style={[styles.closeIcon, { borderColor: 'rgb(0, 234, 255)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
+                                    <TouchableOpacity onPress={() => { setPendingGameType('reflex'); setDisclaimerVisible(true); }} style={[styles.closeIcon, { borderColor: 'rgb(0, 234, 255)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
                                         <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
                                             <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                                 <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
@@ -1369,6 +1375,61 @@ export default function UserLiveViewScreen() {
                 </View>
             </Modal>
 
+            {/* 🔥 NEW: PLAY STORE COMPLIANT SKILL GAMING DISCLAIMER MODAL 🔥 */}
+            <Modal visible={disclaimerVisible} transparent animationType="slide">
+                <View style={styles.actionSheetOverlay}>
+                    <View style={[styles.actionSheetContainer, { paddingBottom: Platform.OS === 'ios' ? 60 : 50 }]}>
+                        <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <View style={styles.actionSheetHandle} />
+                        <Text style={[styles.actionSheetTitle, { marginBottom: 15, color: '#F59E0B' }]}>🛡️ Skill Gaming Policy</Text>
+
+                        <ScrollView style={{ maxHeight: height * 0.35, marginBottom: 15 }} showsVerticalScrollIndicator={false}>
+                            <Text style={styles.disclaimerBodyText}>Welcome to TalkPe Pro Games! Before you proceed, please acknowledge our gaming policy:</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🧠 <Text style={styles.disclaimerBold}>100% Skill-Based:</Text> Games like Reflex Arena and Memory Match are purely based on user skill, speed, and memory. This is NOT a game of chance or gambling.</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>💎 <Text style={styles.disclaimerBold}>Virtual Assets Only:</Text> The Entry Fee is paid in virtual Diamonds. Diamonds hold NO real-world monetary value.</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🚫 <Text style={styles.disclaimerBold}>No Cash Withdrawals:</Text> Diamonds won in this game are for in-app use only. Users CANNOT withdraw, cash out, or exchange Diamonds for real money.</Text>
+                            
+                            <Text style={styles.disclaimerBullet}>🎭 <Text style={styles.disclaimerBold}>Entertainment Only:</Text> This feature is provided strictly for entertainment and interactive networking purposes.</Text>
+                        </ScrollView>
+
+                        <TouchableOpacity 
+                            style={styles.checkboxContainer} 
+                            activeOpacity={0.8}
+                            onPress={() => setDisclaimerChecked(!disclaimerChecked)}
+                        >
+                            <Ionicons name={disclaimerChecked ? "checkbox" : "square-outline"} size={24} color={disclaimerChecked ? "#10B981" : "#94A3B8"} />
+                            <Text style={styles.checkboxText}>I confirm that I have read and agree to the Skill Gaming Policy. I understand that Diamonds cannot be converted to real cash.</Text>
+                        </TouchableOpacity>
+
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 20, paddingBottom: 20 }}>
+                            <TouchableOpacity 
+                                style={[styles.actionSheetCancelBtn, { flex: 1, marginTop: 0 }]} 
+                                onPress={() => { setDisclaimerVisible(false); setDisclaimerChecked(false); setPendingGameType(null); }}
+                            >
+                                <Text style={styles.actionSheetCancelText}>CANCEL</Text>
+                            </TouchableOpacity>
+                            
+                            <TouchableOpacity 
+                                style={[styles.actionSheetBtn, { flex: 1, justifyContent: 'center', backgroundColor: disclaimerChecked ? '#10B981' : 'rgba(16, 185, 129, 0.2)', borderRadius: 15, paddingVertical: 15 }]} 
+                                disabled={!disclaimerChecked}
+                                onPress={() => {
+                                    setDisclaimerVisible(false);
+                                    setDisclaimerChecked(false);
+                                    if (pendingGameType === 'reflex') setGameVisible(true);
+                                    if (pendingGameType === 'memory') setGlassPathVisible(true);
+                                    setPendingGameType(null);
+                                }}
+                            >
+                                <Text style={[styles.actionSheetBtnText, { color: disclaimerChecked ? '#FFF' : 'rgba(255,255,255,0.4)', marginLeft: 0 }]}>AGREE & PLAY</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
+
             {/* ✅ REFLEX BLITZ ARENA (Gateway component) */}
             <LiveGameSheet 
                 visible={gameVisible} 
@@ -1498,4 +1559,11 @@ const styles = StyleSheet.create({
     actionSheetDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.05)', width: '100%' },
     actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
     actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
+
+    // 🔥 NEW: DISCLAIMER STYLES 🔥
+    disclaimerBodyText: { color: '#CBD5E1', fontSize: 13, lineHeight: 20, marginBottom: 15 },
+    disclaimerBullet: { color: '#CBD5E1', fontSize: 13, lineHeight: 22, marginBottom: 10 },
+    disclaimerBold: { fontWeight: 'bold', color: '#FFF' },
+    checkboxContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 12 },
+    checkboxText: { color: '#94A3B8', fontSize: 11, marginLeft: 10, flex: 1, lineHeight: 18 },
 });
