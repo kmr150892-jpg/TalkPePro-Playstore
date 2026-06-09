@@ -67,10 +67,12 @@ const LEGAL_DOCS = [
     },
     {
         id: 'privacy',
-        title: 'PRIVACY POLICY',
+        // 🔥 SATTI UPDATE: Play Store Compliance Title Update
+        title: 'PRIVACY POLICY & DATA DELETION', 
         icon: 'shield-account-outline',
         color: '#10B981',
-        content: `1. DATA COLLECTION & DELETION\nWe collect essential data to provide secure interactions. Users and Hosts retain full rights to delete their accounts and wipe all personal data permanently from our servers via the in-app Delete Account option at any time.\n\n2. ZERO RECORDING POLICY\nWe operate on a strict zero-knowledge framework. Private video and audio calls are NEVER recorded, monitored, or stored by TalkPe Pro to ensure absolute privacy for our Hosts and Users.\n\n3. THIRD-PARTY SHARING\nYour payment and streaming data are processed securely via our trusted partners. We never sell your personal data to advertisers.\n\n4. FINANCIAL DATA SECURITY\nBank account details provided for payouts are strictly confidential, encrypted, and accessed only by authorized administrators for manual processing.`
+        // 🔥 SATTI UPDATE: Added 'IDENTITY VERIFICATION (KYC)' point for strict Play Store Compliance
+        content: `1. DATA COLLECTION & DELETION\nWe collect essential data to provide secure interactions. Users and Hosts retain full rights to delete their accounts and wipe all personal data permanently from our servers via the in-app Delete Account option at any time.\n\n2. IDENTITY VERIFICATION (KYC) & MEDIA USAGE\nTo ensure platform safety and comply with Play Store policies, we require Camera and Microphone access to take a Live Selfie and record a 5-second introductory video. This media is strictly used for internal Identity Verification only. It is NEVER shared publicly or with third parties, and is permanently wiped when you delete your account.\n\n3. ZERO RECORDING POLICY\nWe operate on a strict zero-knowledge framework. Private video and audio calls are NEVER recorded, monitored, or stored by TalkPe Pro to ensure absolute privacy for our Hosts and Users.\n\n4. THIRD-PARTY SHARING\nYour payment and streaming data are processed securely via our trusted partners. We never sell your personal data to advertisers.\n\n5. FINANCIAL DATA SECURITY\nBank account details provided for payouts are strictly confidential, encrypted, and accessed only by authorized administrators for manual processing.`
     },
     {
         id: 'expert_safety',

@@ -7,21 +7,21 @@ import { deleteUser } from 'firebase/auth';
 import { arrayUnion, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    Image,
-    Modal,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
@@ -385,7 +385,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                           await updateDoc(doc(db, "users", user.uid), { isOnline: false });
                           await deleteDoc(doc(db, "users", user.uid));
                           await deleteUser(user);
-                          Alert.alert("Terminated", "Your identity has been removed from the grid.");
+                          Alert.alert("Terminated", "Your identity has been removed from the talkpe pro.");
                           router.replace('/');
                       } catch (error: any) {
                           if (error.code === 'auth/requires-recent-login') {

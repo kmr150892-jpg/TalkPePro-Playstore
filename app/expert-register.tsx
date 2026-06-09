@@ -5,6 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
+import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage'; // 🔥 SATTI UPDATE: Firebase Storage Added
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -92,6 +93,11 @@ export default function RegisterExpert() {
     const [selectedLanguages, setSelectedLanguages] = useState<string[]>(['English']); 
     
     const [image, setImage] = useState<string | null>(null);
+
+    // 🔥 SATTI UPDATE: New States for Host Verification
+    const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
+    const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
+
     const [uploading, setUploading] = useState(false);
     const router = useRouter();
 
@@ -116,6 +122,8 @@ export default function RegisterExpert() {
                     if (parsed.selectedHobbies) setSelectedHobbies(parsed.selectedHobbies);
                     if (parsed.selectedLanguages) setSelectedLanguages(parsed.selectedLanguages);
                     if (parsed.image) setImage(parsed.image);
+                    if (parsed.capturedPhoto) setCapturedPhoto(parsed.capturedPhoto); // 🔥 SATTI UPDATE
+                    if (parsed.capturedVideo) setCapturedVideo(parsed.capturedVideo); // 🔥 SATTI UPDATE
                 }
             } catch (error) {
                 console.log("Error loading draft: ", error);
@@ -133,7 +141,8 @@ export default function RegisterExpert() {
                 const dataToSave = {
                     step, name, age, gender, location, selectedPersonality, 
                     selectedConnections, bio, selectedExpertise, 
-                    selectedHobbies, selectedLanguages, image
+                    selectedHobbies, selectedLanguages, image, 
+                    capturedPhoto, capturedVideo // 🔥 SATTI UPDATE
                 };
                 await AsyncStorage.setItem('@expert_draft', JSON.stringify(dataToSave));
             } catch (error) {
@@ -141,7 +150,7 @@ export default function RegisterExpert() {
             }
         };
         saveDraft();
-    }, [step, name, age, gender, location, selectedPersonality, selectedConnections, bio, selectedExpertise, selectedHobbies, selectedLanguages, image, isRestored]);
+    }, [step, name, age, gender, location, selectedPersonality, selectedConnections, bio, selectedExpertise, selectedHobbies, selectedLanguages, image, capturedPhoto, capturedVideo, isRestored]);
 
 
     useEffect(() => {
@@ -176,6 +185,60 @@ export default function RegisterExpert() {
         }
     };
 
+    // 🔥 SATTI UPDATE: TAKE LIVE SELFIE FUNCTION 🔥
+    const takeLiveSelfie = async () => {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+            Alert.alert("Permission Denied", "We need camera access for Host verification.");
+            return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+        if (!result.canceled) {
+            setCapturedPhoto(result.assets[0].uri);
+        }
+    };
+
+    // 🔥 SATTI UPDATE: RECORD 5s INTRO VIDEO FUNCTION 🔥
+    const recordIntroVideo = async () => {
+        const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
+        if (cameraStatus.status !== 'granted') {
+            Alert.alert("Permission Denied", "Camera access is required for Video verification.");
+            return;
+        }
+        const result = await ImagePicker.launchCameraAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+            allowsEditing: true,
+            videoMaxDuration: 5, 
+            quality: 0.5,
+        });
+        if (!result.canceled) {
+            setCapturedVideo(result.assets[0].uri);
+        }
+    };
+
+    // 🔥 SATTI UPDATE: Local File to Firebase Storage Uploader 🔥
+    const uploadMediaToFirebase = async (uri: string, type: 'image' | 'video') => {
+        try {
+            const response = await fetch(uri);
+            const blob = await response.blob();
+            const storage = getStorage();
+            const filename = `host_verifications/${type}_${Date.now()}`;
+            const storageRef = ref(storage, filename);
+
+            await uploadBytesResumable(storageRef, blob);
+            const downloadUrl = await getDownloadURL(storageRef);
+            return downloadUrl; 
+        } catch (error) {
+            console.error(`Error uploading ${type}:`, error);
+            return null;
+        }
+    };
+
     const toggleTag = (tag: string, list: string[], setList: any, maxLimit: number = 3) => {
         if (list.includes(tag)) {
             setList(list.filter((t: string) => t !== tag));
@@ -193,6 +256,8 @@ export default function RegisterExpert() {
             if (!image || !name || !gender) return Alert.alert("Incomplete", "Please add your photo, name, and gender to proceed.");
         } else if (step === 2) {
             if (!age || !location) return Alert.alert("Incomplete", "Please provide your age and location.");
+            // 🔥 SATTI UPDATE: Force Live Selfie & Video check
+            if (!capturedPhoto || !capturedVideo) return Alert.alert("Verification Required", "Please complete Live Selfie and 5s Video verification to proceed.");
             if (selectedLanguages.length === 0) return Alert.alert("Incomplete", "Please select at least one language you speak.");
             if (parseInt(age) < 18) return Alert.alert("Age Restriction", "You must be 18 years or older to join as a Verified Profile.");
         } else if (step === 3) {
@@ -211,7 +276,6 @@ export default function RegisterExpert() {
         setStep(step - 1);
     };
 
-    // 🔥 PUTHUSA ADD PANNA FUNCTION - BACK BUTTON FOR LOGOUT / CANCEL
     const cancelAndGoToLogin = async () => {
         Alert.alert(
             "Cancel Registration?",
@@ -251,6 +315,7 @@ export default function RegisterExpert() {
                 return;
             }
 
+            // 1. Upload Profile Picture to Cloudinary (Old feature kept intact)
             const cloudName = 'dvwjxeexc'; 
             const uploadPreset = 'TALKPE'; 
 
@@ -276,6 +341,12 @@ export default function RegisterExpert() {
 
             if (!photoURL) throw new Error("Image upload failed.");
 
+            // 🔥 SATTI UPDATE: 2. Upload Live Selfie & Video to Firebase Storage 🔥
+            let liveSelfieUrl = "";
+            let introVideoUrl = "";
+            if (capturedPhoto) liveSelfieUrl = await uploadMediaToFirebase(capturedPhoto, 'image') || "";
+            if (capturedVideo) introVideoUrl = await uploadMediaToFirebase(capturedVideo, 'video') || "";
+
             await setDoc(doc(db, "users", user.uid), {
                 displayName: name,
                 name: name, 
@@ -284,8 +355,12 @@ export default function RegisterExpert() {
                 location: location,
                 photoURL: photoURL, 
                 profilePic: photoURL, 
-                languages: selectedLanguages, 
                 
+                // 🔥 SATTI UPDATE: Save Firebase URLs to Firestore
+                liveSelfie: liveSelfieUrl,
+                introVideo: introVideoUrl,
+
+                languages: selectedLanguages, 
                 personalityTraits: selectedPersonality,
                 connectWithMeFor: selectedConnections,
                 bio: bio.trim(),
@@ -482,6 +557,43 @@ export default function RegisterExpert() {
                                 </View>
                             </View>
 
+                            {/* 🔥 SATTI UPDATE: NEW HOST VERIFICATION UI (ADDED IN STEP 2) 🔥 */}
+                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                                <Text style={styles.sectionTitle}>Identity Verification</Text>
+                                <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', marginBottom: 15, lineHeight: 16 }}>
+                                    To ensure platform safety & comply with Play Store policies, please take a live selfie and a 5-second video (e.g., just say "Hi").
+                                </Text>
+
+                                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 25, marginBottom: 10 }}>
+                                    {/* 🔹 PHOTO CIRCLE 🔹 */}
+                                    <View style={{ alignItems: 'center' }}>
+                                        <TouchableOpacity onPress={takeLiveSelfie} style={[styles.verifyCircle, { borderColor: activeGradient[0] }]}>
+                                            {capturedPhoto ? (
+                                                <Image source={{ uri: capturedPhoto }} style={styles.verifyImage} />
+                                            ) : (
+                                                <Ionicons name="camera" size={32} color={activeGradient[0]} />
+                                            )}
+                                        </TouchableOpacity>
+                                        <Text style={styles.verifyLabelText}>Live Selfie</Text>
+                                    </View>
+
+                                    {/* 🔹 VIDEO CIRCLE 🔹 */}
+                                    <View style={{ alignItems: 'center' }}>
+                                        <TouchableOpacity onPress={recordIntroVideo} style={[styles.verifyCircle, { borderColor: activeGradient[1] }]}>
+                                            {capturedVideo ? (
+                                                <View style={[styles.verifyImage, { backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center' }]}>
+                                                    <Ionicons name="checkmark-circle" size={32} color="#02fa0a" />
+                                                </View>
+                                            ) : (
+                                                <Ionicons name="videocam" size={32} color={activeGradient[1]} />
+                                            )}
+                                        </TouchableOpacity>
+                                        <Text style={styles.verifyLabelText}>5s Intro Video</Text>
+                                    </View>
+                                </View>
+                            </View>
+                            {/* 🔥 SATTI UPDATE END 🔥 */}
+
                             <View style={[styles.formCard, { marginTop: 20 }]}>
                                 <View style={styles.tagSectionHeader}>
                                     <Text style={styles.sectionTitle}>Languages You Speak</Text>
@@ -619,7 +731,7 @@ export default function RegisterExpert() {
                                         <Feather name="check-circle" size={18} color={activeGradient[0]} />
                                     </View>
                                     <Text style={styles.termsText}>
-                                        By proceeding, you agree to our Terms of Use. We value your privacy and maintain a professional environment. Our team will verify your details to ensure community standards.
+                                        By proceeding, you agree to our Terms of Use. We value your privacy and maintain a safe environment. Our team will verify your details to ensure community standards.
                                     </Text>
                                 </View>
                             </View>
@@ -632,7 +744,6 @@ export default function RegisterExpert() {
                 <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
                 
                 <View style={styles.footerRow}>
-                    {/* 🔥 1st Step-la Logout icon varum, Matha Step-la Back Arrow varum! */}
                     <TouchableOpacity 
                         style={styles.backBtn} 
                         onPress={step === 1 ? cancelAndGoToLogin : prevStep}
@@ -640,7 +751,6 @@ export default function RegisterExpert() {
                         <Feather name={step === 1 ? "log-out" : "arrow-left"} size={24} color="#F8FAFC" />
                     </TouchableOpacity>
 
-                    {/* 🔥 Style Update: Back button yappa paathalum irukkum, so layout udayaathu! */}
                     <TouchableOpacity 
                         style={styles.submitBtn} 
                         onPress={step === 5 ? handleRegistration : nextStep} 
@@ -746,4 +856,9 @@ const styles = StyleSheet.create({
     submitGlow: { position: 'absolute', top: 5, left: 10, right: 10, bottom: -5, borderRadius: 20, opacity: 0.5, shadowOffset: { width: 0, height: 5 }, shadowOpacity: 1, shadowRadius: 10 },
     submitInner: { flexDirection: 'row', height: 62, borderRadius: 20, justifyContent: 'center', alignItems: 'center', gap: 10 },
     submitText: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 1.2 },
+
+    // 🔥 SATTI UPDATE: NEW STYLES FOR CAMERA VERIFICATION 🔥
+    verifyCircle: { width: 75, height: 75, borderRadius: 37.5, borderWidth: 2, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: 8 },
+    verifyImage: { width: '100%', height: '100%', resizeMode: 'cover' },
+    verifyLabelText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' }
 });

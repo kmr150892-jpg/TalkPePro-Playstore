@@ -53,9 +53,12 @@ export default function VerifyExpertDetail() {
         try {
             const userRef = doc(db, "users", expertId as string);
             const updateData: any = {
-                status: isApprove ? "Active" : "Rejected", 
+                // 🔥 SATTI FIX: Reject aana "User" status ku maaridum, appothan thirumba fresh login page & register form pogum
+                status: isApprove ? "Active" : "User", 
                 role: isApprove ? "expert" : "user", 
                 isApplying: false, 
+                // 🔥 SATTI FIX: Added this to clear the onboarding lock flag! 🔥
+                registrationInProgress: false, 
                 isVerified: isApprove,
                 lastAdminAction: serverTimestamp(),
             };
@@ -120,6 +123,19 @@ export default function VerifyExpertDetail() {
             Linking.openURL(expert.idProof);
         } else {
             Alert.alert("Not Found", "Identity document not uploaded yet.");
+        }
+    };
+
+    // 🔥 SATTI FIX: CRASH PREVENTION FOR LOCAL FILES 🔥
+    const handleOpenMedia = (url: string) => {
+        if (!url) return;
+        if (url.startsWith('file://')) {
+            Alert.alert(
+                "Cannot Open Media", 
+                "This Host uploaded a local device file instead of a Cloud URL. Ask them to login again so the system can auto-upload it to Firebase."
+            );
+        } else {
+            Linking.openURL(url);
         }
     };
 
@@ -236,6 +252,41 @@ export default function VerifyExpertDetail() {
                         <View style={styles.infoRow}>
                             <Text style={styles.infoLabel}>LOCATION:</Text>
                             <Text style={styles.infoValue}>{expert?.location || 'Chennai'}</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* 🔥 SATTI UPDATE: PLAY STORE VERIFICATION MEDIA 🔥 */}
+                <View style={styles.section}>
+                    <View style={styles.sectionHeader}>
+                        <MaterialCommunityIcons name="shield-check" size={14} color="#6366F1" />
+                        <Text style={styles.sectionTitle}>PLAY STORE VERIFICATION MEDIA</Text>
+                    </View>
+                    <View style={styles.glassBox}>
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>LIVE SELFIE:</Text>
+                            {expert?.liveSelfie ? (
+                                <TouchableOpacity onPress={() => handleOpenMedia(expert.liveSelfie)}>
+                                    <Image source={{ uri: expert.liveSelfie }} style={styles.idThumb} />
+                                    <Text style={{color: '#6366F1', fontSize: 10, marginTop: 5, fontWeight: '900', textAlign: 'center'}}>TAP TO VIEW</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <Text style={[styles.infoValue, { color: '#EF4444' }]}>NOT PROVIDED</Text>
+                            )}
+                        </View>
+                        <View style={styles.divider} />
+                        <View style={styles.infoRow}>
+                            <Text style={styles.infoLabel}>5S INTRO VIDEO:</Text>
+                            {expert?.introVideo ? (
+                                <TouchableOpacity onPress={() => handleOpenMedia(expert.introVideo)}>
+                                    <View style={[styles.idThumb, { justifyContent: 'center', alignItems: 'center' }]}>
+                                        <Ionicons name="play-circle" size={32} color="#6366F1" />
+                                    </View>
+                                    <Text style={{color: '#6366F1', fontSize: 10, marginTop: 5, fontWeight: '900', textAlign: 'center'}}>TAP TO PLAY</Text>
+                                </TouchableOpacity>
+                            ) : (
+                                <Text style={[styles.infoValue, { color: '#EF4444' }]}>NOT PROVIDED</Text>
+                            )}
                         </View>
                     </View>
                 </View>

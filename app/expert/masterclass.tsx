@@ -387,9 +387,9 @@ export default function MasterClassScreen() {
                         <View style={[styles.lockedRevenueCard, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '40' }]}>
                             <View style={styles.revenueHeader}>
                                 <MaterialCommunityIcons name="rocket-launch" size={18} color={theme.accent} />
-                                <Text style={[styles.revenueTitle, { color: theme.accent }]}>ALGORITHM BOOST</Text>
+                                <Text style={[styles.revenueTitle, { color: theme.accent }]}> ALGORITHM BOOST</Text>
                             </View>
-                            <Text style={styles.revenueDesc}>Premium Spotlight activates priority Discovermaking across the network.</Text>
+                            <Text style={styles.revenueDesc}>Activate Premium Spotlight for priority discovery. Experience new daily updates that bring more traffic and opportunities your way!</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
                                 <MaterialCommunityIcons name="trending-up" size={28} color="#FFF" />
                                 <Text style={styles.revenueAmount}>300% MORE VISIBILITY</Text>
