@@ -19,6 +19,7 @@ import {
     View
 } from 'react-native';
 import { auth, db } from '../../../firebaseConfig';
+import { sendNotificationToUser } from '../../../utils/notificationHelper'; // 🔥 NOTIFICATION IMPORT
 
 const { width, height } = Dimensions.get('window');
 
@@ -236,6 +237,14 @@ export default function WalletSystem({ expertData }: any) {
                     lastWithdrawalAt: serverTimestamp()
                 });
 
+                // 🔥 NOTIFICATION TRIGGER 1: Redeem Request Update
+                await sendNotificationToUser(
+                    user.uid,
+                    "Withdrawal Requested 💸",
+                    `Your redeem request for ₹${numAmtRupee} is being processed. It will be credited soon.`,
+                    "payment"
+                );
+
                 Alert.alert("Success ✅", "Request sent for processing!");
                 setModalVisible(false);
                 setAmount('');
@@ -275,6 +284,14 @@ export default function WalletSystem({ expertData }: any) {
                     createdAt: serverTimestamp(),
                     details: { ...bankDetails, idProof: idProofImage }
                 });
+
+                // 🔥 NOTIFICATION TRIGGER 2: Bank Details Saved Update
+                await sendNotificationToUser(
+                    user.uid,
+                    "Bank Configured 🏦",
+                    "Your bank details have been submitted. Waiting for admin verification.",
+                    "system"
+                );
 
                 Alert.alert("Updated ✅", "Details submitted for verification.");
                 setEditBankVisible(false);
@@ -394,11 +411,25 @@ export default function WalletSystem({ expertData }: any) {
                         </View>
                         {isBankVerified ? (
                             <View style={styles.statusBadgeGreen}><Text style={styles.badgeLabelText}>ACTIVE</Text></View>
+                        ) : expertData?.bankRejectReason ? (
+                            <View style={[styles.statusBadgeYellow, { backgroundColor: '#EF444420', borderColor: '#EF444440' }]}><Text style={[styles.badgeLabelText, { color: '#EF4444' }]}>REJECTED</Text></View>
                         ) : (
                             <View style={styles.statusBadgeYellow}><Text style={styles.badgeLabelText}>PENDING</Text></View>
                         )}
                     </View>
                 </TouchableOpacity>
+
+                {/* 🔥 NEW UI: BANK KYC REJECTION REASON DISPLAY BOX 🔥 */}
+                {!isBankVerified && expertData?.bankRejectReason && (
+                    <View style={[styles.rejectReasonBox, { marginTop: -25, marginBottom: 25 }]}>
+                        <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{marginTop: 2}} />
+                        <View style={{ marginLeft: 8, flex: 1 }}>
+                            <Text style={styles.rejectLabel}>KYC REJECTION REASON</Text>
+                            <Text style={styles.rejectReasonText}>{expertData.bankRejectReason}</Text>
+                            <Text style={{ color: theme.primary, fontSize: 10, fontWeight: '800', marginTop: 5 }}>* Tap CONFIG above to fix and resubmit details.</Text>
+                        </View>
+                    </View>
+                )}
 
                 <Text style={styles.sectionTitleMain}>LEDGER HISTORY</Text>
                 {transactions.length === 0 ? (
@@ -620,7 +651,6 @@ const styles = StyleSheet.create({
     finalSubmitBtn: { borderRadius: 25, overflow: 'hidden' },
     finalSubmitGrad: { paddingVertical: 20, alignItems: 'center' },
     finalSubmitText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 2 },
-    
     inputNodeBox: { marginBottom: 20 },
     nodeLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
     nodeInput: { borderRadius: 20, padding: 18, color: '#FFF', fontSize: 15, fontWeight: '700' },

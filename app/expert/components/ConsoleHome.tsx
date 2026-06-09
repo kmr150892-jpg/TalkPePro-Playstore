@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { deleteUser } from 'firebase/auth';
-import { arrayUnion, deleteDoc, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { arrayUnion, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
+import { sendNotificationToUser } from '../../../utils/notificationHelper';
 
 // --- COMPONENTS ---
 
@@ -118,6 +119,12 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const [coverUploading, setCoverUploading] = useState(false);
   const [galleryUploading, setGalleryUploading] = useState(false);
   const [saving, setSaving] = useState(false);
+  
+  const [unreadCount, setUnreadCount] = useState(0); 
+
+  // 🔥 NEW FIX: REFS TO PREVENT INFINITE LOOPS & FIX ZERO-TO-ONE REQUEST BUG 🔥
+  const initialLoadRef = useRef(true);
+  const knownRequestsRef = useRef<string[]>([]);
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
@@ -186,13 +193,55 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         if (data.isOnline !== undefined && data.isOnline !== isOnline) {
             setIsOnline(data.isOnline);
         }
+
+        if (data.notifications) {
+          const unread = data.notifications.filter((notif: any) => !notif.read).length;
+          setUnreadCount(unread);
+        }
       }
     });
     return () => unsub();
   }, [user?.uid]);
 
-  // 🔥 SATTI FIX: Removed the buggy 'checkAndAwardDailyBonus' Effect entirely. 
-  // ExpertStats.tsx will now securely handle all daily milestones using the correct updated logic without double-triggering!
+  // 🔥 NEW FIX: ROBUST BACKGROUND LISTENER FOR CONNECTION REQUESTS 🔥
+  useEffect(() => {
+      if (!user?.uid) return;
+
+      const requestQuery = query(collection(db, "connections"), where("receiverId", "==", user.uid), where("status", "==", 'pending'));
+
+      const unsubRequests = onSnapshot(requestQuery, async (snapshot) => {
+          const currentIds = snapshot.docs.map(doc => doc.id);
+          
+          if (initialLoadRef.current) {
+              // App open பண்ணும்போது இருக்குற பழைய requests-க்கு நோட்டிபிகேஷன் அனுப்பக் கூடாது.
+              knownRequestsRef.current = currentIds;
+              initialLoadRef.current = false;
+              return;
+          }
+
+          // புதுசா வந்துருக்க ஐடி மட்டும் பில்டர் பண்றோம் (0 to 1 வந்தாலும் இது எடுக்கும்!)
+          const newIncomingIds = currentIds.filter(id => !knownRequestsRef.current.includes(id));
+          
+          if (newIncomingIds.length > 0) {
+              for (const docSnap of snapshot.docs) {
+                  if (newIncomingIds.includes(docSnap.id)) {
+                      const connData = docSnap.data();
+                      await sendNotificationToUser(
+                          user.uid,
+                          "New Connection Request! 🤝",
+                          `${connData.senderName || 'A user'} wants to connect with you. Check your requests tab!`,
+                          "system"
+                      );
+                  }
+              }
+          }
+          
+          // அடுத்த முறை செக் பண்ண ரெஃப்பரன்ஸை அப்டேட் பண்றோம்
+          knownRequestsRef.current = currentIds;
+      });
+
+      return () => unsubRequests();
+  }, [user?.uid]);
 
   useEffect(() => {
       if (expertData && user?.uid) {
@@ -211,6 +260,13 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                   Alert.alert(
                       "Level Updated! 🚀",
                       `Your rank changed! Your Call Rate has been automatically updated to the new Max Price: ${newMaxRate} Rewards/Min!`
+                  );
+                  // 🔥 AUTO NOTIFICATION WHEN LEVEL UPGRADES 🔥
+                  sendNotificationToUser(
+                      user.uid,
+                      "Level Upgraded! 🚀",
+                      `Congratulations! You have reached ${config.label}. Your new call rate is ${newMaxRate}.`,
+                      "system"
                   );
               }).catch(()=>{});
               
@@ -464,9 +520,21 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                   <MaterialCommunityIcons name="shield-crown" size={20} color="#10B981" />
                 </TouchableOpacity>
               )}
+              
+              {/* 🔥 NOTIFICATION BELL WITH BADGE */}
               <TouchableOpacity style={styles.iconCircle} onPress={() => router.push("/expert/notifications")}>
-                <Ionicons name="notifications-outline" size={18} color="#FFF" />
+                <View>
+                    <Ionicons name="notifications-outline" size={18} color="#FFF" />
+                    {unreadCount > 0 && (
+                        <View style={styles.badgeContainer}>
+                            <Text style={styles.badgeText}>
+                                {unreadCount > 9 ? '9+' : unreadCount}
+                            </Text>
+                        </View>
+                    )}
+                </View>
               </TouchableOpacity>
+
               <TouchableOpacity style={[styles.iconCircle, {marginLeft: 8}]} onPress={() => router.push("/blocked-users")}>
                 <Ionicons name="person-remove-outline" size={18} color="#EF4444" />
               </TouchableOpacity>
@@ -768,6 +836,10 @@ const styles = StyleSheet.create({
   rightHeader: { flexDirection: 'row', alignItems: 'center' },
   adminIconBtn: { width: 38, height: 38, backgroundColor: 'rgba(16, 185, 129, 0.2)', borderRadius: 10, justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#10B98140' },
   iconCircle: { width: 38, height: 38, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  
+  badgeContainer: { position: 'absolute', right: -6, top: -6, backgroundColor: '#F43F5E', borderRadius: 10, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#020617' },
+  badgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', paddingHorizontal: 3 },
+
   profileSection: { alignItems: 'center', marginBottom: 25 },
   avatarWrapper: { position: 'relative', padding: 5 },
   avatarRing: { width: 140, height: 140, borderRadius: 70, justifyContent: 'center', alignItems: 'center' },

@@ -1,15 +1,20 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { collection, deleteDoc, doc, getDoc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Linking, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, Linking, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { db } from '../../../../firebaseConfig';
+import { sendNotificationToUser } from '../../../../utils/notificationHelper'; // 🔥 ADDED NOTIFICATION HELPER
 
 export default function VerifyBankDetails() {
   const { id } = useLocalSearchParams(); // Host ID securely passed here
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [expert, setExpert] = useState<any>(null);
+
+  // 🔥 STATE FOR REJECT REASON POPUP 🔥
+  const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [rejectReason, setRejectReason] = useState("");
 
   useEffect(() => {
     fetchExpertDetails();
@@ -32,6 +37,13 @@ export default function VerifyBankDetails() {
   };
 
   const handleAction = async (status: 'Approve' | 'Reject') => {
+    if (status === 'Reject') {
+        // 🔥 OPENS REJECT REASON MODAL INSTEAD OF DIRECT ALERT
+        setRejectReason("");
+        setRejectModalVisible(true);
+        return;
+    }
+
     Alert.alert(
       `Confirm ${status} Action`,
       `Are you sure you want to ${status.toLowerCase()} these financial details?`,
@@ -42,9 +54,10 @@ export default function VerifyBankDetails() {
           onPress: async () => {
             setLoading(true);
             try {
-              // 1. Update Host Profile (Database key kept intact)
+              // 1. Update Host Profile for APPROVE
               await updateDoc(doc(db, "users", id as string), {
-                isBankVerified: status === 'Approve' ? true : false
+                isBankVerified: true,
+                bankRejectReason: null // Clears any past reject reason
               });
 
               // 2. Remove the notification (Cleaning up operational logs)
@@ -57,6 +70,14 @@ export default function VerifyBankDetails() {
                 await deleteDoc(doc(db, "adminNotifications", document.id));
               });
 
+              // 🔥 ADMIN SUCCESS NOTIFICATION TRIGGER 🔥
+              await sendNotificationToUser(
+                  id as string,
+                  "Bank Verified 🏦✅",
+                  "Your bank and KYC details have been successfully verified! You can now request withdrawals.",
+                  "system"
+              );
+
               Alert.alert("Success ✅", `Financial details ${status.toLowerCase()}ed successfully!`);
               router.back();
             } catch (e) {
@@ -68,6 +89,48 @@ export default function VerifyBankDetails() {
         }
       ]
     );
+  };
+
+  // 🔥 NEW FUNCTION: EXECUTE REJECT BANK DETAILS WITH REASON 🔥
+  const executeRejectBank = async () => {
+      if (!rejectReason || rejectReason.trim() === "") {
+          Alert.alert("Error", "Please provide a reason for declining.");
+          return;
+      }
+      setLoading(true);
+      try {
+          // 1. Update Host Profile with Reject Reason
+          await updateDoc(doc(db, "users", id as string), {
+              isBankVerified: false,
+              bankRejectReason: rejectReason.trim() // 🔥 Saving reason so host can see it and retry
+          });
+
+          // 2. Remove the notification (Cleaning up operational logs)
+          const q = query(collection(db, "adminNotifications"), 
+              where("expertId", "==", id), 
+              where("type", "==", "BANK_VERIFICATION")
+          );
+          const querySnapshot = await getDocs(q);
+          querySnapshot.forEach(async (document) => {
+              await deleteDoc(doc(db, "adminNotifications", document.id));
+          });
+
+          // 🔥 ADMIN REJECT NOTIFICATION TRIGGER WITH REASON 🔥
+          await sendNotificationToUser(
+              id as string,
+              "Bank KYC Declined ⚠️",
+              `Your banking KYC was declined. Reason: ${rejectReason.trim()}. Please review and submit correct details in your console.`,
+              "system"
+          );
+
+          Alert.alert("Declined ❌", "Host bank details rejected successfully.");
+          setRejectModalVisible(false);
+          router.back();
+      } catch (e) {
+          Alert.alert("Error", "System update failed");
+      } finally {
+          setLoading(false);
+      }
   };
 
   // ✅ SECURE FUNCTION: To open KYC document in browser for secure download
@@ -143,13 +206,59 @@ export default function VerifyBankDetails() {
 
       <View style={styles.btnGroup}>
         <TouchableOpacity style={[styles.btn, styles.rejectBtn]} onPress={() => handleAction('Reject')}>
-          <Text style={styles.btnText}>DECLINE</Text>
+          <Text style={[styles.btnText, {color: '#EF4444'}]}>DECLINE</Text>
         </TouchableOpacity>
         <TouchableOpacity style={[styles.btn, styles.approveBtn]} onPress={() => handleAction('Approve')}>
           <Text style={styles.btnText}>AUTHORIZE & VERIFY</Text>
         </TouchableOpacity>
       </View>
       <View style={{ height: 50 }} />
+
+      {/* 🔥 REJECT REASON MODAL 🔥 */}
+      <Modal visible={rejectModalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                  <View style={styles.modalHeaderBox}>
+                      <MaterialCommunityIcons name="alert-circle" size={24} color="#EF4444" />
+                      <Text style={styles.modalTitle}>DECLINE KYC</Text>
+                  </View>
+                  
+                  <Text style={styles.modalSub}>Select a quick reason or type below.</Text>
+                  
+                  {/* 🔥 QUICK SELECT REASON CHIPS 🔥 */}
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReasonScroll}>
+                      {['Invalid Account Number', 'Incorrect IFSC Code', 'Blurry KYC Document', 'Name Mismatch'].map((reason) => (
+                          <TouchableOpacity 
+                              key={reason} 
+                              style={[styles.quickReasonChip, rejectReason === reason && styles.quickReasonChipActive]} 
+                              onPress={() => setRejectReason(reason)}
+                          >
+                              <Text style={[styles.quickReasonText, rejectReason === reason && styles.quickReasonTextActive]}>{reason}</Text>
+                          </TouchableOpacity>
+                      ))}
+                  </ScrollView>
+
+                  <TextInput
+                      style={styles.reasonInput}
+                      placeholder="Or type custom reason here..."
+                      placeholderTextColor="#475569"
+                      value={rejectReason}
+                      onChangeText={setRejectReason}
+                      multiline
+                  />
+
+                  <View style={styles.modalActionRow}>
+                      <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setRejectModalVisible(false)}>
+                          <Text style={styles.modalCancelText}>CANCEL</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity style={styles.modalSubmitBtn} onPress={executeRejectBank}>
+                          <Text style={styles.modalSubmitText}>CONFIRM DECLINE</Text>
+                      </TouchableOpacity>
+                  </View>
+              </View>
+          </View>
+      </Modal>
+
     </ScrollView>
   );
 }
@@ -172,5 +281,23 @@ const styles = StyleSheet.create({
   btn: { flex: 1, padding: 18, borderRadius: 18, alignItems: 'center' },
   rejectBtn: { backgroundColor: '#EF444420', borderWidth: 1, borderColor: '#EF444440' },
   approveBtn: { backgroundColor: '#818CF8' },
-  btnText: { color: '#FFF', fontWeight: '900', fontSize: 14 }
+  btnText: { color: '#FFF', fontWeight: '900', fontSize: 14 },
+
+  // 🔥 MODAL & QUICK REASON CHIP STYLES 🔥
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
+  modalContent: { width: '100%', backgroundColor: '#0F172A', padding: 25, borderRadius: 24, borderWidth: 1, borderColor: '#1E293B' },
+  modalHeaderBox: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5 },
+  modalTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
+  modalSub: { color: '#475569', fontSize: 11, fontWeight: '700', marginBottom: 15 },
+  quickReasonScroll: { marginBottom: 15, maxHeight: 40 },
+  quickReasonChip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: '#334155', justifyContent: 'center' },
+  quickReasonChipActive: { backgroundColor: '#EF444420', borderColor: '#EF4444' },
+  quickReasonText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
+  quickReasonTextActive: { color: '#EF4444' },
+  reasonInput: { backgroundColor: '#020617', color: '#FFF', padding: 15, borderRadius: 16, borderWidth: 1, borderColor: '#1E293B', minHeight: 80, textAlignVertical: 'top', fontSize: 14 },
+  modalActionRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
+  modalCancelBtn: { flex: 1, padding: 15, borderRadius: 16, backgroundColor: '#1E293B', alignItems: 'center' },
+  modalCancelText: { color: '#94A3B8', fontWeight: '900', fontSize: 12 },
+  modalSubmitBtn: { flex: 1, padding: 15, borderRadius: 16, backgroundColor: '#EF4444', alignItems: 'center' },
+  modalSubmitText: { color: '#FFF', fontWeight: '900', fontSize: 12 }
 });

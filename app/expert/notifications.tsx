@@ -47,10 +47,25 @@ export default function NotificationsScreen() {
     const user = auth.currentUser;
     if (!user) return;
 
-    const unsubUser = onSnapshot(doc(db, "users", user.uid), (docSnap) => {
+    // 🔥 FIX: Added 'async' to docSnap callback to handle read status update
+    const unsubUser = onSnapshot(doc(db, "users", user.uid), async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data();
-        setNotifications(data.notifications || []); 
+        const notifs = data.notifications || [];
+        setNotifications(notifs); 
+
+        // 🔥 FIX: Mark unread notifications as read when screen is opened
+        const hasUnread = notifs.some((n: any) => n.read === false);
+        if (hasUnread) {
+            const updatedNotifs = notifs.map((n: any) => ({ ...n, read: true }));
+            try {
+                await updateDoc(doc(db, "users", user.uid), {
+                    notifications: updatedNotifs
+                });
+            } catch (err) {
+                console.error("Error updating read status: ", err);
+            }
+        }
       }
       setLoading(false);
     });

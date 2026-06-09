@@ -58,43 +58,43 @@ const getSmartLevelConfig = (userData: any) => {
 const FAQS = [
     {
         id: 1,
-        question: "When will I receive my Redeem ACTIVITY_REWARD?",
-        answer: "Withdrawals are processed manually by our admin team within 5-7 working days. Admins strictly verify game and call logs to ensure fair play before releasing funds. Ensure your bank details are 100% accurate."
+        question: "When will I receive my Withdrawn Amount?",
+        answer: "Withdrawals are processed manually by our admin team within 5-7 working days. Admins strictly verify your call logs and platform engagement to ensure high-quality interactions before releasing funds. Ensure your bank details and ID proof are 100% accurate."
     },
     {
         id: 2,
         question: "How does the Premium Spotlight (Algorithm Boost) work?",
-        answer: "Premium Spotlight pushes your profile up. Note: All Spotlight videos are subject to strict UGC guidelines. Users can report videos, which triggers a mandatory 24-hour admin review to ensure platform safety."
+        answer: "Premium Spotlight pushes your profile up to get more genuine call requests. Note: All Spotlight videos are subject to strict UGC (User Generated Content) guidelines. Users can report videos, which triggers a mandatory 24-hour admin review to ensure platform safety."
     },
     {
         id: 3,
-        question: "What is the minimum Redeem limit?",
-        answer: "The limit is dynamically set (e.g., 50,000 Rewards). Remember, TalkPe Pro strictly prohibits gambling. Rewards are earned purely through your time and skill-based game interactions with users."
+        question: "What is the minimum Redeem limit & Rules?",
+        answer: "The minimum withdrawal limit is ₹500. Additionally, for any withdrawal request above ₹5,000, submission of a valid ID proof (Aadhaar or PAN) is mandatory for KYC compliance. Note: A standard transaction charge of ₹100 applies per withdrawal."
     },
     {
         id: 4,
-        question: "Why am I not receiving any Discover requests?",
-        answer: "1. Check your 'ONLINE' status.\n2. Ensure your profile picture is professional and strictly 18+ compliant (no explicit content).\n3. Keep your app updated to the latest Play Store version."
+        question: "Why am I not receiving any incoming call requests?",
+        answer: "1. Check your 'ONLINE' status in the command center.\n2. Ensure your profile picture is highly professional and strictly 18+ compliant (no explicit content).\n3. Maintain a positive interaction rating with users.\n4. Keep your app updated to the latest Play Store version."
     },
     {
         id: 5,
-        question: "How do Broadcast & Forum Activity Platform Share work?",
-        answer: "You earn a Platform Share from virtual assets spent by users. In case of a user network disconnect during skill-based games, our system automatically resolves the match to protect your legitimate earnings."
+        question: "How do Broadcast & Audio/Video Calls work?",
+        answer: "You earn rewards directly based on your Tier's 'Rewards per Minute' rate during active audio or video sessions. If a user disconnects due to poor network, our system automatically calculates your earnings up to the exact second of disconnection to protect your legitimate time spent."
     },
     {
         id: 6,
         question: "My account is showing as restricted. What do I do?",
-        answer: "Accounts are restricted automatically for strict policy violations. Contact support to appeal. Additionally, as per data safety rules, you retain full rights to use the 'Delete Account' option to permanently wipe your data at any time."
+        answer: "Accounts are restricted automatically for strict policy violations (e.g., sharing personal numbers, inappropriate behavior). Contact support to appeal. Additionally, as per data safety rules, you retain full rights to use the 'Delete Account' option to permanently wipe your data at any time."
     },
     {
         id: 7,
         question: "How to handle abusive or misbehaving users?",
-        answer: "Your safety is our priority. Disconnect immediately and use the in-call 'Block & Report' feature. Our Trust & Safety team reviews all reports within 24 hours to enforce permanent bans on violators."
+        answer: "Your safety is our absolute priority. Disconnect immediately and use the in-call 'Block & Report' feature. Our Trust & Safety team reviews all reports within 24 hours to enforce permanent platform bans on violators."
     },
     {
         id: 8,
-        question: "Can I change my Call Rate?",
-        answer: "Yes! Based on your Tier, you can adjust your 'Rewards per Minute' rate every 30 minutes. Rest assured, for your absolute privacy, TalkPe Pro operates under a Zero Recording Policy—private calls are NEVER recorded."
+        question: "Can I change my Per-Minute Call Rate?",
+        answer: "Yes! Based on your Tier (e.g., Bronze, Silver, Gold), you can adjust your 'Rewards per Minute' rate every 30 minutes. Rest assured, for your absolute privacy, TalkPe Pro operates under a Zero Recording Policy—private calls are NEVER recorded."
     }
 ];
 

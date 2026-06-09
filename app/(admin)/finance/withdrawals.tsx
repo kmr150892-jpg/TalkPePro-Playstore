@@ -19,6 +19,7 @@ import {
 } from 'react-native';
 import { auth, db } from '../../../firebaseConfig';
 import { recordTransaction } from '../../../utils/finance';
+import { sendNotificationToUser } from '../../../utils/notificationHelper'; // 🔥 IMPORTED NOTIFICATION HELPER
 
     const { width } = Dimensions.get('window');
     const ADMIN_UID = "9yFRrTeuOCd1twDDpBiNCp4U1yf1"; 
@@ -151,6 +152,18 @@ import { recordTransaction } from '../../../utils/finance';
                                     });
                                 }
 
+                                // 🔥 ADMIN SUCCESS NOTIFICATION TRIGGER 🔥
+                                await sendNotificationToUser(
+                                    request.userId,
+                                    "Transfer Successful 💸",
+                                    `Your withdrawal of ₹${amountToProcess} has been successfully processed to your bank account.`,
+                                    "payment"
+                                );
+
+                                // 🔥 FIX: OPTIMISTIC UI UPDATE TO REMOVE ITEM IMMEDIATELY 🔥
+                                setRequests(prev => prev.filter(item => item.id !== request.id));
+                                setStats(prev => ({ totalPending: prev.totalPending - Number(request.amount), count: prev.count - 1 }));
+
                                 Alert.alert("Success! ✅", "System Ledger Synchronized.");
                             } catch (err: any) {
                                 console.error("Transfer Sync Error:", err);
@@ -205,6 +218,18 @@ import { recordTransaction } from '../../../utils/finance';
                         processedBy: auth.currentUser?.uid
                     });
                 }
+
+                // 🔥 ADMIN REJECT NOTIFICATION TRIGGER WITH REASON 🔥
+                await sendNotificationToUser(
+                    request.userId,
+                    "Transfer Declined ⚠️",
+                    `Your withdrawal of ₹${amountToProcess} was declined. Reason: ${rejectReason.trim()}. The full amount has been refunded to your wallet.`,
+                    "system"
+                );
+
+                // 🔥 FIX: OPTIMISTIC UI UPDATE TO REMOVE ITEM IMMEDIATELY 🔥
+                setRequests(prev => prev.filter(item => item.id !== request.id));
+                setStats(prev => ({ totalPending: prev.totalPending - Number(request.amount), count: prev.count - 1 }));
 
                 Alert.alert("Success! ✅", `Request Declined & Fully Refunded (₹${amountToProcess + transCharge}).`);
                 setRejectModalVisible(false);
@@ -322,11 +347,24 @@ import { recordTransaction } from '../../../utils/finance';
                                 <Text style={styles.modalTitle}>DECLINE REQUEST</Text>
                             </View>
                             
-                            <Text style={styles.modalSub}>Reason will be shown to the Host.</Text>
+                            <Text style={styles.modalSub}>Select a quick reason or type below.</Text>
                             
+                            {/* 🔥 QUICK SELECT REASON CHIPS 🔥 */}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.quickReasonScroll}>
+                                {['Invalid Account Number', 'Incorrect IFSC Code', 'UPI ID Not Active', 'Name Mismatch'].map((reason) => (
+                                    <TouchableOpacity 
+                                        key={reason} 
+                                        style={[styles.quickReasonChip, rejectReason === reason && styles.quickReasonChipActive]} 
+                                        onPress={() => setRejectReason(reason)}
+                                    >
+                                        <Text style={[styles.quickReasonText, rejectReason === reason && styles.quickReasonTextActive]}>{reason}</Text>
+                                    </TouchableOpacity>
+                                ))}
+                            </ScrollView>
+
                             <TextInput
                                 style={styles.reasonInput}
-                                placeholder="E.g., Invalid Bank Details..."
+                                placeholder="Or type custom reason here..."
                                 placeholderTextColor="#475569"
                                 value={rejectReason}
                                 onChangeText={setRejectReason}
@@ -391,13 +429,18 @@ import { recordTransaction } from '../../../utils/finance';
         empty: { alignItems: 'center', marginTop: 80 },
         emptyT: { color: '#475569', fontSize: 16, fontWeight: '800', marginTop: 15 },
         
-        // 🔥 NEW STYLES FOR REJECT MODAL 🔥
+        // 🔥 MODAL & QUICK REASON CHIP STYLES 🔥
         modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.8)', justifyContent: 'center', alignItems: 'center', padding: 20 },
         modalContent: { width: '100%', backgroundColor: '#0F172A', padding: 25, borderRadius: 24, borderWidth: 1, borderColor: '#1E293B' },
         modalHeaderBox: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 5 },
         modalTitle: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
-        modalSub: { color: '#475569', fontSize: 11, fontWeight: '700', marginBottom: 20 },
-        reasonInput: { backgroundColor: '#020617', color: '#FFF', padding: 15, borderRadius: 16, borderWidth: 1, borderColor: '#1E293B', minHeight: 100, textAlignVertical: 'top', fontSize: 14 },
+        modalSub: { color: '#475569', fontSize: 11, fontWeight: '700', marginBottom: 15 },
+        quickReasonScroll: { marginBottom: 15, maxHeight: 40 },
+        quickReasonChip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, marginRight: 10, borderWidth: 1, borderColor: '#334155', justifyContent: 'center' },
+        quickReasonChipActive: { backgroundColor: '#EF444420', borderColor: '#EF4444' },
+        quickReasonText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
+        quickReasonTextActive: { color: '#EF4444' },
+        reasonInput: { backgroundColor: '#020617', color: '#FFF', padding: 15, borderRadius: 16, borderWidth: 1, borderColor: '#1E293B', minHeight: 80, textAlignVertical: 'top', fontSize: 14 },
         modalActionRow: { flexDirection: 'row', gap: 10, marginTop: 20 },
         modalCancelBtn: { flex: 1, padding: 15, borderRadius: 16, backgroundColor: '#1E293B', alignItems: 'center' },
         modalCancelText: { color: '#94A3B8', fontWeight: '900', fontSize: 12 },

@@ -6,6 +6,7 @@ import { collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, que
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { auth, db } from '../../firebaseConfig';
+import { sendNotificationToUser } from '../../utils/notificationHelper'; // 🔥 IMPORTED NOTIFICATION HELPER
 
 const { width, height } = Dimensions.get('window');
 
@@ -45,6 +46,11 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
     const [data, setData] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [expertProfile, setExpertProfile] = useState<any>(null);
+    
+    // 🔥 NEW STATES FOR REQUEST BADGE ALERTS 🔥
+    const [newRequestCount, setNewRequestCount] = useState(0);
+    const [lastKnownRequestIds, setLastKnownRequestIds] = useState<string[]>([]);
+    
     const expert = auth.currentUser;
     const router = useRouter();
 
@@ -78,6 +84,48 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
           })
         ).start();
     }, []);
+
+    // 🔥 NEW EFFECT: INDEPENDENT BACKGROUND LISTENER FOR PENDING REQUESTS & NOTIFICATIONS 🔥
+    useEffect(() => {
+        if (!expert?.uid) return;
+
+        const requestQuery = query(collection(db, "connections"), where("receiverId", "==", expert.uid), where("status", "==", 'pending'));
+
+        const unsubRequests = onSnapshot(requestQuery, async (snapshot) => {
+            const currentIds = snapshot.docs.map(doc => doc.id);
+            
+            // Check if there are new requests that we haven't seen yet
+            const newIncomingIds = currentIds.filter(id => !lastKnownRequestIds.includes(id));
+            
+            if (newIncomingIds.length > 0 && lastKnownRequestIds.length > 0) {
+                // If there's a new request and it's not the initial load, send a Notification!
+                for (const docSnap of snapshot.docs) {
+                    if (newIncomingIds.includes(docSnap.id)) {
+                        const connData = docSnap.data();
+                        await sendNotificationToUser(
+                            expert.uid,
+                            "New Connection Request! 🤝",
+                            `${connData.senderName || 'A user'} wants to connect with you. Check your requests tab!`,
+                            "system"
+                        );
+                    }
+                }
+            }
+
+            // Only update the unread badge if we are NOT currently on the REQUESTS tab
+            if (activeTab !== 'REQUESTS') {
+                setNewRequestCount(currentIds.length);
+            } else {
+                // If we are already on the tab, clear it immediately
+                setNewRequestCount(0);
+            }
+
+            // Keep track of known IDs to detect future new ones
+            setLastKnownRequestIds(currentIds);
+        });
+
+        return () => unsubRequests();
+    }, [expert?.uid, activeTab, lastKnownRequestIds]);
 
     useEffect(() => {
         if (!expert?.uid) return;
@@ -294,10 +342,20 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                         <Text style={[styles.tabText, activeTab === 'USERS' && { color: '#FFF' }]}>USERS</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                        style={[styles.massTab, activeTab === 'REQUESTS' && { backgroundColor: 'rgba(236, 72, 153, 0.25)' }]}
-                        onPress={() => setActiveTab('REQUESTS')}
+                        style={[styles.massTab, activeTab === 'REQUESTS' && { backgroundColor: 'rgba(236, 72, 153, 0.25)', position: 'relative' }]}
+                        onPress={() => {
+                            setActiveTab('REQUESTS');
+                            setNewRequestCount(0); // 🔥 CLEAR BADGE ON CLICK 🔥
+                        }}
                     >
                         <Text style={[styles.tabText, activeTab === 'REQUESTS' && { color: '#FFF' }]}>REQUESTS</Text>
+                        
+                        {/* 🔥 REQUESTS TAB ALERT BADGE 🔥 */}
+                        {newRequestCount > 0 && activeTab !== 'REQUESTS' && (
+                            <View style={styles.tabBadge}>
+                                <Text style={styles.tabBadgeText}>{newRequestCount > 9 ? '9+' : newRequestCount}</Text>
+                            </View>
+                        )}
                     </TouchableOpacity>
                 </BlurView>
             </View>
@@ -411,6 +469,10 @@ const styles = StyleSheet.create({
     tabContainer: { flexDirection: 'row', padding: 6, borderRadius: 25, overflow: 'hidden' },
     massTab: { flex: 1, height: 44, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
     tabText: { color: '#94A3B8', fontWeight: '900', fontSize: 10, letterSpacing: 2 },
+
+    // 🔥 NEW STYLES FOR THE REQUEST TAB BADGE 🔥
+    tabBadge: { position: 'absolute', top: 4, right: 15, backgroundColor: '#EF4444', minWidth: 16, height: 16, borderRadius: 8, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#020617' },
+    tabBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', paddingHorizontal: 3 },
 
     cardWrapper: { marginBottom: 15 },
     fluidUserCard: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 35 }, 
