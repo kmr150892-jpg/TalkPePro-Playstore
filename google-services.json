@@ -5,7 +5,7 @@
     "project_id": "talkpe-67db0",
     "storage_bucket": "talkpe-67db0.firebasestorage.app"
   },
-  "user": [
+  "client": [
     {
       "client_info": {
         "mobilesdk_app_id": "1:2462622395:android:300e86e1028fb134a87f9e",
