@@ -33,16 +33,12 @@ export default function AdminGameRevenue() {
 
     useEffect(() => {
         let unsub: any = null;
-        let timeoutId: ReturnType<typeof setTimeout>;
 
-        // 🔥 ANTI-FREEZE LOGIC. Delay fetching so page opens instantly! 🔥
-        const startFetching = setTimeout(() => {
-            const q = query(collectionGroup(db, 'games'), orderBy('createdAt', 'desc'));
+        const fetchData = async () => {
+            try {
+                const q = query(collectionGroup(db, 'games'), orderBy('createdAt', 'desc'));
 
-            unsub = onSnapshot(q, async (snap) => {
-                // Debounce rapid updates to prevent UI stuttering
-                clearTimeout(timeoutId);
-                timeoutId = setTimeout(async () => {
+                unsub = onSnapshot(q, (snap) => {
                     let tPool = 0;
                     let tAdmin = 0;
                     let tExpert = 0;
@@ -51,55 +47,54 @@ export default function AdminGameRevenue() {
 
                     const fetchedGames: any[] = [];
 
-                    try {
-                        for (const docSnap of snap.docs) {
-                            const data = docSnap.data();
+                    snap.docs.forEach((docSnap) => {
+                        const data = docSnap.data();
+                        
+                        // 🔥 FETCHING EXACT NAMES FROM DB AS REQUESTED 🔥
+                        const totalPool = Number(data.totalPool) || 0;
+                        const expertBeans = Number(data.expertBeans) || 0;
+                        const adminProfit = Number(data.adminCommission) || 0; 
+                        
+                        if (totalPool > 0 || adminProfit > 0 || expertBeans > 0) {
                             
-                            // 🔥 FETCHING EXACT NAMES FROM DB AS REQUESTED 🔥
-                            const totalPool = Number(data.totalPool) || 0;
-                            const expertBeans = Number(data.expertBeans) || 0;
-                            const adminProfit = Number(data.adminCommission) || 0; 
-                            
-                            if (totalPool > 0 || adminProfit > 0 || expertBeans > 0) {
-                                
-                                // Calculating Expert Diamonds (1 Bean = 2 Diamonds)
-                                let expertDiamonds = expertBeans * 2; 
+                            // Calculating Expert Diamonds (1 Bean = 2 Diamonds)
+                            let expertDiamonds = expertBeans * 2; 
 
-                                // User winning grants calculation
-                                let winnerACTIVITY_REWARD = totalPool - adminProfit - expertDiamonds;
-                                if (winnerACTIVITY_REWARD < 0) winnerACTIVITY_REWARD = 0;
+                            // User winning grants calculation
+                            let winnerACTIVITY_REWARD = totalPool - adminProfit - expertDiamonds;
+                            if (winnerACTIVITY_REWARD < 0) winnerACTIVITY_REWARD = 0;
 
-                                tPool += totalPool;
-                                tAdmin += adminProfit;
-                                tExpert += expertBeans;
+                            tPool += totalPool;
+                            tAdmin += adminProfit;
+                            tExpert += expertBeans;
 
-                                // 🔥 CHECKING GAME TYPE 🔥
-                                const gameIdStr = String(data.gameName || data.gameId || data.type || docSnap.id).toLowerCase();
-                                const isMemory = gameIdStr.includes('memory_match') || gameIdStr.includes('memory');
+                            // 🔥 CHECKING GAME TYPE 🔥
+                            const gameIdStr = String(data.gameName || data.gameId || data.type || docSnap.id).toLowerCase();
+                            const isMemory = gameIdStr.includes('memory_match') || gameIdStr.includes('memory');
 
-                                if (isMemory) {
-                                    tMemoryProfit += adminProfit;
-                                } else {
-                                    // Assuming anything else is reflex_arena
-                                    tReflexProfit += adminProfit;
-                                }
-
-                                fetchedGames.push({
-                                    uniqueKey: docSnap.ref.path,
-                                    id: docSnap.id, // 🔥 ADDED THIS LINE BACK FOR SLICE FUNCTION
-                                    totalPool,
-                                    winnerACTIVITY_REWARD,
-                                    expertBeans,
-                                    expertDiamonds,
-                                    adminProfit,
-                                    gameTypeResolved: isMemory ? 'MEMORY MATCH' : 'REFLEX ARENA',
-                                    ...data
-                                });
+                            if (isMemory) {
+                                tMemoryProfit += adminProfit;
+                            } else {
+                                // Assuming anything else is reflex_arena
+                                tReflexProfit += adminProfit;
                             }
+
+                            // 🔥 SATTI FIX: Guaranteed Unique Key Generation 🔥
+                            const uniqueKey = docSnap.id + "_" + (data.createdAt?.seconds || Date.now());
+
+                            fetchedGames.push({
+                                uniqueKey: uniqueKey,
+                                id: docSnap.id, 
+                                totalPool,
+                                winnerACTIVITY_REWARD,
+                                expertBeans,
+                                expertDiamonds,
+                                adminProfit,
+                                gameTypeResolved: isMemory ? 'MEMORY MATCH' : 'REFLEX ARENA',
+                                ...data
+                            });
                         }
-                    } catch (err) {
-                        console.log("Global fetch loop error:", err);
-                    }
+                    });
 
                     setGameLogs(fetchedGames);
                     setStats({
@@ -109,14 +104,22 @@ export default function AdminGameRevenue() {
                         memoryProfit: tMemoryProfit,
                         reflexProfit: tReflexProfit
                     });
+                    
+                    // Stop loading once data is mapped
                     setLoading(false);
-                }, 150); 
-            });
-        }, 300); 
+                }, (error) => {
+                    console.log("Snapshot Error:", error);
+                    setLoading(false);
+                });
+            } catch (err) {
+                console.log("Initialization Error:", err);
+                setLoading(false);
+            }
+        };
+
+        fetchData();
 
         return () => {
-            clearTimeout(startFetching);
-            clearTimeout(timeoutId);
             if (unsub) unsub();
         };
     }, []);

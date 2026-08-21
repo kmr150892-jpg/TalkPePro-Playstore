@@ -6,7 +6,7 @@ import * as ScreenCapture from 'expo-screen-capture';
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import {
     addDoc,
-    arrayUnion, // 🔥 SATTI UPDATE: Added arrayUnion for Block Logic
+    arrayUnion,
     collection,
     doc, getDoc,
     increment, onSnapshot, orderBy, query,
@@ -14,7 +14,7 @@ import {
 } from 'firebase/firestore';
 import React, { useContext, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator, // 🔥 SATTI UPDATE: Added for loading state
+    ActivityIndicator,
     Alert,
     Animated,
     AppState,
@@ -22,7 +22,7 @@ import {
     Easing,
     Image,
     KeyboardAvoidingView,
-    Modal, // 🔥 SATTI UPDATE: Added Modal for Report Screen
+    Modal,
     PanResponder,
     PermissionsAndroid,
     Platform,
@@ -109,6 +109,8 @@ export default function VideoCallScreen() {
     const [isMuted, setIsMuted] = useState(false);
     
     const [isProEnabled, setIsProEnabled] = useState(false);
+    
+    const [isPrivacyBlurActive, setIsPrivacyBlurActive] = useState(false);
 
     const [isCallAccepted, setIsCallAccepted] = useState(role === 'user'); 
     const [isRinging, setIsRinging] = useState(true); 
@@ -164,12 +166,11 @@ export default function VideoCallScreen() {
     const [activeGiftOverlay, setActiveGiftOverlay] = useState<any>(null);
     const [expertThemeBeans, setExpertThemeBeans] = useState<number>(0);
 
-    // 🔥 SATTI UPDATE: Block & Report Modal State Variables
     const [blockModalVisible, setBlockModalVisible] = useState(false);
     const [isBlocking, setIsBlocking] = useState(false);
     const blockReasons = [
         "Abusive Language / Harassment",
-        "Inappropriate Behavior / Nudity",
+        "Inappropriate Behavior / Content",
         "Scam / Spam / Phishing",
         "Threatening / Aggressive",
         "Other Unwanted Contact"
@@ -746,10 +747,8 @@ export default function VideoCallScreen() {
         }
     };
 
-    // 🔥 SATTI FIX: FULLY BULLETPROOF GIFT ENGINE 🔥
     const handleSendGift = async (amount: number, type: string, giftName: string = 'Gift') => {
         if (!user) return;
-        // Ensuring all variables are explicitly cast as strings to prevent undefined crashes
         const targetUserIdForLog = String(realCallerId || params.callerId || user?.uid || 'unknown');
         const targetExpertId = String(safeExpertId || "UNKNOWN_EXPERT");
 
@@ -817,7 +816,6 @@ export default function VideoCallScreen() {
                     lastBonusDate: today
                 });
                 
-                // 🔥 SATTI FIX: Guaranteed AddDoc with fully validated fields! No more missing records
                 await addDoc(collection(db, "transactions"), {
                     userId: targetUserIdForLog, 
                     expertId: targetExpertId, 
@@ -826,9 +824,9 @@ export default function VideoCallScreen() {
                     senderId: targetUserIdForLog,
                     diamonds: amount || 0, 
                     beans: expertBeans || 0,
-                    amount: amount || 0, // Fallback for some queries
+                    amount: amount || 0, 
                     type: 'gift', 
-                    source: 'call', // 🔥 CRUCIAL FIX FOR EXPERT STATS FILTER
+                    source: 'call', 
                     status: 'completed', 
                     giftType: type || 'gift',
                     giftName: giftName || 'Gift',
@@ -838,7 +836,6 @@ export default function VideoCallScreen() {
             }
             
             if (callId) {
-                // Merge ensures we don't crash if callDoc is temporarily missing
                 await setDoc(doc(db, "calls", String(callId)), {
                     lastGift: { 
                         type: type || 'gift', 
@@ -884,12 +881,10 @@ export default function VideoCallScreen() {
         handleCallEnd(false, 'missed');
     };
 
-    // 🔥 SATTI UPDATE: New Block UI Trigger
     const handleBlockUser = () => {
         setBlockModalVisible(true);
     };
 
-    // 🔥 SATTI UPDATE: Execution Logic with Database Storage
     const handleReasonSelect = async (reason: string) => {
         let targetUserId = '';
         
@@ -922,20 +917,15 @@ export default function VideoCallScreen() {
         );
     };
 
-    // 🔥 SATTI UPDATE: Core Block & Database Logic matching Profile Model
     const executeBlockUser = async (reason: string, targetUserId: string) => {
         if (!user || !targetUserId) return;
         setIsBlocking(true);
         const currentUserId = user.uid;
 
         try {
-            // 1. Array Union to blockedUsers (Invisible matching)
             await updateDoc(doc(db, "users", currentUserId), { blockedUsers: arrayUnion(targetUserId) });
-            
-            // 2. Increment block count
             await updateDoc(doc(db, "users", targetUserId), { expertBlockCount: increment(1) });
             
-            // 3. Admin Alert Data Push
             await addDoc(collection(db, "admin_alerts"), {
                 type: role === 'expert' ? 'EXPERT_BLOCKED_USER' : 'USER_BLOCKED_EXPERT', 
                 expertId: role === 'expert' ? currentUserId : targetUserId, 
@@ -946,8 +936,8 @@ export default function VideoCallScreen() {
                 status: 'unread'
             });
 
-            blockUser(targetUserId); // Context block connection
-            handleCallEnd(true, 'ended'); // Force deduct current call
+            blockUser(targetUserId); 
+            handleCallEnd(true, 'ended'); 
             
             Alert.alert("USER RESTRICTED", "The user has been blocked and reported to safety moderation.");
         } catch (error) {
@@ -1180,7 +1170,25 @@ export default function VideoCallScreen() {
             <Animated.View style={[styles.redAlertOverlay, { opacity: pulseAnim.interpolate({inputRange: [0, 1], outputRange: [0, 0.45]}) }]} pointerEvents="none" />
 
             <View style={StyleSheet.absoluteFill}>
-                {remoteUid ? <RtcSurfaceView canvas={{ uid: remoteUid }} style={styles.fullVideo} /> : (
+                {/* 🔥 SATTI UPDATE: Privacy Blur View conditionally rendered OVER the remote video */}
+                {remoteUid ? (
+                    <>
+                        {/* Only render remote video if privacy is OFF */}
+                        {!isPrivacyBlurActive && (
+                            <RtcSurfaceView canvas={{ uid: remoteUid }} style={styles.fullVideo} />
+                        )}
+                        {/* Show solid black shield if privacy is ON */}
+                        {isPrivacyBlurActive && (
+                            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2, 6, 23, 0.98)', justifyContent: 'center', alignItems: 'center', zIndex: 5 }]}>
+                                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(59, 130, 246, 0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 15 }}>
+                                    <Ionicons name="eye-off" size={40} color="#3B82F6" />
+                                </View>
+                                <Text style={styles.privacyShieldText}>PRIVACY SHIELD ON</Text>
+                                <Text style={styles.privacyShieldSubText}>Remote video is safely hidden.</Text>
+                            </View>
+                        )}
+                    </>
+                ) : (
                     <View style={styles.waitingBox}>
                         <LinearGradient colors={['#020617', '#1E293B']} style={StyleSheet.absoluteFill} />
                         <MaterialCommunityIcons name="shield-check-outline" size={80} color="#3B82F6" />
@@ -1210,9 +1218,23 @@ export default function VideoCallScreen() {
             )}
 
             {joined && !showSummary && (
-                <Animated.View {...panResponder.panHandlers} style={[styles.localVideoFloating, { transform: pan.getTranslateTransform() }]}>
-                    <RtcSurfaceView canvas={{ uid: 0 }} style={styles.innerVideo} zOrderMediaOverlay={true} />
+                <Animated.View {...panResponder.panHandlers} style={[styles.localVideoFloatingWrapper, { transform: pan.getTranslateTransform() }]}>
+                    <View style={styles.localVideoFloating}>
+                        <RtcSurfaceView canvas={{ uid: 0 }} style={styles.innerVideo} zOrderMediaOverlay={true} />
+                    </View>
                 </Animated.View>
+            )}
+
+            {/* 🔥 NEW FIX: Independent Floating Privacy Button for ALL users 🔥 */}
+            {isCallAccepted && !showSummary && (
+                <TouchableOpacity 
+                    style={[styles.floatingPrivacyBtn, isPrivacyBlurActive && styles.floatingPrivacyBtnActive]} 
+                    onPress={() => setIsPrivacyBlurActive(!isPrivacyBlurActive)} 
+                    activeOpacity={0.7}
+                >
+                    <Ionicons name={isPrivacyBlurActive ? "eye-off" : "eye"} size={22} color={isPrivacyBlurActive ? "#FFF" : "#020617"} />
+                    {isPrivacyBlurActive && <Text style={styles.floatingPrivacyText}>SHIELD ON</Text>}
+                </TouchableOpacity>
             )}
 
             {isCallAccepted && !showSummary && (
@@ -1232,10 +1254,12 @@ export default function VideoCallScreen() {
                             </View>
                         </View>
                         
-                        <TouchableOpacity style={styles.topRightBlockBtn} onPress={handleBlockUser} activeOpacity={0.7}>
-                            <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
-                            <Text style={styles.blockBtnText}>RESTRICT</Text>
-                        </TouchableOpacity>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <TouchableOpacity style={styles.topRightBlockBtn} onPress={handleBlockUser} activeOpacity={0.7}>
+                                <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
+                                <Text style={styles.blockBtnText}>RESTRICT</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             )}
@@ -1294,7 +1318,6 @@ export default function VideoCallScreen() {
                 </View>
             </KeyboardAvoidingView>
 
-            {/* 🔥 SATTI UPDATE: New Reporting Modal UI Added at the bottom */}
             <Modal
                 visible={blockModalVisible}
                 transparent={true}
@@ -1349,8 +1372,12 @@ const styles = StyleSheet.create({
     redAlertOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'red', zIndex: 10 },
     fullVideo: { flex: 1 },
     uiWrapper: { flex: 1, justifyContent: 'flex-end' },
-    localVideoFloating: { width: 110, height: 160, position: 'absolute', borderRadius: 20, borderWidth: 2, borderColor: '#3B82F6', zIndex: 100, backgroundColor: '#000', overflow: 'hidden', elevation: 10 },
-    innerVideo: { flex: 1 },
+    
+    // 🔥 SATTI FIX: Absolute bulletproof rounded corners for local video
+    localVideoFloatingWrapper: { width: 110, height: 160, position: 'absolute', zIndex: 100, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 12 },
+    localVideoFloating: { flex: 1, borderWidth: 2, borderColor: 'rgba(0, 64, 255, 0.9)', backgroundColor: '#020617', overflow: 'hidden' },
+    innerVideo: { flex: 1, overflow: 'hidden' },
+    
     topHeader: { position: 'absolute', top: 40, left: 20, right: 20, zIndex: 150 },
     headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: width - 40 },
     headerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 },
@@ -1361,15 +1388,23 @@ const styles = StyleSheet.create({
     liveText: { color: '#FFF', fontSize: 16, fontWeight: '800' },
     freeBadgeText: { color: '#FBBF24', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
     callerNameText: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4, textShadowColor: '#000', textShadowRadius: 15, flexShrink: 1 },
-    topRightBlockBtn: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 5, zIndex: 999, flexShrink: 0 },
-    blockBtnText: { color: '#EF4444', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
+    
+    // 🔥 SATTI FIX: Floating Privacy Button Styles
+    floatingPrivacyBtn: { position: 'absolute', top: 43, right: 110, backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingHorizontal: 5, paddingVertical: 5, borderRadius: 25, flexDirection: 'row', alignItems: 'center', zIndex: 999, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
+    floatingPrivacyBtnActive: { backgroundColor: '#3B82F6', borderColor: '#60A5FA' },
+    floatingPrivacyText: { color: '#FFF', fontSize: 8, fontWeight: '900', marginLeft: 6, letterSpacing: 1 },
+    privacyShieldCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    privacyShieldText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 2, marginTop: 15 },
+    privacyShieldSubText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', marginTop: 5 },
+
+    topRightBlockBtn: { flexDirection: 'row', top: -13, right:-5, backgroundColor: 'rgb(255, 255, 255)', paddingHorizontal: 5, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0, 0, 0, 0.4)', elevation: 5, flexShrink: 0, height:35 },
+    blockBtnText: { color: '#000000', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
     waitingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     waitingText: { color: '#FFF', fontSize: 14, fontWeight: '600', marginTop: 15, opacity: 0.8 },
     warningContainer: { position: 'absolute', top: '40%', alignSelf: 'center', zIndex: 120, alignItems: 'center' },
     warningTimerText: { color: '#FFF', fontSize: 100, fontWeight: '900', textShadowColor: '#EF4444', textShadowRadius: 30 },
     warningSubText: { color: '#FFF', fontSize: 16, fontWeight: 'bold', backgroundColor: 'rgba(239, 68, 68, 0.8)', paddingHorizontal: 15, paddingVertical: 5, borderRadius: 15, overflow: 'hidden', marginTop: -10 },
     
-    /* 🔥 SATTI UPDATE: Modal Styles Added */
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
     modalContainer: { backgroundColor: '#0F172A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1, borderColor: '#3B82F6', borderBottomWidth: 0 },
     modalIconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 15, backgroundColor: 'rgba(239, 68, 68, 0.1)' },
