@@ -30,6 +30,11 @@ import { auth, db } from '../firebaseConfig';
 
 const { width } = Dimensions.get('window');
 
+// 🆕 UPDATE 6: RECHARGE SWITCH
+// false = button shows "COMING SOON" and cannot be clicked.
+// BillDesk verification + Play Console products ready aana apram ithai true panna podhum.
+const RECHARGE_ENABLED = false;
+
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
 const calculateUserLevel = (totalSpent: number) => {
   if (totalSpent >= 500000001) return { 
@@ -196,6 +201,11 @@ export default function RechargeScreen() {
     }, [user]);
 
     const handleBuy = async () => {
+        // 🆕 UPDATE 6: Recharge locked -> Coming Soon
+        if (!RECHARGE_ENABLED) {
+            Alert.alert("Coming Soon", "Diamond recharge will be available soon.");
+            return;
+        }
         if (!user) { Alert.alert("Identification Error", "Please login to access your asset vault."); return; }
         const selectedBundle = BUNDLES.find(b => b.id === selected);
         if (!selectedBundle) return;
@@ -211,11 +221,13 @@ export default function RechargeScreen() {
         }
     };
 
-    // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display in Recharge!
+    // 🆕 UPDATE 3: LEVEL FIX
+    // Munnaadi: balance / walletBalance use panninom -> diamonds kharchu aanaa level kammi aagum.
+    // Ippo: lifetime-la mattum athigam aagura totalSpentDiamonds (+ totalDiamonds) use panrom -> level kammi aagaadhu.
     const userDiamonds = Math.max(
-        userData?.totalDiamonds || 0,
-        userData?.walletBalance || 0,
-        userData?.balance || 0
+        totalSpentDiamonds,
+        userData?.totalSpentDiamonds || 0,
+        userData?.totalDiamonds || 0
     );
     const userTier = calculateUserLevel(userDiamonds);
     
@@ -328,17 +340,21 @@ export default function RechargeScreen() {
                 </ScrollView>
 
                 <View style={styles.footerArea}>
+                    {/* 🆕 UPDATE 6: Coming Soon notice */}
+                    {!RECHARGE_ENABLED && (
+                        <Text style={styles.comingSoonText}>DIAMOND RECHARGE WILL BE AVAILABLE SOON</Text>
+                    )}
                     <TouchableOpacity 
-                        style={[styles.buyBtn, isBuying && { opacity: 0.6 }, { backgroundColor: userTier.color, shadowColor: userTier.color }]} 
+                        style={[styles.buyBtn, (isBuying || !RECHARGE_ENABLED) && { opacity: 0.6 }, { backgroundColor: userTier.color, shadowColor: userTier.color }]} 
                         onPress={handleBuy}
-                        disabled={isBuying}
+                        disabled={isBuying || !RECHARGE_ENABLED}
                     >
                         {isBuying ? (
                             <ActivityIndicator color="#000" />
                         ) : (
-                            <Animated.View style={[styles.buyBtnContent, { transform: [{ scale: pulseAnim }] }]}>
-                                <Text style={styles.buyBtnLabel}>AUTHORIZE TRANSACTION</Text>
-                                <Ionicons name="flash" size={18} color="#000" />
+                            <Animated.View style={[styles.buyBtnContent, { transform: [{ scale: RECHARGE_ENABLED ? pulseAnim : 1 }] }]}>
+                                <Text style={styles.buyBtnLabel}>{RECHARGE_ENABLED ? 'AUTHORIZE TRANSACTION' : 'COMING SOON'}</Text>
+                                <Ionicons name={RECHARGE_ENABLED ? 'flash' : 'time'} size={18} color="#000" />
                             </Animated.View>
                         )}
                     </TouchableOpacity>
@@ -378,6 +394,7 @@ const styles = StyleSheet.create({
     encryptionInfo: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 15 },
     encryptionText: { color: '#475569', fontSize: 11, fontWeight: '800' },
     footerArea: { padding: 20, paddingBottom: 35 },
+    comingSoonText: { color: '#94a3b8', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, textAlign: 'center', marginBottom: 12 },
     buyBtn: { borderRadius: 30, overflow: 'hidden', elevation: 15, shadowOpacity: 0.4, shadowRadius: 10 },
     buyBtnContent: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', paddingVertical: 20, gap: 10 },
     buyBtnLabel: { color: '#000', fontSize: 15, fontWeight: '900', letterSpacing: 2 }

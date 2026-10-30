@@ -4,24 +4,24 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { deleteUser } from 'firebase/auth';
-import { arrayUnion, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  Image,
-  Modal,
-  ScrollView,
-  Share,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    Modal,
+    ScrollView,
+    Share,
+    StyleSheet,
+    Switch,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
@@ -388,6 +388,29 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     }
   };
 
+  // 🗑️ NEW: DELETE GALLERY PHOTO (with confirmation)
+  const deleteGalleryImage = (imgUrl: string) => {
+    if (!user?.uid) return;
+    Alert.alert(
+      "Delete Photo?",
+      "Indha photo va portfolio la irundhu remove pannalama?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await updateDoc(doc(db, "users", user.uid), { gallery: arrayRemove(imgUrl) });
+            } catch (e) {
+              Alert.alert("Error", "Delete failed. Check connection.");
+            }
+          }
+        }
+      ]
+    );
+  };
+
   const toggleTag = (tag: string, list: string[], setList: any, maxLimit: number) => {
     if (list.includes(tag)) {
         setList(list.filter((t: string) => t !== tag));
@@ -704,7 +727,14 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                 </TouchableOpacity>
              </View>
              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{marginTop: 10}}>
-                {expertData?.gallery?.map((img: string, index: number) => <Image key={index} source={{ uri: img }} style={styles.galleryImg} />)}
+                {expertData?.gallery?.map((img: string, index: number) => (
+                  <View key={index} style={styles.galleryItem}>
+                    <Image source={{ uri: img }} style={styles.galleryImg} />
+                    <TouchableOpacity style={styles.galleryDeleteBtn} onPress={() => deleteGalleryImage(img)}>
+                      <Ionicons name="close" size={14} color="#FFF" />
+                    </TouchableOpacity>
+                  </View>
+                ))}
                 {(!expertData?.gallery || expertData?.gallery.length === 0) && <View style={styles.emptyGallery}><Text style={styles.emptyText}>Upload your work</Text></View>}
              </ScrollView>
           </View>
@@ -895,7 +925,9 @@ const styles = StyleSheet.create({
   premiumChipText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
   cyberHobbyChip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 12, borderLeftWidth: 4 },
   cyberHobbyText: { color: '#E2E8F0', fontSize: 12, fontWeight: '700' },
-  galleryImg: { width: 100, height: 100, borderRadius: 15, marginRight: 10 },
+  galleryImg: { width: 100, height: 100, borderRadius: 15 },
+  galleryItem: { position: 'relative', marginRight: 10 },
+  galleryDeleteBtn: { position: 'absolute', top: 5, right: 5, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(239, 68, 68, 0.9)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
   emptyGallery: { width: width - 40, height: 100, borderRadius: 15, backgroundColor: 'rgba(30, 41, 59, 0.4)', justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#334155' },
   emptyText: { color: '#475569', fontSize: 10, fontWeight: '700' },
  

@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 // 🔥 SATTI FIX: Replaced expo-video with expo-av for better compatibility 🔥
 import { useVideoPlayer, VideoView } from 'expo-video';
-import { doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
+import { deleteField, doc, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -100,6 +100,7 @@ export default function MasterClassScreen() {
 
     // 🔥 Video Showcase States
     const [teaserUploading, setTeaserUploading] = useState(false);
+    const [isDeleting, setIsDeleting] = useState(false); // 🔥 NEW: Delete showcase loading state
     const [showPreviewModal, setShowPreviewModal] = useState(false);
     const [showWarningModal, setShowWarningModal] = useState(false); // 🔥 SATTI NEW: Modal State for Play Store Safe Warning
     const [teaserVideo, setTeaserVideo] = useState<string | null>(null);
@@ -252,6 +253,38 @@ export default function MasterClassScreen() {
             Alert.alert("Upload Failed", "Something went wrong while uploading your showcase.");
             setTeaserUploading(false);
         }
+    };
+
+    // 🔥 NEW: DELETE SHOWCASE VIDEO LOGIC (asks confirmation first)
+    const handleDeleteShowcase = () => {
+        if (!user?.uid || !teaserVideo) return;
+
+        Alert.alert(
+            "Delete Showcase? 🗑️",
+            "Your showcase video will be removed from your Premium Spotlight. You can upload a new one anytime.",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: async () => {
+                        setIsDeleting(true);
+                        try {
+                            try { player.pause(); } catch (e) {}
+                            await updateDoc(doc(db, "users", user.uid), {
+                                teaserVideo: deleteField()
+                            });
+                            setShowPreviewModal(false);
+                            Alert.alert("Deleted", "Your showcase video has been removed.");
+                        } catch (error) {
+                            Alert.alert("Error", "Unable to delete showcase. Please try again.");
+                        } finally {
+                            setIsDeleting(false);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     // 🔥 SAVE SKILL NAME LOGIC
@@ -458,6 +491,22 @@ export default function MasterClassScreen() {
                             />
                         )}
                     </View>
+
+                    {/* 🔥 NEW: DELETE SHOWCASE BUTTON 🔥 */}
+                    <TouchableOpacity
+                        onPress={handleDeleteShowcase}
+                        disabled={isDeleting}
+                        style={styles.deleteBtn}
+                    >
+                        {isDeleting ? (
+                            <ActivityIndicator color="#EF4444" />
+                        ) : (
+                            <>
+                                <Ionicons name="trash" size={18} color="#EF4444" />
+                                <Text style={styles.deleteBtnText}>DELETE SHOWCASE</Text>
+                            </>
+                        )}
+                    </TouchableOpacity>
                 </BlurView>
             </Modal>
 
@@ -548,4 +597,21 @@ const styles = StyleSheet.create({
     closePreviewBtn: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 40, right: 20, zIndex: 100 },
     previewVideoContainer: { width: width * 0.85, height: height * 0.7, borderRadius: 30, overflow: 'hidden', borderWidth: 2, backgroundColor: '#000' },
     previewVideo: { width: '100%', height: '100%' },
+
+    // 🔥 NEW: DELETE SHOWCASE BUTTON STYLES
+    deleteBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 16,
+        paddingVertical: 12,
+        paddingHorizontal: 28,
+        borderRadius: 16,
+        borderWidth: 1,
+        borderColor: 'rgba(239, 68, 68, 0.6)',
+        backgroundColor: 'rgba(239, 68, 68, 0.12)',
+        minHeight: 46,
+    },
+    deleteBtnText: { color: '#EF4444', fontWeight: '900', fontSize: 12, letterSpacing: 1 },
 });
