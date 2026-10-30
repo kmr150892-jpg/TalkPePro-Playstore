@@ -76,8 +76,6 @@ export default function LiveAudienceGameOverlay({ liveId, roomId = 'reflex_arena
 
     if (!isVisible || !gameData) return null;
 
-    const entryFee = gameData.entryFee || 0;
-
     return (
         <Animated.View style={[styles.overlayContainer, { transform: [{ translateY: slideAnim }] }]}>
             <TouchableOpacity activeOpacity={0.9} onPress={onOpenGameSheet} style={styles.touchableWrapper}>
@@ -97,7 +95,7 @@ export default function LiveAudienceGameOverlay({ liveId, roomId = 'reflex_arena
                             </View>
                             <View style={styles.textStack}>
                                 <Text style={styles.alertTitle}>EXPERT CHALLENGE!</Text>
-                                <Text style={styles.alertSub}>Reflex Blitz Arena is Open</Text>
+                                <Text style={styles.alertSub}>Reflex Blitz Arena • Just for fun</Text>
                             </View>
                         </View>
 
@@ -106,7 +104,7 @@ export default function LiveAudienceGameOverlay({ liveId, roomId = 'reflex_arena
                             <LinearGradient colors={['#F59E0B', '#D97706']} style={styles.joinBtnBg}>
                                 <Text style={styles.joinBtnText}>JOIN</Text>
                                 <View style={styles.feeBadge}>
-                                    <Text style={styles.feeBadgeText}>{entryFee} 💎</Text>
+                                    <Text style={styles.feeBadgeText}>FREE</Text>
                                 </View>
                             </LinearGradient>
                         </Animated.View>
