@@ -6,7 +6,9 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 
-// 🏁 REFLEX BLITZ ARENA MANAGER - CLEAN PRODUCTION REWARD ENGINE
+// 🏁 REFLEX BLITZ ARENA MANAGER - FREE-TO-PLAY (NO ENTRY FEE, NO REWARD, NO COMMISSION)
+// 🆕 FREE-TO-PLAY UPDATE: This function now ONLY decides the winner and closes the round.
+// Wallet balance, diamonds payout, admin/expert commission, passbook money logs are all removed.
 exports.reflexBlitzGlobalManager = onSchedule("every 1 minutes", async (event) => {
     const db = admin.firestore();
     const reflexRef = db.collection('global_games').doc('reflex_arena');
@@ -23,8 +25,6 @@ exports.reflexBlitzGlobalManager = onSchedule("every 1 minutes", async (event) =
                 if (now >= data.gameExpiresAt) {
                     
                     const players = data.players || [];
-                    const entryFee = data.entryFee || 0;
-                    const totalPrizePool = players.length * entryFee;
 
                     let winnerId = null;
 
@@ -45,54 +45,13 @@ exports.reflexBlitzGlobalManager = onSchedule("every 1 minutes", async (event) =
                         winnerId = players[0].id; 
                     }
 
-                    // 🛠️ MULTI-TIER REWARD PROTOCOL: 60% Winner, 30% Admin, 10% Expert (Converted to Beans)
-                    const winnerReward = totalPrizePool * 0.60;
-                    const adminCommission = totalPrizePool * 0.30;
-                    const expertCommission = totalPrizePool * 0.10;
-                    const expertBeans = Math.floor(expertCommission / 2); 
-
-                    const batch = db.batch();
-
-                    players.forEach(player => {
-                        const isWin = player.id === winnerId;
-                        const finalWinAmount = isWin ? winnerReward : 0;
-                        
-                        // Increment winner balance register safely
-                        if (isWin && winnerReward > 0) {
-                            const userRef = db.collection("users").doc(player.id);
-                            batch.update(userRef, { 
-                                balance: admin.firestore.FieldValue.increment(winnerReward) 
-                            });
-                        }
-
-                        // Write telemetry data record logs to Passbook
-                        const historyRef = db.collection("users").doc(player.id).collection("activityHistory").doc();
-                        batch.set(historyRef, {
-                            type: "GAME_RESULT",
-                            status: isWin ? "WIN" : "LOSS",
-                            gameName: "REFLEX BLITZ ARENA",
-                            sessionId: "reflex_arena",
-                            entryFee: entryFee,
-                            winAmount: finalWinAmount,
-                            lossAmount: isWin ? 0 : entryFee,
-                            timestamp: admin.firestore.FieldValue.serverTimestamp()
-                        });
-                    });
-
-                    // 4. Finalize Ledger Record Logs
-                    batch.update(reflexRef, {
+                    // 3. Finalize round (winner name only, no money involved)
+                    await reflexRef.update({
                         status: 'FINISHED',
                         finishedAt: admin.firestore.FieldValue.serverTimestamp(),
-                        winnerId: winnerId,
-                        totalPool: totalPrizePool,
-                        rewardAmount: winnerReward,
-                        adminCommission: adminCommission,
-                        expertCommission: expertCommission,
-                        expertBeans: expertBeans,
-                        prizeDistributed: winnerReward
+                        winnerId: winnerId
                     });
 
-                    await batch.commit();
                     console.log(`✅ Reflex Blitz Arena Session Concluded. Winner: ${winnerId}`);
                 }
             }
