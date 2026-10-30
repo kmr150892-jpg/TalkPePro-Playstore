@@ -18,7 +18,6 @@ const COLOR_POOL = [
     { name: 'ORANGE', colorCode: '#F97316' }  
 ];
 
-const ENTRY_FEES = [500, 1000, 5000, 10000, 25000, 50000];
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 10;
 
@@ -30,7 +29,7 @@ interface GlassPathProps {
     onClose: () => void;
     liveId: string;
     isHost: boolean;
-    entryFee: number; 
+    entryFee?: number; // 🆓 Game is free now. Prop kept optional so existing callers don't break.
     userWalletBalance?: number;
     collectionName?: string; 
 }
@@ -53,7 +52,7 @@ const PlayerItem = React.memo(({ item }: { item: any }) => (
 export default function GlassPathSheet({ visible, onClose, liveId, isHost, userWalletBalance = 0, collectionName = 'lives' }: GlassPathProps) {
     const [gameStatus, setGameStatus] = useState<'WAITING' | 'SHUFFLING' | 'PLAYING' | 'FINISHED' | 'CANCELLED'>('WAITING');
     const [players, setPlayers] = useState<any[]>([]);
-    const [entryFee, setEntryFee] = useState<number>(500); 
+    // 🆓 isFeeLocked now simply means "Arena is OPEN for joining" (Firestore field name kept for compatibility)
     const [isFeeLocked, setIsFeeLocked] = useState<boolean>(false);
     const [hostId, setHostId] = useState<string>('');
     const [matchResults, setMatchResults] = useState<any>(null); 
@@ -105,59 +104,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         })
     ).current;
 
-    // 🔥 SATTI FIX: SELF-HEALING AUTO REFUND WITH PROPER WALLET SYNC & LOGGING 🔥
-    const handleAutoRefundOnCancel = async () => {
-        if (!auth.currentUser) return;
-        const uid = auth.currentUser.uid;
-        try {
-            await runTransaction(db, async (transaction) => {
-                const userRef = doc(db, 'users', uid);
-                const roomSnap = await transaction.get(roomRef);
-                const userSnap = await transaction.get(userRef);
-
-                if (!roomSnap.exists() || !userSnap.exists()) return;
-                const roomData = roomSnap.data();
-
-                if (roomData.status !== 'CANCELLED') return;
-
-                const currentPlayers = roomData.players || [];
-                const myPlayerObj = currentPlayers.find((p: any) => p.id === uid);
-
-                if (!myPlayerObj) return; 
-
-                const roomFee = Number(roomData.entryFee) || 0;
-                
-                const uData = userSnap.data();
-                const safeBal = Number(uData.balance) || 0;
-                const safeWalletBal = Number(uData.walletBalance) || 0;
-
-                const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
-
-                transaction.update(userRef, { 
-                    balance: safeBal + roomFee,
-                    walletBalance: safeWalletBal + roomFee
-                });
-                
-                transaction.update(roomRef, { players: updatedPlayers });
-
-                const txId = `${uid}_auto_refund_${liveId}`;
-                const txRef = doc(db, 'transactions', txId);
-                transaction.set(txRef, {
-                    userId: uid, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Arena Auto Refund (Host Left)', timestamp: serverTimestamp()
-                });
-
-                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
-                transaction.set(activityRef, {
-                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
-                    sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
-                    title: 'Arena Auto Refund (Host Left)', timestamp: serverTimestamp()
-                });
-            });
-        } catch (e) {
-            console.log("Auto refund error:", e);
-        }
-    };
-
     useEffect(() => {
         if (!liveId || !visible || isHost) return;
         const parentRoomRef = doc(db, actualCollection, liveId);
@@ -166,7 +112,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
             if (snap.exists()) {
                 const data = snap.data();
                 if (data.status === 'ended' || data.status === 'CANCELLED') {
-                    forceRefundOnHostDrop();
+                    handleHostDropExit();
                 }
             }
         });
@@ -174,56 +120,29 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         return () => unsubParent();
     }, [liveId, visible, isHost, actualCollection]);
 
-    const forceRefundOnHostDrop = async () => {
+    // 🆓 Host dropped / room ended: just remove the player from the arena and close (no wallet logic)
+    const handleHostDropExit = async () => {
         if (!auth.currentUser || isProcessing) return;
         const uid = auth.currentUser.uid;
         try {
             await runTransaction(db, async (transaction) => {
                 const gameSnap = await transaction.get(roomRef);
-                const userRef = doc(db, 'users', uid);
-                const userSnap = await transaction.get(userRef);
 
-                if (!gameSnap.exists() || !userSnap.exists()) return;
+                if (!gameSnap.exists()) return;
                 const gameData = gameSnap.data();
 
-                if (gameData.status === 'FINISHED' || gameData.status === 'CANCELLED' || gameData.refunded) return;
+                if (gameData.status === 'FINISHED' || gameData.status === 'CANCELLED') return;
 
                 const currentPlayers = gameData.players || [];
                 const myPlayerObj = currentPlayers.find((p: any) => p.id === uid);
                 if (!myPlayerObj) return; 
 
-                const roomFee = Number(gameData.entryFee) || 0;
-                if (roomFee === 0) return;
-
-                const uData = userSnap.data();
-                const safeBal = Number(uData.balance) || 0;
-                const safeWalletBal = Number(uData.walletBalance) || 0;
-
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
-
-                transaction.update(userRef, { 
-                    balance: safeBal + roomFee,
-                    walletBalance: safeWalletBal + roomFee
-                });
-                
                 transaction.update(roomRef, { players: updatedPlayers });
-
-                const txId = `${uid}_force_refund_${liveId}`;
-                const txRef = doc(db, 'transactions', txId);
-                transaction.set(txRef, {
-                    userId: uid, type: 'GAME_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Arena Refund (Host Disconnected)', timestamp: serverTimestamp()
-                });
-
-                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
-                transaction.set(activityRef, {
-                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
-                    sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
-                    title: 'Arena Refund (Host Disconnected)', timestamp: serverTimestamp()
-                });
             });
             onClose(); 
         } catch (e) {
-            console.log("Force refund error:", e);
+            console.log("Host drop exit error:", e);
         }
     };
 
@@ -236,12 +155,10 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 if (!snap.exists() || data?.status === 'FINISHED' || data?.status === 'CANCELLED') {
                     setDoc(roomRef, { 
                         status: 'WAITING', 
-                        entryFee: entryFee, 
                         isFeeLocked: false,
                         hostId: auth.currentUser?.uid, 
                         players: [], 
                         deck: [], 
-                        refunded: false, 
                         createdAt: serverTimestamp() 
                     });
                     setMatchResults(null);
@@ -268,7 +185,6 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 const data = docSnap.data();
                 if (data.status) setGameStatus(data.status);
                 if (data.players) setPlayers(data.players);
-                if (data.entryFee !== undefined) setEntryFee(data.entryFee);
                 if (data.isFeeLocked !== undefined) setIsFeeLocked(data.isFeeLocked);
                 if (data.hostId) setHostId(data.hostId);
                 if (data.deck) setDeck(data.deck);
@@ -300,22 +216,15 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     setMatchResults({
                         isTie: data.isTie,
                         winnerIds: data.winnerIds,
-                        rewardPerWinner: data.rewardPerWinner,
-                        expertBeans: data.expertBeans,
-                        totalPool: data.totalPool,
-                        adminCommission: data.adminCommission,
                         rankedPlayers: data.rankedPlayers || data.players 
                     });
 
                     if (isHost && !data.payoutProcessed) {
-                        processMasterPayout();
+                        finalizeMatchResults();
                     }
                 }
 
                 if (data.status === 'CANCELLED') {
-                    if (!isHost) {
-                        handleAutoRefundOnCancel();
-                    }
                     onClose(); 
                 }
             }
@@ -340,7 +249,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 setTimeLeftToCross(prev => {
                     if (prev <= 1) {
                         clearInterval(playTimer);
-                        if (!isHost && myStatus === 'playing') {
+                        if (myStatus === 'playing') {
                             handleTimeOutElimination();
                         }
                         return 0;
@@ -354,26 +263,20 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         return () => { if(playTimer) clearInterval(playTimer); }
     }, [gameStatus, myStatus, isHost]);
 
-    const updateRoomFee = async (fee: number) => {
-        if (isFeeLocked) return; 
-        try {
-            setEntryFee(fee); 
-            await setDoc(roomRef, { entryFee: fee }, { merge: true });
-        } catch (e) { console.log("Fee Update Error: ", e); }
-    };
-
-    const lockRoomFee = async () => {
+    // 🆓 Host opens the arena lobby (no fee, no diamonds)
+    const openArena = async () => {
         try {
             await setDoc(roomRef, { isFeeLocked: true }, { merge: true });
-        } catch (e) { console.log("Lock Error", e); }
+        } catch (e) { console.log("Open Arena Error", e); }
     };
 
-    const unlockRoomFee = async () => {
+    const closeArenaLobby = async () => {
         try {
             await setDoc(roomRef, { isFeeLocked: false }, { merge: true });
-        } catch (e) { console.log("Unlock Error", e); }
+        } catch (e) { console.log("Close Lobby Error", e); }
     };
 
+    // 🆓 Works for both Host and Players (Host can now play too)
     const handleJoinArena = async () => {
         if (!auth.currentUser || isProcessing || !isFeeLocked) return;
         setIsProcessing(true);
@@ -383,37 +286,18 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
         try {
             await runTransaction(db, async (transaction) => {
-                const userRef = doc(db, 'users', uid);
-                const userSnap = await transaction.get(userRef);
                 const roomSnap = await transaction.get(roomRef);
 
-                if (!userSnap.exists() || !roomSnap.exists()) throw "Data missing! Arena setup might be incomplete.";
-                
-                const uData = userSnap.data();
-                const safeBal = Number(uData.balance) || 0;
-                const safeWalletBal = Number(uData.walletBalance) || 0;
-                const effectiveBalance = Math.max(safeBal, safeWalletBal); 
+                if (!roomSnap.exists()) throw "Data missing! Arena setup might be incomplete.";
                 
                 const roomData = roomSnap.data();
-                const roomFee = Number(roomData.entryFee) || 0;
                 const currentPlayers = roomData.players || [];
 
                 if (currentPlayers.find((p: any) => p.id === uid)) throw "Already joined";
                 if (currentPlayers.length >= MAX_PLAYERS) throw "Arena Full";
-                if (effectiveBalance < roomFee) throw `Insufficient Balance. You need ${roomFee} 💎 to join.`;
 
-                transaction.update(userRef, { 
-                    balance: Math.max(0, safeBal - roomFee),
-                    walletBalance: Math.max(0, safeWalletBal - roomFee)
-                });
-                
                 transaction.update(roomRef, {
                     players: [...currentPlayers, { id: uid, name: uName, avatar: avatar, status: 'playing', progress: 0, score: 0, joinedAt: Date.now() }]
-                });
-
-                const txRef = doc(db, 'transactions', `${uid}_arena_${Date.now()}`);
-                transaction.set(txRef, {
-                    userId: uid, type: 'ARENA_ENTRY', amount: roomFee, status: 'SUCCESS', title: 'Memory Match Arena Entry', timestamp: serverTimestamp()
                 });
             });
             Alert.alert("Success!", "You joined the Arena. Waiting for launch.");
@@ -430,11 +314,9 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
         try {
             await runTransaction(db, async (transaction) => {
-                const userRef = doc(db, 'users', uid);
                 const roomSnap = await transaction.get(roomRef);
-                const userSnap = await transaction.get(userRef);
 
-                if (!roomSnap.exists() || !userSnap.exists()) throw "Data missing";
+                if (!roomSnap.exists()) throw "Data missing";
                 const roomData = roomSnap.data();
 
                 if (roomData.status !== 'WAITING') throw "Arena already active! Can't exit now.";
@@ -444,35 +326,10 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                 if (!myPlayerObj) throw "You are not in the arena";
 
-                const roomFee = Number(roomData.entryFee) || 0;
-                
-                const uData = userSnap.data();
-                const safeBal = Number(uData.balance) || 0;
-                const safeWalletBal = Number(uData.walletBalance) || 0;
-                
                 const updatedPlayers = currentPlayers.filter((p: any) => p.id !== uid);
-
-                transaction.update(userRef, { 
-                    balance: safeBal + roomFee,
-                    walletBalance: safeWalletBal + roomFee
-                });
-                
                 transaction.update(roomRef, { players: updatedPlayers });
-
-                const txId = `${uid}_refund_${liveId}_${Date.now()}`; 
-                const txRef = doc(db, 'transactions', txId);
-                transaction.set(txRef, {
-                    userId: uid, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Memory Match Arena Refund', timestamp: serverTimestamp()
-                });
-
-                const activityRef = doc(db, 'users', uid, 'activityHistory', txId);
-                transaction.set(activityRef, {
-                    type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
-                    sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
-                    title: 'Memory Match Arena Refund', timestamp: serverTimestamp()
-                });
             });
-            Alert.alert("Refunded 🎖️", "You left the arena. Access Requirement has been refunded to your wallet.");
+            Alert.alert("Left Arena 🎖️", "You left the arena.");
         } catch (e: any) {
             Alert.alert("Exit Failed", e.toString());
         }
@@ -482,11 +339,11 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
     const handleHostClose = async () => {
         if (isHost && (gameStatus === 'WAITING' || gameStatus === 'SHUFFLING' || gameStatus === 'PLAYING') && players.length > 0) {
             Alert.alert(
-                "Cancel Arena & Refund?",
-                "Closing now will cancel the arena and refund all participants.",
+                "Cancel Arena?",
+                "Closing now will cancel the arena for all participants.",
                 [
                     { text: "Cancel", style: "cancel" },
-                    { text: "Yes, Refund All", style: "destructive", onPress: async () => {
+                    { text: "Yes, Cancel Arena", style: "destructive", onPress: async () => {
                         setIsProcessing(true);
                         try {
                             await runTransaction(db, async (transaction) => {
@@ -494,43 +351,13 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 if(!roomSnap.exists()) return;
                                 const data = roomSnap.data();
 
-                                if (data.status === 'CANCELLED' || data.refunded === true) { return; }
+                                if (data.status === 'CANCELLED') { return; }
 
-                                const currentPlayers = data.players || [];
-                                const roomFee = Number(data.entryFee) || 0;
-
-                                const userSnapsPromises = currentPlayers.map((p: any) => transaction.get(doc(db, 'users', p.id)));
-                                const userSnaps = await Promise.all(userSnapsPromises);
-
-                                currentPlayers.forEach((p: any, index: number) => {
-                                    const uSnap = userSnaps[index];
-                                    if(uSnap.exists()){
-                                        const uData = uSnap.data();
-                                        const safeBal = Number(uData.balance) || 0;
-                                        const safeWalletBal = Number(uData.walletBalance) || 0;
-                                        
-                                        transaction.update(uSnap.ref, { 
-                                            balance: safeBal + roomFee,
-                                            walletBalance: safeWalletBal + roomFee
-                                        });
-                                        
-                                        const txId = `${p.id}_host_cancel_${liveId}`;
-                                        const txRef = doc(db, 'transactions', txId);
-                                        transaction.set(txRef, { userId: p.id, type: 'ARENA_REFUND', amount: roomFee, status: 'SUCCESS', title: 'Host Cancelled Refund', timestamp: serverTimestamp() });
-
-                                        const activityRef = doc(db, 'users', p.id, 'activityHistory', txId);
-                                        transaction.set(activityRef, {
-                                            type: 'ARENA_REFUND', status: 'REFUNDED', gameName: 'MEMORY MATCH ARENA',
-                                            sessionId: 'memory_match', entryFee: roomFee, winAmount: roomFee, lossAmount: 0,
-                                            title: 'Host Cancelled Refund', timestamp: serverTimestamp()
-                                        });
-                                    }
-                                });
-                                transaction.update(roomRef, { status: 'CANCELLED', players: [], refunded: true });
+                                transaction.update(roomRef, { status: 'CANCELLED', players: [] });
                             });
                             onClose();
                         } catch (e) {
-                            Alert.alert("Error", "Could not refund users properly.");
+                            Alert.alert("Error", "Could not cancel the arena properly.");
                         }
                         setIsProcessing(false);
                     }}
@@ -543,7 +370,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
     const launchLiveMatch = async () => {
         if (players.length < MIN_PLAYERS) {
-            Alert.alert("Waiting for Challengers ⏳", `Need at least ${MIN_PLAYERS} participants to share rewards!`);
+            Alert.alert("Waiting for Challengers ⏳", `Need at least ${MIN_PLAYERS} participants to start the match!`);
             return;
         }
         try {
@@ -565,7 +392,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
     };
 
     const handleTimeOutElimination = async () => {
-        if (!auth.currentUser || isHost) return;
+        if (!auth.currentUser) return;
         
         try {
             const snap = await getDoc(roomRef);
@@ -603,7 +430,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
     };
 
     const handleCardPress = async (index: number) => {
-        if (!auth.currentUser || isHost || gameStatus !== 'PLAYING' || myStatus !== 'playing') return;
+        if (!auth.currentUser || gameStatus !== 'PLAYING' || myStatus !== 'playing') return;
         if (isChecking || isFrozen || isBlackout || myOpenCards.includes(index) || myMatchedPairs.includes(deck[index])) return;
 
         const newOpen = [...myOpenCards, index];
@@ -694,7 +521,8 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         }
     };
 
-    const processMasterPayout = async () => {
+    // 🆓 No payout anymore. Host only ranks the players and marks the match as processed.
+    const finalizeMatchResults = async () => {
         if (isProcessing || !isHost) return;
         setIsProcessing(true);
 
@@ -709,35 +537,8 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                 const currentPlayers = data.players || [];
                 if (currentPlayers.length === 0) return; 
 
-                const actualHostId = data.hostId || auth.currentUser?.uid; 
                 const winnerIds = data.winnerIds || [];
-
-                const winnerRefs = winnerIds.map((id: string) => doc(db, 'users', id));
-                const hostRef = actualHostId ? doc(db, 'users', actualHostId) : null;
-                
-                const liveRef = (liveId && actualHostId) ? doc(db, actualCollection, liveId) : null;
-
-                const winnerSnaps = await Promise.all(winnerRefs.map((ref: any) => transaction.get(ref)));
-                const hostSnap = hostRef ? await transaction.get(hostRef) : null;
-                const liveSnap = liveRef ? await transaction.get(liveRef) : null;
-
-                const rawEntryFee = Number(data.entryFee) || 0;
-                const totalPool = rawEntryFee * currentPlayers.length;
                 const isTie = winnerIds.length > 1; 
-                
-                let rewardPerWinner = 0;
-                let adminCommission = 0; 
-                let expertBeans = 0; 
-                
-                if (winnerIds.length > 0) {
-                    const totalWinnerReward = Math.floor(totalPool * 0.75); 
-                    rewardPerWinner = Math.floor(totalWinnerReward / winnerIds.length);
-                    adminCommission = Math.floor(totalPool * 0.15); 
-                    expertBeans = Math.floor(totalPool * 0.10); 
-                } else {
-                    expertBeans = Math.floor(totalPool * 0.10); 
-                    adminCommission = totalPool - expertBeans; 
-                }
 
                 const ranked = [...currentPlayers].sort((a, b) => {
                     if (a.status === 'won' && b.status !== 'won') return -1;
@@ -745,63 +546,14 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     return (b.score || 0) - (a.score || 0);
                 });
 
-                if (winnerIds.length > 0) {
-                    winnerIds.forEach((wId: string, index: number) => {
-                        const wSnap = winnerSnaps[index];
-                        if (wSnap && wSnap.exists()) {
-                            const wData = wSnap.data() || {};
-                            const currentSafeBalance = Number(wData.balance) || 0;
-                            const currentSafeWallet = Number(wData.walletBalance) || 0;
-                            
-                            transaction.update(wSnap.ref, { 
-                                balance: currentSafeBalance + rewardPerWinner,
-                                walletBalance: currentSafeWallet + rewardPerWinner
-                            });
-                            
-                            const winTxRef = doc(db, 'transactions', `${wId}_win_${Date.now()}`);
-                            transaction.set(winTxRef, { userId: wId, type: 'ARENA_REWARD', amount: rewardPerWinner, status: 'SUCCESS', title: 'Memory Match Arena Winner', timestamp: serverTimestamp() });
-                        }
-                    });
-                }
-
-                if (hostSnap && hostSnap.exists() && actualHostId) {
-                    const eData = hostSnap.data() || {};
-                    const safeEBeans = Number(eData.beans) || 0;
-                    const safeEBalance = Number(eData.balance) || 0;
-                    const safeWalletBal = Number(eData.walletBalance) || 0;
-                    const safeBeansBal = Number(eData.beansBalance) || 0;
-                    const safeTotalEarned = Number(eData.totalBeansEarned) || 0;
-
-                    transaction.update(hostSnap.ref, { 
-                        beans: safeEBeans + expertBeans,
-                        balance: safeEBalance + expertBeans,
-                        walletBalance: safeWalletBal + expertBeans,
-                        beansBalance: safeBeansBal + expertBeans,
-                        totalBeansEarned: safeTotalEarned + expertBeans
-                    });
-                    
-                    const expertTxRef = doc(db, 'transactions', `${actualHostId}_commission_${Date.now()}`);
-                    transaction.set(expertTxRef, { userId: actualHostId, type: 'HOST_BONUS', amount: expertBeans, currency: 'DIAMONDS', status: 'SUCCESS', title: 'Arena Host Bonus', timestamp: serverTimestamp() });
-                }
-
-                if (liveSnap && liveSnap.exists()) {
-                    const lData = liveSnap.data() || {};
-                    const safeEarned = Number(lData.earnedBeans) || 0;
-                    transaction.update(liveSnap.ref, { earnedBeans: safeEarned + expertBeans });
-                }
-
                 transaction.update(roomRef, {
                     payoutProcessed: true,
                     rankedPlayers: ranked, 
-                    isTie: isTie,
-                    totalPool: totalPool,
-                    rewardPerWinner: rewardPerWinner,
-                    expertBeans: expertBeans,
-                    adminCommission: adminCommission 
+                    isTie: isTie
                 });
             });
         } catch (e) {
-            console.error("Payout error:", e);
+            console.error("Finalize results error:", e);
         }
         setIsProcessing(false);
     };
@@ -813,6 +565,10 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
         const w = players.find(p => p.id === matchResults.winnerIds?.[0]);
         return w ? `${w.name.toUpperCase()} WON! 🏆` : "UNKNOWN";
     };
+
+    const topScore = matchResults?.rankedPlayers?.length
+        ? Math.max(...matchResults.rankedPlayers.map((p: any) => p.score || 0))
+        : 0;
 
     return (
         <Modal visible={visible} animationType="slide" transparent>
@@ -842,11 +598,11 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     {gameStatus === 'WAITING' && (
                         <ScrollView contentContainerStyle={{ paddingBottom: 30 }} showsVerticalScrollIndicator={false}>
                             <View style={styles.lobbyStateWrapper}>
-                                <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY LOCK (${lobbyTimeLeft}s)` : 'WAITING FOR HOST TO LOCK ARENA PASS...'}</Text>
+                                <Text style={styles.lobbyHelperText}>{isFeeLocked ? `ARENA LOBBY OPEN (${lobbyTimeLeft}s)` : 'WAITING FOR HOST TO OPEN ARENA...'}</Text>
                                 
                                 <View style={styles.entryFeeContainer}>
                                     <Text style={styles.feeLabel}>ARENA PASS:</Text>
-                                    <Text style={styles.feeValueText}>🪙 {entryFee} Diamonds</Text>
+                                    <Text style={styles.feeValueText}>🎮 FREE TO PLAY</Text>
                                 </View>
 
                                 <View style={styles.playerPoolRow}>
@@ -879,58 +635,48 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 </View>
 
                                 {isHost && !isFeeLocked && (
-                                    <View style={{ width: '100%', marginBottom: 20 }}>
-                                        <Text style={[styles.feeLabel, { marginBottom: 10 }]}>SELECT ARENA PASS (DIAMONDS)</Text>
-                                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingHorizontal: 5 }}>
-                                            {ENTRY_FEES.map(fee => (
-                                                <TouchableOpacity 
-                                                    key={fee} 
-                                                    onPress={() => updateRoomFee(fee)} 
-                                                    style={[styles.feeChip, entryFee === fee && styles.feeChipActive]}
-                                                >
-                                                    <Text style={[styles.feeChipText, entryFee === fee && styles.feeChipTextActive]}>{fee} 💎</Text>
-                                                </TouchableOpacity>
-                                            ))}
-                                        </ScrollView>
-                                        <TouchableOpacity onPress={lockRoomFee} style={[styles.arcadeLaunchBtn, { width: '100%', marginTop: 20 }]}>
+                                    <View style={{ width: '100%', marginBottom: 20, alignItems: 'center' }}>
+                                        <TouchableOpacity onPress={openArena} style={[styles.arcadeLaunchBtn, { width: '100%', marginTop: 20 }]}>
                                             <LinearGradient colors={['#A855F7', '#7E22CE']} style={StyleSheet.absoluteFill} />
-                                            <Text style={[styles.launchBtnLabel, { color: '#FFF' }]}>🔒 LOCK {entryFee}💎 & OPEN ARENA</Text>
+                                            <Text style={[styles.launchBtnLabel, { color: '#FFF' }]}>🚀 OPEN ARENA</Text>
                                         </TouchableOpacity>
                                     </View>
                                 )}
                                 
                                 {isHost && isFeeLocked && (
                                     <View style={{ width: '100%', marginBottom: 20, alignItems: 'center' }}>
-                                        <Text style={[styles.feeLabel, { marginBottom: 10, color: '#F59E0B' }]}>🔒 ARENA PASS LOCKED</Text>
+                                        <Text style={[styles.feeLabel, { marginBottom: 10, color: '#F59E0B' }]}>✅ ARENA OPEN</Text>
                                         <TouchableOpacity onPress={launchLiveMatch} style={styles.arcadeLaunchBtn}>
                                             <LinearGradient colors={['#00F2FE', '#059669']} style={StyleSheet.absoluteFill} />
                                             <Text style={styles.launchBtnLabel}>START 60s MEMORY MATCH</Text>
                                         </TouchableOpacity>
                                         
                                         {players.length === 0 && (
-                                            <TouchableOpacity onPress={unlockRoomFee} style={{marginTop: 15, padding: 10}}>
-                                                <Text style={{color: '#94A3B8', fontWeight: 'bold', fontSize: 12}}>🔓 UNLOCK & EDIT PASS</Text>
+                                            <TouchableOpacity onPress={closeArenaLobby} style={{marginTop: 15, padding: 10}}>
+                                                <Text style={{color: '#94A3B8', fontWeight: 'bold', fontSize: 12}}>🔓 CLOSE LOBBY</Text>
                                             </TouchableOpacity>
                                         )}
                                     </View>
                                 )}
 
-                                {!isHost && isFeeLocked && !hasJoined && (
+                                {isFeeLocked && !hasJoined && (
                                     <TouchableOpacity onPress={handleJoinArena} disabled={isProcessing} style={styles.arcadeLaunchBtn}>
                                         <LinearGradient colors={['#F59E0B', '#D97706']} style={StyleSheet.absoluteFill} />
-                                        <Text style={styles.launchBtnLabel}>{isProcessing ? 'PROCESSING...' : `JOIN ARENA (${entryFee} 💎)`}</Text>
+                                        <Text style={styles.launchBtnLabel}>{isProcessing ? 'PROCESSING...' : 'JOIN ARENA'}</Text>
                                     </TouchableOpacity>
                                 )}
 
                                 {!isHost && !isFeeLocked && (
-                                    <Text style={[styles.waitServerSignalText, { color: '#F59E0B' }]}>⏳ Waiting for host to lock arena pass...</Text>
+                                    <Text style={[styles.waitServerSignalText, { color: '#F59E0B' }]}>⏳ Waiting for host to open the arena...</Text>
                                 )}
 
-                                {!isHost && hasJoined && (
+                                {hasJoined && (
                                     <View style={{ alignItems: 'center', width: '100%' }}>
-                                        <Text style={styles.waitServerSignalText}>You are in! Awaiting expert to launch... ({lobbyTimeLeft}s)</Text>
+                                        <Text style={styles.waitServerSignalText}>
+                                            {isHost ? `You joined as a player! Start when ready. (${lobbyTimeLeft}s)` : `You are in! Awaiting expert to launch... (${lobbyTimeLeft}s)`}
+                                        </Text>
                                         <TouchableOpacity onPress={handleExitArena} disabled={isProcessing} style={[styles.arcadeLaunchBtn, { marginTop: 15, backgroundColor: 'transparent', borderWidth: 1, borderColor: '#EF4444', elevation: 0 }]}>
-                                            <Text style={[styles.launchBtnLabel, { color: '#EF4444' }]}>{isProcessing ? 'WAIT...' : 'EXIT & REFUND'}</Text>
+                                            <Text style={[styles.launchBtnLabel, { color: '#EF4444' }]}>{isProcessing ? 'WAIT...' : 'EXIT ARENA'}</Text>
                                         </TouchableOpacity>
                                     </View>
                                 )}
@@ -940,8 +686,8 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                     <Ionicons name="warning" size={14} color="#F59E0B" />
                                     <Text style={styles.warningText}>
                                         {isHost 
-                                            ? "HOST WARNING: Do not close app from recent tabs. Users will lose diamonds, and action will be taken against your account."
-                                            : "NOTE: Do not close app during gameplay. Refunds apply ONLY for verified host disconnections."}
+                                            ? "HOST WARNING: Do not close app from recent tabs. It will end the arena for all players, and action may be taken against your account."
+                                            : "NOTE: Do not close app during gameplay. If the host disconnects, the arena will end."}
                                     </Text>
                                 </View>
                             </View>
@@ -973,7 +719,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 <Text style={{ color: '#EF4444', fontSize: 10, fontWeight: '900', textShadowColor: 'rgba(239,68,68,0.5)', textShadowRadius: 5 }}>☠️ TRAP: -200</Text>
                             </View>
 
-                            {!isHost && myStatus === 'playing' && (
+                            {myStatus === 'playing' && (
                                 <View style={styles.liveHudContainer}>
                                     <Text style={styles.hudScoreText}>SCORE: {myScore}</Text>
                                     <Text style={styles.hudComboText}>COMBO x{myCombo}</Text>
@@ -1014,8 +760,8 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                             <Ionicons name="warning" size={14} color="#F59E0B" />
                                             <Text style={styles.warningText}>
                                                 {isHost 
-                                                    ? "HOST WARNING: Do not close app from recent tabs. Users will lose diamonds, and action will be taken against your account."
-                                                    : "NOTE: Do not close app during gameplay. Refunds apply ONLY for verified host disconnections."}
+                                                    ? "HOST WARNING: Do not close app from recent tabs. It will end the arena for all players, and action may be taken against your account."
+                                                    : "NOTE: Do not close app during gameplay. If the host disconnects, the arena will end."}
                                             </Text>
                                         </View>
                                     )}
@@ -1026,7 +772,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                         return (
                                             <TouchableOpacity 
                                                 activeOpacity={0.8}
-                                                disabled={isHost || isChecking || isFrozen || isBlackout || isFlipped || myStatus !== 'playing' || gameStatus !== 'PLAYING'}
+                                                disabled={isChecking || isFrozen || isBlackout || isFlipped || myStatus !== 'playing' || gameStatus !== 'PLAYING'}
                                                 style={[
                                                     styles.card, 
                                                     isFlipped && styles.neonGlowBlue, 
@@ -1082,7 +828,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 )}
                             </View>
 
-                            {!isHost && (myStatus === 'eliminated' || myStatus === 'time_up') && timeLeftToCross <= 0 && (
+                            {(myStatus === 'eliminated' || myStatus === 'time_up') && timeLeftToCross <= 0 && (
                                 <Text style={styles.eliminatedText} numberOfLines={1} adjustsFontSizeToFit>TIME OUT! WAITING FOR RESULTS... ⏳</Text>
                             )}
 
@@ -1093,7 +839,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                     {gameStatus === 'FINISHED' && matchResults && (
                         <View style={styles.terminalStateWrapper}>
                             
-                            {!isHost && matchResults.winnerIds?.includes(auth.currentUser?.uid) && (
+                            {matchResults.winnerIds?.includes(auth.currentUser?.uid) && (
                                 <View style={[StyleSheet.absoluteFill, { zIndex: 999 }]} pointerEvents="none">
                                     <LottieView
                                         source={require('../assets/images/fireworks.json')} 
@@ -1127,22 +873,15 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
                             <View style={styles.resultDetailsCard}>
                                 <View style={styles.resultRow}>
-                                    <Text style={styles.resultLabel}>{matchResults.winnerIds?.length === 0 ? 'Nobody Scored:' : (matchResults.isTie ? 'Shared Reward (Per Winner):' : 'Winner Takes (75%):')}</Text>
+                                    <Text style={styles.resultLabel}>{matchResults.winnerIds?.length === 0 ? 'Nobody Scored:' : (matchResults.isTie ? 'Tied Winners:' : 'Winning Score:')}</Text>
                                     <Text style={[styles.resultValue, matchResults.winnerIds?.length === 0 ? { color: '#EF4444' } : { color: '#10B981' }]}>
-                                        {matchResults.winnerIds?.length === 0 ? 'LOST' : `+${matchResults.rewardPerWinner || 0} 💎`}
+                                        {matchResults.winnerIds?.length === 0 ? 'NO WINNER' : (matchResults.isTie ? `${matchResults.winnerIds?.length} 🏆` : `${topScore} Pts`)}
                                     </Text>
                                 </View>
                                 <View style={styles.resultRow}>
-                                    <Text style={styles.resultLabel}>Total Pool:</Text>
-                                    <Text style={styles.resultValue}>{matchResults.totalPool} 💎</Text>
+                                    <Text style={styles.resultLabel}>Total Players:</Text>
+                                    <Text style={styles.resultValue}>{matchResults.rankedPlayers?.length || 0}</Text>
                                 </View>
-                                
-                                {isHost && (
-                                    <View style={styles.resultRow}>
-                                        <Text style={[styles.resultLabel, { color: '#F59E0B' }]}>Host Bonus (10%):</Text>
-                                        <Text style={[styles.resultValue, { color: '#F59E0B' }]}>+{matchResults.expertBeans || 0} 🎖️</Text>
-                                    </View>
-                                )}
                             </View>
                             
                             <TouchableOpacity onPress={onClose} style={[styles.arcadeLaunchBtn, { marginTop: 10, height: 50 }]}>
@@ -1298,10 +1037,5 @@ const styles = StyleSheet.create({
     resultDetailsCard: { width: '100%', backgroundColor: 'rgba(30,41,59,0.7)', borderRadius: 18, padding: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 15 },
     resultRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginVertical: 6 },
     resultLabel: { color: '#94A3B8', fontSize: 13, fontWeight: '800' },
-    resultValue: { color: '#FFF', fontSize: 16, fontWeight: '900' },
-
-    feeChip: { backgroundColor: 'rgba(30,41,59,0.7)', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
-    feeChipActive: { backgroundColor: 'rgba(168, 85, 247, 0.2)', borderColor: '#A855F7' },
-    feeChipText: { color: '#94A3B8', fontSize: 13, fontWeight: '800' },
-    feeChipTextActive: { color: '#A855F7', fontSize: 15, fontWeight: '900' }
+    resultValue: { color: '#FFF', fontSize: 16, fontWeight: '900' }
 });

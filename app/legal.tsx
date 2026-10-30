@@ -114,7 +114,7 @@ export default function LegalScreen() {
                         <Text style={styles.headerTitle}>LEGAL CENTER</Text>
                         <View style={styles.syncRow}>
                             <View style={[styles.pulseDot, { backgroundColor: userTier.color }]} />
-                            <Text style={styles.headerSub}>LAST UPDATED: MARCH 2026</Text>
+                            <Text style={styles.headerSub}>LAST UPDATED: OCTOBER 2026</Text>
                         </View>
                     </View>
                 </View>
@@ -156,8 +156,8 @@ export default function LegalScreen() {
                             <ContentSection 
                                 icon="gamepad-variant"
                                 color="#0EA5E9"
-                                title="2. Digital Assets & Skill Games" 
-                                text="Diamonds are virtual in-app assets used to connect with hosts and as Entry Fees for skill-based games (Reflex Arena, Memory Match). Diamonds have NO real-world monetary value and cannot be cashed out. We strictly prohibit gambling. All purchases are non-refundable." 
+                                title="2. Digital Assets & Free Games" 
+                                text="Diamonds are virtual in-app assets used to connect with hosts and to send virtual gifts. In-app games (Reflex Arena, Memory Match) are completely free to play: no Entry Fee is charged and no Diamond rewards are paid out. Diamonds have NO real-world monetary value and cannot be cashed out. We strictly prohibit gambling. All purchases are non-refundable." 
                             />
                             <ContentSection 
                                 icon="alert-octagon"
@@ -181,7 +181,7 @@ export default function LegalScreen() {
                                 icon="wifi-off"
                                 color="#8B5CF6"
                                 title="6. Game Disconnect Policy" 
-                                text="In the event of a network disconnection during skill-based games, our system evaluates the match state to prevent unfair Diamond loss. Validated disconnections or server errors will be resolved automatically to protect your digital assets." 
+                                text="In the event of a network disconnection during a free game, the match may end or restart automatically. Since games are free to play, no Diamonds are charged or lost because of a disconnection." 
                             />
                         </View>
                     ) : (

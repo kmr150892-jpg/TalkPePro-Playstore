@@ -143,13 +143,13 @@ export default function HistoryScreen() {
         });
 
         // ==========================================
-        // 🔥 2. SATTI FIX: 100% PROFILE SCREEN MATCH ENGINE
+        // 🔥 2. FREE-TO-PLAY ACTIVITY LOG ENGINE
+        // (No entry fee / reward / refund tracking)
         // ==========================================
         let rawActivityGames: any[] = [];
-        let rawTxGames: any[] = [];
 
         const processGames = () => {
-            const combinedGames = [...rawActivityGames, ...rawTxGames].sort((a, b) => {
+            const combinedGames = [...rawActivityGames].sort((a, b) => {
                 const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
                 const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
                 return timeB - timeA;
@@ -159,78 +159,27 @@ export default function HistoryScreen() {
             setGameHistory(uniqueGames);
         };
 
-        const qTransactions = query(collection(db, 'transactions'), where('userId', '==', user.uid));
-        const unsubTransactions = onSnapshot(qTransactions, (snap) => {
-            rawTxGames = snap.docs.map(doc => {
-                const d = doc.data();
-                const typeStr = String(d.type || '').toUpperCase();
-                const titleStr = String(d.title || '').toUpperCase();
-                const statusStr = String(d.status || '').toUpperCase();
-                
-                const isRefund = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
-                const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
-                const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
-
-                if (isRefund || isGameReward || isGameEntry) {
-                    let amount = Math.abs(Number(String(d.amount || d.diamonds || d.diamondsAdded || d.entryFee || d.winAmount || d.price || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-                    
-                    let isWinner = false;
-                    let isCancelOrRefund = false;
-                    let finalStatus = "LOSS";
-
-                    if (isRefund) {
-                        isCancelOrRefund = true;
-                        finalStatus = "REFUNDED";
-                    } else if (isGameReward) {
-                        isWinner = true;
-                        finalStatus = "REWARD";
-                    } else if (isGameEntry) {
-                        finalStatus = "ENTRY"; 
-                    }
-
-                    return {
-                        id: doc.id,
-                        gameName: (d.title || d.type || "ARENA SESSION").replace(/WINNER/gi, 'REWARD').replace(/GIFT/gi, 'REWARD'),
-                        entryFee: isGameEntry || isCancelOrRefund ? amount : 0,
-                        rewardPerWinner: isWinner ? amount : 0,
-                        totalPool: d.pool || d.totalPool || 0,
-                        score: d.score || 0,
-                        status: finalStatus,
-                        isWinner,
-                        isCancelOrRefund,
-                        timestamp: d.timestamp || d.createdAt,
-                        ...d
-                    };
-                }
-                return null;
-            }).filter(Boolean);
-            processGames();
-        });
-
         const unsubActivity = onSnapshot(collection(db, "users", user.uid, "activityHistory"), (snap) => {
             rawActivityGames = snap.docs.map(doc => {
                 const d = doc.data();
                 let rawStatus = String(d.status || d.gameStatus || 'COMPLETED').toUpperCase();
                 
-                const isCancelOrRefund = rawStatus.includes("CANCEL") || rawStatus.includes("REFUND");
-                const isWinner = rawStatus.includes("WIN") || rawStatus === "WON" || rawStatus.includes("REWARD") || Number(String(d.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
+                const isCancelled = rawStatus.includes("CANCEL") || rawStatus.includes("REFUND");
+                const isWinner = !isCancelled && (rawStatus.includes("WIN") || rawStatus === "WON");
 
-                let finalStatus = "LOSS";
-                if (isCancelOrRefund) finalStatus = "REFUNDED";
-                else if (isWinner) finalStatus = "REWARD";
+                let finalStatus = "PLAYED";
+                if (isCancelled) finalStatus = "CANCELLED";
+                else if (isWinner) finalStatus = "WON";
 
                 return {
+                    ...d,
                     id: doc.id,
                     gameName: d.gameName || d.title || "ACTIVITY LOG",
-                    entryFee: Number(d.entryFee || d.entryAmount || d.betAmount || 0),
-                    rewardPerWinner: Number(d.rewardPerWinner || d.winAmount || d.payout || 0),
-                    totalPool: Number(d.totalPool || d.pool || 0),
                     score: d.score || 0,
                     status: finalStatus,
                     isWinner,
-                    isCancelOrRefund,
-                    timestamp: d.timestamp || d.createdAt,
-                    ...d
+                    isCancelled,
+                    timestamp: d.timestamp || d.createdAt
                 };
             });
             processGames();
@@ -238,7 +187,7 @@ export default function HistoryScreen() {
 
         return () => { 
             unsubUser(); unsubscribeHistory(); unsubscribeGifts(); 
-            unsubTransactions(); unsubActivity(); 
+            unsubActivity(); 
         };
     }, [user, userData]);
 
@@ -373,32 +322,26 @@ export default function HistoryScreen() {
         );
     };
 
-    // 🔥 THE 100% UNIFIED GAME HISTORY RENDERER 🔥
+    // 🔥 FREE-TO-PLAY ACTIVITY LOG RENDERER (no diamonds / fees / rewards) 🔥
     const renderGameHistoryItem = ({ item }: { item: any }) => {
-        let displayAmount = "";
-        let amountColor = '#F59E0B'; // 🔥 Default to Orange/Gold instead of Red
-        let badgeLabel = 'ENTRY';
-        let payoutDisplay = 0;
-        let badgeBg = 'rgba(245, 158, 11, 0.8)'; // Orange/Gold BG
+        let accentColor = userTier.color;
+        let accentSecondary = userTier.secondaryColor;
+        let badgeBg = userTier.color;
+        let badgeLabel = 'PLAYED';
+        let badgeIcon: any = 'game-controller';
 
-        if (item.isCancelOrRefund) {
-            amountColor = '#3B82F6'; 
+        if (item.isCancelled) {
+            accentColor = '#3B82F6';
+            accentSecondary = 'rgba(59, 130, 246, 0.4)';
             badgeBg = 'rgba(59, 130, 246, 0.8)';
-            displayAmount = `+${item.entryFee.toLocaleString()}`;
-            badgeLabel = 'REFUNDED';
-            payoutDisplay = item.entryFee;
+            badgeLabel = 'CANCELLED';
+            badgeIcon = 'alert-circle';
         } else if (item.isWinner) {
-            amountColor = '#10B981';
+            accentColor = '#10B981';
+            accentSecondary = 'rgba(16, 185, 129, 0.4)';
             badgeBg = 'rgba(16, 185, 129, 0.8)';
-            displayAmount = `+${item.rewardPerWinner.toLocaleString()}`;
-            badgeLabel = 'WINNER';
-            payoutDisplay = item.rewardPerWinner;
-        } else {
-            amountColor = '#F59E0B'; // 🔥 RED கலர் எடுத்துட்டு Orange/Amber (#F59E0B) மாத்தியாச்சு
-            badgeBg = 'rgba(245, 158, 11, 0.8)';
-            displayAmount = `-${item.entryFee.toLocaleString()}`;
-            badgeLabel = 'ENTRY';
-            payoutDisplay = 0;
+            badgeLabel = 'WON';
+            badgeIcon = 'trophy';
         }
         
         const gameIcon = item.gameName.toUpperCase().includes("REFLEX") ? "flash" : (item.gameName.toUpperCase().includes("MEMORY") ? "extension-puzzle" : "game-controller");
@@ -417,20 +360,20 @@ export default function HistoryScreen() {
             <Animated.View style={[styles.cardContainer, { transform: [{ translateY: floatAnim }] }]}>
                 <View style={styles.stealthHistoryCard}>
                     <View style={[styles.quadBorder, { 
-                        borderLeftColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : userTier.color), 
-                        borderRightColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : userTier.color), 
-                        borderTopColor: item.isCancelOrRefund ? 'rgba(59, 130, 246, 0.4)' : (item.isWinner ? 'rgba(16, 185, 129, 0.4)' : userTier.secondaryColor), 
-                        borderBottomColor: item.isCancelOrRefund ? 'rgba(59, 130, 246, 0.4)' : (item.isWinner ? 'rgba(16, 185, 129, 0.4)' : userTier.secondaryColor) 
+                        borderLeftColor: accentColor, 
+                        borderRightColor: accentColor, 
+                        borderTopColor: accentSecondary, 
+                        borderBottomColor: accentSecondary 
                     }]} />
                     
-                    <View style={[styles.sessionBadge, { backgroundColor: badgeBg, borderWidth: 1, borderColor: amountColor }]}>
-                         <Ionicons name={item.isCancelOrRefund ? "alert-circle" : (item.isWinner ? "trophy" : "game-controller")} size={10} color="#FFF" />
+                    <View style={[styles.sessionBadge, { backgroundColor: badgeBg, borderWidth: 1, borderColor: accentColor }]}>
+                         <Ionicons name={badgeIcon} size={10} color="#FFF" />
                          <Text style={[styles.sessionTypeText, { color: '#FFF' }]} numberOfLines={1}>{badgeLabel}</Text>
                     </View>
                     
                     <View style={styles.cardHeader}>
-                        <View style={[styles.expertThumbRing, { borderColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : userTier.color), shadowColor: item.isCancelOrRefund ? amountColor : userTier.color, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-                            <Ionicons name={gameIcon} size={28} color={item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : userTier.color)} />
+                        <View style={[styles.expertThumbRing, { borderColor: accentColor, shadowColor: accentColor, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }]}>
+                            <Ionicons name={gameIcon} size={28} color={accentColor} />
                         </View>
                         
                         <View style={styles.expertInfo}>
@@ -439,40 +382,16 @@ export default function HistoryScreen() {
                         </View>
 
                         <View style={styles.costContainer}>
-                             <Text style={[styles.costText, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit>{displayAmount}</Text>
-                             <Ionicons name="diamond" size={12} color={amountColor} />
+                             <Text style={[styles.costText, { color: accentColor }]} numberOfLines={1} adjustsFontSizeToFit>FREE</Text>
+                             <Ionicons name="game-controller-outline" size={12} color={accentColor} />
                         </View>
                     </View>
 
                     <View style={styles.statsRow}>
-                        {/* 🔥 WINNER மற்றும் REFUNDED-க்கு Entry காட்டாது! 🔥 */}
-                        {!(item.isWinner || item.isCancelOrRefund) && (
-                            <>
-                                <View style={styles.statItem}>
-                                    <Ionicons name="ticket-outline" size={13} color="#64748B" />
-                                    <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>Entry: {item.entryFee} 💎</Text>
-                                </View>
-                                <View style={styles.vDivider} />
-                            </>
-                        )}
-                        
                         <View style={styles.statItem}>
-                            <Ionicons name="trophy-outline" size={13} color={item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : "#F59E0B")} />
-                            <Text style={[styles.statValueText, { color: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : '#F59E0B') }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.status}</Text>
+                            <Ionicons name="trophy-outline" size={13} color={accentColor} />
+                            <Text style={[styles.statValueText, { color: accentColor }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.status}</Text>
                         </View>
-
-                        {/* WINNER & REFUNDED-க்கு மட்டும் Redeem Details காட்டும் */}
-                        {(item.isWinner || item.isCancelOrRefund) && (
-                            <>
-                                <View style={styles.vDivider} />
-                                <View style={styles.statItem}>
-                                    <Ionicons name="cash-outline" size={13} color={amountColor} />
-                                    <Text style={[styles.statValueText, { color: amountColor, fontWeight: '900' }]} numberOfLines={1} adjustsFontSizeToFit>
-                                        {item.isWinner ? 'REWARD' : 'REFUND'}: {payoutDisplay} 💎
-                                    </Text>
-                                </View>
-                            </>
-                        )}
                     </View>
                 </View>
             </Animated.View>

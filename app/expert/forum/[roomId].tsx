@@ -963,7 +963,7 @@ export default function ExpertForumRoomScreen() {
                 onClose={() => setGlassVisible(false)} 
                 liveId={roomId} 
                 isHost={user?.uid === roomData?.hostId} 
-                entryFee={50}
+                entryFee={0}
             />
 
             <Modal visible={ringModalVisible} transparent animationType="fade">
@@ -1090,13 +1090,13 @@ export default function ExpertForumRoomScreen() {
                         <ScrollView style={{ maxHeight: height * 0.35, marginBottom: 15 }} showsVerticalScrollIndicator={false}>
                             <Text style={styles.disclaimerBodyText}>Welcome to TalkPe Pro Games! As a Host, please acknowledge your responsibilities:</Text>
                             
-                            <Text style={styles.disclaimerBullet}>🎮 <Text style={styles.disclaimerBold}>Host Role:</Text> You can only host the games (Reflex Arena & Memory Match) to engage your audience. Hosts cannot participate as players.</Text>
+                            <Text style={styles.disclaimerBullet}>🎮 <Text style={styles.disclaimerBold}>Host Role:</Text> You can host the games (Reflex Arena & Memory Match) to engage your audience. You can also join and play along with your audience.</Text>
                             
-                            <Text style={styles.disclaimerBullet}>🏆 <Text style={styles.disclaimerBold}>Host Reward:</Text> You will receive a 10% platform bonus based on the total diamonds spent by users playing your hosted game.</Text>
+                            <Text style={styles.disclaimerBullet}>🎁 <Text style={styles.disclaimerBold}>Free to Play:</Text> All games are completely free. There is no entry fee and no game rewards or commission for hosts or players.</Text>
 
                             <Text style={styles.disclaimerBullet}>⚠️ <Text style={styles.disclaimerBold}>Do Not Force Close:</Text> Never close or minimize the app while a game is active. This disrupts the session for users.</Text>
                             
-                            <Text style={styles.disclaimerBullet}>🧠 <Text style={styles.disclaimerBold}>Skill & Entertainment Only:</Text> These are strictly skill-based interactive features. Diamonds are virtual assets and users cannot cash them out.</Text>
+                            <Text style={styles.disclaimerBullet}>🧠 <Text style={styles.disclaimerBold}>Skill & Entertainment Only:</Text> These are strictly skill-based interactive features created purely for fun and entertainment.</Text>
                         </ScrollView>
 
                         <TouchableOpacity 
@@ -1105,7 +1105,7 @@ export default function ExpertForumRoomScreen() {
                             onPress={() => setDisclaimerChecked(!disclaimerChecked)}
                         >
                             <Ionicons name={disclaimerChecked ? "checkbox" : "square-outline"} size={24} color={disclaimerChecked ? "#10B981" : "#94A3B8"} />
-                            <Text style={styles.checkboxText}>I confirm that I understand my role as a Host, the 10% bonus structure, and agree not to disrupt active games.</Text>
+                            <Text style={styles.checkboxText}>I confirm that I understand my role as a Host, that games are free to play, and agree not to disrupt active games.</Text>
                         </TouchableOpacity>
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 20, paddingBottom: 20 }}>

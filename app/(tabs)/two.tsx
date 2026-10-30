@@ -1,4 +1,4 @@
-    import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import {
@@ -91,8 +91,6 @@ import { auth, db } from '../../firebaseConfig';
     const [totalGiftsSpent, setTotalGiftsSpent] = useState<number>(0);
     const [totalVideoCallSpent, setTotalVideoCallSpent] = useState<number>(0);
     const [totalSpentCalculated, setTotalSpentCalculated] = useState<number>(0); 
-    const [gameNetProfit, setGameNetProfit] = useState<number>(0); 
-    const [totalEntryFees, setTotalEntryFees] = useState<number>(0); 
     const [totalMinutes, setTotalMinutes] = useState<number>(0);
 
     // 🌀 COMPLEX ANIMATION ENGINE MATRIX
@@ -164,7 +162,6 @@ import { auth, db } from '../../firebaseConfig';
 
         let rawTransactions: any[] = [];
         let rawGifts: any[] = [];
-        let rawGames: any[] = []; 
         let rawCalls: any[] = []; // 🔥 Fetching calls globally here to sync everything properly
 
         const processAllLogs = () => {
@@ -216,14 +213,8 @@ import { auth, db } from '../../firebaseConfig';
                 return { ...t, _enrichedName: enrichedName };
             });
 
-            const mappedGames = rawGames.map(g => ({
-                ...g,
-                _source: 'game_history',
-                timestamp: g.timestamp || g.createdAt
-            }));
-
-            // Merge everything into history
-            const mergedLogs = [...validTransactions, ...enrichedGifts, ...mappedGames, ...mappedCallGifts];
+            // Merge everything into history (🎮 Game logs removed - game is now free-to-play)
+            const mergedLogs = [...validTransactions, ...enrichedGifts, ...mappedCallGifts];
 
             mergedLogs.sort((a, b) => {
                 const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.createdAt?.toMillis ? a.createdAt.toMillis() : 0);
@@ -274,78 +265,6 @@ import { auth, db } from '../../firebaseConfig';
             }, 0);
             setTotalVideoCallSpent(calcVideoCalls);
 
-            // 5. Calculate Activity Rewards & EXCLUSIVE Game Entry Fees Calculation 🔥
-            let totalGameEntryFeesAll = 0; 
-            let totalGameRefundsAll = 0; 
-            
-            const calcGameNet = rawGames.reduce((sum, log) => {
-                const rawStatus = String(log.status || '').toUpperCase();
-                const typeStr = String(log.type || '').toUpperCase();
-                const titleStr = String(log.gameName || log.title || '').toUpperCase();
-                
-                const isWin = rawStatus.includes('WIN') || rawStatus === 'WON' || rawStatus.includes('REWARD') || typeStr.includes('WIN') || typeStr.includes('REWARD') || titleStr.includes('WIN') || titleStr.includes('REWARD') || Number(String(log.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
-                
-                // 🔥 If game is Cancelled or Refunded, completely isolate it
-                const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || rawStatus.includes('REFUND');
-                const isFailedOrCancelled = rawStatus.includes('CANCEL') || rawStatus.includes('FAIL');
-                
-                let winVal = 0;
-                let entryVal = Math.abs(Number(String(log.entryFee || log.entryAmount || log.Amount || log.fee || log.cost || 0).replace(/[^0-9.-]+/g, ''))) || 0; 
-
-                if (isRefundTx) {
-                    totalGameRefundsAll += entryVal;
-                } else if (!isFailedOrCancelled) {
-                    totalGameEntryFeesAll += entryVal; 
-                }
-
-                if (isWin && !isFailedOrCancelled && !isRefundTx) {
-                    winVal = Math.abs(Number(String(log.winAmount || log.rewardAmount || log.amount || log.prize || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-                    return sum + winVal;
-                }
-                return sum; 
-            }, 0);
-
-            const calcTxGameNet = rawTransactions.reduce((sum, log) => {
-                const typeStr = String(log.type || '').toUpperCase();
-                const titleStr = String(log.title || '').toUpperCase();
-                const statusStr = String(log.status || '').toUpperCase();
-                
-                let amountVal = Math.abs(Number(String(log.amount || log.diamonds || log.diamondsAdded || log.winAmount || log.entryFee || log.price || log.fee || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-
-                // 🔥 1. ABSOLUTE STOP FOR ANY REFUND
-                const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
-                const isGameRelated = typeStr.includes('ARENA') || typeStr.includes('GAME') || typeStr.includes('ENTRY') || 
-                                        titleStr.includes('ARENA') || titleStr.includes('GAME') || titleStr.includes('ENTRY');
-
-                if (isRefundTx) {
-                    if (isGameRelated) {
-                        totalGameRefundsAll += amountVal;
-                    }
-                    return sum; // 🛑 STRICTLY STOP HERE IF IT IS A REFUND
-                }
-
-                // 🔥 2. ONLY PROCEED IF IT IS DEFINITELY NOT A REFUND
-                const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
-                const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
-                const isFailed = statusStr.includes('CANCEL') || statusStr.includes('FAIL');
-
-                if (isGameReward) {
-                    if (!isFailed) return sum + amountVal;
-                    return sum;
-                }
-                
-                if (isGameEntry) {
-                    if (!isFailed) {
-                        totalGameEntryFeesAll += amountVal;
-                    }
-                    return sum;
-                }
-
-                return sum;
-            }, 0);
-
-            setGameNetProfit(calcGameNet + calcTxGameNet);
-
             // 6. Calculate ALL General Refunds
             const calcRefunds = rawTransactions.reduce((sum, log) => {
                 if (String(log.type || '').toUpperCase().includes('REFUND')) {
@@ -357,9 +276,6 @@ import { auth, db } from '../../firebaseConfig';
             // 7. Calculate Total Spent / Asset Utilized (Removed calcRedeemed here)
             const grandTotalSpent = Math.max(0, calcVideoCalls + calcGifts);
             setTotalSpentCalculated(grandTotalSpent);
-
-            // 🔥 TOTAL ARENA ENTRY : Accurately subtract Game Refunds
-            setTotalEntryFees(Math.max(0, totalGameEntryFeesAll - totalGameRefundsAll));
 
             setLedgerLoading(false);
         };
@@ -377,12 +293,6 @@ import { auth, db } from '../../firebaseConfig';
             processAllLogs();
         });
 
-        const qGameHistory = query(collection(db, "users", user.uid, "activityHistory"));
-        const unsubGameHistory = onSnapshot(qGameHistory, (snap) => {
-            rawGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-            processAllLogs();
-        });
-
         // 🔥 Calls Snapshot integration
         const qCalls = query(collection(db, "calls"), where("callerId", "==", user.uid));
         const unsubCalls = onSnapshot(qCalls, (snap) => {
@@ -390,7 +300,7 @@ import { auth, db } from '../../firebaseConfig';
             processAllLogs();
         });
 
-        return () => { unsubHistory(); unsubGifts(); unsubGameHistory(); unsubCalls(); };
+        return () => { unsubHistory(); unsubGifts(); unsubCalls(); };
     }, [user, userData]);
 
     // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display across all screens!
@@ -554,31 +464,19 @@ import { auth, db } from '../../firebaseConfig';
                                     <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>ASSETS UTILIZED</Text>
                                 </View>
                                 <View style={[styles.ledgerBox, borderType1]}>
-                                    <View style={[styles.iconCircle, { backgroundColor: gameNetProfit >= 0 ? '#10B98130' : '#EF444430' }]}><MaterialCommunityIcons name="gamepad-variant" size={24} color={gameNetProfit >= 0 ? "#10B981" : "#EF4444"} /></View>
-                                    <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{gameNetProfit > 0 ? '+' : ''}{gameNetProfit} 💎</Text>
-                                    <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>ACTIVITY REWARDS</Text>
-                                </View>
-                                <View style={[styles.ledgerBox, borderType2]}>
                                     <View style={[styles.iconCircle, { backgroundColor: '#A855F730' }]}><MaterialCommunityIcons name="gift" size={24} color="#A855F7" /></View>
                                     <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalGiftsSpent} 💎</Text>
                                     <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>REWARDS SENT</Text>
                                 </View>
-                                <View style={[styles.ledgerBox, borderType1]}>
+                                <View style={[styles.ledgerBox, borderType2]}>
                                     <View style={[styles.iconCircle, { backgroundColor: '#3B82F630' }]}><MaterialCommunityIcons name="video-vintage" size={24} color="#3B82F6" /></View>
                                     <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalVideoCallSpent} 💎</Text>
                                     <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CALL SPENT</Text>
                                 </View>
-                                <View style={[styles.ledgerBox, borderType2]}>
+                                <View style={[styles.ledgerBox, borderType1, { width: '100%' }]}>
                                     <View style={[styles.iconCircle, { backgroundColor: '#F59E0B30' }]}><MaterialCommunityIcons name="clock-outline" size={24} color="#F59E0B" /></View>
                                     <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalMinutes}</Text>
                                     <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>CALL MINS</Text>
-                                </View>
-                                
-                                {/* 🔥 NEW TOTAL ARENA ENTRY BOX 🔥 */}
-                                <View style={[styles.ledgerBox, borderType2, { width: '100%' }]}>
-                                    <View style={[styles.iconCircle, { backgroundColor: '#EF444430' }]}><MaterialCommunityIcons name="sword-cross" size={24} color="#EF4444" /></View>
-                                    <Text style={styles.statBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{totalEntryFees.toLocaleString()} 💎</Text>
-                                    <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>TOTAL ARENA ENTRY</Text>
                                 </View>
                             </View>
                         )}

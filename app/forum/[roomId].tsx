@@ -238,7 +238,7 @@ export default function PartyRoomScreen() {
         }
 
         try {
-            // OLD GAMBLING GAMES COMPLETELY REMOVED FROM HERE
+            // GAMES ARE NOW FREE-TO-PLAY: NO ENTRY FEE / NO REWARD SETTLEMENT TO WAIT FOR
             // NO ACTIVE GAMES TO WAIT FOR ANYMORE
 
             // 🔥 FORUM EXIT IMMEDIATELY 🔥
@@ -825,6 +825,7 @@ export default function PartyRoomScreen() {
                         </View>
                     </View>
 
+                    {/* 🔥 FREE-TO-PLAY: isHost={false} => HOST ALSO JOINS AS A NORMAL PLAYER (NO HOST-ONLY CONTROL, NO FEE) 🔥 */}
                     <LiveGameSheet 
                         visible={gameVisible} 
                         onClose={() => setGameVisible(false)} 
@@ -833,14 +834,13 @@ export default function PartyRoomScreen() {
                         userWalletBalance={userData?.balance || 0} 
                     />
 
-                    {/* ✅ MEMORY MATCH ARENA */}
+                    {/* ✅ MEMORY MATCH ARENA (FREE-TO-PLAY, HOST ALSO PLAYS AS PLAYER) */}
                     <MemoryMatch
                         visible={glassPathVisible}
                         onClose={() => setGlassPathVisible(false)}
                         liveId={roomId}
                         isHost={false}
                         userWalletBalance={userData?.balance || 0}
-                        entryFee={0}
                     />
 
                     <View style={styles.chatArea}>
@@ -1127,7 +1127,7 @@ export default function PartyRoomScreen() {
                 </View>
             </Modal>
 
-            {/* 🔥 NEW: PLAY STORE COMPLIANT SKILL GAMING DISCLAIMER MODAL 🔥 */}
+            {/* 🔥 NEW: PLAY STORE COMPLIANT FREE-TO-PLAY GAMING DISCLAIMER MODAL 🔥 */}
             <Modal visible={disclaimerVisible} transparent animationType="slide">
                 <View style={styles.actionSheetOverlay}>
                     <View style={[styles.actionSheetContainer, { paddingBottom: 30 }]}>
@@ -1140,9 +1140,9 @@ export default function PartyRoomScreen() {
                             
                             <Text style={styles.disclaimerBullet}>🧠 <Text style={styles.disclaimerBold}>100% Skill-Based:</Text> Games like Reflex Arena and Memory Match are purely based on user skill, speed, and memory. This is NOT a game of chance or gambling.</Text>
                             
-                            <Text style={styles.disclaimerBullet}>💎 <Text style={styles.disclaimerBold}>Virtual Assets Only:</Text> The Entry Fee is paid in virtual Diamonds. Diamonds hold NO real-world monetary value.</Text>
+                            <Text style={styles.disclaimerBullet}>🎮 <Text style={styles.disclaimerBold}>Free to Play:</Text> All games are completely free. There is NO entry fee and NO Diamonds are deducted to play.</Text>
                             
-                            <Text style={styles.disclaimerBullet}>🚫 <Text style={styles.disclaimerBold}>No Cash Withdrawals:</Text> Diamonds won in this game are for in-app use only. Users CANNOT withdraw, cash out, or exchange Diamonds for real money.</Text>
+                            <Text style={styles.disclaimerBullet}>🚫 <Text style={styles.disclaimerBold}>No Rewards or Cash Value:</Text> Games do not give any Diamond rewards or prizes. Nothing in these games can be withdrawn, cashed out, or exchanged for real money.</Text>
                             
                             <Text style={styles.disclaimerBullet}>🎭 <Text style={styles.disclaimerBold}>Entertainment Only:</Text> This feature is provided strictly for entertainment and interactive networking purposes.</Text>
                         </ScrollView>
@@ -1153,7 +1153,7 @@ export default function PartyRoomScreen() {
                             onPress={() => setDisclaimerChecked(!disclaimerChecked)}
                         >
                             <Ionicons name={disclaimerChecked ? "checkbox" : "square-outline"} size={24} color={disclaimerChecked ? "#10B981" : "#94A3B8"} />
-                            <Text style={styles.checkboxText}>I confirm that I have read and agree to the Skill Gaming Policy. I understand that Diamonds cannot be converted to real cash.</Text>
+                            <Text style={styles.checkboxText}>I confirm that I have read and agree to the Skill Gaming Policy. I understand that the games are free and carry no monetary rewards.</Text>
                         </TouchableOpacity>
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 20 }}>

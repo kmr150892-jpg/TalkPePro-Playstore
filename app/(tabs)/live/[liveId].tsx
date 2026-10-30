@@ -200,49 +200,8 @@ export default function UserLiveViewScreen() {
         isClosingRef.current = true;
         leaveChannel(); // Safely disconnect Agora so video/audio stops immediately
 
-        // 🔥 SATTI FIX: FRONTEND AUTO-REFUND LOGIC (USER-SIDE SAFEGUARD) 🔥
-        // Expert app kill pannalum, user screen close aagurathuku munnadi refund adichudum!
-        try {
-            if (auth.currentUser) {
-                const roomRef = doc(db, 'lives', liveId, 'games', 'reflex_arena');
-                const roomSnap = await getDoc(roomRef);
-                
-                if (roomSnap.exists()) {
-                    const roomData = roomSnap.data();
-                    // Check if game was stuck in WAITING or PLAYING state
-                    if (roomData.status === 'WAITING' || roomData.status === 'PLAYING') {
-                        const players = roomData.players || [];
-                        const iAmPlaying = players.some((p: any) => p.id === auth.currentUser?.uid);
-                        
-                        if (iAmPlaying) {
-                            const entryFee = Number(roomData.entryFee) || 0;
-                            if (entryFee > 0) {
-                                const userRef = doc(db, "users", auth.currentUser.uid);
-                                // 1. Instantly refund the wallet
-                                await updateDoc(userRef, { balance: increment(entryFee) });
-                                
-                                // 2. Add to transaction history
-                                await addDoc(collection(db, "users", auth.currentUser.uid, "activityHistory"), {
-                                    type: "ARENA_REFUND",
-                                    status: "REFUNDED",
-                                    gameName: "REFLEX BLITZ ARENA",
-                                    sessionId: "reflex_arena",
-                                    entryFee: entryFee,
-                                    winAmount: entryFee,
-                                    lossAmount: 0,
-                                    title: "Arena Pass Refund (Host Left)",
-                                    timestamp: serverTimestamp()
-                                });
-                                console.log(`✅ Frontend Auto-Refund processed successfully for ${entryFee} diamonds!`);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (e) {
-            console.log("Frontend Refund Check Error:", e);
-        }
-        // ----------------------------------------------------------------------
+        // 🆕 FREE-TO-PLAY UPDATE: Frontend auto-refund block removed.
+        // Games are free now, so there is no entry fee to refund and no wallet change happens here.
 
         // 🔥 SATTI FIX: GAME WAITING LOGIC REMOVED! INSTANT EXIT & CLOSE ALL MODALS 🔥
         setExitMessage("Host left the broadcast. Exiting... 🚀");
@@ -1388,9 +1347,10 @@ export default function UserLiveViewScreen() {
                             
                             <Text style={styles.disclaimerBullet}>🧠 <Text style={styles.disclaimerBold}>100% Skill-Based:</Text> Games like Reflex Arena and Memory Match are purely based on user skill, speed, and memory. This is NOT a game of chance or gambling.</Text>
                             
-                            <Text style={styles.disclaimerBullet}>💎 <Text style={styles.disclaimerBold}>Virtual Assets Only:</Text> The Entry Fee is paid in virtual Diamonds. Diamonds hold NO real-world monetary value.</Text>
+                            {/* 🆕 FREE-TO-PLAY UPDATE: Disclaimer text updated (no entry fee / no rewards) */}
+                            <Text style={styles.disclaimerBullet}>🆓 <Text style={styles.disclaimerBold}>Free to Play:</Text> Games like Reflex Arena and Memory Match are free. There is no entry fee and no prize or reward of any kind.</Text>
                             
-                            <Text style={styles.disclaimerBullet}>🚫 <Text style={styles.disclaimerBold}>No Cash Withdrawals:</Text> Diamonds won in this game are for in-app use only. Users CANNOT withdraw, cash out, or exchange Diamonds for real money.</Text>
+                            <Text style={styles.disclaimerBullet}>🚫 <Text style={styles.disclaimerBold}>No Wallet Impact:</Text> Playing or winning does not add or deduct Diamonds or any real money.</Text>
                             
                             <Text style={styles.disclaimerBullet}>🎭 <Text style={styles.disclaimerBold}>Entertainment Only:</Text> This feature is provided strictly for entertainment and interactive networking purposes.</Text>
                         </ScrollView>
@@ -1401,7 +1361,7 @@ export default function UserLiveViewScreen() {
                             onPress={() => setDisclaimerChecked(!disclaimerChecked)}
                         >
                             <Ionicons name={disclaimerChecked ? "checkbox" : "square-outline"} size={24} color={disclaimerChecked ? "#10B981" : "#94A3B8"} />
-                            <Text style={styles.checkboxText}>I confirm that I have read and agree to the Skill Gaming Policy. I understand that Diamonds cannot be converted to real cash.</Text>
+                            <Text style={styles.checkboxText}>I confirm that I have read and agree to the Gaming Policy. I understand these games are for fun only and have no rewards.</Text>
                         </TouchableOpacity>
 
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginTop: 20, paddingBottom: 20 }}>
