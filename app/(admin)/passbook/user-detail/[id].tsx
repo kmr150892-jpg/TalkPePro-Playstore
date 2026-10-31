@@ -64,13 +64,12 @@ export default function UserPassbookDetail() {
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
-  // Tabs: Merged Admin STATS with User Tabs + FLAGS
-  const [activeTab, setActiveTab] = useState<'STATS' | 'CALLS' | 'GAMES' | 'REWARDS' | 'FLAGS'>('STATS'); 
+  // 🆕 UPDATE: 'GAMES' (ACTIVITY) tab removed. Tabs: STATS, CALLS, REWARDS, FLAGS
+  const [activeTab, setActiveTab] = useState<'STATS' | 'CALLS' | 'REWARDS' | 'FLAGS'>('STATS'); 
 
   // 🔥 USER HISTORY STATES
   const [history, setHistory] = useState<any[]>([]);
-  const [gameHistory, setGameHistory] = useState<any[]>([]); 
-  const [totalGames, setTotalGames] = useState<number>(0); 
+  // 🆕 UPDATE: gameHistory and totalGames states removed
   const [flags, setFlags] = useState<any[]>([]); // 🔥 SATTI UPDATE: Flag Data State
 
   // 🔥 ADMIN EXACT STATS VARIABLES
@@ -78,9 +77,8 @@ export default function UserPassbookDetail() {
   const [totalGiftsSpent, setTotalGiftsSpent] = useState<number>(0);
   const [totalVideoCallSpent, setTotalVideoCallSpent] = useState<number>(0);
   const [totalSpentCalculated, setTotalSpentCalculated] = useState<number>(0); 
-  const [gameNetProfit, setGameNetProfit] = useState<number>(0); 
+  // 🆕 UPDATE: gameNetProfit and totalEntryFees states removed
   const [totalRedeemed, setTotalRedeemed] = useState<number>(0); 
-  const [totalEntryFees, setTotalEntryFees] = useState<number>(0); 
   const [totalMinutes, setTotalMinutes] = useState<number>(0);
 
   // 🌀 COMPLEX ANIMATION ENGINE MATRIX
@@ -130,8 +128,7 @@ export default function UserPassbookDetail() {
       let rawTransactions: any[] = [];
       let rawGifts: any[] = [];
       let rawRequests: any[] = []; 
-      let rawActivityGames: any[] = []; 
-      let rawTxGames: any[] = [];
+      // 🆕 UPDATE: rawActivityGames and rawTxGames removed
       let rawCalls: any[] = []; 
 
       const processAllLogs = () => {
@@ -176,86 +173,7 @@ export default function UserPassbookDetail() {
           setTotalMinutes(Math.floor(totalSecs / 60));
           setHistory(combinedHistory);
 
-          // ==========================================
-          // 🔥 2. GAME HISTORY ENGINE
-          // ==========================================
-          const mappedTxGames = rawTxGames.map(d => {
-              const typeStr = String(d.type || '').toUpperCase();
-              const titleStr = String(d.title || '').toUpperCase();
-              const statusStr = String(d.status || '').toUpperCase();
-              
-              const isRefund = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
-              const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
-              const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
-
-              if (isRefund || isGameReward || isGameEntry) {
-                  let amount = Math.abs(Number(String(d.amount || d.diamonds || d.diamondsAdded || d.entryFee || d.winAmount || d.price || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-                  
-                  let isWinner = false;
-                  let isCancelOrRefund = false;
-                  let finalStatus = "LOSS";
-
-                  if (isRefund) {
-                      isCancelOrRefund = true;
-                      finalStatus = "REFUNDED";
-                  } else if (isGameReward) {
-                      isWinner = true;
-                      finalStatus = "REWARD";
-                  } else if (isGameEntry) {
-                      finalStatus = "ENTRY"; 
-                  }
-
-                  return {
-                      id: d.id,
-                      gameName: (d.title || d.type || "ARENA SESSION").replace(/WINNER/gi, 'REWARD').replace(/GIFT/gi, 'REWARD'),
-                      entryFee: isGameEntry || isCancelOrRefund ? amount : 0,
-                      rewardPerWinner: isWinner ? amount : 0,
-                      totalPool: d.pool || d.totalPool || 0,
-                      score: d.score || 0,
-                      status: finalStatus,
-                      isWinner,
-                      isCancelOrRefund,
-                      timestamp: d.timestamp || d.createdAt,
-                      ...d
-                  };
-              }
-              return null;
-          }).filter(Boolean);
-
-          const mappedActivityGames = rawActivityGames.map(d => {
-              let rawStatus = String(d.status || d.gameStatus || 'COMPLETED').toUpperCase();
-              
-              const isCancelOrRefund = rawStatus.includes("CANCEL") || rawStatus.includes("REFUND");
-              const isWinner = rawStatus.includes("WIN") || rawStatus === "WON" || rawStatus.includes("REWARD") || Number(String(d.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
-
-              let finalStatus = "LOSS";
-              if (isCancelOrRefund) finalStatus = "REFUNDED";
-              else if (isWinner) finalStatus = "REWARD";
-
-              return {
-                  id: d.id,
-                  gameName: d.gameName || d.title || "ACTIVITY LOG",
-                  entryFee: Number(d.entryFee || d.entryAmount || d.betAmount || 0),
-                  rewardPerWinner: Number(d.rewardPerWinner || d.winAmount || d.payout || 0),
-                  totalPool: Number(d.totalPool || d.pool || 0),
-                  score: d.score || 0,
-                  status: finalStatus,
-                  isWinner,
-                  isCancelOrRefund,
-                  timestamp: d.timestamp || d.createdAt,
-                  ...d
-              };
-          });
-
-          const combinedGames = [...mappedActivityGames, ...mappedTxGames].sort((a, b) => {
-              const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-              const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
-              return timeB - timeA;
-          });
-          const uniqueGames = Array.from(new Map(combinedGames.map(item => [item.id, item])).values());
-          setTotalGames(uniqueGames.length);
-          setGameHistory(uniqueGames);
-
+          // 🆕 UPDATE: Game history engine (activity log) removed from here.
 
           // ================= EXACT ADMIN STATS CALCULATION ENGINE =================
           const calcRecharge = rawTransactions.reduce((sum, log) => {
@@ -291,75 +209,7 @@ export default function UserPassbookDetail() {
           }, 0);
           setTotalRedeemed(calcRedeemed);
 
-          // 5. Calculate Activity Rewards & EXCLUSIVE Game Entry Fees Calculation 🔥
-          let totalGameEntryFeesAll = 0; 
-          let totalGameRefundsAll = 0; 
-          
-          const calcGameNet = rawActivityGames.reduce((sum, log) => {
-              const rawStatus = String(log.status || '').toUpperCase();
-              const typeStr = String(log.type || '').toUpperCase();
-              const titleStr = String(log.gameName || log.title || '').toUpperCase();
-              
-              const isWin = rawStatus.includes('WIN') || rawStatus === 'WON' || rawStatus.includes('REWARD') || typeStr.includes('WIN') || typeStr.includes('REWARD') || titleStr.includes('WIN') || titleStr.includes('REWARD') || Number(String(log.winAmount || 0).replace(/[^0-9.-]+/g, '')) > 0;
-              
-              const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || rawStatus.includes('REFUND');
-              const isFailedOrCancelled = rawStatus.includes('CANCEL') || rawStatus.includes('FAIL');
-              
-              let winVal = 0;
-              let entryVal = Math.abs(Number(String(log.entryFee || log.entryAmount || log.Amount || log.fee || log.cost || 0).replace(/[^0-9.-]+/g, ''))) || 0; 
-
-              if (isRefundTx) {
-                  totalGameRefundsAll += entryVal;
-              } else if (!isFailedOrCancelled) {
-                  totalGameEntryFeesAll += entryVal; 
-              }
-
-              if (isWin && !isFailedOrCancelled && !isRefundTx) {
-                  winVal = Math.abs(Number(String(log.winAmount || log.rewardAmount || log.amount || log.prize || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-                  return sum + winVal;
-              }
-              return sum; 
-          }, 0);
-
-          const calcTxGameNet = rawTransactions.reduce((sum, log) => {
-              const typeStr = String(log.type || '').toUpperCase();
-              const titleStr = String(log.title || '').toUpperCase();
-              const statusStr = String(log.status || '').toUpperCase();
-              
-              let amountVal = Math.abs(Number(String(log.amount || log.diamonds || log.diamondsAdded || log.winAmount || log.entryFee || log.price || log.fee || 0).replace(/[^0-9.-]+/g, ''))) || 0;
-
-              const isRefundTx = typeStr.includes('REFUND') || titleStr.includes('REFUND') || statusStr.includes('REFUND');
-              const isGameRelated = typeStr.includes('ARENA') || typeStr.includes('GAME') || typeStr.includes('ENTRY') || 
-                                    titleStr.includes('ARENA') || titleStr.includes('GAME') || titleStr.includes('ENTRY');
-
-              if (isRefundTx) {
-                  if (isGameRelated) {
-                      totalGameRefundsAll += amountVal;
-                  }
-                  return sum;
-              }
-
-              const isGameReward = typeStr.includes('WINNER') || typeStr.includes('REWARD') || titleStr.includes('WINNER') || titleStr.includes('REWARD') || statusStr.includes('WINNER') || statusStr.includes('REWARD');
-              const isGameEntry = typeStr.includes('ARENA_ENTRY') || typeStr.includes('GAME_ENTRY') || typeStr.includes('ARENA') || typeStr.includes('ENTRY') || titleStr.includes('ARENA') || titleStr.includes('ENTRY');
-              const isFailed = statusStr.includes('CANCEL') || statusStr.includes('FAIL');
-
-              if (isGameReward) {
-                  if (!isFailed) return sum + amountVal;
-                  return sum;
-              }
-              
-              if (isGameEntry) {
-                  if (!isFailed) {
-                      totalGameEntryFeesAll += amountVal;
-                  }
-                  return sum;
-              }
-
-              return sum;
-          }, 0);
-
-          setGameNetProfit(calcGameNet + calcTxGameNet);
-          setTotalEntryFees(Math.max(0, totalGameEntryFeesAll - totalGameRefundsAll));
+          // 🆕 UPDATE: Activity rewards & arena entry fee calculation removed from here.
           
           const grandTotalSpent = Math.max(0, calcVideoCalls + (calcGiftsFromNested + calcCallGifts) + calcRedeemed);
           setTotalSpentCalculated(grandTotalSpent);
@@ -375,7 +225,6 @@ export default function UserPassbookDetail() {
       const qHistory = query(collection(db, 'transactions'), where('userId', '==', id));
       const unsubHistory = onSnapshot(qHistory, (snap) => {
           rawTransactions = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          rawTxGames = rawTransactions;
           processAllLogs();
       });
 
@@ -406,11 +255,7 @@ export default function UserPassbookDetail() {
           processAllLogs();
       });
 
-      const qGameHistory = query(collection(db, "users", id as string, "activityHistory")); 
-      const unsubGameHistory = onSnapshot(qGameHistory, (snap) => {
-          rawActivityGames = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-          processAllLogs();
-      });
+      // 🆕 UPDATE: activityHistory listener (game activity log) removed from here.
 
       const qCalls = query(collection(db, "calls"), where("callerId", "==", id), orderBy("endedAt", "desc"));
       const unsubCalls = onSnapshot(qCalls, (snap) => {
@@ -451,7 +296,7 @@ export default function UserPassbookDetail() {
           setFlags(list);
       });
 
-      return () => { unsubUser(); unsubHistory(); unsubGifts(); unsubRequests(); unsubGameHistory(); unsubCalls(); unsubFlags(); };
+      return () => { unsubUser(); unsubHistory(); unsubGifts(); unsubRequests(); unsubCalls(); unsubFlags(); };
   }, [id]);
 
   if (!userData && !loading) return <View style={styles.loader}><Text style={{color: '#FFF'}}>Account record not found in secure vault.</Text></View>;
@@ -594,88 +439,7 @@ export default function UserPassbookDetail() {
       );
   };
 
-  const renderGameHistoryItem = ({ item }: { item: any }) => {
-      let displayAmount = "";
-      let amountColor = '#F59E0B'; 
-      let badgeLabel = 'ENTRY';
-      let payoutDisplay = 0;
-      let badgeBg = 'rgba(245, 158, 11, 0.8)'; 
-
-      if (item.isCancelOrRefund) {
-          amountColor = '#3B82F6'; badgeBg = 'rgba(59, 130, 246, 0.8)';
-          displayAmount = `+${item.entryFee.toLocaleString()}`; badgeLabel = 'REFUNDED'; payoutDisplay = item.entryFee;
-      } else if (item.isWinner) {
-          amountColor = '#10B981'; badgeBg = 'rgba(16, 185, 129, 0.8)';
-          displayAmount = `+${item.rewardPerWinner.toLocaleString()}`; badgeLabel = 'WINNER'; payoutDisplay = item.rewardPerWinner;
-      } else {
-          amountColor = '#F59E0B'; badgeBg = 'rgba(245, 158, 11, 0.8)';
-          displayAmount = `-${item.entryFee.toLocaleString()}`; badgeLabel = 'ENTRY'; payoutDisplay = 0;
-      }
-      
-      const gameIcon = item.gameName.toUpperCase().includes("REFLEX") ? "flash" : (item.gameName.toUpperCase().includes("MEMORY") ? "extension-puzzle" : "game-controller");
-
-      let displayTime = 'JUST NOW';
-      const timeVal = item.timestamp || item.createdAt;
-      if (timeVal?.toDate) displayTime = timeVal.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-      else if (timeVal?.seconds) displayTime = new Date(timeVal.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-      else if (typeof timeVal === 'string' || typeof timeVal === 'number') displayTime = new Date(timeVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-
-      return (
-          <Animated.View style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
-              <View style={styles.stealthHistoryCard}>
-                  <View style={[styles.quadBorderUI, { 
-                      borderLeftColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color), 
-                      borderRightColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color), 
-                      borderTopColor: item.isCancelOrRefund ? 'rgba(59, 130, 246, 0.4)' : (item.isWinner ? 'rgba(16, 185, 129, 0.4)' : rank.secondaryColor), 
-                      borderBottomColor: item.isCancelOrRefund ? 'rgba(59, 130, 246, 0.4)' : (item.isWinner ? 'rgba(16, 185, 129, 0.4)' : rank.secondaryColor) 
-                  }]} />
-                  <View style={[styles.sessionBadge, { backgroundColor: badgeBg, borderWidth: 1, borderColor: amountColor }]}>
-                       <Ionicons name={item.isCancelOrRefund ? "alert-circle" : (item.isWinner ? "trophy" : "game-controller")} size={10} color="#FFF" />
-                       <Text style={[styles.sessionTypeText, { color: '#FFF' }]} numberOfLines={1}>{badgeLabel}</Text>
-                  </View>
-                  <View style={styles.cardHeaderUI}>
-                      <View style={[styles.expertThumbRing, { borderColor: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color), shadowColor: item.isCancelOrRefund ? amountColor : rank.color, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-                          <Ionicons name={gameIcon} size={28} color={item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : rank.color)} />
-                      </View>
-                      <View style={styles.expertInfo}>
-                          <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{item.gameName.toUpperCase()}</Text>
-                          <Text style={styles.callDateText} numberOfLines={1}>{displayTime}</Text>
-                      </View>
-                      <View style={styles.costContainer}>
-                           <Text style={[styles.costText, { color: amountColor }]} numberOfLines={1} adjustsFontSizeToFit>{displayAmount}</Text>
-                           <Ionicons name="diamond" size={12} color={amountColor} />
-                      </View>
-                  </View>
-                  <View style={styles.statsRow}>
-                      {!(item.isWinner || item.isCancelOrRefund) && (
-                          <>
-                              <View style={styles.statItem}>
-                                  <Ionicons name="ticket-outline" size={13} color="#64748B" />
-                                  <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>Entry: {item.entryFee} 💎</Text>
-                              </View>
-                              <View style={styles.vDivider} />
-                          </>
-                      )}
-                      <View style={styles.statItem}>
-                          <Ionicons name="trophy-outline" size={13} color={item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : "#F59E0B")} />
-                          <Text style={[styles.statValueText, { color: item.isCancelOrRefund ? amountColor : (item.isWinner ? amountColor : '#F59E0B') }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.status}</Text>
-                      </View>
-                      {(item.isWinner || item.isCancelOrRefund) && (
-                          <>
-                              <View style={styles.vDivider} />
-                              <View style={styles.statItem}>
-                                  <Ionicons name="cash-outline" size={13} color={amountColor} />
-                                  <Text style={[styles.statValueText, { color: amountColor, fontWeight: '900' }]} numberOfLines={1} adjustsFontSizeToFit>
-                                      {item.isWinner ? 'REWARD' : 'REFUND'}: {payoutDisplay} 💎
-                                  </Text>
-                              </View>
-                          </>
-                      )}
-                  </View>
-              </View>
-          </Animated.View>
-      );
-  };
+  // 🆕 UPDATE: renderGameHistoryItem (game activity card renderer) removed.
 
   const renderDynamicProfileCard = () => {
     return (
@@ -750,9 +514,7 @@ export default function UserPassbookDetail() {
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'CALLS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('CALLS')}>
                 <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CALL LOG</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'GAMES' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('GAMES')}>
-                <Text style={[styles.tabText, activeTab === 'GAMES' && { color: '#FFF' }]} numberOfLines={1}>ACTIVITY</Text>
-            </TouchableOpacity>
+            {/* 🆕 UPDATE: "ACTIVITY" tab removed */}
             <TouchableOpacity style={[styles.tabBtn, activeTab === 'REWARDS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('REWARDS')}>
                 <Text style={[styles.tabText, activeTab === 'REWARDS' && { color: '#FFF' }]} numberOfLines={1}>REWARD</Text>
             </TouchableOpacity>
@@ -773,11 +535,11 @@ export default function UserPassbookDetail() {
                         <View style={styles.statsContainer}>
                             <StatBox icon="cash-plus" label="ASSETS ADDED" value={`${totalRechargeDiamonds} 💎`} color="#10B981" bgColor="rgba(16, 185, 129, 0.1)" />
                             <StatBox icon="diamond-stone" label="ASSETS UTILIZED" value={`${totalSpentCalculated} 💎`} color="#F43F5E" bgColor="rgba(244, 63, 94, 0.1)" />
-                            <StatBox icon="gamepad-variant" label="ACTIVITY REWARDS" value={`${gameNetProfit > 0 ? '+' : ''}${gameNetProfit} 💎`} color={gameNetProfit >= 0 ? "#10B981" : "#EF4444"} bgColor={gameNetProfit >= 0 ? "rgba(16, 185, 129, 0.1)" : "rgba(239, 68, 68, 0.1)"} />
+                            {/* 🆕 UPDATE: "ACTIVITY REWARDS" stat box removed */}
                             <StatBox icon="gift" label="REWARDS SENT" value={`${totalGiftsSpent} 💎`} color="#A855F7" bgColor="rgba(168, 85, 247, 0.1)" />
                             <StatBox icon="video-vintage" label="CALL SPENT" value={`${totalVideoCallSpent} 💎`} color="#3B82F6" bgColor="rgba(59, 130, 246, 0.1)" />
-                            <StatBox icon="clock-outline" label="CALL MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" />
-                            <StatBox icon="sword-cross" label="TOTAL ARENA ENTRY" value={`${totalEntryFees.toLocaleString()} 💎`} color="#EF4444" bgColor="rgba(239, 68, 68, 0.1)" width="100%" />
+                            {/* 🆕 UPDATE: "TOTAL ARENA ENTRY" stat box removed. CALL MINS now full width as the last box. */}
+                            <StatBox icon="clock-outline" label="CALL MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" width="100%" />
                         </View>
                     )}
                 </View>
@@ -802,24 +564,7 @@ export default function UserPassbookDetail() {
                 </View>
             )}
 
-            {/* GAMES TAB */}
-            {activeTab === 'GAMES' && (
-                <View>
-                    <View style={styles.talktimeHighlight}>
-                         <Text style={[styles.totalTalkLabel, { color: rank.color, marginBottom: 15 }]}>TOTAL TASKS COMPLETED: {totalGames}</Text>
-                    </View>
-                    {loading ? (
-                        <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
-                    ) : gameHistory.length > 0 ? (
-                        gameHistory.map((item, index) => <View key={item.id || index}>{renderGameHistoryItem({item})}</View>)
-                    ) : (
-                        <View style={styles.emptyBox}>
-                            <Ionicons name="game-controller-outline" size={48} color="rgba(255,255,255,0.2)" />
-                            <Text style={styles.emptyText}>No activity records documented.</Text>
-                        </View>
-                    )}
-                </View>
-            )}
+            {/* 🆕 UPDATE: GAMES (ACTIVITY) TAB content removed */}
 
             {/* REWARDS TAB */}
             {activeTab === 'REWARDS' && (

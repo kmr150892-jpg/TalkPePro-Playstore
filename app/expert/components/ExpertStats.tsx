@@ -38,27 +38,6 @@ const getLevelConfig = (beans: number) => {
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
 };
 
-const calculateLevel = (d: number) => {
-    if (d <= 200000) return "Silver";
-    if (d <= 1000000) return "Gold";
-    if (d <= 5000000) return "Diamond";
-    if (d <= 10000000) return "Legend";
-    if (d <= 50000000) return "Elite";
-    if (d <= 100000000) return "Master";
-    if (d <= 500000000) return "Grandmaster";
-    return "Godlike";
-};
-
-const TABS = [
-    { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
-    { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
-    { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
-    { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
-    { id: 'live_game_bonus', label: 'Broadcast Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
-    { id: 'party_game_bonus', label: 'Forum Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
-    { id: 'daily_bonus', label: 'Daily Bonus', icon: 'star-shooting', iconType: 'MaterialCommunityIcons' } 
-];
-
 export default function ExpertStats({ expertData }: { expertData: any }) {
     const router = useRouter(); 
     const [loading, setLoading] = useState(true);
@@ -68,10 +47,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     const [activeTab, setActiveTab] = useState(0); 
 
     const [breakdown, setBreakdown] = useState({
-        calls: 0, liveGifts: 0, partyGifts: 0, callGifts: 0, liveGames: 0, partyGames: 0, totalDeepGifts: 0
+        calls: 0, liveGifts: 0, partyGifts: 0, callGifts: 0, totalDeepGifts: 0
     });
 
-    // 🔥 SATTI FIX: NEW STATE TO OVERRIDE CORRUPTED DATABASE COUNTERS 🔥
     const [realTodayStats, setRealTodayStats] = useState<{calls: number, mins: number, beans: number} | null>(null);
 
     const [historyLogs, setHistoryLogs] = useState<any[]>([]); 
@@ -131,7 +109,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
         
         if (currentData.lastBonusDate !== localDateStr) {
-            
             if (bonusLock.current) return;
             bonusLock.current = true; 
 
@@ -227,7 +204,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             try {
                 let rawData: any[] = [];
                 
-                // 🔥 REAL-TIME DAILY CALCULATION VARIABLES 🔥
                 let calcTodayCalls = 0;
                 let calcTodayMins = 0;
                 const today = new Date();
@@ -240,7 +216,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     for (const docSnap of callsSnap.docs) {
                         const d = docSnap.data();
 
-                        // 🔥 ACCURATE TODAY STATS CALCULATION (Bypasses Corrupted DB Counters) 🔥
                         const timeVal = d.endedAt || d.createdAt;
                         if (timeVal) {
                             let logDate = new Date();
@@ -250,7 +225,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                             const logDateStr = (new Date(logDate.getTime() - offset)).toISOString().split('T')[0];
                             if (logDateStr === localDateStr) {
-                                // Only count calls that actually ended/connected
                                 if (d.status === 'ended' || d.status === 'completed' || d.duration > 0) {
                                     calcTodayCalls++;
                                     calcTodayMins += (Number(d.duration) || Number(d.callDuration) || 0) / 60;
@@ -265,7 +239,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 } catch(e) { console.log('Calls fetch error', e); }
 
-                // 2. TRANSACTIONS (Fallback & Daily Bonus)
+                // 2. TRANSACTIONS
                 try {
                     const userQ = query(collection(db, "transactions"), where("userId", "==", user.uid));
                     const expertQ = query(collection(db, "transactions"), where("expertId", "==", user.uid));
@@ -301,9 +275,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         let tType = '';
                         if (d.type === 'withdrawal' || d.type === 'payout' || d.status === 'deducted' || d.amount < 0) continue;
 
-                        if (d.type?.includes('game') || d.source?.includes('game')) {
-                            tType = (d.source === 'Session' || d.source === 'forum') ? 'party_game_bonus' : 'live_game_bonus';
-                        } else if (d.source === 'Session' || d.source === 'forum') {
+                        if (d.source === 'Session' || d.source === 'forum') {
                             tType = 'party_gift';
                         } else if (d.source === 'live') {
                             tType = 'live_gift';
@@ -320,23 +292,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 } catch(e) { console.log('Transactions fetch error', e); }
 
-                // 3. LIVE GIFTS & NESTED GAMES
+                // 3. LIVE GIFTS
                 try {
                     const livesSnap = await getDocs(query(collection(db, "lives"), where("hostId", "==", user.uid)));
                     for (const liveDoc of livesSnap.docs) {
                         const liveData = liveDoc.data();
-                        const isParty = liveData.isPartyRoom === true || liveData.status === "party_hidden";
-
-                        if (liveData.gameBeansCollected && liveData.gameBeansCollected > 0) {
-                            rawData.push({
-                                id: `game_${liveDoc.id}`,
-                                type: isParty ? 'party_game_bonus' : 'live_game_bonus',
-                                senderName: 'System Reward',
-                                beans: liveData.gameBeansCollected,
-                                timestamp: liveData.endedAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) }
-                            });
-                        }
-
                         const giftsSnap = await getDocs(collection(db, "lives", liveDoc.id, "gifts"));
                         for (const gDoc of giftsSnap.docs) {
                             const g = gDoc.data();
@@ -345,27 +305,10 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 rawData.push({ id: gDoc.id, type: 'live_gift', beans: bns, timestamp: g.timestamp || liveData.startedAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "User", userId: g.senderId || g.userId });
                             }
                         }
-                        
-                        try {
-                            const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
-                            for (const gameDoc of gamesSnap.docs) {
-                                const d = gameDoc.data();
-                                const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                                if (expertBeans > 0) {
-                                    rawData.push({ 
-                                        id: `${liveDoc.id}_${gameDoc.id}`, 
-                                        type: 'live_game_bonus', 
-                                        beans: expertBeans, 
-                                        timestamp: d.timestamp || d.createdAt || d.gameStartedAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) }, 
-                                        senderName: "Live Game System" 
-                                    });
-                                }
-                            }
-                        } catch(e){}
                     }
                 } catch(e) { console.log('Live gifts fetch error', e); }
 
-                // 4. FORUM REWARDS & NESTED GAMES
+                // 4. FORUM REWARDS
                 try {
                     const forumSnap = await getDocs(query(collection(db, "forum_rooms"), where("hostId", "==", user.uid)));
                     for (const forumDoc of forumSnap.docs) {
@@ -378,57 +321,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 rawData.push({ id: gDoc.id, type: 'party_gift', beans: bns, timestamp: g.timestamp || pData.createdAt || { seconds: 1 }, senderName: g.senderName || g.userName || g.name || "User", userId: g.senderId || g.userId });
                             }
                         }
-
-                        try {
-                            const gamesSnap = await getDocs(collection(db, "forum_rooms", forumDoc.id, "games"));
-                            for (const gameDoc of gamesSnap.docs) {
-                                const d = gameDoc.data();
-                                const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                                if (expertBeans > 0) {
-                                    rawData.push({ 
-                                        id: `${forumDoc.id}_${gameDoc.id}`, 
-                                        type: 'party_game_bonus', 
-                                        beans: expertBeans, 
-                                        timestamp: d.timestamp || d.createdAt || d.gameStartedAt || pData.createdAt || { seconds: Math.floor(Date.now() / 1000) }, 
-                                        senderName: "Forum Game System" 
-                                    });
-                                }
-                            }
-                        } catch(e){}
                     }
                 } catch(e) { console.log('Forum rewards fetch error', e); }
 
-                // 5. BROADCAST ACTIVITY (Live Games)
-                try {
-                    const idFields = ["hostId", "expertId", "userId"];
-                    for (const field of idFields) {
-                        const snap = await getDocs(query(collection(db, "live_games"), where(field, "==", user.uid)));
-                        for (const gameDoc of snap.docs) {
-                            const d = gameDoc.data();
-                            const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                            if (expertBeans > 0) { 
-                                rawData.push({ id: gameDoc.id, type: 'live_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Live Game System" });
-                            }
-                        }
-                    }
-                } catch(e) { console.log('Live games fetch error', e); }
-
-                // 6. FORUM ACTIVITY (Forum Games)
-                try {
-                    const idFields = ["hostId", "expertId", "userId"];
-                    for (const field of idFields) {
-                        const snap = await getDocs(query(collection(db, "forum_games"), where(field, "==", user.uid)));
-                        for (const gameDoc of snap.docs) {
-                            const d = gameDoc.data();
-                            const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                            if (expertBeans > 0) { 
-                                rawData.push({ id: gameDoc.id, type: 'party_game_bonus', beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) }, senderName: "Forum Game System" });
-                            }
-                        }
-                    }
-                } catch(e) { console.log('Forum games fetch error', e); }
-
-                // PROCESS UNIQUE DATA
                 const uniqueData: any[] = [];
                 const seen = new Set();
                 for (const item of rawData) {
@@ -442,18 +337,15 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     }
                 }
 
-                let calls = 0, liveGifts = 0, partyGifts = 0, callGifts = 0, liveGames = 0, partyGames = 0;
-                let todayCalculatedBeans = 0; // 🔥 NEW DAILY TOTAL TRACKER
+                let calls = 0, liveGifts = 0, partyGifts = 0, callGifts = 0;
+                let todayCalculatedBeans = 0;
 
                 uniqueData.forEach(t => {
                     if (t.type === 'video_call') calls += (t.expertEarnings || 0);
                     else if (t.type === 'live_gift') liveGifts += (t.beans || 0);
                     else if (t.type === 'party_gift') partyGifts += (t.beans || 0);
                     else if (t.type === 'call_gift') callGifts += (t.beans || 0);
-                    else if (t.type === 'live_game_bonus') liveGames += (t.beans || 0);
-                    else if (t.type === 'party_game_bonus') partyGames += (t.beans || 0);
 
-                    // 🔥 EXACT DAILY EARNINGS CALCULATION 🔥
                     const rawT = t.timestamp || t.createdAt;
                     if (rawT) {
                         let logDate = new Date();
@@ -471,8 +363,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 });
 
                 setBreakdown({
-                    calls, liveGifts, partyGifts, callGifts, liveGames, partyGames,
-                    totalDeepGifts: liveGifts + partyGifts + callGifts + liveGames + partyGames
+                    calls, liveGifts, partyGifts, callGifts,
+                    totalDeepGifts: liveGifts + partyGifts + callGifts
                 });
 
                 uniqueData.sort((a, b) => {
@@ -491,7 +383,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 
                 setHistoryLogs(uniqueData);
 
-                // 🔥 COMMIT REAL TODAY STATS TO STATE 🔥
                 setRealTodayStats({
                     calls: calcTodayCalls,
                     mins: calcTodayMins,
@@ -515,7 +406,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         let earned = 0;
                         if (t.type === 'video_call') earned = Number(t.expertEarnings) || 0;
                         else if (t.type === 'live_gift' || t.type === 'party_gift' || t.type === 'call_gift') earned = Number(t.beans) || 0;
-                        else if (t.type === 'live_game_bonus' || t.type === 'party_game_bonus') earned = Number(t.beans) || 0;
                         else if (t.type === 'daily_bonus') earned = Number(t.beans) || 0; 
                         else earned = Number(t.expertEarnings) || Number(t.beans) || 0;
 
@@ -704,9 +594,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             iconName = "gift"; iconColor = theme.secondary; 
             let baseTitle = itemType === 'live_gift' ? "Broadcast Reward" : itemType === 'party_gift' ? "Forum Reward" : "Private Reward";
             titleText = `${baseTitle} (from ${targetUserName})`;
-        } else if (itemType.includes('game')) {
-            iconName = "dice-multiple"; iconColor = "#F59E0B";
-            titleText = itemType === 'live_game_bonus' ? "Broadcast Activity Reward" : "Forum Activity Reward";
         } else if (itemType === 'daily_bonus') {
             iconName = "star-shooting"; iconColor = "#8B5CF6";
             titleText = item.giftName || 'Daily Mission Bonus';
@@ -859,7 +746,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         </View>
     );
 
-    // 🔥 MAP REAL-TIME CALCULATIONS TO OVERRIDE CORRUPTED FIREBASE COUNTERS 🔥
     const finalTodayCalls = realTodayStats !== null ? realTodayStats.calls : stats?.todayCalls;
     const finalTodayMins = realTodayStats !== null ? Math.round(realTodayStats.mins).toString() : stats?.todayMins;
     const finalTodayBeans = realTodayStats !== null ? realTodayStats.beans : stats?.todayBeans;
@@ -954,10 +840,6 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`🎖️${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />
                                         <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`🎖️${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
                                     </View>
-                                    <View style={styles.matrixRow}>
-                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Broadcast Activity" value={`🎖️${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" borderStyle={borderType2} />
-                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Forum Activity" value={`🎖️${breakdown.partyGames.toLocaleString()}`} color="#EC4899" borderStyle={borderType1} />
-                                    </View>
                                 </View>
 
                                 <View style={styles.dailyFlowContainer}>
@@ -972,7 +854,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                  <MaterialCommunityIcons name="gift-outline" size={24} color="#F59E0B" />
                                             </View>
                                             <View style={styles.flowTextContainer}>
-                                                <Text style={styles.flowLabel} numberOfLines={1} adjustsFontSizeToFit>LIFETIME REWARDS & ACTIVITIES</Text>
+                                                <Text style={styles.flowLabel} numberOfLines={1} adjustsFontSizeToFit>LIFETIME GIFT REWARDS</Text>
                                             </View>
                                             <View style={styles.flowValueNode}>
                                                 <View style={[styles.flowValueGlow, { backgroundColor: '#F59E0B' }]} />
@@ -1275,7 +1157,7 @@ const styles = StyleSheet.create({
     loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: '#020617' },
     loaderText: { marginTop: 15, fontSize: 11, fontWeight: '900', letterSpacing: 3 },
     
-    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15 },
 
     subHeading: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 3, marginBottom: 15, marginTop: 40, textTransform: 'uppercase' },
     eliteHeroWrapper: { width: '100%', marginTop: 10 },
@@ -1311,13 +1193,12 @@ const styles = StyleSheet.create({
     dailyFlowContainer: { marginTop: 15, marginBottom: 5 },
     holoFlowCardWrapper: { borderRadius: 30, overflow: 'hidden' },
     dailyFlowPill: { flexDirection: 'row', alignItems: 'center', padding: 20, borderWidth: 1, position: 'relative' },
-    flowIconGlow: { position: 'absolute', top: 20, left: 20, width: 50, height: 50, borderRadius: 25, opacity: 0.3, filter: 'blur(10px)' },
+    flowIconGlow: { position: 'absolute', top: 20, left: 20, width: 50, height: 50, borderRadius: 25, opacity: 0.3 },
     flowIconBox: { width: 56, height: 56, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, zIndex: 2 },
     flowTextContainer: { flex: 1, paddingLeft: 18, justifyContent: 'center' },
     flowLabel: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
-    flowSub: { fontSize: 11, fontWeight: '700', marginTop: 3, letterSpacing: 0.5 },
     flowValueNode: { position: 'relative', flexShrink: 1, maxWidth: '40%' },
-    flowValueGlow: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, borderRadius: 20, opacity: 0.5, filter: 'blur(8px)' },
+    flowValueGlow: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, borderRadius: 20, opacity: 0.5 },
     flowValueBox: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, zIndex: 2 },
     flowValText: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5, flexShrink: 1 },
     flowBeanSymbol: { fontSize: 16, fontWeight: '900' },
@@ -1360,8 +1241,6 @@ const styles = StyleSheet.create({
     tabText: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
     tabTextActive: { color: '#FFF' },
     
-    filterPill: { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginRight: 10, backgroundColor: 'rgba(255,255,255,0.05)' },
-    filterPillText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
     historyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.45)', padding: 15, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#1E293B' },
     historyIconBox: { width: 45, height: 45, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     historyTitle: { color: '#FFF', fontSize: 14, fontWeight: 'bold', marginBottom: 4, letterSpacing: 0.5, lineHeight: 20 },

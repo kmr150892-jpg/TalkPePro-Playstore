@@ -37,13 +37,13 @@ export default function HistoryScreen() {
     const user = auth.currentUser;
     
     const [history, setHistory] = useState<any[]>([]);
-    const [gameHistory, setGameHistory] = useState<any[]>([]); 
+    // 🆕 UPDATE: gameHistory and totalGames states removed (game activity log removed)
     const [userData, setUserData] = useState<any>(null);
     const [loading, setLoading] = useState(true);
     const [totalMinutes, setTotalMinutes] = useState<number>(0);
-    const [totalGames, setTotalGames] = useState<number>(0); 
 
-    const [activeTab, setActiveTab] = useState<'CALLS' | 'GAMES' | 'REWARDS'>('CALLS'); 
+    // 🆕 UPDATE: 'GAMES' tab removed. Only CALLS and REWARDS remain.
+    const [activeTab, setActiveTab] = useState<'CALLS' | 'REWARDS'>('CALLS'); 
 
     const scrollY = useRef(new Animated.Value(0)).current;
     const floatAnim = useRef(new Animated.Value(0)).current;
@@ -142,52 +142,10 @@ export default function HistoryScreen() {
             processCallLogs();
         });
 
-        // ==========================================
-        // 🔥 2. FREE-TO-PLAY ACTIVITY LOG ENGINE
-        // (No entry fee / reward / refund tracking)
-        // ==========================================
-        let rawActivityGames: any[] = [];
-
-        const processGames = () => {
-            const combinedGames = [...rawActivityGames].sort((a, b) => {
-                const timeA = a.timestamp?.toMillis ? a.timestamp.toMillis() : (a.timestamp?.seconds ? a.timestamp.seconds * 1000 : 0);
-                const timeB = b.timestamp?.toMillis ? b.timestamp.toMillis() : (b.timestamp?.seconds ? b.timestamp.seconds * 1000 : 0);
-                return timeB - timeA;
-            });
-            const uniqueGames = Array.from(new Map(combinedGames.map(item => [item.id, item])).values());
-            setTotalGames(uniqueGames.length);
-            setGameHistory(uniqueGames);
-        };
-
-        const unsubActivity = onSnapshot(collection(db, "users", user.uid, "activityHistory"), (snap) => {
-            rawActivityGames = snap.docs.map(doc => {
-                const d = doc.data();
-                let rawStatus = String(d.status || d.gameStatus || 'COMPLETED').toUpperCase();
-                
-                const isCancelled = rawStatus.includes("CANCEL") || rawStatus.includes("REFUND");
-                const isWinner = !isCancelled && (rawStatus.includes("WIN") || rawStatus === "WON");
-
-                let finalStatus = "PLAYED";
-                if (isCancelled) finalStatus = "CANCELLED";
-                else if (isWinner) finalStatus = "WON";
-
-                return {
-                    ...d,
-                    id: doc.id,
-                    gameName: d.gameName || d.title || "ACTIVITY LOG",
-                    score: d.score || 0,
-                    status: finalStatus,
-                    isWinner,
-                    isCancelled,
-                    timestamp: d.timestamp || d.createdAt
-                };
-            });
-            processGames();
-        });
+        // 🆕 UPDATE: Game activity log engine (activityHistory listener) removed from here.
 
         return () => { 
             unsubUser(); unsubscribeHistory(); unsubscribeGifts(); 
-            unsubActivity(); 
         };
     }, [user, userData]);
 
@@ -322,81 +280,7 @@ export default function HistoryScreen() {
         );
     };
 
-    // 🔥 FREE-TO-PLAY ACTIVITY LOG RENDERER (no diamonds / fees / rewards) 🔥
-    const renderGameHistoryItem = ({ item }: { item: any }) => {
-        let accentColor = userTier.color;
-        let accentSecondary = userTier.secondaryColor;
-        let badgeBg = userTier.color;
-        let badgeLabel = 'PLAYED';
-        let badgeIcon: any = 'game-controller';
-
-        if (item.isCancelled) {
-            accentColor = '#3B82F6';
-            accentSecondary = 'rgba(59, 130, 246, 0.4)';
-            badgeBg = 'rgba(59, 130, 246, 0.8)';
-            badgeLabel = 'CANCELLED';
-            badgeIcon = 'alert-circle';
-        } else if (item.isWinner) {
-            accentColor = '#10B981';
-            accentSecondary = 'rgba(16, 185, 129, 0.4)';
-            badgeBg = 'rgba(16, 185, 129, 0.8)';
-            badgeLabel = 'WON';
-            badgeIcon = 'trophy';
-        }
-        
-        const gameIcon = item.gameName.toUpperCase().includes("REFLEX") ? "flash" : (item.gameName.toUpperCase().includes("MEMORY") ? "extension-puzzle" : "game-controller");
-
-        let displayTime = 'JUST NOW';
-        const timeVal = item.timestamp || item.createdAt;
-        if (timeVal?.toDate) {
-            displayTime = timeVal.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        } else if (timeVal?.seconds) {
-            displayTime = new Date(timeVal.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        } else if (typeof timeVal === 'string' || typeof timeVal === 'number') {
-            displayTime = new Date(timeVal).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-        }
-
-        return (
-            <Animated.View style={[styles.cardContainer, { transform: [{ translateY: floatAnim }] }]}>
-                <View style={styles.stealthHistoryCard}>
-                    <View style={[styles.quadBorder, { 
-                        borderLeftColor: accentColor, 
-                        borderRightColor: accentColor, 
-                        borderTopColor: accentSecondary, 
-                        borderBottomColor: accentSecondary 
-                    }]} />
-                    
-                    <View style={[styles.sessionBadge, { backgroundColor: badgeBg, borderWidth: 1, borderColor: accentColor }]}>
-                         <Ionicons name={badgeIcon} size={10} color="#FFF" />
-                         <Text style={[styles.sessionTypeText, { color: '#FFF' }]} numberOfLines={1}>{badgeLabel}</Text>
-                    </View>
-                    
-                    <View style={styles.cardHeader}>
-                        <View style={[styles.expertThumbRing, { borderColor: accentColor, shadowColor: accentColor, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-                            <Ionicons name={gameIcon} size={28} color={accentColor} />
-                        </View>
-                        
-                        <View style={styles.expertInfo}>
-                            <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{item.gameName.toUpperCase()}</Text>
-                            <Text style={styles.callDateText} numberOfLines={1}>{displayTime}</Text>
-                        </View>
-
-                        <View style={styles.costContainer}>
-                             <Text style={[styles.costText, { color: accentColor }]} numberOfLines={1} adjustsFontSizeToFit>FREE</Text>
-                             <Ionicons name="game-controller-outline" size={12} color={accentColor} />
-                        </View>
-                    </View>
-
-                    <View style={styles.statsRow}>
-                        <View style={styles.statItem}>
-                            <Ionicons name="trophy-outline" size={13} color={accentColor} />
-                            <Text style={[styles.statValueText, { color: accentColor }]} numberOfLines={1} adjustsFontSizeToFit>Result: {item.status}</Text>
-                        </View>
-                    </View>
-                </View>
-            </Animated.View>
-        );
-    };
+    // 🆕 UPDATE: renderGameHistoryItem (game activity log renderer) removed.
 
     const parallaxHeader = scrollY.interpolate({ inputRange: [0, 200], outputRange: [0, -40], extrapolate: 'clamp' });
 
@@ -420,14 +304,14 @@ export default function HistoryScreen() {
 
                     <View style={styles.talktimeHighlight}>
                         <Text style={[styles.totalTalkLabel, { color: userTier.color }]} numberOfLines={1}>
-                            {activeTab === 'CALLS' ? 'TOTAL CALL TALKTIME' : activeTab === 'GAMES' ? 'TOTAL TASKS COMPLETED' : 'TOTAL REWARDS SENT'}
+                            {activeTab === 'CALLS' ? 'TOTAL CALL TALKTIME' : 'TOTAL REWARDS SENT'}
                         </Text>
                         <View style={styles.minsDisplay}>
                             <Text style={styles.bigMins} numberOfLines={1} adjustsFontSizeToFit>
-                                {activeTab === 'CALLS' ? totalMinutes.toLocaleString() : activeTab === 'GAMES' ? totalGames.toLocaleString() : rewardsData.length.toLocaleString()}
+                                {activeTab === 'CALLS' ? totalMinutes.toLocaleString() : rewardsData.length.toLocaleString()}
                             </Text>
                             <Text style={styles.minSuffix} numberOfLines={1}>
-                                {activeTab === 'CALLS' ? 'MINS' : activeTab === 'GAMES' ? 'TASKS' : 'GIFTS'}
+                                {activeTab === 'CALLS' ? 'MINS' : 'GIFTS'}
                             </Text>
                         </View>
                     </View>
@@ -455,9 +339,7 @@ export default function HistoryScreen() {
                     <TouchableOpacity style={[styles.tabBtn, activeTab === 'CALLS' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('CALLS')}>
                         <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CALL LOG</Text>
                     </TouchableOpacity>
-                    <TouchableOpacity style={[styles.tabBtn, activeTab === 'GAMES' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('GAMES')}>
-                        <Text style={[styles.tabText, activeTab === 'GAMES' && { color: '#FFF' }]} numberOfLines={1}>ACTIVITY LOG</Text>
-                    </TouchableOpacity>
+                    {/* 🆕 UPDATE: "ACTIVITY LOG" tab removed */}
                     <TouchableOpacity style={[styles.tabBtn, activeTab === 'REWARDS' && { backgroundColor: userTier.color + '40', borderColor: userTier.color }]} onPress={() => setActiveTab('REWARDS')}>
                         <Text style={[styles.tabText, activeTab === 'REWARDS' && { color: '#FFF' }]} numberOfLines={1}>REWARD LOG</Text>
                     </TouchableOpacity>
@@ -488,7 +370,7 @@ export default function HistoryScreen() {
                             onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
                         />
                     )
-                ) : activeTab === 'REWARDS' ? (
+                ) : (
                     rewardsData.length === 0 ? (
                         <View style={styles.emptyContainer}>
                             <View style={[styles.emptyIconCircle, { borderColor: userTier.color + '20' }]}>
@@ -502,25 +384,6 @@ export default function HistoryScreen() {
                             data={rewardsData}
                             keyExtractor={(item) => item.id}
                             renderItem={renderHistoryItem}
-                            contentContainerStyle={styles.listPadding}
-                            showsVerticalScrollIndicator={false}
-                            onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
-                        />
-                    )
-                ) : (
-                    gameHistory.length === 0 ? (
-                        <View style={styles.emptyContainer}>
-                            <View style={[styles.emptyIconCircle, { borderColor: userTier.color + '20' }]}>
-                                 <Ionicons name="game-controller-outline" size={50} color={userTier.color} style={{ opacity: 0.2 }} />
-                            </View>
-                            <Text style={styles.emptyTitle}>NO ACTIVITY FOUND</Text>
-                            <Text style={styles.emptySub}>Your activity transmission logs will appear here once you complete a round.</Text>
-                        </View>
-                    ) : (
-                        <Animated.FlatList
-                            data={gameHistory}
-                            keyExtractor={(item) => item.id}
-                            renderItem={renderGameHistoryItem}
                             contentContainerStyle={styles.listPadding}
                             showsVerticalScrollIndicator={false}
                             onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}

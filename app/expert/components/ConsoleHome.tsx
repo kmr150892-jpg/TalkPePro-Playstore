@@ -7,21 +7,21 @@ import { deleteUser } from 'firebase/auth';
 import { arrayRemove, arrayUnion, collection, deleteDoc, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    Image,
-    Modal,
-    ScrollView,
-    Share,
-    StyleSheet,
-    Switch,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  Modal,
+  ScrollView,
+  Share,
+  StyleSheet,
+  Switch,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { Circle } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
@@ -392,8 +392,8 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const deleteGalleryImage = (imgUrl: string) => {
     if (!user?.uid) return;
     Alert.alert(
-      "Delete Photo?",
-      "Indha photo va portfolio la irundhu remove pannalama?",
+      "Delete Photo",
+      "Delete photo from portfolio?",
       [
         { text: "Cancel", style: "cancel" },
         {

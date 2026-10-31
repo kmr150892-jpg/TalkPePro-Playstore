@@ -315,7 +315,7 @@ const AdminPanel = () => {
 
                             <Text style={styles.sectionTitle}>AUDIT LEDGER</Text>
                             <SecurityLink title="LEDGER VAULT" sub="Account-level history logs" icon="card-account-details-outline" route="/passbook" color="#A855F7" />
-                            <SecurityLink title="PLATFORM SHARE" sub="Interaction throughput metrics" icon="finance" route="/game-reward" color="#10B981" />
+                           
                             <SecurityLink title="SYSTEM LEDGER" sub="Financial traceability audit" icon="database-sync" route="/finance/transactions" color="#818CF8" />
 
                             <Text style={styles.sectionTitle}>SECURITY & COMPLIANCE</Text>

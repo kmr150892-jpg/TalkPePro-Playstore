@@ -59,9 +59,7 @@ const TABS = [
     { id: 'video_call', label: 'Call Reward', icon: 'videocam', iconType: 'Ionicons' },
     { id: 'live_gift', label: 'Broadcast Rewards', icon: 'broadcast', iconType: 'MaterialCommunityIcons' },
     { id: 'party_gift', label: 'Forum Rewards', icon: 'party-popper', iconType: 'MaterialCommunityIcons' },
-    { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' },
-    { id: 'live_game_bonus', label: 'Broadcast Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' },
-    { id: 'party_game_bonus', label: 'Forum Activity', icon: 'dice-multiple', iconType: 'MaterialCommunityIcons' }
+    { id: 'call_gift', label: 'Private Rewards', icon: 'gift', iconType: 'MaterialCommunityIcons' }
 ];
 
 export default function ExpertPassbookDetail() {
@@ -74,26 +72,21 @@ export default function ExpertPassbookDetail() {
     const [totalGiftsBeans, setTotalGiftsBeans] = useState<number>(0);
     const [totalEarningsCalculated, setTotalEarningsCalculated] = useState<number>(0);
     const [totalWithdrawnCalculated, setTotalWithdrawnCalculated] = useState<number>(0);
-    const [flags, setFlags] = useState<any[]>([]); // 🔥 SATTI UPDATE: Added Flag State
+    const [flags, setFlags] = useState<any[]>([]); 
     
     const [breakdown, setBreakdown] = useState({
-        calls: 0, liveGifts: 0, partyGifts: 0, callGifts: 0, liveGames: 0, partyGames: 0, totalDeepGifts: 0
+        calls: 0, liveGifts: 0, partyGifts: 0, callGifts: 0, totalDeepGifts: 0
     });
 
     const [loading, setLoading] = useState(true);
-    // 🔥 SATTI UPDATE: Added 'FLAGS' tab to the main tabs state
     const [activeTab, setActiveTab] = useState<'STATS' | 'HISTORY' | 'FLAGS'>('STATS');
-    
-    // 🔥 NEW: History Sub-Tab State from Memory
-    const [activeHistoryTab, setActiveHistoryTab] = useState<'video_call' | 'live_gift' | 'party_gift' | 'call_gift' | 'live_game_bonus' | 'party_game_bonus'>('video_call');
-    
+    const [activeHistoryTab, setActiveHistoryTab] = useState<'video_call' | 'live_gift' | 'party_gift' | 'call_gift'>('video_call');
     const [activeMissionTab, setActiveMissionTab] = useState(0); 
 
-    // 🔥 ANIMATION STATES
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(30)).current;
     const shimmerAnim = useRef(new Animated.Value(0)).current; 
-    const floatAnim = useRef(new Animated.Value(0)).current; // Added from Expert History
+    const floatAnim = useRef(new Animated.Value(0)).current; 
 
     useEffect(() => {
         Animated.loop(
@@ -122,7 +115,6 @@ export default function ExpertPassbookDetail() {
 
             const myReceivedGifts = rawGifts.filter(g => g.receiverId === id || g.hostId === id);
 
-            // Merging with rawDeepLogs last so it overrides un-enriched data
             const allLogs = [
                 ...rawWithdrawals.map(w => ({ ...w, _source: 'ACTIVITY_REWARD' })),
                 ...myReceivedGifts.map(g => ({ ...g, _source: 'gift' })),
@@ -169,13 +161,11 @@ export default function ExpertPassbookDetail() {
             setTotalWithdrawnCalculated(withdrawn);
         };
 
-        // 🔥 EXACT 100% DEEP FETCH FROM EXPERT HISTORY (Enriched with Profile Pics & Names) 🔥
         const fetchAllArchives = async () => {
             try {
                 let rawData: any[] = [];
                 const expertId = id as string;
 
-                // 1. FETCH CALLS
                 const callsSnap = await getDocs(query(collection(db, "calls"), where("expertId", "==", expertId)));
                 for (const docSnap of callsSnap.docs) {
                     const d = docSnap.data();
@@ -203,7 +193,6 @@ export default function ExpertPassbookDetail() {
                     }
                 }
 
-                // 2. FETCH TRANSACTIONS (For Call Gifts Fallback)
                 const transSnap = await getDocs(query(collection(db, "transactions"), where("expertId", "==", expertId)));
                 for (const docSnap of transSnap.docs) {
                     const d = docSnap.data();
@@ -215,9 +204,6 @@ export default function ExpertPassbookDetail() {
                         let tType = 'call_gift';
                         if (d.source === 'Session' || d.source === 'forum') tType = 'party_gift';
                         if (d.source === 'live') tType = 'live_gift';
-                        if (d.type?.includes('game') || d.source?.includes('game')) {
-                            tType = (d.source === 'Session' || d.source === 'forum') ? 'party_game_bonus' : 'live_game_bonus';
-                        }
 
                         let senderName = d.senderName || d.userName || 'Verified Supporter';
                         let senderPic = d.userImage || null;
@@ -240,19 +226,10 @@ export default function ExpertPassbookDetail() {
                     }
                 }
 
-                // 3. FETCH LIVES (Live Gifts & Game Beans)
                 const livesSnap = await getDocs(query(collection(db, "lives"), where("hostId", "==", expertId)));
                 for (const liveDoc of livesSnap.docs) {
                     const liveData = liveDoc.data();
                     const isParty = liveData.isPartyRoom === true || liveData.status === "party_hidden";
-
-                    if (liveData.gameBeansCollected && liveData.gameBeansCollected > 0) {
-                        rawData.push({
-                            id: `game_${liveDoc.id}`, type: isParty ? 'party_game_bonus' : 'live_game_bonus', senderId: null, senderName: 'System Reward', 
-                            giftName: 'Performance Reward', amount: liveData.gameBeansCollected * 2, beans: liveData.gameBeansCollected,
-                            timestamp: liveData.endedAt || liveData.startedAt || { seconds: Date.now() / 1000 }, syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, syncLevel: 'Master'
-                        });
-                    }
 
                     if (!isParty) {
                         const giftsSnap = await getDocs(collection(db, "lives", liveDoc.id, "gifts"));
@@ -281,25 +258,9 @@ export default function ExpertPassbookDetail() {
                                 });
                             }
                         }
-
-                        try {
-                            const gamesSnap = await getDocs(collection(db, "lives", liveDoc.id, "games"));
-                            for (const gameDoc of gamesSnap.docs) {
-                                const d = gameDoc.data();
-                                const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                                if (expertBeans > 0) {
-                                    rawData.push({
-                                        id: gameDoc.id, type: 'live_game_bonus', senderId: null, senderName: "Live Game System", giftName: "Broadcast Activity Reward", 
-                                        amount: expertBeans * 2, beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || liveData.startedAt || { seconds: Math.floor(Date.now() / 1000) },
-                                        syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, syncLevel: 'Master'
-                                    });
-                                }
-                            }
-                        } catch(e){}
                     }
                 }
 
-                // 4. FETCH FORUM ROOMS (Forum Gifts & Nested Games)
                 const partySnap = await getDocs(query(collection(db, "forum_rooms"), where("hostId", "==", expertId)));
                 for (const partyDoc of partySnap.docs) {
                     const pData = partyDoc.data();
@@ -329,55 +290,8 @@ export default function ExpertPassbookDetail() {
                             });
                         }
                     }
-
-                    try {
-                        const gamesSnap = await getDocs(collection(db, "forum_rooms", partyDoc.id, "games"));
-                        for (const gameDoc of gamesSnap.docs) {
-                            const d = gameDoc.data();
-                            const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                            if (expertBeans > 0) {
-                                rawData.push({
-                                    id: gameDoc.id, type: 'party_game_bonus', senderId: null, senderName: "Forum Game System", giftName: "Forum Activity Reward", 
-                                    amount: expertBeans * 2, beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || pData.createdAt || { seconds: Math.floor(Date.now() / 1000) },
-                                    syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, syncLevel: 'Master'
-                                });
-                            }
-                        }
-                    } catch(e){}
                 }
 
-                // 5 & 6. TOP LEVEL BROADCAST & FORUM ACTIVITY GAMES
-                const idFields = ["hostId", "expertId", "userId"];
-                for (const field of idFields) {
-                    const snap = await getDocs(query(collection(db, "live_games"), where(field, "==", expertId)));
-                    for (const gameDoc of snap.docs) {
-                        const d = gameDoc.data();
-                        const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                        if (expertBeans > 0) {
-                            rawData.push({
-                                id: gameDoc.id, type: 'live_game_bonus', senderId: null, senderName: "Live Game System", giftName: "Broadcast Activity Reward", 
-                                amount: expertBeans * 2, beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) },
-                                syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, syncLevel: 'Master'
-                            });
-                        }
-                    }
-                }
-                for (const field of idFields) {
-                    const snap = await getDocs(query(collection(db, "forum_games"), where(field, "==", expertId)));
-                    for (const gameDoc of snap.docs) {
-                        const d = gameDoc.data();
-                        const expertBeans = Number(d.expertBeans) || Number(d.expertBean) || 0;
-                        if (expertBeans > 0) {
-                            rawData.push({
-                                id: gameDoc.id, type: 'party_game_bonus', senderId: null, senderName: "Forum Game System", giftName: "Forum Activity Reward", 
-                                amount: expertBeans * 2, beans: expertBeans, timestamp: d.timestamp || d.createdAt || d.endedAt || { seconds: Math.floor(Date.now() / 1000) },
-                                syncPic: `https://img.icons8.com/3d-fluency/512/controller.png`, syncLevel: 'Master'
-                            });
-                        }
-                    }
-                }
-
-                // 🔥 FIXED: PROCESS UNIQUE DATA EXACTLY LIKE EXPERT HISTORY TO SYNC BROADCAST ACTIVITY
                 const uniqueData: any[] = [];
                 const seen = new Set();
                 for (const item of rawData) {
@@ -394,23 +308,19 @@ export default function ExpertPassbookDetail() {
                     return timeB - timeA;
                 });
 
-                // Set All transactions exactly for the 6 Tabs
                 setAllTransactions(uniqueData);
 
-                // Setup Stats Breakdown seamlessly
-                let calls = 0, liveGifts = 0, partyGifts = 0, callGifts = 0, liveGames = 0, partyGames = 0;
+                let calls = 0, liveGifts = 0, partyGifts = 0, callGifts = 0;
                 uniqueData.forEach(t => {
                     if (t.type === 'video_call') calls += (t.beans || 0);
                     else if (t.type === 'live_gift') liveGifts += (t.beans || 0);
                     else if (t.type === 'party_gift') partyGifts += (t.beans || 0);
                     else if (t.type === 'call_gift') callGifts += (t.beans || 0);
-                    else if (t.type === 'live_game_bonus') liveGames += (t.beans || 0);
-                    else if (t.type === 'party_game_bonus') partyGames += (t.beans || 0);
                 });
 
                 setBreakdown({
-                    calls, liveGifts, partyGifts, callGifts, liveGames, partyGames,
-                    totalDeepGifts: liveGifts + partyGifts + callGifts + liveGames + partyGames
+                    calls, liveGifts, partyGifts, callGifts,
+                    totalDeepGifts: liveGifts + partyGifts + callGifts
                 });
 
                 rawDeepLogs = uniqueData.map(t => {
@@ -419,8 +329,6 @@ export default function ExpertPassbookDetail() {
                     else if (t.type === 'live_gift') { titleText = "Live Interaction Reward"; source = "gift"; }
                     else if (t.type === 'party_gift') { titleText = "Group Interaction Reward"; source = "gift"; }
                     else if (t.type === 'call_gift') { titleText = "Direct Reward"; source = "gift"; }
-                    else if (t.type === 'live_game_bonus') { titleText = "Interactive Bonus"; source = "game"; }
-                    else if (t.type === 'party_game_bonus') { titleText = "Activity Bonus"; source = "game"; }
 
                     return { ...t, id: t.id, _source: source, title: titleText, status: 'SUCCESS', timestamp: t.timestamp };
                 });
@@ -480,10 +388,9 @@ export default function ExpertPassbookDetail() {
             processAllExpertLogs();
         });
 
-        // 🔥 SATTI UPDATE: FLAG LISTENER ENGINE FOR EXPERT 🔥
         const qFlags = query(
             collection(db, "admin_alerts"), 
-            where("expertId", "==", id), // Check for reports AGAINST this expert
+            where("expertId", "==", id), 
             where("type", "==", "USER_BLOCKED_EXPERT")
         );
         const unsubFlags = onSnapshot(qFlags, async (snap) => {
@@ -550,7 +457,6 @@ export default function ExpertPassbookDetail() {
     const progress = Math.min(userData?.todayBeans / currentMilestone.target, 1) || 0;
     const isCompleted = userData?.todayBeans >= currentMilestone.target;
 
-    // 🔥 STEALTH UI RENDERERS FROM EXPERT MEMORY 🔥
     const renderCallItem = ({ item, index }: { item: any, index: number }) => {
         const duration = Number(item.finalDuration) || 0;
         const mins = Math.floor(duration / 60);
@@ -613,29 +519,22 @@ export default function ExpertPassbookDetail() {
         let iconType = 'gift';
         let iconColor = theme.primary;
     
-        if (item.type?.includes('game')) {
-            displayTitle = item.type === 'live_game_bonus' ? 'Broadcast Activity Reward' : 'Forum Activity Reward';
-            displaySub = item.senderName || 'System Reward';
-            iconType = 'dice-multiple';
-            iconColor = '#F59E0B';
-        } else {
-            let baseTitle = "";
-            if (item.type === 'live_gift') {
-                baseTitle = "Broadcast Reward";
-                iconType = 'broadcast';
-                iconColor = '#10B981';
-            } else if (item.type === 'party_gift') {
-                baseTitle = "Forum Reward";
-                iconType = 'party-popper';
-                iconColor = '#EC4899';
-            } else if (item.type === 'call_gift') {
-                baseTitle = "Private Reward";
-                iconType = 'gift';
-                iconColor = theme.primary;
-            }
-            const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "User";
-            displayTitle = `${baseTitle} (from ${validSender})`;
+        let baseTitle = "";
+        if (item.type === 'live_gift') {
+            baseTitle = "Broadcast Reward";
+            iconType = 'broadcast';
+            iconColor = '#10B981';
+        } else if (item.type === 'party_gift') {
+            baseTitle = "Forum Reward";
+            iconType = 'party-popper';
+            iconColor = '#EC4899';
+        } else if (item.type === 'call_gift') {
+            baseTitle = "Private Reward";
+            iconType = 'gift';
+            iconColor = theme.primary;
         }
+        const validSender = item.senderName && item.senderName !== "Unknown" ? item.senderName : "User";
+        displayTitle = `${baseTitle} (from ${validSender})`;
     
         return (
           <Animated.View style={[styles.eliteCard, index % 2 === 0 ? borderType2 : borderType1, { transform: [{ translateY: floatAnim }] }]}>
@@ -680,10 +579,8 @@ export default function ExpertPassbookDetail() {
 
     const filteredTransactions = allTransactions.filter(t => t.type === activeHistoryTab);
 
-    // 🔥 THIS COMPONENT REPLACES THE LIST EMPTY COMPONENT 🔥
     const renderListFooter = () => (
         <View style={styles.footerContainer}>
-            {/* 🔥 SATTI UPDATE: FLAG BUTTON LAST LA BOTTOM LA VECHACHU! 🔥 */}
             <TouchableOpacity 
                 style={[styles.bottomFlagBtn, flags.length > 0 ? {backgroundColor: '#EF4444'} : {backgroundColor: 'rgba(255,255,255,0.05)'}]}
                 onPress={() => setActiveTab('FLAGS')}
@@ -729,7 +626,7 @@ export default function ExpertPassbookDetail() {
                 renderItem={activeHistoryTab === 'video_call' ? renderCallItem : renderGiftItem}
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 50 }}
-                ListFooterComponent={renderListFooter} // 🔥 Added the combined footer here so it scrolls
+                ListFooterComponent={renderListFooter} 
                 ListHeaderComponent={
                     <View style={{ paddingHorizontal: 20 }}>
                         
@@ -846,10 +743,6 @@ export default function ExpertPassbookDetail() {
                                         <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`🎖️${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />
                                         <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`🎖️${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
                                     </View>
-                                    <View style={styles.matrixRow}>
-                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Broadcast Activity" value={`🎖️${breakdown.liveGames.toLocaleString()}`} color="#F59E0B" borderStyle={borderType2} />
-                                        <MatrixBox icon="dice-multiple" iconFamily="MaterialCommunityIcons" label="Forum Activity" value={`🎖️${breakdown.partyGames.toLocaleString()}`} color="#EC4899" borderStyle={borderType1} />
-                                    </View>
                                 </View>
 
                                 <View style={styles.dailyFlowContainer}>
@@ -864,7 +757,7 @@ export default function ExpertPassbookDetail() {
                                                  <MaterialCommunityIcons name="gift-outline" size={24} color="#F59E0B" />
                                             </View>
                                             <View style={styles.flowTextContainer}>
-                                                <Text style={styles.flowLabel} numberOfLines={1} adjustsFontSizeToFit>LIFETIME REWARDS & ACTIVITIES</Text>
+                                                <Text style={styles.flowLabel} numberOfLines={1} adjustsFontSizeToFit>LIFETIME GIFT REWARDS</Text>
                                             </View>
                                             <View style={styles.flowValueNode}>
                                                 <View style={[styles.flowValueGlow, { backgroundColor: '#F59E0B' }]} />
@@ -964,7 +857,6 @@ export default function ExpertPassbookDetail() {
                             </Animated.View>
                         )}
                         
-                        {/* 🔥 6-TAB FILTER HEADER FOR HISTORY 🔥 */}
                         {activeTab === 'HISTORY' && (
                             <View style={{ marginBottom: 15 }}>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabCapsuleContainer}>
@@ -992,7 +884,6 @@ export default function ExpertPassbookDetail() {
                             </View>
                         )}
                         
-                        {/* 🔥 SATTI UPDATE: NEW FLAGS TAB CONTENT 🔥 */}
                         {activeTab === 'FLAGS' && (
                             <View style={{ marginTop: 20 }}>
                                 <View style={styles.talktimeHighlight}>
@@ -1002,7 +893,6 @@ export default function ExpertPassbookDetail() {
                                     <ActivityIndicator size="large" color="#EF4444" style={{ marginTop: 40 }} />
                                 ) : flags.length > 0 ? (
                                     flags.map((item, index) => {
-                                        // Fetching the user's profile picture that was synced from the admin_alerts query
                                         const userPic = item.fetchedUserPic || item.userImage || item.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.userName || 'User')}&background=EF4444&color=fff&bold=true`;
                                         return (
                                             <Animated.View key={item.alertId || index} style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
@@ -1098,8 +988,7 @@ const styles = StyleSheet.create({
     tabText: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
     tabTextActive: { color: '#FFF' },
     
-    // Core Stats Screen Styles
-    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15 },
     subHeading: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 3, marginBottom: 15, marginTop: 40, textTransform: 'uppercase' },
     eliteHeroWrapper: { width: '100%', marginTop: 10 },
     eliteHeroCard: { borderRadius: 40, padding: 25, overflow: 'hidden', elevation: 20 },
@@ -1133,12 +1022,12 @@ const styles = StyleSheet.create({
     dailyFlowContainer: { marginTop: 15, marginBottom: 5 },
     holoFlowCardWrapper: { borderRadius: 30, overflow: 'hidden' },
     dailyFlowPill: { flexDirection: 'row', alignItems: 'center', padding: 20, borderWidth: 1, position: 'relative' },
-    flowIconGlow: { position: 'absolute', top: 20, left: 20, width: 50, height: 50, borderRadius: 25, opacity: 0.3, filter: 'blur(10px)' },
+    flowIconGlow: { position: 'absolute', top: 20, left: 20, width: 50, height: 50, borderRadius: 25, opacity: 0.3 },
     flowIconBox: { width: 56, height: 56, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, zIndex: 2 },
     flowTextContainer: { flex: 1, paddingLeft: 18, justifyContent: 'center' },
     flowLabel: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
     flowValueNode: { position: 'relative', flexShrink: 1, maxWidth: '40%' },
-    flowValueGlow: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, borderRadius: 20, opacity: 0.5, filter: 'blur(8px)' },
+    flowValueGlow: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, borderRadius: 20, opacity: 0.5 },
     flowValueBox: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, zIndex: 2 },
     flowValText: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5, flexShrink: 1 },
     flowBeanSymbol: { fontSize: 16, fontWeight: '900' },
@@ -1170,7 +1059,6 @@ const styles = StyleSheet.create({
     insightTopTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
     insightDescription: { color: '#94A3B8', fontSize: 13, marginTop: 5, lineHeight: 20 },
 
-    // 🔥 HISTORY 6-TAB STYLES 🔥
     tabCapsuleContainer: { paddingBottom: 20 },
     tabCapsule: { flexDirection: 'row', backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 25, padding: 6, borderWidth: 1, overflow: 'hidden' },
     eliteTab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 16, position: 'relative' },
@@ -1206,17 +1094,14 @@ const styles = StyleSheet.create({
     receivedTag: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
     receivedText: { fontSize: 8, fontWeight: '900', letterSpacing: 1 },
     emptyCenter: { justifyContent: 'center', alignItems: 'center', padding: 40 },
-    emptyIconCircle: { width: 120, height: 120, borderRadius: 60, backgroundColor: 'rgba(255,255,255,0.02)', justifyContent: 'center', alignItems: 'center', marginBottom: 25, borderWidth: 1 },
     emptyTitleText: { color: '#FFF', fontSize: 22, fontWeight: '900' },
 
-    // 🔥 SATTI UPDATE: Footer List Component Styles 🔥
     footerContainer: { alignItems: 'center', paddingHorizontal: 20, paddingBottom: 20, paddingTop: 10 },
     bottomFlagBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 25, width: '100%', gap: 10, elevation: 5, shadowColor: '#EF4444', shadowOpacity: 0.3, shadowRadius: 10 },
     bottomFlagText: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
     talktimeHighlight: { alignItems: 'center' },
     totalTalkLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
     
-    // 🔥 SATTI FIX: MISSING STYLES FOR THE FLAGS TAB ADDED HERE 🔥
     cardContainerUI: { marginBottom: 20 },
     stealthHistoryCard: { backgroundColor: 'rgba(5,5,5,0.7)', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
     quadBorderUI: { ...StyleSheet.absoluteFillObject, borderLeftWidth: 4, borderRightWidth: 4, borderTopWidth: 1.2, borderBottomWidth: 1.2, borderRadius: 24, opacity: 0.8 },
@@ -1228,11 +1113,7 @@ const styles = StyleSheet.create({
     expertInfo: { flex: 1, marginLeft: 15, overflow: 'hidden' },
     expertName: { color: '#FFF', fontSize: 14, fontWeight: '900', marginBottom: 4, letterSpacing: 0.5 },
     callDateText: { color: '#475569', fontSize: 10, fontWeight: '800' },
-    costContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 10 },
-    costText: { fontSize: 17, fontWeight: '900' },
     statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12, zIndex: 10, width: '100%' },
-    statItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' },
-    statValueText: { color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
     
     footer: { alignItems: 'center', marginTop: 25 },
     verText: { color: 'rgba(255,255,255,0.15)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
