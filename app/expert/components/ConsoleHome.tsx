@@ -190,6 +190,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   // 🔥 NEW FIX: REFS TO PREVENT INFINITE LOOPS & FIX ZERO-TO-ONE REQUEST BUG 🔥
   const initialLoadRef = useRef(true);
   const knownRequestsRef = useRef<string[]>([]);
+  const seenInitRef = useRef(false); // one-time: set the 'notifications last seen' time
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
@@ -318,9 +319,24 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
             setIsOnline(data.isOnline);
         }
 
-        if (data.notifications) {
-          const unread = data.notifications.filter((notif: any) => !notif.read).length;
+        // 🔔 BELL COUNT (bullet-proof): a notification counts as NEW when
+        //   (a) its read flag is not true, OR
+        //   (b) it was created after the last time the Notifications screen was opened (notifSeenAt).
+        // (b) means nothing else in the app (toast bar, background listeners...) can silently hide the count by flipping read:true.
+        if (data.notifSeenAt === undefined && !seenInitRef.current) {
+          seenInitRef.current = true;
+          updateDoc(doc(db, "users", user.uid), { notifSeenAt: Date.now() }).catch(() => {});
+        }
+        if (Array.isArray(data.notifications)) {
+          const seenAt = data.notifSeenAt === undefined ? null : (Number(data.notifSeenAt) || 0);
+          const unread = data.notifications.filter((notif: any) => {
+            const flagUnread = !(notif?.read === true || notif?.isRead === true);
+            const newerThanSeen = seenAt !== null && typeof notif?.createdAt === 'number' && notif.createdAt > seenAt;
+            return flagUnread || newerThanSeen;
+          }).length;
           setUnreadCount(unread);
+        } else {
+          setUnreadCount(0);
         }
       }
     });
@@ -683,6 +699,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const pulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
   const dotPulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] });
   const dotPulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
+  const badgePulse = pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] });
   const sweepX = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: [-160, width] });
   const badgeSweepX = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: [-60, 180] });
   const ringOffset = progressAnim.interpolate({ inputRange: [0, 100], outputRange: [RING_C, 0] });
@@ -778,16 +795,14 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               
               {/* 🔥 NOTIFICATION BELL WITH BADGE */}
               <TouchableOpacity style={styles.iconCircle} onPress={() => router.push("/expert/notifications")}>
-                <View>
-                    <Ionicons name="notifications-outline" size={18} color="#FFF" />
-                    {unreadCount > 0 && (
-                        <View style={styles.badgeContainer}>
-                            <Text style={styles.badgeText}>
-                                {unreadCount > 9 ? '9+' : unreadCount}
-                            </Text>
-                        </View>
-                    )}
-                </View>
+                <Ionicons name={unreadCount > 0 ? "notifications" : "notifications-outline"} size={18} color="#FFF" />
+                {unreadCount > 0 && (
+                    <Animated.View style={[styles.badgeContainer, { transform: [{ scale: badgePulse }] }]}>
+                        <Text style={styles.badgeText}>
+                            {unreadCount > 9 ? '9+' : unreadCount}
+                        </Text>
+                    </Animated.View>
+                )}
               </TouchableOpacity>
 
               <TouchableOpacity style={[styles.iconCircle, {marginLeft: 8}]} onPress={() => router.push("/blocked-users")}>
@@ -1226,7 +1241,6 @@ const styles = StyleSheet.create({
   editCoverBtn: { backgroundColor: 'rgba(4, 4, 247, 0.65)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
  
   editCoverText: { color: '#FFF', fontSize: 11, fontWeight: '800', marginLeft: 6, letterSpacing: 0.5 },
-
   // 🆕 BANNER MENU STYLES (Change / Remove)
   bannerMenuBackdrop: { ...StyleSheet.absoluteFillObject, zIndex: 14 },
   bannerMenu: { position: 'absolute', bottom: 112, right: 10, zIndex: 20, minWidth: 176, backgroundColor: 'rgba(8, 15, 35, 0.96)', borderRadius: 18, padding: 6, borderWidth: 1, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
@@ -1239,8 +1253,8 @@ const styles = StyleSheet.create({
   adminIconBtn: { width: 38, height: 38, backgroundColor: 'rgba(16, 185, 129, 0.2)', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginRight: 8, borderWidth: 1, borderColor: '#10B98140' },
   iconCircle: { width: 38, height: 38, backgroundColor: 'rgba(15, 23, 42, 0.7)', borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
   
-  badgeContainer: { position: 'absolute', right: -6, top: -6, backgroundColor: '#F43F5E', borderRadius: 10, minWidth: 16, height: 16, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#020617' },
-  badgeText: { color: '#FFF', fontSize: 8, fontWeight: '900', paddingHorizontal: 3 },
+  badgeContainer: { position: 'absolute', right: -7, top: -7, backgroundColor: '#F43F5E', borderRadius: 10, minWidth: 19, height: 19, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#020617', zIndex: 20, elevation: 8 },
+  badgeText: { color: '#FFF', fontSize: 10, fontWeight: '900', paddingHorizontal: 4 },
 
   profileSection: { alignItems: 'center', marginBottom: 25 },
   avatarWrapper: { width: 156, height: 156, justifyContent: 'center', alignItems: 'center' },
