@@ -12,6 +12,7 @@ import MaintenanceScreen from '../components/.MaintenanceScreen';
 import UpdateAlert from '../components/UpdateAlert';
 import { auth, db } from '../firebaseConfig';
 import { BlockProvider } from '../utils/context/BlockContext';
+import { sendNotificationToUser } from '../utils/notificationHelper'; // 🔥 NEW: missed call notification
 
 LogBox.ignoreLogs([
   'BloomFilter error',
@@ -73,6 +74,7 @@ export default function RootLayout() {
 
   const isNavigatingToCall = useRef(false);
   const hasShownLogoutAlert = useRef(false);
+  const notifiedCallsRef = useRef<Set<string>>(new Set()); // 🔥 NEW: prevents duplicate missed/cancelled call notification
 
   const [incomingCallData, setIncomingCallData] = useState<any>(null);
   const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
@@ -346,6 +348,69 @@ export default function RootLayout() {
         if (interval) clearInterval(interval);
     };
   }, [incomingCallId, incomingCallData]);
+
+  // 🔥 NEW: GLOBAL MISSED / CANCELLED CALL NOTIFIER
+  // Runs on EVERY screen (live, forum, quick connect, videocall...). Whenever a call to this host
+  // becomes 'missed' or 'cancelled', one notification (with caller id + photo) is saved in the host's list.
+  useEffect(() => {
+    if (!user?.uid || userRole !== 'expert' || initializing) return;
+
+    const missedQuery = query(
+      collection(db, 'calls'),
+      where('expertId', '==', user.uid),
+      where('status', 'in', ['missed', 'cancelled', 'rejected', 'declined'])
+    );
+
+    const toMs = (t: any): number | null =>
+      t?.toMillis ? t.toMillis() : (t?.seconds ? t.seconds * 1000 : null);
+
+    const unsubMissed = onSnapshot(missedQuery, (snapshot) => {
+      snapshot.docChanges().forEach((change) => {
+        if (change.type !== 'added') return;
+
+        const callId = change.doc.id;
+        const d: any = change.doc.data();
+
+        if (d.hostNotified === true) return;                          // already notified earlier
+        if (notifiedCallsRef.current.has(callId)) return;             // already notified in this session
+        if (d.acceptedAt || d.connectedAt || (d.finalDuration || 0) > 0) return; // call actually connected -> not a missed call
+
+        const ts = toMs(d.endedAt) ?? toMs(d.updatedAt) ?? toMs(d.createdAt) ?? Date.now();
+        if (Date.now() - ts > 10 * 60 * 1000) return;                 // ignore old history
+
+        const callerId = d.callerId || d.userId;
+        if (!callerId) return;
+
+        notifiedCallsRef.current.add(callId);
+
+        const callerName = d.callerName || d.userName || 'A user';
+        const callerImage = d.callerImage || d.userImage || undefined;
+        let notifTitle = "Call Cancelled 📵";
+        let notifMessage = `${callerName} cancelled the call`;
+        if (d.status === 'missed') {
+          notifTitle = "Missed Call 📞";
+          notifMessage = `${callerName} called you`;
+        } else if (d.status === 'rejected' || d.status === 'declined') {
+          notifTitle = "Call Declined 🚫";
+          notifMessage = `You declined a call from ${callerName}`;
+        }
+
+        sendNotificationToUser(
+          user.uid,
+          notifTitle,
+          notifMessage,
+          'call',
+          { callerId, callerImage }
+        );
+
+        updateDoc(change.doc.ref, { hostNotified: true }).catch(() => {});
+      });
+    }, (error) => {
+      if (error.code === 'permission-denied') console.log("Missed call notifier detached.");
+    });
+
+    return () => unsubMissed();
+  }, [user?.uid, userRole, initializing]);
 
   const acceptIncomingCall = async () => {
       if (!incomingCallId) return;

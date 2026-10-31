@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { arrayUnion, collection, doc, limit, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -83,6 +83,14 @@ export default function ExpertDashboard() {
     const router = useRouter();
     const [user, setUser] = useState(auth.currentUser);
     const [activeTab, setActiveTab] = useState('DASH');
+
+    // 🆕 NEW: Open specific tab when navigated with ?tab=WALLET / MESSAGES / LEVELS / STATS / DASH
+    const dashParams = useLocalSearchParams();
+    useEffect(() => {
+        const t = String(dashParams.tab || '');
+        if (['DASH', 'WALLET', 'MESSAGES', 'LEVELS', 'STATS'].includes(t)) setActiveTab(t);
+    }, [dashParams.tab, dashParams.ts]);
+
     const [loading, setLoading] = useState(true);
     const [expertData, setExpertData] = useState<any>(null);
     const [isOnline, setIsOnline] = useState(false);

@@ -36,7 +36,8 @@ import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
     IRtcEngine,
-    RtcSurfaceView
+    RtcSurfaceView,
+    RtcTextureView
 } from 'react-native-agora';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
@@ -83,6 +84,86 @@ const getQuickDiscoverTierRate = (beans: number) => {
     return 1000; 
 };
 
+// 🌈 Multicolor palette (preview frame + menu border + FAB ring)
+const RAINBOW_COLORS = ['#FF3D81', '#F5C84C', '#34D399', '#22D3EE', '#8B5CF6', '#FF3D81'] as const;
+const MENU_BORDER_COLORS = ['#F5D27A', '#FF5C9E', '#8B5CF6', '#22D3EE', '#34D399'] as const;
+
+// 🆕 Chinna toggle switch (call settings menu-ku) - ippo gradient track
+const MenuSwitch = ({ on, colors }: { on: boolean; colors: readonly [string, string] }) => (
+    <View style={styles.menuSwitchTrack}>
+        {on && (
+            <LinearGradient
+                colors={colors as any}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={StyleSheet.absoluteFill}
+            />
+        )}
+        <View style={[styles.menuSwitchKnob, on && { alignSelf: 'flex-end' }]} />
+    </View>
+);
+
+// 🆕 Settings menu-oda oru row (staggered slide-in animation oda)
+const MenuRow = ({
+    anim, index, accent, gradColors, icon, title, subtitle, right, onPress, disabled, active, last, danger
+}: {
+    anim: Animated.Value;
+    index: number;
+    accent: string;
+    gradColors: readonly [string, string];
+    icon: React.ReactNode;
+    title: string;
+    subtitle: string;
+    right: React.ReactNode;
+    onPress: () => void;
+    disabled?: boolean;
+    active?: boolean;
+    last?: boolean;
+    danger?: boolean;
+}) => {
+    const start = index * 0.18;
+    return (
+        <Animated.View
+            style={{
+                marginBottom: last ? 0 : 10,
+                opacity: anim.interpolate({ inputRange: [start, start + 0.55], outputRange: [0, 1], extrapolate: 'clamp' }),
+                transform: [{ translateX: anim.interpolate({ inputRange: [start, start + 0.55], outputRange: [26, 0], extrapolate: 'clamp' }) }]
+            }}
+        >
+            <TouchableOpacity
+                style={[
+                    styles.menuRow,
+                    { borderColor: accent + (active || danger ? '99' : '44') },
+                    disabled && { opacity: 0.45 }
+                ]}
+                onPress={onPress}
+                disabled={disabled}
+                activeOpacity={0.75}
+            >
+                <LinearGradient
+                    colors={[accent + '30', 'transparent']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={StyleSheet.absoluteFill}
+                />
+                <LinearGradient
+                    colors={gradColors as any}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.menuIconCircle}
+                >
+                    {icon}
+                </LinearGradient>
+                <View style={styles.menuTextWrap}>
+                    <Text style={[styles.menuRowTitle, danger && { color: '#FCA5A5' }]}>{title}</Text>
+                    <Text style={styles.menuRowSub}>{subtitle}</Text>
+                </View>
+                {right}
+            </TouchableOpacity>
+        </Animated.View>
+    );
+};
+
 export default function VideoCallScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
@@ -111,6 +192,18 @@ export default function VideoCallScreen() {
     const [isProEnabled, setIsProEnabled] = useState(false);
     
     const [isPrivacyBlurActive, setIsPrivacyBlurActive] = useState(false);
+
+    // 🆕 CAMERA ON/OFF (AUDIO MODE) STATES
+    // isCameraOff = en camera off-a irukka, remoteCameraOff = antha pakkam camera off-a irukka
+    const [isCameraOff, setIsCameraOff] = useState(false);
+    const [remoteCameraOff, setRemoteCameraOff] = useState(false);
+    const audioPulseAnim = useRef(new Animated.Value(0)).current; // audio mode avatar glow pulse
+    const [isMenuOpen, setIsMenuOpen] = useState(false); // call settings menu (Shield / Camera / Restrict)
+    const menuAnim = useRef(new Animated.Value(0)).current;
+    // 🆕 Settings FAB gear -> square morph (shape animation, non-native driver)
+    const fabMorph = useRef(new Animated.Value(0)).current;
+    // 🆕 Preview box multicolor rotating frame
+    const borderSpin = useRef(new Animated.Value(0)).current;
 
     const [isCallAccepted, setIsCallAccepted] = useState(role === 'user'); 
     const [isRinging, setIsRinging] = useState(true); 
@@ -515,6 +608,9 @@ export default function VideoCallScreen() {
                 if (data.expertImage && !expertProfilePic) setExpertProfilePic(data.expertImage);
                 if (data.callerImage && !callerProfilePic) setCallerProfilePic(data.callerImage);
 
+                // 🆕 Antha pakkam camera off pannirukkangala nu kandupidikkum (audio mode layout-ku)
+                setRemoteCameraOff(role === 'expert' ? !!data.userCameraOff : !!data.expertCameraOff);
+
                 if (!isQuickDiscover && (data.userPrice || data.pricePerMin || data.beansPerMin)) {
                     const price = data.userPrice || data.pricePerMin || data.beansPerMin;
                     diamondRateRef.current = price;
@@ -699,6 +795,42 @@ export default function VideoCallScreen() {
         };
     }, [isCallAccepted]);
 
+    // 🆕 Antha pakkam camera off aanaa, avanga video stream-a download pannama niruthum (data save)
+    useEffect(() => {
+        if (!engine.current || remoteUid === null) return;
+        try {
+            engine.current.muteRemoteVideoStream(remoteUid, remoteCameraOff);
+        } catch (e) {
+            console.log("Remote video mute error:", e);
+        }
+    }, [remoteCameraOff, remoteUid]);
+
+    // 🆕 AUDIO MODE: avatar-oda glow pulse animation (antha pakkam camera off irukkumbodhu mattum)
+    useEffect(() => {
+        if (remoteCameraOff && remoteUid) {
+            const loop = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(audioPulseAnim, { toValue: 1, duration: 1600, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+                    Animated.timing(audioPulseAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+                ])
+            );
+            loop.start();
+            return () => { loop.stop(); audioPulseAnim.setValue(0); };
+        }
+    }, [remoteCameraOff, remoteUid]);
+
+    // 🆕 PREVIEW BOX: multicolor frame continuous-a suthum (call join aana pinnaadi)
+    useEffect(() => {
+        if (joined && !showSummary) {
+            borderSpin.setValue(0);
+            const spinLoop = Animated.loop(
+                Animated.timing(borderSpin, { toValue: 1, duration: 4500, easing: Easing.linear, useNativeDriver: true })
+            );
+            spinLoop.start();
+            return () => { spinLoop.stop(); };
+        }
+    }, [joined, showSummary]);
+
     const setupVideoSDKEngine = async () => {
         try {
             if (engine.current) return;
@@ -745,6 +877,41 @@ export default function VideoCallScreen() {
         } catch (error) {
             console.log("Pro engine error:", error);
         }
+    };
+
+    // 🆕 CAMERA ON/OFF: camera stream actually stop aagum (battery + data save), matha pakkathukkum theriyum
+    const toggleCamera = async () => {
+        if (!engine.current) return;
+        const nextOff = !isCameraOff;
+        setIsCameraOff(nextOff);
+        try {
+            engine.current.enableLocalVideo(!nextOff);
+            engine.current.muteLocalVideoStream(nextOff);
+        } catch (error) {
+            console.log("Camera toggle error:", error);
+        }
+        if (callId) {
+            const field = role === 'expert' ? 'expertCameraOff' : 'userCameraOff';
+            updateDoc(doc(db, "calls", callId), { [field]: nextOff }).catch(() => {});
+        }
+    };
+
+    // 🆕 Menu open: panel slide-in + FAB gear -> square morph
+    const openMenu = () => {
+        setIsMenuOpen(true);
+        menuAnim.setValue(0);
+        Animated.parallel([
+            Animated.timing(menuAnim, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+            Animated.timing(fabMorph, { toValue: 1, duration: 320, easing: Easing.out(Easing.cubic), useNativeDriver: false })
+        ]).start();
+    };
+
+    // 🆕 Menu close: panel fade-out + FAB square -> gear morph
+    const closeMenu = () => {
+        Animated.parallel([
+            Animated.timing(menuAnim, { toValue: 0, duration: 220, easing: Easing.in(Easing.ease), useNativeDriver: true }),
+            Animated.timing(fabMorph, { toValue: 0, duration: 220, easing: Easing.in(Easing.ease), useNativeDriver: false })
+        ]).start(() => setIsMenuOpen(false));
     };
 
     const handleSendGift = async (amount: number, type: string, giftName: string = 'Gift') => {
@@ -1164,6 +1331,23 @@ export default function VideoCallScreen() {
         ? (callerProfilePic || `https://ui-avatars.com/api/?name=${callerDisplayName}&background=0F172A&color=00F2FE&bold=true`)
         : (expertProfilePic || `https://ui-avatars.com/api/?name=${expertName}&background=0F172A&color=00F2FE&bold=true`);
 
+    // 🆕 AUDIO MODE: en sondha photo (camera off-la floating tile-la kaattum)
+    const ownProfilePic = role === 'expert'
+        ? (expertProfilePic || `https://ui-avatars.com/api/?name=${expertName}&background=0F172A&color=00F2FE&bold=true`)
+        : (callerProfilePic || `https://ui-avatars.com/api/?name=${callerDisplayName}&background=0F172A&color=00F2FE&bold=true`);
+
+    // 🆕 AUDIO MODE: antha pakkam peyar
+    const remoteDisplayName = role === 'expert' ? (callerDisplayName || "User") : expertName;
+
+    // 🆕 FAB shape morph (circle -> rounded square) + gear/square icon crossfade
+    const fabOuterRadius = fabMorph.interpolate({ inputRange: [0, 1], outputRange: [27, 15] });
+    const fabInnerRadius = fabMorph.interpolate({ inputRange: [0, 1], outputRange: [24.5, 12.5] });
+    const gearOpacity = menuAnim.interpolate({ inputRange: [0, 0.5], outputRange: [1, 0], extrapolate: 'clamp' });
+    const gearRotate = menuAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+    const squareOpacity = menuAnim.interpolate({ inputRange: [0.4, 1], outputRange: [0, 1], extrapolate: 'clamp' });
+    const squareRotate = menuAnim.interpolate({ inputRange: [0, 1], outputRange: ['-90deg', '0deg'] });
+    const squareScale = menuAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+
     return (
         <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
             <StatusBar barStyle="light-content" backgroundColor="#000" />
@@ -1173,19 +1357,49 @@ export default function VideoCallScreen() {
                 {/* 🔥 SATTI UPDATE: Privacy Blur View conditionally rendered OVER the remote video */}
                 {remoteUid ? (
                     <>
-                        {/* Only render remote video if privacy is OFF */}
-                        {!isPrivacyBlurActive && (
-                            <RtcSurfaceView canvas={{ uid: remoteUid }} style={styles.fullVideo} />
-                        )}
-                        {/* Show solid black shield if privacy is ON */}
-                        {isPrivacyBlurActive && (
-                            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2, 6, 23, 0.98)', justifyContent: 'center', alignItems: 'center', zIndex: 5 }]}>
-                                <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(59, 130, 246, 0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 15 }}>
-                                    <Ionicons name="eye-off" size={40} color="#3B82F6" />
+                        {remoteCameraOff ? (
+                            /* 🆕 AUDIO MODE LAYOUT: antha pakkam camera off aanaa avatar + name + call timer */
+                            <View style={styles.audioModeContainer}>
+                                <LinearGradient colors={['#020617', '#1E293B']} style={StyleSheet.absoluteFill} />
+                                <View style={styles.audioModeAvatarWrap}>
+                                    <Animated.View
+                                        pointerEvents="none"
+                                        style={[
+                                            styles.audioPulseRing,
+                                            {
+                                                opacity: audioPulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] }),
+                                                transform: [{ scale: audioPulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] }) }]
+                                            }
+                                        ]}
+                                    />
+                                    <View style={styles.audioModeAvatarRing}>
+                                        <Image source={{ uri: topHeaderProfilePic }} style={styles.audioModeAvatar} />
+                                    </View>
                                 </View>
-                                <Text style={styles.privacyShieldText}>PRIVACY SHIELD ON</Text>
-                                <Text style={styles.privacyShieldSubText}>Remote video is safely hidden.</Text>
+                                <Text style={styles.audioModeName} numberOfLines={1}>{remoteDisplayName}</Text>
+                                <Text style={styles.audioModeTimer}>{formatTime(secondsElapsed)}</Text>
+                                <View style={styles.audioModeBadge}>
+                                    <Ionicons name="videocam-off" size={14} color="#94A3B8" />
+                                    <Text style={styles.audioModeBadgeText}>AUDIO CALL • CAMERA OFF</Text>
+                                </View>
                             </View>
+                        ) : (
+                            <>
+                                {/* Only render remote video if privacy is OFF */}
+                                {!isPrivacyBlurActive && (
+                                    <RtcSurfaceView canvas={{ uid: remoteUid }} style={styles.fullVideo} />
+                                )}
+                                {/* Show solid black shield if privacy is ON */}
+                                {isPrivacyBlurActive && (
+                                    <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2, 6, 23, 0.98)', justifyContent: 'center', alignItems: 'center', zIndex: 5 }]}>
+                                        <View style={{ width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(59, 130, 246, 0.2)', justifyContent: 'center', alignItems: 'center', marginBottom: 15 }}>
+                                            <Ionicons name="eye-off" size={40} color="#3B82F6" />
+                                        </View>
+                                        <Text style={styles.privacyShieldText}>PRIVACY SHIELD ON</Text>
+                                        <Text style={styles.privacyShieldSubText}>Remote video is safely hidden.</Text>
+                                    </View>
+                                )}
+                            </>
                         )}
                     </>
                 ) : (
@@ -1219,22 +1433,184 @@ export default function VideoCallScreen() {
 
             {joined && !showSummary && (
                 <Animated.View {...panResponder.panHandlers} style={[styles.localVideoFloatingWrapper, { transform: pan.getTranslateTransform() }]}>
-                    <View style={styles.localVideoFloating}>
-                        <RtcSurfaceView canvas={{ uid: 0 }} style={styles.innerVideo} zOrderMediaOverlay={true} />
+                    {/* 🌈 MULTICOLOR ROTATING FRAME: rainbow gradient continuous-a suthum, antha mela video clip aagum */}
+                    <View style={styles.localRingClip} pointerEvents="none">
+                        <Animated.View
+                            style={[
+                                styles.localRingSpinner,
+                                { transform: [{ rotate: borderSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }
+                            ]}
+                        >
+                            <LinearGradient
+                                colors={RAINBOW_COLORS as any}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={StyleSheet.absoluteFill}
+                            />
+                        </Animated.View>
+                    </View>
+
+                    {/* 🆕 ROYAL PREVIEW BOX: multicolor frame, clean rounded clipping (TextureView), YOU chip + mute badge */}
+                    <View style={styles.localVideoClip}>
+                        {isCameraOff ? (
+                            /* Camera off aanaa en tile-la en photo + camera-off icon */
+                            <View style={styles.localCamOffPlaceholder}>
+                                <Image source={{ uri: ownProfilePic }} style={styles.localCamOffAvatar} />
+                                <View style={styles.localCamOffIconBadge}>
+                                    <Ionicons name="videocam-off" size={14} color="#FFF" />
+                                </View>
+                            </View>
+                        ) : (
+                            <RtcTextureView canvas={{ uid: 0 }} style={styles.innerVideo} />
+                        )}
+                        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.75)']} style={styles.localShade} pointerEvents="none" />
+                        <View style={styles.localYouChip} pointerEvents="none">
+                            <MaterialCommunityIcons name="crown" size={11} color="#F5C84C" />
+                            <Text style={styles.localYouText}>YOU</Text>
+                        </View>
+                        {isMuted && (
+                            <View style={styles.localMicBadge} pointerEvents="none">
+                                <Ionicons name="mic-off" size={12} color="#FFF" />
+                            </View>
+                        )}
+                        <View style={styles.localFrameInner} pointerEvents="none" />
                     </View>
                 </Animated.View>
             )}
 
-            {/* 🔥 NEW FIX: Independent Floating Privacy Button for ALL users 🔥 */}
+            {/* 🆕 ROYAL CALL SETTINGS: top-right-la oru multicolor icon, click panna gear -> square aagi, Shield + Camera + Restrict 3-um keezha thirandhu varum */}
             {isCallAccepted && !showSummary && (
-                <TouchableOpacity 
-                    style={[styles.floatingPrivacyBtn, isPrivacyBlurActive && styles.floatingPrivacyBtnActive]} 
-                    onPress={() => setIsPrivacyBlurActive(!isPrivacyBlurActive)} 
-                    activeOpacity={0.7}
-                >
-                    <Ionicons name={isPrivacyBlurActive ? "eye-off" : "eye"} size={22} color={isPrivacyBlurActive ? "#FFF" : "#020617"} />
-                    {isPrivacyBlurActive && <Text style={styles.floatingPrivacyText}>SHIELD ON</Text>}
-                </TouchableOpacity>
+                <>
+                    {isMenuOpen && (
+                        <TouchableOpacity activeOpacity={1} style={styles.menuBackdrop} onPress={closeMenu}>
+                            <Animated.View
+                                pointerEvents="none"
+                                style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2,6,23,0.55)', opacity: menuAnim }]}
+                            />
+                        </TouchableOpacity>
+                    )}
+
+                    <TouchableOpacity style={styles.menuFabWrap} onPress={isMenuOpen ? closeMenu : openMenu} activeOpacity={0.85}>
+                        <Animated.View style={[styles.menuFabShape, { borderRadius: fabOuterRadius }]}>
+                            <LinearGradient
+                                colors={(isMenuOpen ? ['#FFE9A8', '#FF8AC6', '#A78BFA', '#67E8F9'] : MENU_BORDER_COLORS) as any}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.menuFabRing}
+                            >
+                                <Animated.View
+                                    style={[
+                                        styles.menuFabInner,
+                                        { borderRadius: fabInnerRadius },
+                                        isMenuOpen && { backgroundColor: 'transparent' }
+                                    ]}
+                                >
+                                    {/* Gear icon (closed state) */}
+                                    <Animated.View style={[styles.fabIconLayer, { opacity: gearOpacity, transform: [{ rotate: gearRotate }] }]}>
+                                        <Ionicons name="settings-sharp" size={22} color="#F5C84C" />
+                                    </Animated.View>
+                                    {/* Square glyph (open state) */}
+                                    <Animated.View style={[styles.fabIconLayer, { opacity: squareOpacity, transform: [{ rotate: squareRotate }, { scale: squareScale }] }]}>
+                                        <View style={styles.squareGlyphOuter}>
+                                            <View style={styles.squareGlyphInner} />
+                                        </View>
+                                    </Animated.View>
+                                </Animated.View>
+                            </LinearGradient>
+                        </Animated.View>
+                        {!isMenuOpen && (isPrivacyBlurActive || isCameraOff) && (
+                            <View style={[styles.menuStatusDot, { backgroundColor: isCameraOff ? '#EF4444' : '#F5C84C' }]} />
+                        )}
+                    </TouchableOpacity>
+
+                    {isMenuOpen && (
+                        <Animated.View
+                            style={[
+                                styles.menuPanelWrap,
+                                {
+                                    opacity: menuAnim,
+                                    transform: [
+                                        { translateY: menuAnim.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }) },
+                                        { scale: menuAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) }
+                                    ]
+                                }
+                            ]}
+                        >
+                            {/* 🌈 Multicolor gradient border */}
+                            <LinearGradient
+                                colors={MENU_BORDER_COLORS as any}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={styles.menuPanelBorder}
+                            >
+                                <View style={styles.menuPanelInner}>
+                                    <LinearGradient colors={['#1A1040', '#0A0F24', '#06161F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                                    {/* Soft color glows */}
+                                    <View style={styles.menuGlowViolet} pointerEvents="none" />
+                                    <View style={styles.menuGlowCyan} pointerEvents="none" />
+
+                                    <View style={styles.menuHeaderRow}>
+                                        <LinearGradient colors={['#F5D27A', '#FF5C9E']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.menuHeaderBadge}>
+                                            <MaterialCommunityIcons name="crown" size={14} color="#0B1026" />
+                                        </LinearGradient>
+                                        <Text style={styles.menuTitle}>ROYAL CONTROLS</Text>
+                                        <View style={styles.menuLiveChip}>
+                                            <View style={styles.menuLiveDot} />
+                                            <Text style={styles.menuLiveText}>LIVE</Text>
+                                        </View>
+                                    </View>
+                                    <LinearGradient
+                                        colors={['transparent', '#F5D27A', '#FF5C9E', '#8B5CF6', '#22D3EE', 'transparent']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 0 }}
+                                        style={styles.menuGoldLine}
+                                    />
+
+                                    <MenuRow
+                                        anim={menuAnim}
+                                        index={0}
+                                        accent="#8B5CF6"
+                                        gradColors={['#A78BFA', '#6366F1']}
+                                        active={isPrivacyBlurActive}
+                                        icon={<Ionicons name={isPrivacyBlurActive ? "eye-off" : "eye"} size={18} color="#FFF" />}
+                                        title="Privacy Shield"
+                                        subtitle={isPrivacyBlurActive ? 'Remote video hidden' : 'Hide remote video'}
+                                        right={<MenuSwitch on={isPrivacyBlurActive} colors={['#A78BFA', '#6366F1']} />}
+                                        onPress={() => setIsPrivacyBlurActive(!isPrivacyBlurActive)}
+                                    />
+
+                                    <MenuRow
+                                        anim={menuAnim}
+                                        index={1}
+                                        accent={isCameraOff ? '#EF4444' : '#22D3EE'}
+                                        gradColors={isCameraOff ? ['#F87171', '#EF4444'] : ['#22D3EE', '#34D399']}
+                                        active={!isCameraOff}
+                                        disabled={!joined}
+                                        icon={<Ionicons name={isCameraOff ? "videocam-off" : "videocam"} size={18} color="#FFF" />}
+                                        title="Camera"
+                                        subtitle={!joined ? 'Connecting...' : (isCameraOff ? 'Camera is off (audio mode)' : 'Camera is on')}
+                                        right={<MenuSwitch on={!isCameraOff} colors={['#22D3EE', '#34D399']} />}
+                                        onPress={toggleCamera}
+                                    />
+
+                                    <MenuRow
+                                        anim={menuAnim}
+                                        index={2}
+                                        accent="#FF3D81"
+                                        gradColors={['#FF5C9E', '#EF4444']}
+                                        danger
+                                        last
+                                        icon={<Ionicons name="shield-checkmark" size={18} color="#FFF" />}
+                                        title="Restrict"
+                                        subtitle="Report & block this user"
+                                        right={<Ionicons name="chevron-forward" size={16} color="#FF5C9E" />}
+                                        onPress={() => { closeMenu(); handleBlockUser(); }}
+                                    />
+                                </View>
+                            </LinearGradient>
+                        </Animated.View>
+                    )}
+                </>
             )}
 
             {isCallAccepted && !showSummary && (
@@ -1254,12 +1630,6 @@ export default function VideoCallScreen() {
                             </View>
                         </View>
                         
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <TouchableOpacity style={styles.topRightBlockBtn} onPress={handleBlockUser} activeOpacity={0.7}>
-                                <Ionicons name="shield-checkmark" size={18} color="#EF4444" />
-                                <Text style={styles.blockBtnText}>RESTRICT</Text>
-                            </TouchableOpacity>
-                        </View>
                     </View>
                 </View>
             )}
@@ -1374,13 +1744,12 @@ const styles = StyleSheet.create({
     uiWrapper: { flex: 1, justifyContent: 'flex-end' },
     
     // 🔥 SATTI FIX: Absolute bulletproof rounded corners for local video
-    localVideoFloatingWrapper: { width: 110, height: 160, position: 'absolute', zIndex: 100, elevation: 15, shadowColor: '#000', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.5, shadowRadius: 12 },
-    localVideoFloating: { flex: 1, borderWidth: 2, borderColor: 'rgba(0, 64, 255, 0.9)', backgroundColor: '#020617', overflow: 'hidden' },
     innerVideo: { flex: 1, overflow: 'hidden' },
     
     topHeader: { position: 'absolute', top: 40, left: 20, right: 20, zIndex: 150 },
     headerContent: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: width - 40 },
-    headerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 },
+    // 🆕 paddingRight 66 -> top-right settings button-ku idam vittu (peyar mela overlap aagaama)
+    headerInfo: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 66 },
     headerAvatarWrapper: { width: 50, height: 50, borderRadius: 25, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', overflow: 'hidden', backgroundColor: '#000' },
     headerAvatarPic: { width: '100%', height: '100%' },
     statusBadge: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 25, alignSelf: 'flex-start' },
@@ -1389,16 +1758,73 @@ const styles = StyleSheet.create({
     freeBadgeText: { color: '#FBBF24', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
     callerNameText: { color: '#FFF', fontSize: 20, fontWeight: '900', marginTop: 4, textShadowColor: '#000', textShadowRadius: 15, flexShrink: 1 },
     
-    // 🔥 SATTI FIX: Floating Privacy Button Styles
-    floatingPrivacyBtn: { position: 'absolute', top: 43, right: 110, backgroundColor: 'rgba(255, 255, 255, 0.9)', paddingHorizontal: 5, paddingVertical: 5, borderRadius: 25, flexDirection: 'row', alignItems: 'center', zIndex: 999, elevation: 15, borderWidth: 1, borderColor: 'rgba(0,0,0,0.1)' },
-    floatingPrivacyBtnActive: { backgroundColor: '#3B82F6', borderColor: '#60A5FA' },
-    floatingPrivacyText: { color: '#FFF', fontSize: 8, fontWeight: '900', marginLeft: 6, letterSpacing: 1 },
     privacyShieldCenter: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     privacyShieldText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 2, marginTop: 15 },
     privacyShieldSubText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', marginTop: 5 },
 
-    topRightBlockBtn: { flexDirection: 'row', top: -13, right:-5, backgroundColor: 'rgb(255, 255, 255)', paddingHorizontal: 5, paddingVertical: 9, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(0, 0, 0, 0.4)', elevation: 5, flexShrink: 0, height:35 },
-    blockBtnText: { color: '#000000', fontWeight: 'bold', marginLeft: 5, fontSize: 12 },
+
+    // 🆕 AUDIO MODE LAYOUT STYLES (antha pakkam camera off)
+    audioModeContainer: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center', zIndex: 4 },
+    audioModeAvatarRing: { width: 150, height: 150, borderRadius: 75, borderWidth: 3, borderColor: 'rgba(59, 130, 246, 0.8)', padding: 4, justifyContent: 'center', alignItems: 'center', shadowColor: '#3B82F6', shadowOpacity: 0.6, shadowRadius: 25, elevation: 12, backgroundColor: '#0F172A' },
+    audioModeAvatar: { width: '100%', height: '100%', borderRadius: 75 },
+    audioModeName: { color: '#FFF', fontSize: 24, fontWeight: '900', marginTop: 22, maxWidth: width * 0.8, textShadowColor: '#000', textShadowRadius: 12 },
+    audioModeTimer: { color: '#10B981', fontSize: 20, fontWeight: '800', marginTop: 8, letterSpacing: 2 },
+    audioModeBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+    audioModeBadgeText: { color: '#94A3B8', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+
+    // 🆕 LOCAL TILE (en camera off)
+    localCamOffPlaceholder: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A' },
+    localCamOffAvatar: { width: 64, height: 64, borderRadius: 32, borderWidth: 2, borderColor: 'rgba(255,255,255,0.25)' },
+    localCamOffIconBadge: { position: 'absolute', bottom: 10, backgroundColor: 'rgba(239, 68, 68, 0.9)', width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+
+
+    audioModeAvatarWrap: { width: 150, height: 150, justifyContent: 'center', alignItems: 'center' },
+    audioPulseRing: { ...StyleSheet.absoluteFillObject, borderRadius: 75, borderWidth: 2, borderColor: '#3B82F6' },
+
+
+
+    // 🆕 ROYAL LOCAL PREVIEW BOX (multicolor rotating frame)
+    localVideoFloatingWrapper: { width: 112, height: 166, borderRadius: 22, position: 'absolute', zIndex: 100, backgroundColor: '#0B1026', elevation: 14, shadowColor: '#A855F7', shadowOffset: { width: 0, height: 6 }, shadowOpacity: 0.5, shadowRadius: 14 },
+    localRingClip: { ...StyleSheet.absoluteFillObject, borderRadius: 22, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+    localRingSpinner: { position: 'absolute', width: 260, height: 260, left: (112 - 260) / 2, top: (166 - 260) / 2 },
+    localVideoClip: { position: 'absolute', top: 3, left: 3, right: 3, bottom: 3, borderRadius: 19, overflow: 'hidden', backgroundColor: '#0B1026' },
+    localFrameOuter: { ...StyleSheet.absoluteFillObject, borderRadius: 22, borderWidth: 2.5, borderColor: '#F5C84C' },
+    localFrameInner: { position: 'absolute', top: 4, left: 4, right: 4, bottom: 4, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)' },
+    localShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 56 },
+    localYouChip: { position: 'absolute', left: 10, bottom: 10, flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(245,200,76,0.5)' },
+    localYouText: { color: '#F5C84C', fontSize: 9, fontWeight: '900', letterSpacing: 1.5 },
+    localMicBadge: { position: 'absolute', top: 10, right: 10, width: 22, height: 22, borderRadius: 11, backgroundColor: 'rgba(239,68,68,0.9)', justifyContent: 'center', alignItems: 'center' },
+
+    // 🆕 ROYAL CALL SETTINGS (top-right multicolor icon -> Shield / Camera / Restrict)
+    menuBackdrop: { ...StyleSheet.absoluteFillObject, zIndex: 996 },
+    menuFabWrap: { position: 'absolute', right: 16, top: 40, width: 50, height: 50, zIndex: 999, elevation: 15, shadowColor: '#A855F7', shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+    menuFabShape: { flex: 1, overflow: 'hidden' },
+    menuFabRing: { flex: 1, padding: 2.5 },
+    menuFabInner: { flex: 1, backgroundColor: '#0B1026', justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    fabIconLayer: { position: 'absolute', justifyContent: 'center', alignItems: 'center' },
+    squareGlyphOuter: { width: 20, height: 20, borderRadius: 6, borderWidth: 2.5, borderColor: '#0B1026', justifyContent: 'center', alignItems: 'center' },
+    squareGlyphInner: { width: 8, height: 8, borderRadius: 2, backgroundColor: '#0B1026' },
+    menuStatusDot: { position: 'absolute', top: -2, right: -2, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#0B1026' },
+    menuPanelWrap: { position: 'absolute', right: 14, top: 100, width: Math.min(width - 28, 310), zIndex: 998, elevation: 14, shadowColor: '#A855F7', shadowOpacity: 0.45, shadowRadius: 22, shadowOffset: { width: 0, height: 10 } },
+    menuPanelBorder: { borderRadius: 26, padding: 2 },
+    menuPanelInner: { borderRadius: 24, padding: 14, overflow: 'hidden' },
+    menuGlowViolet: { position: 'absolute', top: -40, right: -30, width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(139,92,246,0.20)' },
+    menuGlowCyan: { position: 'absolute', bottom: -45, left: -35, width: 130, height: 130, borderRadius: 65, backgroundColor: 'rgba(34,211,238,0.14)' },
+    menuHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginLeft: 2 },
+    menuHeaderBadge: { width: 26, height: 26, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+    menuTitle: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 3, flex: 1 },
+    menuLiveChip: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: 'rgba(52,211,153,0.14)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(52,211,153,0.45)' },
+    menuLiveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#34D399' },
+    menuLiveText: { color: '#34D399', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+    menuGoldLine: { height: 1.5, marginTop: 10, marginBottom: 12 },
+    menuRow: { flexDirection: 'row', alignItems: 'center', borderRadius: 16, padding: 10, borderWidth: 1, overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.03)' },
+    menuIconCircle: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    menuTextWrap: { flex: 1, marginLeft: 12 },
+    menuRowTitle: { color: '#FFF', fontSize: 13, fontWeight: '800' },
+    menuRowSub: { color: '#94A3B8', fontSize: 10, fontWeight: '600', marginTop: 2 },
+    menuSwitchTrack: { width: 40, height: 22, borderRadius: 11, backgroundColor: 'rgba(255,255,255,0.18)', padding: 2, justifyContent: 'center', overflow: 'hidden' },
+    menuSwitchKnob: { width: 18, height: 18, borderRadius: 9, backgroundColor: '#FFF', alignSelf: 'flex-start' },
+
     waitingBox: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     waitingText: { color: '#FFF', fontSize: 14, fontWeight: '600', marginTop: 15, opacity: 0.8 },
     warningContainer: { position: 'absolute', top: '40%', alignSelf: 'center', zIndex: 120, alignItems: 'center' },

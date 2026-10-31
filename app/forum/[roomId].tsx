@@ -193,7 +193,7 @@ export default function PartyRoomScreen() {
                 lvl: calculateUserLevel(userData?.totalSpentDiamonds || 0).lvl,
                 requestedAt: serverTimestamp()
             });
-            Alert.alert("Request Sent ⏳", "Host unga request-a paakkuraar. Select pannina seat-la utkaruveenga.");
+            Alert.alert("Request Sent ⏳", "The host is reviewing your request. please wait for approval.");
         } catch (e) { console.log(e); }
     };
 
@@ -545,7 +545,7 @@ export default function PartyRoomScreen() {
         if (seat.uid || mySeatIndex !== null) return;
         if (!isHost) {
             if (isWaiting) {
-                Alert.alert("Waiting... ⏳", "Host approval-ku wait pannitu irukkeenga. Request cancel pannanuma?", [
+                Alert.alert("Waiting... ⏳", "You are waiting for host approval. Do you want to cancel your request?", [
                     { text: "Keep Waiting", style: "cancel" },
                     { text: "Cancel Request", style: "destructive", onPress: cancelSeatRequest }
                 ]);

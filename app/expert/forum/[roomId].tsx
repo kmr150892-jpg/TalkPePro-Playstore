@@ -647,7 +647,7 @@ export default function ExpertForumRoomScreen() {
         }
         const emptyIdx = roomData.seats.findIndex((s: any) => !s.uid);
         if (emptyIdx === -1) {
-            Alert.alert("Seats Full", "Empty seat illa. Mudhalla oru seat free pannunga.");
+            Alert.alert("Seats Full", "No empty seats available. Please free up a seat first.");
             return;
         }
         try {
@@ -918,7 +918,7 @@ export default function ExpertForumRoomScreen() {
                                                 </TouchableOpacity>
                                             </View>
                                             {waitingList.length === 0 ? (
-                                                <Text style={{ color: '#94A3B8', textAlign: 'center', paddingVertical: 30 }}>Yarum waiting-la illa</Text>
+                                                <Text style={{ color: '#94A3B8', textAlign: 'center', paddingVertical: 30 }}>Queue is empty</Text>
                                             ) : (
                                                 <ScrollView>
                                                     {waitingList.map((w: any) => (

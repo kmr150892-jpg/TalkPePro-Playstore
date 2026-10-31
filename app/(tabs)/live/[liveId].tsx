@@ -3,6 +3,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 // 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
 import { getDatabase, onValue, ref } from 'firebase/database';
@@ -119,6 +120,9 @@ const calculateUserLevel = (totalSpent: number) => {
 };
 
 export default function UserLiveViewScreen() {
+    // 🔒 SCREENSHOT & SCREEN RECORDING BLOCK (Android: full block, iOS: recording hidden)
+    usePreventScreenCapture();
+
     const router = useRouter();
     const navigation = useNavigation();
     const params = useLocalSearchParams();

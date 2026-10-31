@@ -6,6 +6,7 @@ import { collection, doc, getDoc, limit, onSnapshot, query, updateDoc, where } f
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Animated,
   Dimensions,
   Easing,
@@ -195,11 +196,72 @@ export default function NotificationsScreen() {
     } catch (e) { console.log(e); }
   };
 
+  // 🔥 NEW: delete a single notification from the log (with confirmation)
+  const deleteNotification = (item: any) => {
+    const user = auth.currentUser;
+    if (!user) return;
+    Alert.alert("Delete log", "Remove this notification?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await updateDoc(doc(db, "users", user.uid), {
+              notifications: notifications.filter((n: any) => n !== item)
+            });
+          } catch (e) { console.log("Delete notification error:", e); }
+        }
+      }
+    ]);
+  };
+
+  // 🔥 NEW: clear the whole log (with confirmation)
+  const clearAllNotifications = () => {
+    const user = auth.currentUser;
+    if (!user) return;
+    Alert.alert("Clear all logs", "Remove all notifications? This cannot be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Clear All",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await updateDoc(doc(db, "users", user.uid), { notifications: [] });
+          } catch (e) { console.log("Clear notifications error:", e); }
+        }
+      }
+    ]);
+  };
+
   const renderItem = ({ item }: any) => {
     const isCall = item.type === 'call';
+    const targetId = item.callerId || item.userId || item.fromId; // 🔥 NEW: who to open on tap
+    // 🔥 NEW: notifications without a user (level up / connection request) open a dashboard tab instead
+    const notifTitle = String(item.title || '');
+    const targetTab: string | null =
+      item.tab ||
+      (/connection request/i.test(notifTitle) ? 'MESSAGES' :
+       /level/i.test(notifTitle) ? 'LEVELS' : null);
     return (
-      <View style={styles.notificationCardWrapper}>
+      // 🔥 NEW: Card is now tappable -> opens that user's profile (only if the notification has a user id)
+      <TouchableOpacity
+        activeOpacity={(targetId || targetTab) ? 0.7 : 1}
+        disabled={!targetId && !targetTab}
+        onPress={() => {
+          if (targetId) {
+            router.push({ pathname: '/user-detail', params: { userId: targetId } } as any);
+          } else if (targetTab) {
+            router.navigate({ pathname: '/expert/dashboard', params: { tab: targetTab, ts: String(Date.now()) } } as any);
+          }
+        }}
+        style={styles.notificationCardWrapper}
+      >
           <BlurView intensity={20} tint="dark" style={styles.notificationCard}>
+            {item.callerImage ? (
+              // 🔥 NEW: caller profile photo (if saved in the notification)
+              <Image source={{ uri: item.callerImage }} style={styles.notifAvatar} />
+            ) : (
             <LinearGradient
               colors={isCall ? ['#F43F5E', '#9F1239'] : ['#00F2FE', '#4FACFE']}
               start={{x: 0, y: 0}} end={{x: 1, y: 1}}
@@ -211,6 +273,7 @@ export default function NotificationsScreen() {
                 color="#FFF" 
               />
             </LinearGradient>
+            )}
             <View style={styles.textContainer}>
               <Text style={[styles.notifTitle, isCall && {color: '#FDA4AF'}]}>{item.title || "SYSTEM ALERT"}</Text>
               <Text style={styles.notifBody}>{item.message || "Protocol update received."}</Text>
@@ -219,9 +282,13 @@ export default function NotificationsScreen() {
                  <Text style={styles.notifTime}>{item.time || "Just now"}</Text>
               </View>
             </View>
+            {/* 🔥 NEW: delete this log */}
+            <TouchableOpacity onPress={() => deleteNotification(item)} style={styles.deleteBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <MaterialCommunityIcons name="trash-can-outline" size={20} color="#F43F5E" />
+            </TouchableOpacity>
             <Ionicons name="chevron-forward" size={18} color="rgba(255,255,255,0.2)" />
           </BlurView>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -260,6 +327,16 @@ export default function NotificationsScreen() {
             renderItem={renderItem}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            ListHeaderComponent={
+              notifications.length > 0 ? (
+                <View style={styles.clearAllRow}>
+                  <TouchableOpacity onPress={clearAllNotifications} style={styles.clearAllBtn} activeOpacity={0.7}>
+                    <MaterialCommunityIcons name="trash-can-outline" size={16} color="#F43F5E" />
+                    <Text style={styles.clearAllText}>CLEAR ALL</Text>
+                  </TouchableOpacity>
+                </View>
+              ) : null
+            }
             ListEmptyComponent={
               <View style={styles.emptyState}>
                 <View style={styles.emptyIconCircle}>
@@ -350,7 +427,7 @@ export default function NotificationsScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#020617' },
   safeArea: { flex: 1 },
-  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 20 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20,paddingVertical: 20 },
   headerLabel: { color: '#00F2FE', fontSize: 10, fontWeight: '900', letterSpacing: 4 },
   headerTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: -1, textShadowColor: '#00F2FE80', textShadowRadius: 10 },
   backBtn: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
@@ -363,6 +440,11 @@ const styles = StyleSheet.create({
   iconBg: { width: 55, height: 55, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
   iconBgCall: { shadowColor: '#F43F5E', shadowRadius: 15, elevation: 10 },
   iconBgAlert: { shadowColor: '#00F2FE', shadowRadius: 15, elevation: 10 },
+  notifAvatar: { width: 55, height: 55, borderRadius: 20, backgroundColor: '#0F172A' },
+  deleteBtn: { padding: 8, marginRight: 4 },
+  clearAllRow: { alignItems: 'flex-end', marginBottom: 15 },
+  clearAllBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(244, 63, 94, 0.1)', borderWidth: 1, borderColor: 'rgba(244, 63, 94, 0.3)' },
+  clearAllText: { color: '#F43F5E', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
   textContainer: { flex: 1, marginLeft: 18 },
   notifTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
   notifBody: { color: '#94A3B8', fontSize: 13, marginTop: 6, fontWeight: '600', lineHeight: 20 },
