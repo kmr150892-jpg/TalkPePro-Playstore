@@ -150,12 +150,7 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                     const userSnap = await getDoc(userRef);
                     const uData = userSnap.exists() ? userSnap.data() : {};
 
-                    // 🔥 SATTI FIX: Synced Highest Balance check for accurate User Tier in list!
-                    const highestDiamonds = Math.max(
-                        uData?.totalDiamonds || 0,
-                        uData?.walletBalance || 0,
-                        uData?.balance || 0
-                    );
+                    const highestDiamonds = uData?.totalSpentDiamonds || 0;
 
                     return {
                         id: connDoc.id,

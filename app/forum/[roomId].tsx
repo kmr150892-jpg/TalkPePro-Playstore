@@ -95,11 +95,7 @@ const getBadgeLocalImage = (lvl: number) => {
 // 🔥 SATTI FIX: EXACT RANK CALCULATION FROM PROFILE SCREEN 🔥
 const getHighestBalanceForRank = (userRecord: any) => {
     if (!userRecord) return 0;
-    return Math.max(
-        userRecord.totalDiamonds || 0,
-        userRecord.walletBalance || 0,
-        userRecord.balance || 0
-    );
+    return userRecord.totalSpentDiamonds || 0;
 };
 
 export default function PartyRoomScreen() {

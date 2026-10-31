@@ -75,7 +75,8 @@ export default function ExpertNotificationBar() {
 
                 setDiscoverRequest(data);
                 
-                const DiscoveredTier = calculateUserLevel(data.totalSpent || (data.tierLvl ? data.tierLvl * 100000 : 0));
+                const LEVEL_MIN: any = { 1: 0, 2: 200001, 3: 1000000, 4: 5000000, 5: 10000000, 6: 50000000, 7: 100000001, 8: 500000001 };
+const DiscoveredTier = calculateUserLevel(LEVEL_MIN[Number(data.tierLvl)] ?? 0);
                 setUserTier(DiscoveredTier);
 
                 Animated.spring(translateY, { 

@@ -291,11 +291,7 @@ export default function RootLayout() {
                             const actualPic = uData.profilePic || uData.photoURL || callData.callerImage;
                             const actualName = uData.name || uData.displayName || callData.callerName;
                             
-                            const callerDiamonds = Math.max(
-                                uData.totalDiamonds || 0,
-                                uData.walletBalance || 0,
-                                uData.balance || 0
-                            );
+                            const callerDiamonds = uData.totalSpentDiamonds || 0;
 
                             setIncomingCallData((prev: any) => 
                                 prev && prev.callerId === callData.callerId 
