@@ -10,7 +10,9 @@ import {
     Animated,
     Dimensions,
     Easing,
+    Image,
     Modal,
+    Pressable,
     ScrollView,
     StyleSheet,
     Text,
@@ -22,6 +24,14 @@ import { auth, db } from '../../../firebaseConfig';
 import { sendNotificationToUser } from '../../../utils/notificationHelper'; // 🔥 NOTIFICATION IMPORT
 
 const { width, height } = Dimensions.get('window');
+
+// 🎨 IMAGES (neenga eppo venumnaalum unga brand images-a maathikalam)
+const HEADER_BG = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=1600&auto=format&fit=crop';
+const CARD_BG = 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1200&auto=format&fit=crop';
+const BANK_BG = 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=1200&auto=format&fit=crop';
+
+const CARD_WIDTH = width - 40;
+const CARD_HEIGHT = 238;
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
 const getLevelConfig = (beans: number) => {
@@ -36,6 +46,112 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
+};
+
+// ✨ PRESS-SCALE BUTTON (ovvoru tap-kum springy premium feel)
+const ScaleBtn = ({ children, onPress, style, wrapStyle, disabled }: any) => {
+    const s = useRef(new Animated.Value(1)).current;
+    return (
+        <Pressable
+            onPress={onPress}
+            disabled={disabled}
+            style={wrapStyle}
+            onPressIn={() => Animated.spring(s, { toValue: 0.94, useNativeDriver: true, speed: 40, bounciness: 0 }).start()}
+            onPressOut={() => Animated.spring(s, { toValue: 1, useNativeDriver: true, friction: 4 }).start()}
+        >
+            <Animated.View style={[style, { transform: [{ scale: s }] }]}>{children}</Animated.View>
+        </Pressable>
+    );
+};
+
+// ✨ FLOATING GLOW PARTICLE (card ulla magic dust)
+const FloatingDot = ({ delay, left, size, color, duration }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(a, { toValue: 1, duration, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+                Animated.timing(a, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                bottom: 14,
+                left,
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: color,
+                opacity: a.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.85, 0] }),
+                transform: [
+                    { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -150] }) },
+                    { translateX: a.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 10, -8] }) }
+                ]
+            }}
+        />
+    );
+};
+
+// ✨ LEDGER ROW (slide-in animation, status accent bar, status chip)
+const LedgerRow = ({ tx, index, theme, borderStyle }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.timing(a, { toValue: 1, duration: 520, delay: index * 90, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, []);
+
+    const isRejected = tx.status === 'REJECTED';
+    const isPending = tx.status === 'PENDING';
+    const statusColor = isRejected ? '#EF4444' : isPending ? '#F59E0B' : theme.primary;
+
+    return (
+        <Animated.View
+            style={{
+                marginBottom: 12,
+                opacity: a,
+                transform: [{ translateX: a.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }]
+            }}
+        >
+            {/* 🔥 DYNAMIC DUAL-TONE LEDGER ITEMS WITH REJECT FIX */}
+            <View style={[styles.ledgerItem, borderStyle]}>
+                <View style={[styles.ledgerAccent, { backgroundColor: statusColor }]} />
+                <View style={[styles.ledgerIcon, { backgroundColor: isRejected ? '#EF444420' : isPending ? '#F59E0B20' : `${theme.primary}20` }]}>
+                    <MaterialCommunityIcons
+                        name={isRejected ? "close-circle" : isPending ? "clock-fast" : "check-circle"}
+                        size={22} color={statusColor}
+                    />
+                </View>
+                <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Text style={styles.ledgerType}>{tx.type || 'Redeem'}</Text>
+                    <Text style={styles.ledgerDate}>{tx.createdAt?.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) || 'RECENT'}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end' }}>
+                    {/* 🔥 Strikethrough if rejected to show amount wasn't deducted permanently */}
+                    <Text style={[styles.ledgerAmount, isRejected && { textDecorationLine: 'line-through', opacity: 0.5 }]}>
+                        - ₹{tx.amountRupee || tx.amount}
+                    </Text>
+                    <View style={[styles.ledgerStatusChip, { backgroundColor: statusColor + '22', borderColor: statusColor + '55' }]}>
+                        <Text style={[styles.ledgerStatus, { color: statusColor }]}>{tx.status}</Text>
+                    </View>
+                </View>
+            </View>
+
+            {/* 🔥 REJECTION REASON DISPLAY BOX */}
+            {isRejected && tx.rejectReason && (
+                <View style={[styles.rejectReasonBox, { marginTop: 8 }]}>
+                    <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{ marginTop: 2 }} />
+                    <View style={{ marginLeft: 8, flex: 1 }}>
+                        <Text style={styles.rejectLabel}>REJECTION REASON</Text>
+                        <Text style={styles.rejectReasonText}>{tx.rejectReason}</Text>
+                    </View>
+                </View>
+            )}
+        </Animated.View>
+    );
 };
 
 export default function WalletSystem({ expertData }: any) {
@@ -55,8 +171,15 @@ export default function WalletSystem({ expertData }: any) {
 
     const [idProofImage, setIdProofImage] = useState(expertData?.idProof || null);
 
-    // 🔥 ANIMATION REF
+    // 🔥 ANIMATION REFS
     const shimmerAnim = useRef(new Animated.Value(0)).current;
+    const floatAnim = useRef(new Animated.Value(0)).current;       // card floating
+    const sweepAnim = useRef(new Animated.Value(0)).current;       // card light sweep
+    const pulseAnim = useRef(new Animated.Value(0)).current;       // ACTIVE badge pulse
+    const balanceAnim = useRef(new Animated.Value(0)).current;     // balance count-up
+    const progressAnim = useRef(new Animated.Value(0)).current;    // min-redeem progress bar
+    const sectionAnims = useRef(Array.from({ length: 6 }, () => new Animated.Value(0))).current; // staggered entrance
+    const [balanceShown, setBalanceShown] = useState(0);
 
     // 🔥 DYNAMIC THEME CALCULATION
     const totalBeans = expertData?.totalBeansEarned || expertData?.totalBeans || 0;
@@ -74,6 +197,11 @@ export default function WalletSystem({ expertData }: any) {
         ] as const 
     };
 
+    const isBankVerified = expertData?.isBankVerified || false; 
+    const walletBalanceBeans = expertData?.walletBalance || 0; 
+    const availableRupees = Math.floor(walletBalanceBeans / 100); 
+    const pendingACTIVITY_REWARD = expertData?.pendingACTIVITY_REWARD || 0;
+
     useEffect(() => {
         const authUnsub = auth.onAuthStateChanged((u:any) => setUser(u));
         // Start Ambient Animation
@@ -85,8 +213,61 @@ export default function WalletSystem({ expertData }: any) {
             useNativeDriver: true
           })
         ).start();
+
+        // ✨ NEW: card floating loop
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(floatAnim, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(floatAnim, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ).start();
+
+        // ✨ NEW: card light sweep loop
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(1600),
+                Animated.timing(sweepAnim, { toValue: 1, duration: 1900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+                Animated.timing(sweepAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        ).start();
+
+        // ✨ NEW: ACTIVE badge pulse
+        Animated.loop(
+            Animated.timing(pulseAnim, { toValue: 1, duration: 1700, easing: Easing.out(Easing.quad), useNativeDriver: true })
+        ).start();
+
+        // ✨ NEW: staggered entrance of every section
+        Animated.stagger(
+            110,
+            sectionAnims.map((a) =>
+                Animated.timing(a, { toValue: 1, duration: 720, easing: Easing.out(Easing.cubic), useNativeDriver: true })
+            )
+        ).start();
+
         return () => authUnsub();
     }, []);
+
+    // ✨ NEW: balance count-up animation
+    useEffect(() => {
+        const id = balanceAnim.addListener(({ value }) => setBalanceShown(Math.round(value)));
+        Animated.timing(balanceAnim, {
+            toValue: availableRupees,
+            duration: 1500,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false
+        }).start();
+        return () => balanceAnim.removeListener(id);
+    }, [availableRupees]);
+
+    // ✨ NEW: min-redeem progress bar fill
+    useEffect(() => {
+        Animated.timing(progressAnim, {
+            toValue: Math.max(0, Math.min((availableRupees / 500) * 100, 100)),
+            duration: 1200,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false
+        }).start();
+    }, [availableRupees]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -119,11 +300,6 @@ export default function WalletSystem({ expertData }: any) {
             setIdProofImage(expertData.idProof);
         }
     }, [expertData]);
-
-    const isBankVerified = expertData?.isBankVerified || false; 
-    const walletBalanceBeans = expertData?.walletBalance || 0; 
-    const availableRupees = Math.floor(walletBalanceBeans / 100); 
-    const pendingACTIVITY_REWARD = expertData?.pendingACTIVITY_REWARD || 0;
 
     const uploadToCloudinary = async (imageUri: string) => {
         const data = new FormData();
@@ -308,6 +484,18 @@ export default function WalletSystem({ expertData }: any) {
         outputRange: [0, -30]
     });
 
+    // ✨ derived animation styles
+    const cardFloatY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -7] });
+    const cardSweepX = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: [-160, CARD_WIDTH + 60] });
+    const dotPulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] });
+    const dotPulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
+    const progressWidth = progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+
+    const reveal = (i: number) => ({
+        opacity: sectionAnims[i],
+        transform: [{ translateY: sectionAnims[i].interpolate({ inputRange: [0, 1], outputRange: [46, 0] }) }]
+    });
+
     // 🔥 ALTERNATING BORDER STYLES WITH REDUCED THICKNESS (2px)
     const borderType1 = {
         borderLeftWidth: 2,
@@ -333,151 +521,201 @@ export default function WalletSystem({ expertData }: any) {
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
 
+    const last4 = bankDetails.accountNumber ? bankDetails.accountNumber.slice(-4) : '';
+    const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
+
     return (
         <View style={[styles.mainWrapper, { backgroundColor: '#020617' }]}>
             {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
             <LinearGradient colors={theme.bgGradient} style={StyleSheet.absoluteFill} />
+
+            {/* 🖼️ TOP BANNER IMAGE (fades into the background) */}
+            <Image source={{ uri: HEADER_BG }} style={styles.topBgImage} />
+            <LinearGradient colors={['rgba(2,6,23,0.25)', '#020617']} style={styles.topBgFade} pointerEvents="none" />
             
             {/* Shimmer Orbs for Animation */}
-            <Animated.View style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
-            <Animated.View style={[styles.shimmerOrb, { top: 450, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+            <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
+            <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: 450, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
-                
-                <View style={styles.heroSection}>
-                    <LinearGradient 
-                        colors={[theme.primary, theme.secondary]} 
-                        start={{x:0, y:0}} end={{x:1, y:1}} 
-                        style={[styles.premiumCard, { shadowColor: theme.primary, elevation: 20 }]}
-                    >
-                        <View style={styles.cardGlow} />
-                        <View style={styles.cardContentHeader}>
-                            <View>
-                                <Text style={styles.cardLabelText}>AVAILABLE FOR ACTIVITY_REWARD</Text>
-                                <View style={styles.rupeeRow}>
-                                    <Text style={styles.symbolText}>₹</Text>
-                                    <Text style={styles.mainBalanceText}>{availableRupees.toLocaleString()}</Text>
-                                </View>
-                            </View>
-                            <View style={styles.chipWrapper}>
-                                <MaterialCommunityIcons name="integrated-circuit-chip" size={42} color="rgba(255,255,255,0.8)" />
-                            </View>
-                        </View>
 
-                        <View style={styles.ACTIVITY_REWARDDetailRow}>
-                            <View>
-                                <Text style={styles.ACTIVITY_REWARDLabel}>PENDING CLEARANCE</Text>
-                                <Text style={styles.ACTIVITY_REWARDValue}>₹{pendingACTIVITY_REWARD.toLocaleString()}</Text>
-                            </View>
-                            <TouchableOpacity 
-                                // 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN DISABLED CHECK
-                                style={[styles.massWithdrawBtn, (availableRupees < 500 || !isBankVerified) && { opacity: 0.5 }]}
-                                onPress={() => setModalVisible(true)}
-                                disabled={availableRupees < 500 || !isBankVerified}
-                            >
-                                <View style={styles.whiteActionBtn}>
-                                    <Text style={styles.blackBtnText}>Claim Reward</Text>
+                {/* 👑 HEADER */}
+                <Animated.View style={[styles.headerRow, reveal(0)]}>
+                    <View>
+                        <Text style={styles.headerEyebrow}>TALKPE PRO</Text>
+                        <Text style={styles.headerTitle}>My Wallet</Text>
+                    </View>
+                    <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.levelPill}>
+                        <MaterialCommunityIcons name="crown" size={13} color="#FFF" />
+                        <Text style={styles.levelPillText}>{config.label}</Text>
+                    </LinearGradient>
+                </Animated.View>
+                
+                {/* 💳 PREMIUM CARD */}
+                <Animated.View style={[styles.heroSection, reveal(1)]}>
+                    <Animated.View style={{ transform: [{ translateY: cardFloatY }] }}>
+                        <View style={[styles.premiumCard, { shadowColor: theme.primary, elevation: 20 }]}>
+                            <Image source={{ uri: CARD_BG }} style={styles.cardBgImage} />
+                            <LinearGradient
+                                colors={[theme.primary + 'CC', '#020617E6', theme.secondary + 'AA']}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                style={StyleSheet.absoluteFill}
+                            />
+                            <View style={styles.cardGlow} />
+                            <View style={[styles.cardRingOne, { borderColor: theme.accent + '40' }]} />
+                            <View style={[styles.cardRingTwo, { borderColor: theme.primary + '35' }]} />
+                            <Animated.View pointerEvents="none" style={[styles.cardSweep, { transform: [{ translateX: cardSweepX }, { skewX: '-20deg' }] }]} />
+
+                            <FloatingDot delay={0}    left={CARD_WIDTH * 0.10} size={5} color="#FFF"          duration={4200} />
+                            <FloatingDot delay={1100} left={CARD_WIDTH * 0.34} size={4} color={theme.accent}  duration={3800} />
+                            <FloatingDot delay={600}  left={CARD_WIDTH * 0.58} size={6} color="#FFF"          duration={4600} />
+                            <FloatingDot delay={1800} left={CARD_WIDTH * 0.84} size={4} color={theme.primary} duration={4000} />
+
+                            <View style={styles.cardContentHeader}>
+                                <View>
+                                    <Text style={styles.cardLabelText}>AVAILABLE FOR ACTIVITY_REWARD</Text>
+                                    <View style={styles.rupeeRow}>
+                                        <Text style={styles.symbolText}>₹</Text>
+                                        <Text style={styles.mainBalanceText}>{balanceShown.toLocaleString()}</Text>
+                                    </View>
                                 </View>
-                            </TouchableOpacity>
+                                <View style={styles.chipWrapper}>
+                                    <MaterialCommunityIcons name="integrated-circuit-chip" size={42} color="rgba(255,255,255,0.85)" />
+                                </View>
+                            </View>
+
+                            <View style={styles.cardNumberRow}>
+                                <Text style={styles.cardNumberText}>••••  ••••  ••••  {last4 || '••••'}</Text>
+                                <Text style={styles.cardHolderText} numberOfLines={1}>{(bankDetails.holderName || expertData?.name || 'HOST').toUpperCase()}</Text>
+                            </View>
+
+                            <View style={styles.ACTIVITY_REWARDDetailRow}>
+                                <View>
+                                    <Text style={styles.ACTIVITY_REWARDLabel}>PENDING CLEARANCE</Text>
+                                    <Text style={styles.ACTIVITY_REWARDValue}>₹{pendingACTIVITY_REWARD.toLocaleString()}</Text>
+                                </View>
+                                <ScaleBtn
+                                    // 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN DISABLED CHECK
+                                    style={[styles.massWithdrawBtn, (availableRupees < 500 || !isBankVerified) && { opacity: 0.5 }]}
+                                    onPress={() => setModalVisible(true)}
+                                    disabled={availableRupees < 500 || !isBankVerified}
+                                >
+                                    <View style={styles.whiteActionBtn}>
+                                        <Text style={styles.blackBtnText}>Claim Reward</Text>
+                                        <Ionicons name="arrow-forward" size={14} color="#020617" style={{ marginLeft: 6 }} />
+                                    </View>
+                                </ScaleBtn>
+                            </View>
                         </View>
-                        
-                        {/* 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN UI WARNING */}
-                        {availableRupees < 500 && (
+                    </Animated.View>
+
+                    {/* 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN UI WARNING (+ animated progress to unlock) */}
+                    {availableRupees < 500 && (
+                        <View style={styles.unlockBox}>
                             <View style={styles.limitWarning}>
                                 <Ionicons name="information-circle" size={12} color="#FFF" />
                                 <Text style={styles.warningText}>MINIMUM ₹500 REQUIRED</Text>
                             </View>
-                        )}
-                    </LinearGradient>
-                </View>
-
-                <View style={styles.sectionHeaderRow}>
-                    <Text style={styles.sectionTitleMain}>BANKING DETAILS</Text>
-                    <TouchableOpacity onPress={() => setEditBankVisible(true)} style={styles.nodeEditBtn}>
-                        <Ionicons name="settings-sharp" size={14} color={theme.primary} />
-                        <Text style={[styles.nodeEditText, { color: theme.primary }]}>CONFIG</Text>
-                    </TouchableOpacity>
-                </View>
-
-                {/* 🔥 DYNAMIC DUAL-TONE BANK CARD (TYPE 1) */}
-                <TouchableOpacity style={[styles.bankDetailCard, borderType1]} onPress={() => setEditBankVisible(true)}>
-                    <View style={styles.bankInner}>
-                        <View style={[styles.bankIconContainer, { backgroundColor: `${theme.primary}15` }]}>
-                            <Ionicons name="business" size={20} color={theme.primary} />
-                        </View>
-                        <View style={{ flex: 1, marginLeft: 15 }}>
-                            <Text style={styles.bankTitleText}>PRIMARY ACCOUNT</Text>
-                            <Text style={styles.bankValueText}>{bankDetails.accountNumber ? `•••• ${bankDetails.accountNumber.slice(-4)}` : 'DISCONNECTED'}</Text>
-                        </View>
-                        {isBankVerified ? (
-                            <View style={styles.statusBadgeGreen}><Text style={styles.badgeLabelText}>ACTIVE</Text></View>
-                        ) : expertData?.bankRejectReason ? (
-                            <View style={[styles.statusBadgeYellow, { backgroundColor: '#EF444420', borderColor: '#EF444440' }]}><Text style={[styles.badgeLabelText, { color: '#EF4444' }]}>REJECTED</Text></View>
-                        ) : (
-                            <View style={styles.statusBadgeYellow}><Text style={styles.badgeLabelText}>PENDING</Text></View>
-                        )}
-                    </View>
-                </TouchableOpacity>
-
-                {/* 🔥 NEW UI: BANK KYC REJECTION REASON DISPLAY BOX 🔥 */}
-                {!isBankVerified && expertData?.bankRejectReason && (
-                    <View style={[styles.rejectReasonBox, { marginTop: -25, marginBottom: 25 }]}>
-                        <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{marginTop: 2}} />
-                        <View style={{ marginLeft: 8, flex: 1 }}>
-                            <Text style={styles.rejectLabel}>KYC REJECTION REASON</Text>
-                            <Text style={styles.rejectReasonText}>{expertData.bankRejectReason}</Text>
-                            <Text style={{ color: theme.primary, fontSize: 10, fontWeight: '800', marginTop: 5 }}>* Tap CONFIG above to fix and resubmit details.</Text>
-                        </View>
-                    </View>
-                )}
-
-                <Text style={styles.sectionTitleMain}>LEDGER HISTORY</Text>
-                {transactions.length === 0 ? (
-                    <View style={styles.emptyLedger}>
-                        <Ionicons name="receipt-outline" size={40} color="#1e293b" />
-                        <Text style={styles.emptyLedgerText}>No Activity Recorded</Text>
-                    </View>
-                ) : (
-                    transactions.map((tx, index) => (
-                        <View key={tx.id} style={{ marginBottom: 12 }}>
-                            {/* 🔥 DYNAMIC DUAL-TONE LEDGER ITEMS WITH REJECT FIX */}
-                            <View style={[
-                                styles.ledgerItem, 
-                                index % 2 === 0 ? borderType2 : borderType1, 
-                                { marginBottom: tx.status === 'REJECTED' && tx.rejectReason ? 0 : 0 }
-                            ]}>
-                                <View style={[styles.ledgerIcon, { backgroundColor: tx.status === 'REJECTED' ? '#EF444420' : tx.status === 'PENDING' ? '#F59E0B20' : `${theme.primary}20` }]}>
-                                    <MaterialCommunityIcons 
-                                        name={tx.status === 'REJECTED' ? "close-circle" : tx.status === 'PENDING' ? "clock-fast" : "check-circle"} 
-                                        size={20} color={tx.status === 'REJECTED' ? "#EF4444" : tx.status === 'PENDING' ? "#F59E0B" : theme.primary} 
-                                    />
-                                </View>
-                                <View style={{ flex: 1, marginLeft: 15 }}>
-                                    <Text style={styles.ledgerType}>{tx.type || 'Redeem'}</Text>
-                                    <Text style={styles.ledgerDate}>{tx.createdAt?.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) || 'RECENT'}</Text>
-                                </View>
-                                <View style={{ alignItems: 'flex-end' }}>
-                                    {/* 🔥 Strikethrough if rejected to show amount wasn't deducted permanently */}
-                                    <Text style={[styles.ledgerAmount, tx.status === 'REJECTED' && { textDecorationLine: 'line-through', opacity: 0.5 }]}>
-                                        - ₹{tx.amountRupee || tx.amount}
-                                    </Text>
-                                    <Text style={[styles.ledgerStatus, { color: tx.status === 'REJECTED' ? '#EF4444' : tx.status === 'PENDING' ? '#F59E0B' : theme.primary }]}>
-                                        {tx.status}
-                                    </Text>
-                                </View>
+                            <View style={styles.unlockTrack}>
+                                <Animated.View style={[styles.unlockFillWrap, { width: progressWidth }]}>
+                                    <LinearGradient colors={[theme.primary, theme.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                </Animated.View>
                             </View>
+                            <Text style={styles.unlockText}>₹{availableRupees.toLocaleString()} / ₹500 to unlock Claim Reward</Text>
+                        </View>
+                    )}
+                </Animated.View>
 
-                            {/* 🔥 NEW UI: REJECTION REASON DISPLAY BOX */}
-                            {tx.status === 'REJECTED' && tx.rejectReason && (
-                                <View style={styles.rejectReasonBox}>
-                                    <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{marginTop: 2}} />
-                                    <View style={{ marginLeft: 8, flex: 1 }}>
-                                        <Text style={styles.rejectLabel}>REJECTION REASON</Text>
-                                        <Text style={styles.rejectReasonText}>{tx.rejectReason}</Text>
+                {/* 📜 RULES STRIP */}
+                <Animated.View style={[styles.rulesRow, reveal(2)]}>
+                    <View style={[styles.ruleTile, borderType2]}>
+                        <Ionicons name="flash-outline" size={18} color={theme.primary} />
+                        <Text style={styles.ruleValue}>₹500</Text>
+                        <Text style={styles.ruleLabel}>MIN REDEEM</Text>
+                    </View>
+                    <View style={[styles.ruleTile, borderType1]}>
+                        <Ionicons name="cash-outline" size={18} color={theme.primary} />
+                        <Text style={styles.ruleValue}>₹100</Text>
+                        <Text style={styles.ruleLabel}>TRANS. CHARGE</Text>
+                    </View>
+                    <View style={[styles.ruleTile, borderType2]}>
+                        <Ionicons name="swap-horizontal" size={18} color={theme.primary} />
+                        <Text style={styles.ruleValue}>100 = ₹1</Text>
+                        <Text style={styles.ruleLabel}>REWARD RATE</Text>
+                    </View>
+                </Animated.View>
+
+                {/* 🏦 BANKING DETAILS */}
+                <Animated.View style={reveal(3)}>
+                    <View style={styles.sectionHeaderRow}>
+                        <Text style={styles.sectionTitleMain}>BANKING DETAILS</Text>
+                        <TouchableOpacity onPress={() => setEditBankVisible(true)} style={styles.nodeEditBtn}>
+                            <Ionicons name="settings-sharp" size={14} color={theme.primary} />
+                            <Text style={[styles.nodeEditText, { color: theme.primary }]}>CONFIG</Text>
+                        </TouchableOpacity>
+                    </View>
+
+                    {/* 🔥 DYNAMIC DUAL-TONE BANK CARD (TYPE 1) */}
+                    <ScaleBtn style={[styles.bankDetailCard, borderType1]} onPress={() => setEditBankVisible(true)}>
+                        <Image source={{ uri: BANK_BG }} style={styles.bankBgImage} />
+                        <View style={styles.bankInner}>
+                            <View style={[styles.bankIconContainer, { backgroundColor: `${theme.primary}22` }]}>
+                                <Ionicons name="business" size={22} color={theme.primary} />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 15 }}>
+                                <Text style={styles.bankTitleText}>PRIMARY ACCOUNT</Text>
+                                <Text style={styles.bankValueText}>{bankDetails.accountNumber ? `•••• ${bankDetails.accountNumber.slice(-4)}` : 'DISCONNECTED'}</Text>
+                                {!!bankDetails.holderName && (
+                                    <Text style={styles.bankHolderText} numberOfLines={1}>{bankDetails.holderName}</Text>
+                                )}
+                            </View>
+                            {isBankVerified ? (
+                                <View style={styles.statusBadgeGreen}>
+                                    <View style={styles.activeDotWrap}>
+                                        <Animated.View style={[styles.activeDotPulse, { opacity: dotPulseOpacity, transform: [{ scale: dotPulseScale }] }]} />
+                                        <View style={styles.activeDot} />
                                     </View>
+                                    <Text style={styles.badgeLabelText}>ACTIVE</Text>
                                 </View>
+                            ) : expertData?.bankRejectReason ? (
+                                <View style={[styles.statusBadgeYellow, { backgroundColor: '#EF444420', borderColor: '#EF444440' }]}><Text style={[styles.badgeLabelText, { color: '#EF4444' }]}>REJECTED</Text></View>
+                            ) : (
+                                <View style={styles.statusBadgeYellow}><Text style={styles.badgeLabelText}>PENDING</Text></View>
                             )}
                         </View>
+                    </ScaleBtn>
+
+                    {/* 🔥 NEW UI: BANK KYC REJECTION REASON DISPLAY BOX 🔥 */}
+                    {!isBankVerified && expertData?.bankRejectReason && (
+                        <View style={[styles.rejectReasonBox, { marginBottom: 25 }]}>
+                            <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{marginTop: 2}} />
+                            <View style={{ marginLeft: 8, flex: 1 }}>
+                                <Text style={styles.rejectLabel}>KYC REJECTION REASON</Text>
+                                <Text style={styles.rejectReasonText}>{expertData.bankRejectReason}</Text>
+                                <Text style={{ color: theme.primary, fontSize: 10, fontWeight: '800', marginTop: 5 }}>* Tap CONFIG above to fix and resubmit details.</Text>
+                            </View>
+                        </View>
+                    )}
+                </Animated.View>
+
+                {/* 🧾 LEDGER HISTORY */}
+                <Animated.View style={reveal(4)}>
+                    <Text style={styles.sectionTitleMain}>LEDGER HISTORY</Text>
+                </Animated.View>
+                {transactions.length === 0 ? (
+                    <Animated.View style={[styles.emptyLedger, reveal(5)]}>
+                        <Ionicons name="receipt-outline" size={40} color="#1e293b" />
+                        <Text style={styles.emptyLedgerText}>No Activity Recorded</Text>
+                    </Animated.View>
+                ) : (
+                    transactions.map((tx, index) => (
+                        <LedgerRow
+                            key={tx.id}
+                            tx={tx}
+                            index={index}
+                            theme={theme}
+                            borderStyle={index % 2 === 0 ? borderType2 : borderType1}
+                        />
                     ))
                 )}
                 <View style={{ height: 120 }} />
@@ -487,7 +725,8 @@ export default function WalletSystem({ expertData }: any) {
             <Modal visible={modalVisible} transparent animationType="slide">
                 <View style={styles.modalBg}>
                     <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalSheet, { backgroundColor: theme.bgGradient[0] }]}>
+                    <View style={[styles.modalSheet, { backgroundColor: theme.bgGradient[0], borderTopColor: theme.primary + '60' }]}>
+                        <LinearGradient colors={[theme.primary + '22', 'transparent']} style={styles.sheetGlow} pointerEvents="none" />
                         <View style={styles.modalDragger} />
                         <View style={styles.modalHeader}>
                             <Text style={styles.modalTitle}> Redeem Rewards</Text>
@@ -506,19 +745,42 @@ export default function WalletSystem({ expertData }: any) {
                                 value={amount} 
                                 onChangeText={(t: string) => setAmount(t)}
                             />
+
+                            {/* ⚡ QUICK AMOUNT CHIPS */}
+                            <View style={styles.quickRow}>
+                                {QUICK_AMOUNTS.map((v) => {
+                                    const active = amount === String(v);
+                                    return (
+                                        <TouchableOpacity
+                                            key={v}
+                                            onPress={() => setAmount(String(v))}
+                                            style={[styles.quickChip, active && { backgroundColor: theme.primary + '30', borderColor: theme.primary }]}
+                                        >
+                                            <Text style={[styles.quickChipText, active && { color: '#FFF' }]}>₹{v.toLocaleString()}</Text>
+                                        </TouchableOpacity>
+                                    );
+                                })}
+                            </View>
+
                             {/* 🔥 DUAL TONE INFO BOX (TYPE 1) */}
                             <View style={[styles.feeInfoBox, borderType1]}>
                                 <Text style={styles.feeText}>TRANS. CHARGE: <Text style={{color: '#FFF'}}>₹100</Text></Text>
                                 <View style={styles.feeDot} />
                                 <Text style={styles.feeText}>EST. DEDUCTION: <Text style={{color: '#FFF'}}>₹{(Number(amount) || 0) + 100}</Text></Text>
                             </View>
+                            <Text style={styles.availableHint}>Available: ₹{availableRupees.toLocaleString()}</Text>
                         </View>
 
-                        <TouchableOpacity style={styles.finalSubmitBtn} onPress={handleWithdrawal} disabled={loading}>
-                            <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.finalSubmitGrad}>
-                                {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.finalSubmitText}>INITIALIZE TRANSFER</Text>}
+                        <ScaleBtn style={styles.finalSubmitBtn} onPress={handleWithdrawal} disabled={loading}>
+                            <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.finalSubmitGrad}>
+                                {loading ? <ActivityIndicator color="#FFF" /> : (
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <Ionicons name="paper-plane" size={16} color="#FFF" />
+                                        <Text style={styles.finalSubmitText}>INITIALIZE TRANSFER</Text>
+                                    </View>
+                                )}
                             </LinearGradient>
-                        </TouchableOpacity>
+                        </ScaleBtn>
                     </View>
                 </View>
             </Modal>
@@ -526,14 +788,16 @@ export default function WalletSystem({ expertData }: any) {
             <Modal visible={editBankVisible} transparent animationType="fade">
                 <View style={styles.modalBg}>
                     <BlurView intensity={95} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalSheet, { height: height * 0.85, backgroundColor: theme.bgGradient[0] }]}>
+                    <View style={[styles.modalSheet, { height: height * 0.85, backgroundColor: theme.bgGradient[0], borderTopColor: theme.primary + '60' }]}>
+                        <LinearGradient colors={[theme.primary + '22', 'transparent']} style={styles.sheetGlow} pointerEvents="none" />
+                        <View style={styles.modalDragger} />
                         <Text style={styles.modalTitle}>Banking Configuration</Text>
                         <ScrollView style={{ marginTop: 25 }} showsVerticalScrollIndicator={false}>
                             {/* 🔥 DUAL TONE INPUT NODES (ALTERNATING) */}
-                            <InputNode label="ACCOUNT HOLDER" value={bankDetails.holderName} onChange={(t: string) => setBankDetails({...bankDetails, holderName: t})} borderStyle={borderType1} />
-                            <InputNode label="ACCOUNT NUMBER" value={bankDetails.accountNumber} onChange={(t: string) => setBankDetails({...bankDetails, accountNumber: t})} keyboard="numeric" borderStyle={borderType2} />
-                            <InputNode label="IFSC CODE" value={bankDetails.ifsc} onChange={(t: string) => setBankDetails({...bankDetails, ifsc: t})} autoCap="characters" borderStyle={borderType1} />
-                            <InputNode label="UPI ID / VPA" value={bankDetails.upiId} onChange={(t: string) => setBankDetails({...bankDetails, upiId: t})} borderStyle={borderType2} />
+                            <InputNode label="ACCOUNT HOLDER" icon="person-outline" accent={theme.primary} value={bankDetails.holderName} onChange={(t: string) => setBankDetails({...bankDetails, holderName: t})} borderStyle={borderType1} />
+                            <InputNode label="ACCOUNT NUMBER" icon="card-outline" accent={theme.primary} value={bankDetails.accountNumber} onChange={(t: string) => setBankDetails({...bankDetails, accountNumber: t})} keyboard="numeric" borderStyle={borderType2} />
+                            <InputNode label="IFSC CODE" icon="business-outline" accent={theme.primary} value={bankDetails.ifsc} onChange={(t: string) => setBankDetails({...bankDetails, ifsc: t})} autoCap="characters" borderStyle={borderType1} />
+                            <InputNode label="UPI ID / VPA" icon="at-outline" accent={theme.primary} value={bankDetails.upiId} onChange={(t: string) => setBankDetails({...bankDetails, upiId: t})} borderStyle={borderType2} />
                             
                             <Text style={styles.nodeLabel}>ID VERIFICATION DOCUMENTS</Text>
                             <TouchableOpacity style={[styles.uploadNode, borderType1]} onPress={pickIdProof}>
@@ -570,90 +834,155 @@ export default function WalletSystem({ expertData }: any) {
     );
 }
 
-const InputNode = ({ label, value, onChange, keyboard = "default", autoCap = "none", borderStyle }: any) => (
-    <View style={styles.inputNodeBox}>
-        <Text style={styles.nodeLabel}>{label}</Text>
-        <TextInput 
-            style={[styles.nodeInput, borderStyle]} 
-            value={value} 
-            onChangeText={(t: string) => onChange(t)} 
-            keyboardType={keyboard} 
-            autoCapitalize={autoCap} 
-            placeholderTextColor="#334155"
-        />
-    </View>
-);
+// ✨ INPUT NODE (icon + focus glow)
+const InputNode = ({ label, value, onChange, keyboard = "default", autoCap = "none", borderStyle, icon, accent }: any) => {
+    const [focused, setFocused] = useState(false);
+    return (
+        <View style={styles.inputNodeBox}>
+            <Text style={styles.nodeLabel}>{label}</Text>
+            <View
+                style={[
+                    styles.nodeInputWrap,
+                    borderStyle,
+                    focused && {
+                        borderLeftColor: accent,
+                        borderRightColor: accent,
+                        borderTopColor: accent,
+                        borderBottomColor: accent,
+                        shadowColor: accent,
+                        shadowOpacity: 0.55,
+                        shadowRadius: 12,
+                        shadowOffset: { width: 0, height: 0 },
+                        elevation: 6
+                    }
+                ]}
+            >
+                <Ionicons name={icon} size={18} color={focused ? accent : '#475569'} style={{ marginRight: 12 }} />
+                <TextInput 
+                    style={styles.nodeInput} 
+                    value={value} 
+                    onChangeText={(t: string) => onChange(t)} 
+                    keyboardType={keyboard} 
+                    autoCapitalize={autoCap} 
+                    placeholderTextColor="#334155"
+                    onFocus={() => setFocused(true)}
+                    onBlur={() => setFocused(false)}
+                />
+            </View>
+        </View>
+    );
+};
 
 const styles = StyleSheet.create({
     mainWrapper: { flex: 1 },
     // 🔥 DESIGN: AMBIENT SHIMMER ORBS
     shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+    topBgImage: { position: 'absolute', top: 0, left: 0, right: 0, height: 280, width: '100%', opacity: 0.35, resizeMode: 'cover' },
+    topBgFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 280 },
     container: { padding: 20 },
-    heroSection: { marginBottom: 30 },
-    premiumCard: { borderRadius: 35, padding: 25, overflow: 'hidden' },
+
+    headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, marginTop: 6 },
+    headerEyebrow: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 4 },
+    headerTitle: { color: '#FFF', fontSize: 28, fontWeight: '900', letterSpacing: 0.5, marginTop: 2, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+    levelPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+    levelPillText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+
+    heroSection: { marginBottom: 22 },
+    premiumCard: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 32, padding: 22, overflow: 'hidden', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', backgroundColor: '#0F172A', shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 12 } },
+    cardBgImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.45 },
     cardGlow: { position: 'absolute', top: -100, left: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(255,255,255,0.1)' },
+    cardRingOne: { position: 'absolute', right: -60, bottom: -70, width: 210, height: 210, borderRadius: 105, borderWidth: 1.5 },
+    cardRingTwo: { position: 'absolute', right: -20, bottom: -30, width: 130, height: 130, borderRadius: 65, borderWidth: 1.5 },
+    cardSweep: { position: 'absolute', top: -30, bottom: -30, width: 70, backgroundColor: 'rgba(255,255,255,0.16)' },
     cardContentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    cardLabelText: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+    cardLabelText: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
     rupeeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
     symbolText: { color: '#FFF', fontSize: 24, fontWeight: '400', marginRight: 5 },
-    mainBalanceText: { color: '#FFF', fontSize: 44, fontWeight: '900' },
-    chipWrapper: { padding: 5, backgroundColor: 'rgba(0,0,0,0.1)', borderRadius: 12 },
-    ACTIVITY_REWARDDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 30, paddingTop: 20, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
+    mainBalanceText: { color: '#FFF', fontSize: 46, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 10 },
+    chipWrapper: { padding: 5, backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+    cardNumberRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    cardNumberText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '800', letterSpacing: 2.5 },
+    cardHolderText: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '900', letterSpacing: 1.5, maxWidth: CARD_WIDTH * 0.34 },
+    ACTIVITY_REWARDDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
     ACTIVITY_REWARDLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '800' },
     ACTIVITY_REWARDValue: { color: '#FFF', fontSize: 18, fontWeight: '900', marginTop: 2 },
     massWithdrawBtn: { borderRadius: 18, overflow: 'hidden', elevation: 12, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10 },
-    whiteActionBtn: { backgroundColor: '#FFFFFF', paddingHorizontal: 22, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+    whiteActionBtn: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
     blackBtnText: { color: '#020617', fontWeight: '900', fontSize: 12, letterSpacing: 1.5 },
-    limitWarning: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'center', marginTop: 15, backgroundColor: 'rgba(0,0,0,0.2)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10 },
-    warningText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
+
+    unlockBox: { marginTop: 18, alignItems: 'center' },
+    limitWarning: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'center', backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+    warningText: { color: '#FFF', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
+    unlockTrack: { width: '100%', height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginTop: 12 },
+    unlockFillWrap: { height: '100%', borderRadius: 4, overflow: 'hidden' },
+    unlockText: { color: '#64748B', fontSize: 9, fontWeight: '800', marginTop: 8, letterSpacing: 0.5 },
+
+    rulesRow: { flexDirection: 'row', gap: 10, marginBottom: 26 },
+    ruleTile: { flex: 1, borderRadius: 22, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+    ruleValue: { color: '#FFF', fontSize: 14, fontWeight: '900', marginTop: 6 },
+    ruleLabel: { color: '#64748B', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginTop: 3 },
+
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, marginTop: 10 },
-    sectionTitleMain: { color: '#475569', fontSize: 11, fontWeight: '900', letterSpacing: 3 },
+    sectionTitleMain: { color: '#475569', fontSize: 11, fontWeight: '900', letterSpacing: 3, marginBottom: 14 },
     nodeEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#1e293b', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
     nodeEditText: { fontSize: 9, fontWeight: '900' },
     
     // 🔥 ZERO BOX FLUID SHAPES
     bankDetailCard: { borderRadius: 30, overflow: 'hidden', marginBottom: 30 },
+    bankBgImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.12 },
     bankInner: { flexDirection: 'row', alignItems: 'center', padding: 20 },
-    bankIconContainer: { width: 48, height: 48, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+    bankIconContainer: { width: 50, height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
     bankTitleText: { color: '#475569', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
     bankValueText: { color: '#FFF', fontSize: 16, fontWeight: '800', marginTop: 3 },
-    statusBadgeGreen: { backgroundColor: '#10B98120', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#10B98140' },
+    bankHolderText: { color: '#94A3B8', fontSize: 10, fontWeight: '700', marginTop: 3 },
+    statusBadgeGreen: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: '#10B98120', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#10B98140' },
     statusBadgeYellow: { backgroundColor: '#F59E0B20', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, borderColor: '#F59E0B40' },
     badgeLabelText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
+    activeDotWrap: { width: 12, height: 12, justifyContent: 'center', alignItems: 'center' },
+    activeDotPulse: { position: 'absolute', width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+    activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
     
-    emptyLedger: { alignItems: 'center', padding: 40, backgroundColor: 'rgba(30, 41, 59, 0.2)', borderRadius: 25, marginTop: 10 },
+    emptyLedger: { alignItems: 'center', padding: 40, backgroundColor: 'rgba(30, 41, 59, 0.2)', borderRadius: 25, marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: '#1e293b' },
     emptyLedgerText: { color: '#334155', fontSize: 12, fontWeight: '800', marginTop: 10 },
     
-    ledgerItem: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 30, zIndex: 2 },
-    ledgerIcon: { width: 45, height: 45, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    ledgerItem: { flexDirection: 'row', alignItems: 'center', padding: 18, paddingLeft: 22, borderRadius: 30, overflow: 'hidden' },
+    ledgerAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 5 },
+    ledgerIcon: { width: 46, height: 46, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
     ledgerType: { color: '#FFF', fontSize: 15, fontWeight: '800' },
     ledgerDate: { color: '#475569', fontSize: 11, fontWeight: '700', marginTop: 2 },
     ledgerAmount: { color: '#FFF', fontSize: 16, fontWeight: '900' },
-    ledgerStatus: { fontSize: 9, fontWeight: '900', marginTop: 3, letterSpacing: 1 },
+    ledgerStatusChip: { marginTop: 5, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1 },
+    ledgerStatus: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
 
-    // 🔥 NEW REJECTION REASON STYLES
-    rejectReasonBox: { flexDirection: 'row', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#EF444450', borderRadius: 20, padding: 15, marginHorizontal: 10, marginTop: -15, zIndex: -1, paddingTop: 20 },
+    // 🔥 REJECTION REASON STYLES
+    rejectReasonBox: { flexDirection: 'row', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#EF444450', borderRadius: 20, padding: 15, marginHorizontal: 10 },
     rejectLabel: { color: '#EF4444', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 2 },
     rejectReasonText: { color: '#FFF', fontSize: 11, fontWeight: '700', lineHeight: 16 },
     
     modalBg: { flex: 1, justifyContent: 'flex-end' },
-    modalSheet: { borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
-    modalDragger: { width: 50, height: 5, backgroundColor: '#1e293b', borderRadius: 10, alignSelf: 'center', marginBottom: 20 },
+    modalSheet: { borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, borderTopWidth: 1.5, overflow: 'hidden' },
+    sheetGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 140 },
+    modalDragger: { width: 50, height: 5, backgroundColor: '#334155', borderRadius: 10, alignSelf: 'center', marginBottom: 20 },
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
     modalTitle: { color: '#FFF', fontSize: 24, fontWeight: '900' },
     modalClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center' },
     inputArea: { marginBottom: 30 },
     currencyLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 2, textAlign: 'center', marginBottom: 15 },
     giantInput: { color: '#FFF', fontSize: 60, fontWeight: '900', textAlign: 'center', paddingVertical: 10 },
+    quickRow: { flexDirection: 'row', justifyContent: 'center', gap: 8, marginTop: 6 },
+    quickChip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(30,41,59,0.7)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    quickChipText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
     feeInfoBox: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, marginTop: 15, paddingVertical: 12, borderRadius: 20 },
     feeText: { color: '#475569', fontSize: 10, fontWeight: '800' },
     feeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#334155' },
+    availableHint: { color: '#64748B', fontSize: 10, fontWeight: '800', textAlign: 'center', marginTop: 12, letterSpacing: 0.5 },
     finalSubmitBtn: { borderRadius: 25, overflow: 'hidden' },
     finalSubmitGrad: { paddingVertical: 20, alignItems: 'center' },
     finalSubmitText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 2 },
     inputNodeBox: { marginBottom: 20 },
     nodeLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
-    nodeInput: { borderRadius: 20, padding: 18, color: '#FFF', fontSize: 15, fontWeight: '700' },
+    nodeInputWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 20, paddingHorizontal: 18 },
+    nodeInput: { flex: 1, paddingVertical: 18, color: '#FFF', fontSize: 15, fontWeight: '700' },
     uploadNode: { height: 100, borderRadius: 25, borderStyle: 'dashed', justifyContent: 'center', alignItems: 'center' },
     uploadHint: { color: '#475569', fontSize: 11, fontWeight: '800', marginTop: 8 },
     uploadSuccess: { flexDirection: 'row', alignItems: 'center', gap: 10 },

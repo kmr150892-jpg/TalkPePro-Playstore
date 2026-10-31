@@ -1,7 +1,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
 const getLevelConfig = (beans: number) => {
@@ -16,6 +16,74 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 100000)   return { lvl: 2, colors: ['#ff8604', '#f29d0a', '#1505fc'] as const, glow: 'transparent' };
     if (beans >= 30000)    return { lvl: 1, colors: ['#03ffc8', '#13feea', '#f64a06'] as const, glow: 'transparent' };
     return { lvl: 0, colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent' };
+};
+
+// 🌈 Multicolor palettes (same family as the royal settings menu)
+const IDLE_RING = ['rgba(34,211,238,0.60)', 'rgba(139,92,246,0.50)', 'rgba(255,92,158,0.60)'];
+const RAINBOW_COLORS = ['#FF3D81', '#F5C84C', '#34D399', '#22D3EE', '#8B5CF6', '#FF3D81'];
+
+// 🆕 UNIQUE SQUIRCLE BUTTON: multicolor gradient ring + press-spring + neon fill when active
+interface FancyButtonProps {
+    icon: string;
+    iconColor?: string;
+    active?: boolean;
+    activeColors?: string[];
+    idleColors?: string[];
+    glow?: string;
+    onPress?: () => void;
+    children?: React.ReactNode;
+}
+
+const FancyButton = ({
+    icon,
+    iconColor = '#FFF',
+    active = false,
+    activeColors = ['#22D3EE', '#8B5CF6'],
+    idleColors = IDLE_RING,
+    glow = '#22D3EE',
+    onPress,
+    children
+}: FancyButtonProps) => {
+    const scale = useRef(new Animated.Value(1)).current;
+
+    const pressIn = () => {
+        Animated.spring(scale, { toValue: 0.86, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+    };
+    const pressOut = () => {
+        Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 12 }).start();
+    };
+
+    return (
+        <TouchableOpacity activeOpacity={0.85} onPress={onPress} onPressIn={pressIn} onPressOut={pressOut}>
+            <Animated.View
+                style={[
+                    styles.fancyOuter,
+                    { transform: [{ scale }] },
+                    active && { shadowColor: glow, shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0.95, shadowRadius: 14, elevation: 15 }
+                ]}
+            >
+                <LinearGradient
+                    colors={(active ? activeColors : idleColors) as any}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.fancyRing}
+                >
+                    <View style={styles.fancyInner}>
+                        {active && (
+                            <LinearGradient
+                                colors={[activeColors[0] + '77', activeColors[activeColors.length - 1] + '44'] as any}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={StyleSheet.absoluteFill}
+                            />
+                        )}
+                        <Ionicons name={icon as any} size={22} color={iconColor} />
+                        {children}
+                    </View>
+                </LinearGradient>
+            </Animated.View>
+        </TouchableOpacity>
+    );
 };
 
 interface BottomControlsProps {
@@ -73,91 +141,170 @@ export default function BottomControls({
         ? `Trial ends in ${freeTimeLeft}s` 
         : (remainingSeconds && remainingSeconds <= 30 ? `Session ends in ${remainingSeconds}s` : "Low Balance Alert!");
 
-    // 🔥 HIGH-END NEON GLOW FOR ACTIVE BUTTONS (GAME, CHAT)
-    const activeBorderType = {
-        borderWidth: 2,
-        borderColor: theme.accent,
-        backgroundColor: theme.primary + '50', // Darker opacity for floating feel
-        shadowColor: theme.accent,
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 15,
-        elevation: 15,
-    };
-
-    // 🔥 SATTI FIX: EXPLOSIVE GLOW FOR PRO FILTER BUTTON SO HOST KNOWS IT WORKED
-    const activeProFilterStyle = {
-        borderWidth: 2,
-        borderColor: '#FFD700', // Gold pop for Pro
-        backgroundColor: 'rgba(255, 215, 0, 0.35)', 
-        shadowColor: '#FFD700',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 1,
-        shadowRadius: 15,
-        elevation: 15,
-    };
-
     // 🔥 STRICT HOST CHECK
     const isConsultant = role?.toLowerCase() === 'expert' || role?.toLowerCase() === 'host';
+
+    // 🆕 Hangup rainbow ring continuous spin
+    const hangupSpin = useRef(new Animated.Value(0)).current;
+    const hangupScale = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        const spinLoop = Animated.loop(
+            Animated.timing(hangupSpin, { toValue: 1, duration: 3500, easing: Easing.linear, useNativeDriver: true })
+        );
+        spinLoop.start();
+        return () => { spinLoop.stop(); };
+    }, []);
+
+    // 🆕 Critical warning pulse
+    const warnPulse = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        if (showWarning && isCriticalWarning) {
+            const pulseLoop = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(warnPulse, { toValue: 0.6, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                    Animated.timing(warnPulse, { toValue: 1, duration: 450, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+                ])
+            );
+            pulseLoop.start();
+            return () => { pulseLoop.stop(); warnPulse.setValue(1); };
+        } else {
+            warnPulse.setValue(1);
+        }
+    }, [showWarning, isCriticalWarning]);
+
+    const hangupPressIn = () => {
+        Animated.spring(hangupScale, { toValue: 0.9, useNativeDriver: true, speed: 40, bounciness: 6 }).start();
+    };
+    const hangupPressOut = () => {
+        Animated.spring(hangupScale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 12 }).start();
+    };
+
+    // Theme-based active colors (Game / Chat) - level glow same as before
+    const themeActiveColors = [theme.primary, theme.accent, theme.secondary];
 
     return (
         <View style={styles.bottomControlsArea}>
             {showWarning && (
-                <View style={[styles.warningFloating, isCriticalWarning ? {backgroundColor: '#B91C1C', shadowColor: '#B91C1C'} : {backgroundColor: theme.primary + '95', shadowColor: theme.primary}]}>
-                    <Ionicons name="alert-circle" size={18} color="#FFF" />
-                    <Text style={styles.warningText}>{warningMessage}</Text>
-                </View>
+                <Animated.View
+                    style={[
+                        styles.warningFloating,
+                        isCriticalWarning ? { shadowColor: '#B91C1C' } : { shadowColor: theme.primary },
+                        { opacity: warnPulse }
+                    ]}
+                >
+                    <LinearGradient
+                        colors={(isCriticalWarning ? ['#FF416C', '#B91C1C', '#FF4B2B'] : [theme.primary, theme.accent, theme.secondary]) as any}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.warningRing}
+                    >
+                        <View style={styles.warningInner}>
+                            <LinearGradient
+                                colors={(isCriticalWarning ? ['#B91C1CEE', '#7F1D1DEE'] : [theme.primary + '99', theme.secondary + '66']) as any}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 0 }}
+                                style={StyleSheet.absoluteFill}
+                            />
+                            <Ionicons name="alert-circle" size={18} color="#FFF" />
+                            <Text style={styles.warningText}>{warningMessage}</Text>
+                        </View>
+                    </LinearGradient>
+                </Animated.View>
             )}
             
             {/* 🔥 NO BLACK BOX - BUTTONS DIRECTLY FLOAT ON SCREEN 🔥 */}
             <View style={styles.buttonsRow}>
                 
                 {/* 🔄 Camera Switch Button */}
-                <TouchableOpacity style={styles.blurBtn} activeOpacity={0.6} onPress={switchCamera}>
-                    <Ionicons name="camera-reverse" size={22} color="#FFF" />
-                </TouchableOpacity>
+                <FancyButton
+                    icon="camera-reverse"
+                    onPress={switchCamera}
+                />
 
                 {/* 🎮 Game Button */}
-                <TouchableOpacity style={[styles.blurBtn, isGameVisible && activeBorderType]} activeOpacity={0.6} onPress={toggleGameVisibility}>
-                    <Ionicons name="game-controller" size={22} color={isGameVisible ? "#FFF" : "#FFF"} />
-                </TouchableOpacity>
+                <FancyButton
+                    icon="game-controller"
+                    active={isGameVisible}
+                    activeColors={themeActiveColors}
+                    glow={theme.accent}
+                    onPress={toggleGameVisibility}
+                />
 
                 {/* ✨ Pro FILTER BUTTON (HOST ONLY) */}
                 {isConsultant && (
-                    <TouchableOpacity style={[styles.blurBtn, isProEnabled && activeProFilterStyle]} activeOpacity={0.6} onPress={togglePro}>
-                        <Ionicons name="sparkles" size={22} color={isProEnabled ? "#FFD700" : "#FFF"} />
+                    <FancyButton
+                        icon="sparkles"
+                        iconColor={isProEnabled ? "#FFD700" : "#FFF"}
+                        active={isProEnabled}
+                        activeColors={['#FFD700', '#F59E0B', '#FF8A00']}
+                        glow="#FFD700"
+                        onPress={togglePro}
+                    >
                         {/* 🔥 Added a tiny indicator dot to show it's LIVE */}
                         {isProEnabled && <View style={styles.proActiveDot} />}
-                    </TouchableOpacity>
+                    </FancyButton>
                 )}
 
-                {/* 📞 HANGUP BUTTON - RICH RED GRADIENT GLOW */}
-                <TouchableOpacity style={styles.hangupWrapper} activeOpacity={0.8} onPress={() => handleCallEnd(true, 'completed')}>
-                    <LinearGradient 
-                        colors={['#FF416C', '#FF4B2B']} 
-                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                        style={styles.hangupGradient}
-                    >
-                        <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
-                    </LinearGradient>
+                {/* 📞 HANGUP BUTTON - ROTATING RAINBOW RING + RICH RED GRADIENT CORE */}
+                <TouchableOpacity
+                    activeOpacity={0.9}
+                    onPress={() => handleCallEnd(true, 'completed')}
+                    onPressIn={hangupPressIn}
+                    onPressOut={hangupPressOut}
+                >
+                    <Animated.View style={[styles.hangupWrapper, { transform: [{ scale: hangupScale }] }]}>
+                        <View style={styles.hangupRingClip} pointerEvents="none">
+                            <Animated.View
+                                style={[
+                                    styles.hangupSpinner,
+                                    { transform: [{ rotate: hangupSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }
+                                ]}
+                            >
+                                <LinearGradient
+                                    colors={RAINBOW_COLORS as any}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={StyleSheet.absoluteFill}
+                                />
+                            </Animated.View>
+                        </View>
+                        <LinearGradient 
+                            colors={['#FF416C', '#FF4B2B']} 
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                            style={styles.hangupGradient}
+                        >
+                            <Ionicons name="call" size={28} color="#FFF" style={{ transform: [{ rotate: '135deg' }] }} />
+                        </LinearGradient>
+                    </Animated.View>
                 </TouchableOpacity>
 
                 {/* 🎤 Mute Button */}
-                <TouchableOpacity style={[styles.blurBtn, isMuted && styles.mutedBtnStyle]} activeOpacity={0.6} onPress={toggleMute}>
-                    <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#FFF" : "#FFF"} />
-                </TouchableOpacity>
+                <FancyButton
+                    icon={isMuted ? "mic-off" : "mic"}
+                    active={isMuted}
+                    activeColors={['#FF416C', '#F43F5E']}
+                    glow="#F43F5E"
+                    onPress={toggleMute}
+                />
 
                 {/* 🎁 Gift Button (HIDDEN FOR HOST) */}
                 {!isConsultant && (
-                    <TouchableOpacity style={[styles.blurBtn, { borderColor: theme.accent + '90' }]} activeOpacity={0.6} onPress={onOpenGiftPanel}>
-                        <Ionicons name="gift" size={22} color={theme.accent} />
-                    </TouchableOpacity>
+                    <FancyButton
+                        icon="gift"
+                        iconColor={theme.accent}
+                        idleColors={[theme.accent + 'CC', theme.secondary + '99', theme.accent + 'CC']}
+                        onPress={onOpenGiftPanel}
+                    />
                 )}
 
                 {/* 💬 Chat Button */}
-                <TouchableOpacity style={[styles.blurBtn, isChatVisible && activeBorderType]} activeOpacity={0.6} onPress={toggleChatVisibility}>
-                    <Ionicons name="chatbubble-ellipses" size={22} color={isChatVisible ? "#FFF" : "#FFF"} />
-                </TouchableOpacity>
+                <FancyButton
+                    icon="chatbubble-ellipses"
+                    active={isChatVisible}
+                    activeColors={themeActiveColors}
+                    glow={theme.accent}
+                    onPress={toggleChatVisibility}
+                />
                 
             </View>
         </View>
@@ -179,34 +326,37 @@ const styles = StyleSheet.create({
         paddingHorizontal: 10,
         // 🔥 REMOVED ALL BORDERS, BACKGROUNDS & SHADOWS OF THE CONTAINER (NO BLACK BOX)
     },
-    blurBtn: { 
-        width: 50, // Slightly bigger for standalone floating look
-        height: 50, 
-        borderRadius: 25, 
-        backgroundColor: 'rgba(0, 0, 0, 0.55)', // Dark frosted glass for high contrast over video
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        borderWidth: 1.5, 
-        borderColor: 'rgba(255, 255, 255, 0.25)', // Crisper white edge
+
+    // 🆕 SQUIRCLE BUTTON (multicolor ring)
+    fancyOuter: {
+        width: 50,
+        height: 50,
+        borderRadius: 18,
+        backgroundColor: '#0B1026',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 6 },
         shadowOpacity: 0.8,
         shadowRadius: 10,
         elevation: 12,
     },
-    mutedBtnStyle: {
-        backgroundColor: 'rgba(244, 63, 94, 0.85)', // Strong red for mute
-        borderColor: '#F43F5E',
-        shadowColor: '#F43F5E',
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.9,
-        shadowRadius: 12,
-        elevation: 12,
+    fancyRing: {
+        flex: 1,
+        borderRadius: 18,
+        padding: 1.5,
     },
+    fancyInner: {
+        flex: 1,
+        borderRadius: 16.5,
+        backgroundColor: 'rgba(8, 12, 30, 0.78)', // Dark glass for high contrast over video
+        justifyContent: 'center',
+        alignItems: 'center',
+        overflow: 'hidden',
+    },
+
     proActiveDot: {
         position: 'absolute',
-        top: 8,
-        right: 10,
+        top: 7,
+        right: 9,
         width: 6,
         height: 6,
         borderRadius: 3,
@@ -215,10 +365,13 @@ const styles = StyleSheet.create({
         shadowRadius: 4,
         shadowOpacity: 1,
     },
+
+    // 🆕 HANGUP (rounded square + rotating rainbow ring)
     hangupWrapper: {
         width: 68, // Made hangup button slightly more prominent
         height: 68, 
-        borderRadius: 34, 
+        borderRadius: 24, 
+        backgroundColor: '#0B1026',
         shadowColor: '#FF416C',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.7,
@@ -227,26 +380,54 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
     },
-    hangupGradient: {
-        width: '100%',
-        height: '100%',
-        borderRadius: 34,
+    hangupRingClip: {
+        ...StyleSheet.absoluteFillObject,
+        borderRadius: 24,
+        overflow: 'hidden',
         justifyContent: 'center',
         alignItems: 'center',
-        borderWidth: 2,
+    },
+    hangupSpinner: {
+        position: 'absolute',
+        width: 130,
+        height: 130,
+        left: (68 - 130) / 2,
+        top: (68 - 130) / 2,
+    },
+    hangupGradient: {
+        position: 'absolute',
+        top: 4,
+        left: 4,
+        right: 4,
+        bottom: 4,
+        borderRadius: 20,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 1.5,
         borderColor: 'rgba(255, 255, 255, 0.4)',
     },
+
+    // 🆕 WARNING PILL (gradient ring)
     warningFloating: { 
-        flexDirection: 'row', 
-        alignItems: 'center', 
-        paddingHorizontal: 20, 
-        paddingVertical: 12, 
         borderRadius: 25, 
         marginBottom: 20, 
         shadowOffset: { width: 0, height: 5 },
         shadowOpacity: 0.5,
         shadowRadius: 10,
         elevation: 10 
+    },
+    warningRing: {
+        borderRadius: 25,
+        padding: 1.5,
+    },
+    warningInner: {
+        flexDirection: 'row', 
+        alignItems: 'center', 
+        paddingHorizontal: 20, 
+        paddingVertical: 12, 
+        borderRadius: 23.5,
+        backgroundColor: 'rgba(8, 12, 30, 0.9)',
+        overflow: 'hidden',
     },
     warningText: { 
         color: '#FFF', 

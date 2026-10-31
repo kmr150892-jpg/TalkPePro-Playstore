@@ -1,7 +1,8 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef } from 'react';
-import { Animated, Easing, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Easing, FlatList, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // 🔥 SATTI FIX: UPDATED GIFT LIST TO INCLUDE ALL YOUR PREMIUM CUSTOM IMAGE GIFTS 🔥
 const GIFT_OPTIONS = [
@@ -63,6 +64,19 @@ const getGiftImage = (giftName: string) => {
     return null;
 };
 
+// 💎 Compact price so every card stays neat: 1K, 25K, 1M
+const formatPrice = (n: number) => {
+    if (n >= 1000000) return `${n / 1000000}M`;
+    if (n >= 1000) return `${n / 1000}K`;
+    return `${n}`;
+};
+
+const CARD_WIDTH = 112;
+const CARD_GAP = 10;
+
+// 🛡️ Gifts ABOVE this amount ask "Are you sure?" before sending (change to 4999 to include 5000)
+const CONFIRM_ABOVE = 5000;
+
 interface GiftPanelProps {
     onSendGift: (amount: number, type: string, name: string) => void; // Added name for GiftOverlay support
     onClose: () => void;
@@ -70,8 +84,45 @@ interface GiftPanelProps {
     expertBeans?: number; // 🔥 ADDED FOR DYNAMIC THEME
 }
 
+// 🎁 One gift card: gradient hairline border, glow disc behind the image, press bounce
+const GiftCard = ({ item, theme, canAfford, onPress }: any) => {
+    const scale = useRef(new Animated.Value(1)).current;
+    const imageSource = getGiftImage(item.name);
+
+    const pressIn = () => Animated.spring(scale, { toValue: 0.94, useNativeDriver: true, friction: 6 }).start();
+    const pressOut = () => Animated.spring(scale, { toValue: 1, useNativeDriver: true, friction: 4 }).start();
+
+    return (
+        <Animated.View style={{ transform: [{ scale }], marginRight: CARD_GAP, opacity: canAfford ? 1 : 0.5 }}>
+            <TouchableOpacity activeOpacity={0.9} onPress={onPress} onPressIn={pressIn} onPressOut={pressOut}>
+                <LinearGradient
+                    colors={[theme.primary, theme.secondary]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.cardBorder}
+                >
+                    <View style={styles.cardInner}>
+                        <View style={[styles.glowDisc, { backgroundColor: theme.accent + '26' }]} />
+                        {imageSource ? (
+                            <Image source={imageSource} style={styles.giftImage} resizeMode="contain" />
+                        ) : (
+                            <MaterialCommunityIcons name={item.icon as any} size={44} color={theme.accent} style={{ marginVertical: 16 }} />
+                        )}
+                        <Text style={styles.giftName} numberOfLines={1}>{item.name}</Text>
+                        <View style={styles.pricePill}>
+                            <MaterialCommunityIcons name="diamond-stone" size={12} color="#FBBF24" />
+                            <Text style={styles.priceText}>{formatPrice(item.amount)}</Text>
+                        </View>
+                    </View>
+                </LinearGradient>
+            </TouchableOpacity>
+        </Animated.View>
+    );
+};
+
 export default function GiftPanel({ onSendGift, onClose, userBalance, expertBeans = 0 }: GiftPanelProps) {
     const shimmerAnim = useRef(new Animated.Value(0)).current;
+    const enter = useRef(new Animated.Value(0)).current;
 
     // 🔥 DYNAMIC THEME CALCULATION
     const config = getLevelConfig(expertBeans);
@@ -82,62 +133,83 @@ export default function GiftPanel({ onSendGift, onClose, userBalance, expertBean
     };
 
     useEffect(() => {
+        // Ambient glow breathes slowly (smooth back-and-forth, no jump)
         Animated.loop(
-          Animated.timing(shimmerAnim, {
-            toValue: 1,
-            duration: 4000,
-            easing: Easing.inOut(Easing.sin),
-            useNativeDriver: true
-          })
+            Animated.sequence([
+                Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(shimmerAnim, { toValue: 0, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+            ])
         ).start();
+
+        // ONE entrance moment: panel glides up
+        Animated.timing(enter, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     }, []);
 
-    const orbTranslateY = shimmerAnim.interpolate({
-        inputRange: [0, 1],
-        outputRange: [0, -20]
-    });
+    const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -20] });
 
-    // 🔥 DUAL-TONE BORDER STYLES (FLUID, 2px)
-    const borderType1 = {
-        borderLeftWidth: 2,
-        borderRightWidth: 2,
-        borderTopWidth: 0.5,
-        borderBottomWidth: 0.5,
-        borderLeftColor: theme.primary,
-        borderRightColor: theme.primary,
-        borderTopColor: theme.secondary + '80',
-        borderBottomColor: theme.secondary + '80',
-        backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    };
-
-    const borderType2 = {
-        borderLeftWidth: 2,
-        borderRightWidth: 2,
-        borderTopWidth: 0.5,
-        borderBottomWidth: 0.5,
-        borderLeftColor: theme.secondary,
-        borderRightColor: theme.secondary,
-        borderTopColor: theme.primary + '80',
-        borderBottomColor: theme.primary + '80',
-        backgroundColor: 'rgba(15, 23, 42, 0.85)',
+    // 🛡️ Big gifts need a confirm. Low balance skips the confirm so the parent's "Insufficient balance" alert still shows.
+    const handleGiftPress = (item: { name: string; amount: number; type: string }) => {
+        const needsConfirm = item.amount > CONFIRM_ABOVE && userBalance >= item.amount;
+        if (!needsConfirm) {
+            onSendGift(item.amount, item.type, item.name);
+            return;
+        }
+        Alert.alert(
+            `Send ${item.name}?`,
+            `${item.amount.toLocaleString()} diamonds will be deducted from your balance.`,
+            [
+                { text: 'Cancel', style: 'cancel' },
+                { text: 'Send', onPress: () => onSendGift(item.amount, item.type, item.name) },
+            ]
+        );
     };
 
     return (
-        <View style={styles.overlay}>
-            
+        <Animated.View
+            style={[
+                styles.overlay,
+                {
+                    opacity: enter,
+                    transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }],
+                },
+            ]}
+        >
             {/* 🔥 SHIMMER ORBS FOR AMBIENT GLOW */}
             <Animated.View style={[styles.shimmerOrb, { top: -30, right: 10, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
             <Animated.View style={[styles.shimmerOrb, { bottom: -30, left: 10, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
-            <BlurView intensity={95} tint="dark" style={[styles.panel, borderType1]}>
+            <BlurView intensity={70} tint="dark" style={styles.panel}>
+                <View style={styles.panelTint} pointerEvents="none" />
+
+                {/* Signature accent edge (same as chat) */}
+                <LinearGradient
+                    colors={[theme.primary, theme.secondary]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.accentEdge}
+                />
+
+                {/* Header: title on the left, balance + close on the right */}
                 <View style={styles.header}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                        <Text style={styles.title}>SEND A BONUS</Text>
-                        <MaterialCommunityIcons name="gift" size={18} color={theme.primary} style={{ marginLeft: 8 }} />
+                    <View style={styles.titleWrap}>
+                        <MaterialCommunityIcons name="gift-outline" size={20} color={theme.accent} />
+                        <Text style={styles.title}>Send a bonus</Text>
                     </View>
-                    <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-                        <Ionicons name="close-circle" size={32} color="rgba(255,255,255,0.5)" />
-                    </TouchableOpacity>
+
+                    <View style={styles.headerRight}>
+                        <View style={styles.balancePill}>
+                            <MaterialCommunityIcons name="diamond-stone" size={14} color="#FBBF24" />
+                            <Text style={styles.balanceValue}>{Math.floor(userBalance).toLocaleString()}</Text>
+                        </View>
+                        <TouchableOpacity
+                            onPress={onClose}
+                            activeOpacity={0.7}
+                            hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                            style={styles.closeBtn}
+                        >
+                            <Ionicons name="close" size={18} color="rgba(255,255,255,0.85)" />
+                        </TouchableOpacity>
+                    </View>
                 </View>
 
                 <FlatList
@@ -145,46 +217,20 @@ export default function GiftPanel({ onSendGift, onClose, userBalance, expertBean
                     horizontal
                     showsHorizontalScrollIndicator={false}
                     keyExtractor={(item) => item.id}
-                    contentContainerStyle={{ paddingVertical: 10, paddingHorizontal: 5 }}
-                    renderItem={({ item, index }) => {
-                        // 🔥 Alternating Dual-Tone Borders
-                        const cardBorderStyle = index % 2 === 0 ? borderType2 : borderType1;
-                        
-                        // 🔥 SATTI FIX: Fetch image if it matches the name
-                        const imageSource = getGiftImage(item.name);
-                        
-                        return (
-                            <TouchableOpacity 
-                                style={[styles.giftCard, cardBorderStyle]} 
-                                onPress={() => onSendGift(item.amount, item.type, item.name)}
-                                activeOpacity={0.7}
-                            >
-                                {/* 🔥 SATTI FIX: Image rendering logic inside Flatlist */}
-                                {imageSource ? (
-                                    <Image source={imageSource} style={styles.giftImage} resizeMode="contain" />
-                                ) : (
-                                    <MaterialCommunityIcons name={item.icon as any} size={40} color={index % 2 === 0 ? theme.secondary : theme.primary} />
-                                )}
-                                
-                                <Text style={styles.giftName}>{item.name}</Text>
-                                <View style={[styles.priceRow, { backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10 }]}>
-                                    <MaterialCommunityIcons name="diamond-stone" size={12} color="#FBBF24" />
-                                    <Text style={styles.priceText}>{item.amount}</Text>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                    }}
+                    snapToInterval={CARD_WIDTH + CARD_GAP}
+                    decelerationRate="fast"
+                    contentContainerStyle={{ paddingVertical: 6, paddingRight: 6 }}
+                    renderItem={({ item }) => (
+                        <GiftCard
+                            item={item}
+                            theme={theme}
+                            canAfford={userBalance >= item.amount}
+                            onPress={() => handleGiftPress(item)}
+                        />
+                    )}
                 />
-                
-                <View style={[styles.balanceContainer, { borderColor: theme.primary + '40', backgroundColor: theme.primary + '10' }]}>
-                    <Text style={styles.balanceText}>Your Balance:</Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', marginLeft: 6 }}>
-                        <MaterialCommunityIcons name="diamond-stone" size={14} color="#FBBF24" />
-                        <Text style={[styles.balanceValue, { color: theme.primary }]}> {Math.floor(userBalance).toLocaleString()}</Text>
-                    </View>
-                </View>
             </BlurView>
-        </View>
+        </Animated.View>
     );
 }
 
@@ -202,76 +248,110 @@ const styles = StyleSheet.create({
         width: 200, 
         height: 200, 
         borderRadius: 100, 
-        opacity: 0.25, 
+        opacity: 0.22, 
         zIndex: -1
     },
     panel: { 
         width: '92%', 
-        borderRadius: 35, 
-        padding: 20, 
-        overflow: 'hidden', 
+        borderRadius: 30, 
+        paddingHorizontal: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
+        overflow: 'hidden',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(255,255,255,0.16)',
     },
+    panelTint: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(8, 12, 26, 0.66)',
+    },
+    accentEdge: {
+        position: 'absolute',
+        top: 0,
+        left: 30,
+        right: 30,
+        height: 2,
+        borderBottomLeftRadius: 2,
+        borderBottomRightRadius: 2,
+    },
+
     header: { 
         flexDirection: 'row', 
         justifyContent: 'space-between', 
         alignItems: 'center', 
-        marginBottom: 15 
+        marginBottom: 10 
     },
-    title: { 
-        color: '#FFF', 
-        fontSize: 16, 
-        fontWeight: '900', 
-        letterSpacing: 1 
+    titleWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    title: { color: '#FFFFFF', fontSize: 17, fontWeight: '800', letterSpacing: 0.2 },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    balancePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 5,
+        paddingHorizontal: 11,
+        paddingVertical: 6,
+        borderRadius: 16,
+        backgroundColor: 'rgba(251,191,36,0.12)',
+        borderWidth: StyleSheet.hairlineWidth,
+        borderColor: 'rgba(251,191,36,0.45)',
     },
-    giftCard: { 
-        padding: 2, 
-        borderRadius: 25, 
-        alignItems: 'center', 
-        marginRight: 10, 
-        width: 150, 
+    balanceValue: { color: '#FBBF24', fontSize: 13, fontWeight: '800' },
+    closeBtn: {
+        width: 30,
+        height: 30,
+        borderRadius: 15,
+        backgroundColor: 'rgba(255,255,255,0.08)',
+        justifyContent: 'center',
+        alignItems: 'center',
     },
-    // 🔥 SATTI FIX: Custom style for your PNG images inside the card
+
+    // Gradient hairline border (1.5px) wraps the dark inner card
+    cardBorder: {
+        width: CARD_WIDTH,
+        padding: 1.5,
+        borderRadius: 24,
+    },
+    cardInner: {
+        borderRadius: 22.5,
+        backgroundColor: 'rgba(10, 14, 28, 0.94)',
+        alignItems: 'center',
+        paddingTop: 10,
+        paddingBottom: 10,
+        paddingHorizontal: 6,
+        overflow: 'hidden',
+    },
+    glowDisc: {
+        position: 'absolute',
+        top: 6,
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+    },
     giftImage: {
-        width: 125,
-        height: 125,
-        marginBottom: 2,
+        width: 84,
+        height: 84,
     },
     giftName: { 
-        color: '#FFF', 
-        fontSize: 20, 
-        fontWeight: '900', 
-        marginTop: 3,
-        marginBottom: 5,
-        letterSpacing: 0.5,
-        textAlign: 'center'
+        color: '#FFFFFF', 
+        fontSize: 13, 
+        fontWeight: '700', 
+        marginTop: 6,
+        marginBottom: 6,
+        textAlign: 'center',
+        width: '100%',
     },
-    priceRow: { 
+    pricePill: { 
         flexDirection: 'row', 
         alignItems: 'center', 
-        gap: 3, 
+        gap: 4,
+        paddingHorizontal: 10,
+        paddingVertical: 4,
+        borderRadius: 12,
+        backgroundColor: 'rgba(251,191,36,0.12)',
     },
     priceText: { 
         color: '#FBBF24', 
-        fontSize: 15, 
-        fontWeight: '900' 
+        fontSize: 13, 
+        fontWeight: '800' 
     },
-    balanceContainer: {
-        flexDirection: 'row',
-        justifyContent: 'center',
-        alignItems: 'center',
-        marginTop: 15,
-        paddingVertical: 10,
-        borderRadius: 20,
-        borderWidth: 1,
-    },
-    balanceText: { 
-        color: 'rgba(255,255,255,0.7)', 
-        fontSize: 11, 
-        fontWeight: '800',
-        letterSpacing: 0.5
-    },
-    balanceValue: {
-        fontSize: 14,
-        fontWeight: '900',
-    }
 });

@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import LottieView from 'lottie-react-native';
 import React, { useEffect, useRef, useState } from 'react';
-import { Animated, Dimensions, StyleSheet, View } from 'react-native';
+import { Animated, Dimensions, Easing, StyleSheet, View } from 'react-native';
 
 const { width, height } = Dimensions.get('window');
 
@@ -20,6 +20,21 @@ const getLevelConfig = (beans: number) => {
     return { lvl: 0, colors: ['#f807cf', '#f607e2', '#2a06f5'] as const };
 };
 
+const GOLD = '#FFD66B';
+const CRYSTAL = '#FFFFFF';
+
+// 🌑 Some level colours are almost black (e.g. #0a0303) and would vanish on a dark screen.
+// If a colour is too dark, swap it for gold so every diamond stays visible.
+const keepVisible = (hex: string) => {
+    const h = hex.replace('#', '');
+    if (h.length < 6) return GOLD;
+    const r = parseInt(h.substring(0, 2), 16);
+    const g = parseInt(h.substring(2, 4), 16);
+    const b = parseInt(h.substring(4, 6), 16);
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return luminance < 0.22 ? GOLD : hex;
+};
+
 interface GiftRainProps {
     visible: boolean;
     onComplete: () => void;
@@ -35,23 +50,33 @@ export default function GiftRain({ visible, onComplete, giftType = 'diamond', ex
     // 🔥 DYNAMIC THEME CALCULATION
     const config = getLevelConfig(expertTotalBeans);
     const theme = {
-        primary: config.colors[0],
-        secondary: config.colors[2],
+        primary: keepVisible(config.colors[0]),
+        secondary: keepVisible(config.colors[2]),
     };
 
     useEffect(() => {
         if (visible) {
             if (giftType === 'diamond') {
-                // Generate 15-20 random particle positions
-                const newParticles = Array.from({ length: 18 }).map((_, i) => ({
-                    id: i,
-                    x: Math.random() * width,
-                    anim: new Animated.Value(-100),
-                    delay: Math.random() * 2000,
-                    rotate: `${Math.random() * 360}deg`,
-                    // Assign alternate colors to diamonds (Primary and Secondary)
-                    color: i % 2 === 0 ? theme.primary : theme.secondary
-                }));
+                // 👑 Royal palette: level colours + gold + crystal white
+                const palette = [theme.primary, GOLD, theme.secondary, CRYSTAL];
+
+                // Layered rain: big = near (faster, brighter), small = far (slower, dimmer)
+                const newParticles = Array.from({ length: 26 }).map((_, i) => {
+                    const depth = Math.random();
+                    const size = 16 + depth * 26;
+                    return {
+                        id: i,
+                        x: Math.random() * (width - 40),
+                        anim: new Animated.Value(0),
+                        delay: Math.random() * 1800,
+                        duration: 4200 - depth * 1600,
+                        size,
+                        peakOpacity: 0.55 + depth * 0.45,
+                        sway: 8 + Math.random() * 22,
+                        spin: (Math.random() < 0.5 ? -1 : 1) * (180 + Math.random() * 360),
+                        color: palette[i % palette.length],
+                    };
+                });
 
                 setParticles(newParticles);
 
@@ -59,18 +84,22 @@ export default function GiftRain({ visible, onComplete, giftType = 'diamond', ex
                     Animated.sequence([
                         Animated.delay(p.delay),
                         Animated.timing(p.anim, {
-                            toValue: height + 100,
-                            duration: 3000,
+                            toValue: 1,
+                            duration: p.duration,
+                            easing: Easing.linear,
                             // 🔥 SATTI FIX: useNativeDriver kept true for massive performance 🔥
                             useNativeDriver: true,
                         })
                     ])
                 );
 
-                Animated.parallel(animations).start(() => {
+                const running = Animated.parallel(animations);
+                running.start(({ finished }) => {
+                    if (!finished) return; // stopped by cleanup, don't fire onComplete twice
                     onComplete();
                     setParticles([]);
                 });
+                return () => running.stop();
             } else {
                 // Lottie logic (Fireworks or Confetti)
                 // 🔥 Optimized: Reset and Play
@@ -89,7 +118,7 @@ export default function GiftRain({ visible, onComplete, giftType = 'diamond', ex
 
     return (
         <View style={StyleSheet.absoluteFill} pointerEvents="none">
-            {/* 💎 DIAMOND RAIN WITH DEEP-GLOW DYNAMIC THEME */}
+            {/* 💎 LAYERED DIAMOND RAIN: sway, spin, soft glow, fades in and out */}
             {giftType === 'diamond' && particles.map((p) => (
                 <Animated.View
                     key={p.id}
@@ -97,22 +126,34 @@ export default function GiftRain({ visible, onComplete, giftType = 'diamond', ex
                         styles.particleContainer,
                         {
                             left: p.x,
+                            width: p.size * 1.7,
+                            height: p.size * 1.7,
+                            opacity: p.anim.interpolate({
+                                inputRange: [0, 0.08, 0.85, 1],
+                                outputRange: [0, p.peakOpacity, p.peakOpacity, 0],
+                            }),
                             transform: [
-                                { translateY: p.anim },
-                                { rotate: p.rotate }
-                            ]
-                        }
+                                { translateY: p.anim.interpolate({ inputRange: [0, 1], outputRange: [-120, height + 120] }) },
+                                { translateX: p.anim.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, p.sway, 0, -p.sway, 0] }) },
+                                { rotate: p.anim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', `${p.spin}deg`] }) },
+                            ],
+                        },
                     ]}
                 >
-                    <MaterialCommunityIcons 
-                        name="diamond-stone" 
-                        size={30} 
-                        color={p.color} 
-                        style={{
-                            textShadowColor: p.color,
-                            textShadowRadius: 15,
-                        }}
+                    {/* Soft glow disc behind the stone */}
+                    <View
+                        style={[
+                            styles.glow,
+                            {
+                                width: p.size * 1.7,
+                                height: p.size * 1.7,
+                                borderRadius: p.size * 0.85,
+                                backgroundColor: p.color + '33',
+                                shadowColor: p.color,
+                            },
+                        ]}
                     />
+                    <MaterialCommunityIcons name="diamond-stone" size={p.size} color={p.color} />
                 </Animated.View>
             ))}
 
@@ -142,7 +183,17 @@ export default function GiftRain({ visible, onComplete, giftType = 'diamond', ex
 const styles = StyleSheet.create({
     particleContainer: {
         position: 'absolute',
+        top: 0,
         zIndex: 999,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    glow: {
+        position: 'absolute',
+        shadowOpacity: 0.9,
+        shadowRadius: 14,
+        shadowOffset: { width: 0, height: 0 },
+        elevation: 6,
     },
     fullScreenLottie: {
         width: width,

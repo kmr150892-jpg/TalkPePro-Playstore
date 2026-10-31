@@ -46,6 +46,7 @@ import GameOverlay from '../components/GameOverlay';
 import GiftOverlay from '../components/GiftOverlay';
 import BottomControls from '../components/videocall/BottomControls';
 import CallSummary from '../components/videocall/CallSummary';
+import FilterPanel, { FILTER_LEVEL_MULT, FILTER_PRESETS } from '../components/videocall/FilterPanel';
 import FloatingChat from '../components/videocall/FloatingChat';
 import GiftPanel from '../components/videocall/GiftPanel';
 import GiftRain from '../components/videocall/GiftRain';
@@ -190,6 +191,10 @@ export default function VideoCallScreen() {
     const [isMuted, setIsMuted] = useState(false);
     
     const [isProEnabled, setIsProEnabled] = useState(false);
+    // 🆕 GLOW STUDIO (filter panel) states
+    const [isFilterPanelVisible, setIsFilterPanelVisible] = useState(false);
+    const [activeFilter, setActiveFilter] = useState('none');
+    const [filterLevel, setFilterLevel] = useState(1); // 0 = SOFT, 1 = MEDIUM, 2 = MAX
     
     const [isPrivacyBlurActive, setIsPrivacyBlurActive] = useState(false);
 
@@ -863,20 +868,50 @@ export default function VideoCallScreen() {
         } catch (e) {}
     };
 
+    // 🆕 Filter button press -> Glow Studio panel open / close
     const toggleProFilter = () => {
+        setIsFilterPanelVisible(prev => !prev);
+    };
+
+    // 🆕 Filter apply (beauty + color enhance + low-light), intensity-ku ettha scale aagum
+    const applyFilter = (id: string, levelIdx: number = filterLevel) => {
         if (!engine.current) return;
-        const nextState = !isProEnabled;
+        const preset = FILTER_PRESETS.find((p: any) => p.id === id) || FILTER_PRESETS[0];
+        const mult = FILTER_LEVEL_MULT[levelIdx] ?? 1;
+        const sc = (v: number) => Math.min(1, v * mult);
+        const isOn = id !== 'none';
+        const b = preset.beauty;
+
         try {
-            engine.current.setBeautyEffectOptions(nextState, {
-                lighteningContrastLevel: 1, 
-                lighteningLevel: 0.7, 
-                smoothnessLevel: 0.7, 
-                rednessLevel: 0.1,
+            engine.current.setBeautyEffectOptions(!!b, {
+                lighteningContrastLevel: (b?.contrast ?? 1) as any,
+                lighteningLevel: sc(b?.lightening ?? 0),
+                smoothnessLevel: sc(b?.smooth ?? 0),
+                rednessLevel: sc(b?.redness ?? 0),
+                sharpnessLevel: sc(b?.sharp ?? 0),
             });
-            setIsProEnabled(nextState);
         } catch (error) {
-            console.log("Pro engine error:", error);
+            console.log("Beauty filter error:", error);
         }
+
+        try {
+            (engine.current as any).setColorEnhanceOptions(!!preset.color, {
+                strengthLevel: sc(preset.color?.strength ?? 0),
+                skinProtectLevel: preset.color?.skin ?? 1,
+            });
+        } catch (error) {
+            console.log("Color enhance error:", error);
+        }
+
+        try {
+            (engine.current as any).setLowlightEnhanceOptions(!!preset.lowlight, { mode: 0, level: 0 });
+        } catch (error) {
+            console.log("Low-light error:", error);
+        }
+
+        setActiveFilter(id);
+        setFilterLevel(levelIdx);
+        setIsProEnabled(isOn);
     };
 
     // 🆕 CAMERA ON/OFF: camera stream actually stop aagum (battery + data save), matha pakkathukkum theriyum
@@ -1664,6 +1699,16 @@ export default function VideoCallScreen() {
                     )}
                     {isGiftPanelVisible && role === 'user' && (
                         <GiftPanel userBalance={localBalance} onClose={() => setIsGiftPanelVisible(false)} onSendGift={handleSendGift} />
+                    )}
+                    {isFilterPanelVisible && (String(role) === 'expert' || String(role) === 'host') && !showSummary && (
+                        <FilterPanel
+                            activeId={activeFilter}
+                            levelIndex={filterLevel}
+                            onSelect={(id: string) => applyFilter(id)}
+                            onLevelChange={(idx: number) => applyFilter(activeFilter, idx)}
+                            onReset={() => applyFilter('none', 1)}
+                            onClose={() => setIsFilterPanelVisible(false)}
+                        />
                     )}
                     {isCallAccepted && !showSummary && (
                         <BottomControls 

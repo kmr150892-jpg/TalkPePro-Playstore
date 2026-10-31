@@ -34,6 +34,62 @@ import ExpertMessages from './ExpertMessages';
 
 const { width, height } = Dimensions.get('window');
 
+// 🎨 IMAGES (replace with your own brand images anytime)
+const SPOTLIGHT_BG = 'https://images.unsplash.com/photo-1492684223066-81342ee5ff30?q=80&w=1200&auto=format&fit=crop';
+
+// 🧭 TAB ORDER + NAV GEOMETRY (used by the sliding indicator)
+const TABS = ['DASH', 'WALLET', 'MESSAGES', 'LEVELS', 'STATS'];
+const NAV_ROW_W = width - 40;
+const NAV_ITEM_W = NAV_ROW_W / 5;
+
+// ✨ EXPANDING RIPPLE RING (incoming call magic)
+const Ripple = ({ delay, color }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(a, { toValue: 1, duration: 2400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+                Animated.timing(a, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                width: 180,
+                height: 180,
+                borderRadius: 90,
+                borderWidth: 2,
+                borderColor: color,
+                opacity: a.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }),
+                transform: [{ scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.85, 2.3] }) }]
+            }}
+        />
+    );
+};
+
+// ✨ BOTTOM NAV BUTTON (stays fully inside the glass box: icon + label, soft scale only)
+const NavButton = ({ id, icon, label, active, onPress, theme }: any) => {
+    const isActive = active === id;
+    const s = useRef(new Animated.Value(isActive ? 1 : 0)).current;
+    useEffect(() => {
+        Animated.spring(s, { toValue: isActive ? 1 : 0, useNativeDriver: true, friction: 8, tension: 140 }).start();
+    }, [isActive]);
+    const scale = s.interpolate({ inputRange: [0, 1], outputRange: [1, 1.1] });
+    const iconName = isActive ? String(icon).replace('-outline', '') : icon;
+    return (
+        <TouchableOpacity onPress={() => onPress(id)} style={styles.navItem} activeOpacity={0.8}>
+            <Animated.View style={[styles.iconBox, { transform: [{ scale }] }]}>
+                <Ionicons name={iconName} size={19} color={isActive ? '#FFF' : '#94A3B8'} />
+            </Animated.View>
+            <Text style={[styles.navText, { color: isActive ? '#FFF' : '#64748B', fontWeight: isActive ? '900' : '800' }]}>{label}</Text>
+        </TouchableOpacity>
+    );
+};
+
 // ✅ ACCURATE THEME & LEVEL CONFIG
 const getLevelConfig = (userData: any) => {
     const getObj = (lvl: number) => {
@@ -110,6 +166,13 @@ export default function ExpertDashboard() {
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const shimmerAnim = useRef(new Animated.Value(0)).current; 
 
+    // ✨ NEW PREMIUM ANIMATION VALUES
+    const spinAnim = useRef(new Animated.Value(0)).current;      // rotating rings (loader + call avatar)
+    const sweepAnim = useRef(new Animated.Value(0)).current;     // light sweep over buttons / banner
+    const navIndexAnim = useRef(new Animated.Value(0)).current; // sliding nav indicator
+    const tabAnim = useRef(new Animated.Value(1)).current;       // tab switch transition
+    const navStretch = useRef(new Animated.Value(1)).current;    // nav indicator stretch while sliding
+
     // DYNAMIC THEME ENGINE
     const config = getLevelConfig(expertData);
     
@@ -128,6 +191,17 @@ export default function ExpertDashboard() {
         inputRange: [0, 1],
         outputRange: [0, -40]
     });
+
+    // ✨ NEW: derived animation styles
+    const spin = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const sweepX = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: [-100, 240] });
+    const bannerSweepX = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: [-100, width] });
+    const blinkOpacity = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [0.35, 1] });
+    const iconPulseScale = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [1, 1.9] });
+    const iconPulseOpacity = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [0.75, 0] });
+    const acceptPulse = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [1, 1.14] });
+    const navIndicatorX = navIndexAnim.interpolate({ inputRange: [0, 1, 2, 3, 4], outputRange: [0, NAV_ITEM_W, NAV_ITEM_W * 2, NAV_ITEM_W * 3, NAV_ITEM_W * 4] });
+    const tabSlide = tabAnim.interpolate({ inputRange: [0, 1], outputRange: [26, 0] });
 
     const borderType1 = {
         borderLeftWidth: 2,
@@ -184,8 +258,32 @@ export default function ExpertDashboard() {
             })
         ).start();
 
+        // ✨ NEW: spin + light-sweep loops
+        Animated.loop(
+            Animated.timing(spinAnim, { toValue: 1, duration: 5000, easing: Easing.linear, useNativeDriver: true })
+        ).start();
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(1200),
+                Animated.timing(sweepAnim, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+                Animated.timing(sweepAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        ).start();
+
         return () => authUnsub();
     }, []);
+
+    // ✨ NEW: slide the nav indicator + animate content whenever the tab changes
+    useEffect(() => {
+        const idx = Math.max(0, TABS.indexOf(activeTab));
+        Animated.spring(navIndexAnim, { toValue: idx, useNativeDriver: true, friction: 7, tension: 90 }).start();
+        Animated.sequence([
+            Animated.timing(navStretch, { toValue: 1.12, duration: 110, useNativeDriver: true }),
+            Animated.spring(navStretch, { toValue: 1, useNativeDriver: true, friction: 6 })
+        ]).start();
+        tabAnim.setValue(0);
+        Animated.timing(tabAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, [activeTab]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -466,10 +564,27 @@ export default function ExpertDashboard() {
         } catch (e) { console.log("Block Error", e); }
     };
 
+    // 🚀 PREMIUM LOADER (spinning gradient ring + pulsing brand)
     if (loading) {
         return (
             <View style={styles.loader}>
-                <ActivityIndicator size="large" color="#6366F1" />
+                <LinearGradient colors={['#020617', '#1E1B4B', '#020617']} style={StyleSheet.absoluteFill} />
+                <Animated.View style={[styles.shimmerOrb, { top: 120, right: -80, backgroundColor: '#6366F1', transform: [{ translateY: orbTranslateY }] }]} />
+                <Animated.View style={[styles.shimmerOrb, { bottom: 80, left: -100, backgroundColor: '#EC4899', transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+                <View style={styles.loaderRingWrap}>
+                    <View style={styles.loaderRingClip}>
+                        <Animated.View style={{ width: 200, height: 200, transform: [{ rotate: spin }] }}>
+                            <LinearGradient colors={['#6366F1', 'transparent', '#EC4899', 'transparent', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+                        </Animated.View>
+                    </View>
+                    <View style={styles.loaderRingInner}>
+                        <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
+                            <MaterialCommunityIcons name="crown" size={38} color="#FFF" />
+                        </Animated.View>
+                    </View>
+                </View>
+                <Text style={styles.loaderBrand}>TALKPE<Text style={{ color: '#6366F1' }}>PRO</Text></Text>
+                <ActivityIndicator size="small" color="#6366F1" style={{ marginTop: 18 }} />
                 <Text style={styles.loaderText}>SYNCING SECURELY...</Text>
             </View>
         );
@@ -486,75 +601,106 @@ export default function ExpertDashboard() {
         switch (activeTab) {
             case 'DASH': return (
                 <View style={{ flex: 1 }}>
-                    <View style={[styles.compactTopBar, borderType1]}>
-                        <LinearGradient
-                            colors={['rgba(239, 68, 68, 0.12)', 'transparent']}
-                            style={StyleSheet.absoluteFill}
-                        />
-                        
-                        <View style={styles.compactActionGrid}>
-                            <View style={styles.compactRow}>
-                                <Animated.View style={[{ flex: 1 }, { transform: [{ scale: pulseAnim }] }]}>
-                                    <TouchableOpacity
-                                        style={[styles.compactBtn, { flex: 0, width: '100%' }]}
-                                        onPress={startLiveStream} 
-                                        disabled={isStartingLive || isStartingForum} 
-                                    >
-                                        <LinearGradient
-                                            colors={['#FF0000', '#B91C1C']}
-                                            start={{x:0, y:0}} end={{x:1, y:1}}
-                                            style={styles.compactGradient}
-                                        >
-                                            {isStartingLive ? (
-                                                <ActivityIndicator size="small" color="#FFF" />
-                                            ) : (
-                                                <MaterialCommunityIcons name="broadcast" size={16} color="#FFF" />
-                                            )}
-                                            <Text style={styles.compactBtnText}>{isStartingLive ? "SYNCING..." : "GO LIVE"}</Text>
-                                        </LinearGradient>
-                                        <View style={styles.liveButtonGlow} />
-                                    </TouchableOpacity>
-                                </Animated.View>
-
-                                <Animated.View style={[{ flex: 1 }, { transform: [{ scale: pulseAnim }] }]}>
-                                    <TouchableOpacity
-                                        style={[styles.compactBtn, { flex: 0, width: '100%', borderColor: '#F59E0B', borderWidth: 1 }]}
-                                        onPress={startForumRoom} 
-                                        disabled={isStartingForum || isStartingLive}
-                                    >
-                                        <LinearGradient
-                                            colors={['#F59E0B', '#B45309']}
-                                            style={styles.compactGradient}
-                                        >
-                                            {isStartingForum ? (
-                                                <ActivityIndicator size="small" color="#FFF" />
-                                            ) : (
-                                                <MaterialCommunityIcons name="account-group" size={16} color="#FFF" />
-                                            )}
-                                            <Text style={[styles.compactBtnText, { textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
-                                                {isStartingForum ? "SYNCING..." : "FORUM"}
-                                            </Text>
-                                        </LinearGradient>
-                                        <View style={[styles.liveButtonGlow, { backgroundColor: '#F59E0B' }]} />
-                                    </TouchableOpacity>
-                                </Animated.View>
-                            </View>
-
-                            <TouchableOpacity 
-                                style={[styles.masterclassBtn, { borderColor: config.colors[1], borderWidth: 1.5, shadowColor: config.colors[0], shadowOpacity: 0.5, shadowRadius: 10, elevation: 8 }]}
-                                onPress={() => router.push('/expert/masterclass' as any)}
-                                activeOpacity={0.8}
-                            >
+                    {/* 👑 ROYAL COMMAND DECK */}
+                    <View style={styles.royalWrap}>
+                        <LinearGradient colors={['#F5D77A', theme.primary, theme.secondary, '#F5D77A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.royalFrame}>
+                            <View style={styles.royalInner}>
                                 <LinearGradient
-                                    colors={[config.colors[0] + 'E6', config.colors[2] + 'E6']}
-                                    start={{x:0, y:0}} end={{x:1, y:0}}
-                                    style={styles.masterclassGradient}
-                                >
-                                    <Text style={[styles.masterclassTitle, { color: config.colors[1], textShadowColor: '#000', textShadowRadius: 8 }]}>PREMIUM SPOTLIGHT</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
+                                    colors={['rgba(239, 68, 68, 0.16)', 'transparent', 'rgba(245, 158, 11, 0.14)']}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                    style={StyleSheet.absoluteFill}
+                                />
 
-                        </View>
+                                <View style={styles.compactActionGrid}>
+                                    <View style={styles.compactRow}>
+                                        {/* 🔴 GO LIVE */}
+                                        <TouchableOpacity
+                                            style={[styles.royalBtn, { flex: 1, borderColor: 'rgba(255,140,150,0.6)', shadowColor: '#FF1F3D' }]}
+                                            onPress={startLiveStream}
+                                            disabled={isStartingLive || isStartingForum}
+                                            activeOpacity={0.85}
+                                        >
+                                            <LinearGradient
+                                                colors={['#FF1F3D', '#7F0A1E']}
+                                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                                style={styles.royalBtnGradient}
+                                            >
+                                                <MaterialCommunityIcons name="broadcast" size={70} color="rgba(255,255,255,0.12)" style={styles.royalWatermark} />
+                                                <View style={styles.royalIconWrap}>
+                                                    {!isStartingLive && (
+                                                        <Animated.View style={[styles.royalIconPulse, { borderColor: '#FFB4BE', opacity: iconPulseOpacity, transform: [{ scale: iconPulseScale }] }]} />
+                                                    )}
+                                                    <View style={styles.royalIconCircle}>
+                                                        {isStartingLive ? (
+                                                            <ActivityIndicator size="small" color="#FFF" />
+                                                        ) : (
+                                                            <MaterialCommunityIcons name="broadcast" size={18} color="#FFF" />
+                                                        )}
+                                                    </View>
+                                                </View>
+                                                <Text style={styles.royalBtnText}>{isStartingLive ? "SYNCING..." : "GO LIVE"}</Text>
+                                                <Animated.View pointerEvents="none" style={[styles.btnSweep, { transform: [{ translateX: sweepX }, { skewX: '-20deg' }] }]} />
+                                            </LinearGradient>
+                                            <View style={styles.liveButtonGlow} />
+                                        </TouchableOpacity>
+
+                                        {/* 🟠 FORUM */}
+                                        <TouchableOpacity
+                                            style={[styles.royalBtn, { flex: 1, borderColor: 'rgba(253,211,120,0.65)', shadowColor: '#F59E0B' }]}
+                                            onPress={startForumRoom}
+                                            disabled={isStartingForum || isStartingLive}
+                                            activeOpacity={0.85}
+                                        >
+                                            <LinearGradient
+                                                colors={['#F59E0B', '#7C2D12']}
+                                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                                style={styles.royalBtnGradient}
+                                            >
+                                                <MaterialCommunityIcons name="account-group" size={70} color="rgba(255,255,255,0.12)" style={styles.royalWatermark} />
+                                                <View style={styles.royalIconWrap}>
+                                                    {!isStartingForum && (
+                                                        <Animated.View style={[styles.royalIconPulse, { borderColor: '#FDE68A', opacity: iconPulseOpacity, transform: [{ scale: iconPulseScale }] }]} />
+                                                    )}
+                                                    <View style={styles.royalIconCircle}>
+                                                        {isStartingForum ? (
+                                                            <ActivityIndicator size="small" color="#FFF" />
+                                                        ) : (
+                                                            <MaterialCommunityIcons name="account-group" size={18} color="#FFF" />
+                                                        )}
+                                                    </View>
+                                                </View>
+                                                <Text style={[styles.royalBtnText, { textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
+                                                    {isStartingForum ? "SYNCING..." : "FORUM"}
+                                                </Text>
+                                                <Animated.View pointerEvents="none" style={[styles.btnSweep, { transform: [{ translateX: sweepX }, { skewX: '-20deg' }] }]} />
+                                            </LinearGradient>
+                                            <View style={[styles.liveButtonGlow, { backgroundColor: '#F59E0B' }]} />
+                                        </TouchableOpacity>
+                                    </View>
+
+                                    {/* 👑 PREMIUM SPOTLIGHT - royal gold ribbon */}
+                                    <TouchableOpacity
+                                        style={styles.royalSpotlight}
+                                        onPress={() => router.push('/expert/masterclass' as any)}
+                                        activeOpacity={0.85}
+                                    >
+                                        <Image source={{ uri: SPOTLIGHT_BG }} style={styles.spotlightBgImage} />
+                                        <LinearGradient
+                                            colors={['#6B4A0AE6', '#F5D77AE6', '#C9972BE6', '#F5D77AE6', '#6B4A0AE6']}
+                                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                            style={styles.royalSpotlightGradient}
+                                        >
+                                            <MaterialCommunityIcons name="crown" size={17} color="#3B2600" />
+                                            <View style={styles.royalDivider} />
+                                            <Text style={styles.royalSpotlightText}>PREMIUM SPOTLIGHT</Text>
+                                            <View style={styles.royalDivider} />
+                                            <MaterialCommunityIcons name="crown" size={17} color="#3B2600" />
+                                            <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 50, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
+                                        </LinearGradient>
+                                    </TouchableOpacity>
+                                </View>
+                            </View>
+                        </LinearGradient>
                     </View>
 
                     <ConsoleHome expertData={expertData} isOnline={isOnline} setIsOnline={toggleOnlineStatus} />
@@ -566,18 +712,6 @@ export default function ExpertDashboard() {
             case 'STATS': return <ExpertStats expertData={expertData} />;
             default: return <ConsoleHome expertData={expertData} isOnline={isOnline} setIsOnline={toggleOnlineStatus} />;
         }
-    };
-
-    const NavButton = ({ id, icon, label, active, onPress, theme }: any) => {
-        const isActive = active === id;
-        return (
-            <TouchableOpacity onPress={() => onPress(id)} style={styles.navItem}>
-                <View style={[styles.iconBox, isActive && [styles.activeIconBox, { backgroundColor: theme.primary, shadowColor: theme.primary }]]}>
-                    <Ionicons name={icon} size={isActive ? 20 : 18} color={isActive ? '#FFF' : '#94A3B8'} />
-                </View>
-                <Text style={[styles.navText, { color: isActive ? '#FFF' : '#64748B' }]}>{label}</Text>
-            </TouchableOpacity>
-        );
     };
 
     return (
@@ -592,16 +726,30 @@ export default function ExpertDashboard() {
 
             <SafeAreaView style={{ flex: 1 }} edges={['top']}>
                 <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
-                    {renderContent()}
+                    <Animated.View style={{ flex: 1, opacity: tabAnim, transform: [{ translateY: tabSlide }] }}>
+                        {renderContent()}
+                    </Animated.View>
                 </Animated.View>
 
+                {/* 🧭 ROYAL GLASS NAV (everything stays inside the box) */}
                 <View style={styles.floatingNavWrapper}>
-                    <BlurView intensity={40} tint="dark" style={[styles.glassNav, borderType2]}>
-                        <NavButton id="DASH" icon="grid-outline" label="Home" active={activeTab} onPress={setActiveTab} theme={theme} />
-                        <NavButton id="WALLET" icon="wallet-outline" label="Wallet" active={activeTab} onPress={setActiveTab} theme={theme} />
-                        <NavButton id="MESSAGES" icon="chatbubbles-outline" label="Chat" active={activeTab} onPress={setActiveTab} theme={theme} />
-                        <NavButton id="LEVELS" icon="ribbon-outline" label="Level" active={activeTab} onPress={setActiveTab} theme={theme} />
-                        <NavButton id="STATS" icon="bar-chart-outline" label="Stats" active={activeTab} onPress={setActiveTab} theme={theme} />
+                    <BlurView intensity={50} tint="dark" style={styles.glassNav}>
+                        <LinearGradient colors={[theme.primary + '26', 'rgba(2,6,23,0.55)', theme.secondary + '26']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                        <LinearGradient colors={['transparent', theme.accent, '#F5D77A', theme.accent, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.navTopLine} pointerEvents="none" />
+                        <View style={styles.navRow}>
+                            <Animated.View
+                                pointerEvents="none"
+                                style={[styles.navIndicator, { borderColor: theme.primary + '90', shadowColor: theme.primary, transform: [{ translateX: navIndicatorX }, { scaleX: navStretch }] }]}
+                            >
+                                <LinearGradient colors={[theme.primary + '55', theme.secondary + '30']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                                <View style={[styles.navIndicatorTop, { backgroundColor: '#F5D77A' }]} />
+                            </Animated.View>
+                            <NavButton id="DASH" icon="grid-outline" label="Home" active={activeTab} onPress={setActiveTab} theme={theme} />
+                            <NavButton id="WALLET" icon="wallet-outline" label="Wallet" active={activeTab} onPress={setActiveTab} theme={theme} />
+                            <NavButton id="MESSAGES" icon="chatbubbles-outline" label="Chat" active={activeTab} onPress={setActiveTab} theme={theme} />
+                            <NavButton id="LEVELS" icon="ribbon-outline" label="Level" active={activeTab} onPress={setActiveTab} theme={theme} />
+                            <NavButton id="STATS" icon="bar-chart-outline" label="Stats" active={activeTab} onPress={setActiveTab} theme={theme} />
+                        </View>
                     </BlurView>
                 </View>
             </SafeAreaView>
@@ -624,14 +772,29 @@ export default function ExpertDashboard() {
                 </BlurView>
             </Modal>
 
+            {/* 📞 INCOMING CALL (ripples + rotating ring + pulsing accept) */}
             <Modal visible={showCallModal} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
                     <LinearGradient colors={['transparent', theme.primary + '20', 'transparent']} style={StyleSheet.absoluteFill} />
+                    <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: height * 0.15, right: -80, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
+                    <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { bottom: height * 0.1, left: -100, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
                     <View style={styles.callContent}>
                         <View style={styles.pulseContainer}>
+                            <Ripple delay={0} color={theme.primary + '90'} />
+                            <Ripple delay={800} color={theme.accent + '80'} />
+                            <Ripple delay={1600} color={theme.secondary + '80'} />
                             <View style={[styles.outerPulse, { borderColor: theme.primary + '60' }]} />
-                            <Image source={{ uri: `https://ui-avatars.com/api/?name=${incomingCall?.callerName || 'U'}&background=${theme.primary.replace('#','')}&color=fff&size=200` }} style={[styles.callerAvatar, { borderColor: theme.primary }]} />
+                            <View style={styles.callRingClip}>
+                                <Animated.View style={{ width: 240, height: 240, transform: [{ rotate: spin }] }}>
+                                    <LinearGradient
+                                        colors={[theme.primary, 'transparent', theme.secondary, 'transparent', theme.accent, theme.primary]}
+                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                        style={{ flex: 1 }}
+                                    />
+                                </Animated.View>
+                            </View>
+                            <Image source={{ uri: `https://ui-avatars.com/api/?name=${incomingCall?.callerName || 'U'}&background=${theme.primary.replace('#','')}&color=fff&size=200` }} style={[styles.callerAvatar, { borderColor: '#020617' }]} />
                         </View>
                         <Text style={[styles.incomingLabel, { color: theme.accent }]}>
                             {incomingCall?.isDiscoverCall ? '🚀 QUICK SYNC REQUEST' : 'INCOMING CALL'}
@@ -641,12 +804,20 @@ export default function ExpertDashboard() {
                             {incomingCall?.isDiscoverCall ? 'System Discovered you with this user!' : 'Wants to initiate a session...'}
                         </Text>
                         <View style={styles.callActionRow}>
-                            <TouchableOpacity onPress={handleRejectCall} style={[styles.actionBtn, styles.declineBg]}>
-                                <Ionicons name="close" size={40} color="#FFF" />
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={handleAcceptCall} style={[styles.actionBtn, styles.acceptBg]}>
-                                <Ionicons name="videocam" size={35} color="#FFF" />
-                            </TouchableOpacity>
+                            <View style={{ alignItems: 'center' }}>
+                                <TouchableOpacity onPress={handleRejectCall} style={[styles.actionBtn, styles.declineBg]}>
+                                    <Ionicons name="close" size={40} color="#FFF" />
+                                </TouchableOpacity>
+                                <Text style={styles.actionLabel}>DECLINE</Text>
+                            </View>
+                            <View style={{ alignItems: 'center' }}>
+                                <Animated.View style={{ transform: [{ scale: acceptPulse }] }}>
+                                    <TouchableOpacity onPress={handleAcceptCall} style={[styles.actionBtn, styles.acceptBg, { shadowColor: '#34C759' }]}>
+                                        <Ionicons name="videocam" size={35} color="#FFF" />
+                                    </TouchableOpacity>
+                                </Animated.View>
+                                <Text style={styles.actionLabel}>ACCEPT</Text>
+                            </View>
                         </View>
                     </View>
                 </View>
@@ -658,7 +829,11 @@ export default function ExpertDashboard() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#020617' },
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
-    loaderText: { color: '#6366F1', marginTop: 15, fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+    loaderText: { color: '#6366F1', marginTop: 12, fontSize: 10, fontWeight: '900', letterSpacing: 3 },
+    loaderBrand: { color: '#FFF', fontSize: 28, fontWeight: '900', letterSpacing: 2, marginTop: 26 },
+    loaderRingWrap: { width: 140, height: 140, justifyContent: 'center', alignItems: 'center' },
+    loaderRingClip: { width: 140, height: 140, borderRadius: 70, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+    loaderRingInner: { position: 'absolute', width: 124, height: 124, borderRadius: 62, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' },
     shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
     
     compactTopBar: {
@@ -669,9 +844,13 @@ const styles = StyleSheet.create({
         marginHorizontal: 15,
         marginTop: 10,
         marginBottom: 10,
-        borderRadius: 20,
+        borderRadius: 24,
         overflow: 'hidden',
     },
+    studioHeaderRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10, paddingHorizontal: 2 },
+    studioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF0000', marginRight: 8 },
+    studioTitle: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 2.5 },
+    studioSub: { color: '#64748B', fontSize: 8, fontWeight: '800', letterSpacing: 1, marginLeft: 'auto' },
     compactActionGrid: {
         width: '100%',
         gap: 10
@@ -684,7 +863,7 @@ const styles = StyleSheet.create({
     },
     compactBtn: {
         flex: 1,
-        borderRadius: 12,
+        borderRadius: 16,
         overflow: 'hidden',
         elevation: 5,
         shadowColor: '#000',
@@ -696,8 +875,10 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingVertical: 10,
-        gap: 6
+        gap: 8
     },
+    btnIconCircle: { width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.22)', justifyContent: 'center', alignItems: 'center' },
+    btnSweep: { position: 'absolute', top: -10, bottom: -10, width: 34, backgroundColor: 'rgba(255,255,255,0.28)' },
     compactBtnText: {
         color: '#FFF',
         fontWeight: '900',
@@ -714,15 +895,17 @@ const styles = StyleSheet.create({
     },
 
     masterclassBtn: {
-        borderRadius: 12,
+        borderRadius: 16,
         overflow: 'hidden',
         elevation: 5,
     },
+    spotlightBgImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.55 },
     masterclassGradient: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center', 
         padding: 15, 
+        overflow: 'hidden',
     },
     masterclassTitle: {
         fontSize: 14, 
@@ -731,37 +914,63 @@ const styles = StyleSheet.create({
         textTransform: 'uppercase'
     },
 
+    // 👑 ROYAL COMMAND DECK
+    royalWrap: { marginHorizontal: 15, marginTop: 10, marginBottom: 10, borderRadius: 28, overflow: 'hidden', elevation: 10, shadowColor: '#F5D77A', shadowOpacity: 0.35, shadowRadius: 14 },
+    royalFrame: { padding: 1.5, borderRadius: 28 },
+    royalInner: { borderRadius: 26.5, padding: 12, backgroundColor: 'rgba(2, 6, 23, 0.92)', overflow: 'hidden' },
+    royalBtn: { borderRadius: 18, overflow: 'hidden', borderWidth: 1, elevation: 8, shadowOpacity: 0.5, shadowRadius: 10 },
+    royalBtnGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 12, gap: 12, overflow: 'hidden' },
+    royalWatermark: { position: 'absolute', right: -12, bottom: -14, transform: [{ rotate: '-14deg' }] },
+    royalIconWrap: { width: 34, height: 34, justifyContent: 'center', alignItems: 'center' },
+    royalIconPulse: { position: 'absolute', width: 34, height: 34, borderRadius: 17, borderWidth: 1.5 },
+    royalIconCircle: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.22)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)', justifyContent: 'center', alignItems: 'center' },
+    royalBtnText: { color: '#FFF', fontWeight: '900', fontSize: 12, letterSpacing: 1.5 },
+    royalSpotlight: { borderRadius: 18, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255, 236, 170, 0.8)', elevation: 8, shadowColor: '#F5D77A', shadowOpacity: 0.55, shadowRadius: 12 },
+    royalSpotlightGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, overflow: 'hidden' },
+    royalSpotlightText: { color: '#2B1B00', fontSize: 13, fontWeight: '900', letterSpacing: 4 },
+    royalDivider: { width: 22, height: 1.5, backgroundColor: 'rgba(43,27,0,0.55)', marginHorizontal: 10 },
+
     previewModalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.85)' },
     closePreviewBtn: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 40, right: 20, zIndex: 100, shadowColor: '#000', shadowOpacity: 0.8, shadowRadius: 10 },
     previewVideoContainer: { width: width * 0.85, height: height * 0.7, borderRadius: 30, overflow: 'hidden', borderWidth: 2, elevation: 20, shadowOpacity: 0.5, shadowRadius: 20, backgroundColor: '#000' },
     previewVideo: { width: '100%', height: '100%' },
     
     floatingNavWrapper: { position: 'absolute', bottom: 12, left: 0, right: 0 },
-    glassNav: { 
-        flexDirection: 'row', 
-        width: 'auto', 
-        marginHorizontal: 10, 
-        marginBottom: Platform.OS === 'ios' ? 45 : 30, 
-        paddingVertical: 5, 
-        borderRadius: 35, 
-        justifyContent: 'space-around', 
-        overflow: 'hidden' 
+    glassNav: {
+        flexDirection: 'row',
+        width: 'auto',
+        marginHorizontal: 10,
+        marginBottom: Platform.OS === 'ios' ? 45 : 30,
+        paddingVertical: 6,
+        paddingHorizontal: 8,
+        borderRadius: 30,
+        borderWidth: 1,
+        borderColor: 'rgba(245, 215, 122, 0.35)',
+        backgroundColor: 'rgba(2, 6, 23, 0.55)',
+        justifyContent: 'center',
+        overflow: 'hidden'
     },
-    
-    navItem: { alignItems: 'center', justifyContent: 'center', width: width / 5.5 },
-    iconBox: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    activeIconBox: { shadowOpacity: 0.4, shadowRadius: 10, elevation: 8 },
-    navText: { fontSize: 8, fontWeight: '800', marginTop: 4, letterSpacing: 0.3 },
+    navTopLine: { position: 'absolute', top: 0, left: 24, right: 24, height: 1.5 },
+    navRow: { flexDirection: 'row', width: NAV_ROW_W, alignItems: 'center' },
+    navIndicator: { position: 'absolute', top: 0, bottom: 0, left: 5, width: NAV_ITEM_W - 10, borderRadius: 22, borderWidth: 1, overflow: 'hidden' },
+    navIndicatorTop: { position: 'absolute', top: 0, left: 14, right: 14, height: 2, borderBottomLeftRadius: 2, borderBottomRightRadius: 2 },
+
+    navItem: { alignItems: 'center', justifyContent: 'center', width: NAV_ITEM_W, paddingVertical: 7 },
+    iconBox: { width: 40, height: 28, justifyContent: 'center', alignItems: 'center' },
+    activeIconBox: { shadowOpacity: 0.55, shadowRadius: 12, elevation: 8 },
+    navText: { fontSize: 8, fontWeight: '800', marginTop: 3, letterSpacing: 0.4 },
     modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     callContent: { alignItems: 'center', width: '100%', zIndex: 10 },
     pulseContainer: { width: 180, height: 180, justifyContent: 'center', alignItems: 'center', marginBottom: 30 },
     outerPulse: { position: 'absolute', width: 200, height: 200, borderRadius: 100, borderWidth: 2 },
-    callerAvatar: { width: 140, height: 140, borderRadius: 70, borderWidth: 4 },
+    callRingClip: { position: 'absolute', width: 160, height: 160, borderRadius: 80, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+    callerAvatar: { position: 'absolute', width: 146, height: 146, borderRadius: 73, borderWidth: 4 },
     incomingLabel: { fontWeight: '900', fontSize: 11, letterSpacing: 4, marginBottom: 15 },
-    callerNameText: { color: '#FFF', fontSize: 36, fontWeight: '900', marginBottom: 5 },
+    callerNameText: { color: '#FFF', fontSize: 36, fontWeight: '900', marginBottom: 5, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 10 },
     callSubText: { color: '#94A3B8', fontSize: 14, fontWeight: '600', marginBottom: 60 },
     callActionRow: { flexDirection: 'row', gap: 60 },
     actionBtn: { width: 85, height: 85, borderRadius: 42.5, justifyContent: 'center', alignItems: 'center', elevation: 20, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 15 },
+    actionLabel: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 2, marginTop: 12 },
     declineBg: { backgroundColor: '#FF3B30' },
     acceptBg: { backgroundColor: '#34C759' },
 });

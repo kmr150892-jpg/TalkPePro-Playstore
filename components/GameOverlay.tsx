@@ -1,8 +1,9 @@
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import LottieView from 'lottie-react-native'; // 🔥 SATTI FIX: Added Lottie Import for Screen Blast
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 // ✅ Added expertBeans to calculate dynamic theme + lowBalanceAlert for real-time expert warning
 interface GameOverlayProps {
@@ -15,6 +16,11 @@ interface GameOverlayProps {
   expertBeans?: number; // 🔥 ADDED FOR DYNAMIC THEME
   lowBalanceAlert?: boolean; 
   localRole?: 'X' | 'O' | null; // 🔥 SATTI FIX: Added local role to block opposite player clicks
+  // 👑 NEW (all optional, so your existing parent keeps working without any change)
+  xPhoto?: string | null; // profile photo shown instead of the "X" mark
+  oPhoto?: string | null; // profile photo shown instead of the "O" mark
+  xName?: string;         // name shown for the X player
+  oName?: string;         // name shown for the O player
   onClose: () => void;
   onSquareClick: (index: number) => void;
   onReset: (randomStartIsX?: boolean) => void;
@@ -35,6 +41,43 @@ const getLevelConfig = (beans: number) => {
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent' };
 };
 
+const GOLD = '#FFD66B';
+
+// 🏆 All 8 winning lines (used only to light up the winning cells)
+const WIN_LINES = [
+  [0, 1, 2], [3, 4, 5], [6, 7, 8],
+  [0, 3, 6], [1, 4, 7], [2, 5, 8],
+  [0, 4, 8], [2, 4, 6],
+];
+
+// 👑 One player's mark: profile photo if available, otherwise a Crown (X) or a Diamond (O)
+const PlayerMark = ({ role, photo, size, theme }: { role: 'X' | 'O'; photo?: string | null; size: number; theme: any }) => {
+  const [failed, setFailed] = useState(false);
+  const ringColors = role === 'X' ? [GOLD, theme.primary] : [theme.accent, theme.secondary];
+  const inner = size - 6;
+
+  return (
+    <LinearGradient
+      colors={ringColors as any}
+      start={{ x: 0, y: 0 }}
+      end={{ x: 1, y: 1 }}
+      style={{ width: size, height: size, borderRadius: size / 2, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <View style={{ width: inner, height: inner, borderRadius: inner / 2, overflow: 'hidden', backgroundColor: '#0B1020', alignItems: 'center', justifyContent: 'center' }}>
+        {photo && !failed ? (
+          <Image source={{ uri: photo }} style={{ width: inner, height: inner }} onError={() => setFailed(true)} />
+        ) : (
+          <MaterialCommunityIcons
+            name={role === 'X' ? 'crown' : 'diamond-stone'}
+            size={inner * 0.58}
+            color={role === 'X' ? GOLD : theme.accent}
+          />
+        )}
+      </View>
+    </LinearGradient>
+  );
+};
+
 export default function GameOverlay({
   isVisible,
   gameType,
@@ -45,6 +88,10 @@ export default function GameOverlay({
   expertBeans = 0, 
   lowBalanceAlert, 
   localRole, 
+  xPhoto,
+  oPhoto,
+  xName,
+  oName,
   onClose,
   onSquareClick,
   onReset
@@ -66,13 +113,12 @@ export default function GameOverlay({
 
   useEffect(() => {
       if (isVisible) {
+          // Ambient glow breathes slowly (smooth back-and-forth, no jump)
           Animated.loop(
-            Animated.timing(shimmerAnim, {
-              toValue: 1,
-              duration: 4000,
-              easing: Easing.inOut(Easing.sin),
-              useNativeDriver: true
-            })
+            Animated.sequence([
+              Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+              Animated.timing(shimmerAnim, { toValue: 0, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+            ])
           ).start();
       } else {
           shimmerAnim.stopAnimation();
@@ -127,21 +173,28 @@ export default function GameOverlay({
       outputRange: [0, -30]
   });
 
-  // 🔥 DUAL-TONE BORDER STYLES (FLUID, 2px)
-  const borderType1 = {
-      borderLeftWidth: 2,
-      borderRightWidth: 2,
-      borderTopWidth: 0.5,
-      borderBottomWidth: 0.5,
-      borderLeftColor: theme.primary,
-      borderRightColor: theme.primary,
-      borderTopColor: theme.secondary + '80',
-      borderBottomColor: theme.secondary + '80',
-      backgroundColor: 'rgba(15, 23, 42, 0.85)',
-  };
-
   // 🔥 SATTI FIX: DYNAMIC ROLE CHECK FOR WINNER TEXT
   const actualLocalRole = localRole || myDeviceRole;
+
+  // 🏆 Which cells made the winning line (empty if no winner yet)
+  const winningCells: number[] = (() => {
+    if (!winner || !board) return [];
+    for (const [a, b, c] of WIN_LINES) {
+      if (board[a] && board[a] === board[b] && board[a] === board[c]) return [a, b, c];
+    }
+    return [];
+  })();
+
+  // Player labels (no more plain "X" / "O" for the user to read)
+  const xLabel = xName || 'Crown';
+  const oLabel = oName || 'Diamond';
+  const currentTurnLabel = isXNext ? xLabel : oLabel;
+  const turnRole = isXNext ? 'X' : 'O';
+
+  // Friendly turn text: "Your move" when we know which side this phone is
+  const turnText = actualLocalRole
+    ? (actualLocalRole === turnRole ? 'Your move' : `${currentTurnLabel}'s move`)
+    : `${currentTurnLabel} to play`;
 
   return (
     <View style={styles.gameOverlay}>
@@ -150,77 +203,128 @@ export default function GameOverlay({
       <Animated.View style={[styles.shimmerOrb, { top: '20%', right: -50, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
       <Animated.View style={[styles.shimmerOrb, { bottom: '20%', left: -50, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
 
-      {/* 🔥 ZERO-BOX FLUID CONTAINER WITH DUAL TONE BORDER */}
-      <BlurView intensity={95} tint="dark" style={[styles.gameContainer, borderType1]}>
-        
-        {/* ALERT SECTION (Only shows when balance is low) */}
-        {lowBalanceAlert && (
-          <View style={styles.alertBar}>
-            <Ionicons name="warning" size={16} color="#FFF" style={{marginRight: 8}} />
-            <Text style={styles.alertText}>SESSION ENDING SOON - INSUFFICIENT DIAMONDS</Text>
-          </View>
-        )}
+      {/* 👑 ROYAL MULTICOLOR FRAME: theme colour → gold → theme colour */}
+      <LinearGradient
+        colors={[theme.primary, GOLD, theme.secondary]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={styles.frame}
+      >
+        <BlurView intensity={95} tint="dark" style={styles.gameContainer}>
+          <View style={styles.containerTint} pointerEvents="none" />
 
-        {/* Header Section */}
-        <View style={styles.gameHeader}>
-          <View>
-            <Text style={styles.gameTitle}>Tic Tac Toe</Text>
-            {gameType === 'tictactoe' && (
-              <Text style={[styles.gameSubTitle, { color: theme.primary }]}>Interactive Skill Discover</Text>
-            )}
-          </View>
-          <TouchableOpacity onPress={onClose} activeOpacity={0.7}>
-            <Ionicons name="close-circle" size={32} color="rgba(255,255,255,0.5)" />
-          </TouchableOpacity>
-        </View>
+          {/* ALERT SECTION (Only shows when balance is low) */}
+          {lowBalanceAlert && (
+            <View style={styles.alertBar}>
+              <Ionicons name="warning" size={16} color="#FFF" style={{marginRight: 8}} />
+              <Text style={styles.alertText}>SESSION ENDING SOON - INSUFFICIENT DIAMONDS</Text>
+            </View>
+          )}
 
-        <View style={{ alignItems: 'center' }}>
-          {/* 🔥 DYNAMIC Status Badge - Shows Result or Next Action */}
-          <View style={[
-              styles.statusBadge, 
-              { backgroundColor: winner ? theme.primary + '25' : theme.secondary + '20', borderColor: winner ? theme.primary + '50' : theme.secondary + '40' }
-          ]}>
-             {/* 🔥 SATTI FIX: ACCURATE RESULT DISPLAY 🔥 */}
-             <Text style={[styles.turnText, { color: winner ? theme.primary : theme.secondary }]}>
-               {winner 
-                 ? `🎉 Result: ${winner === actualLocalRole ? 'You Win! 🏆' : (expertName || 'Opponent Wins')}` 
-                 : `Action: ${isXNext ? 'X Turn' : 'O Turn'}`
-               }
-             </Text>
-          </View>
-          
-          {/* 3x3 Interaction Board */}
-          <View style={styles.board}>
-            {board && board.map((square, i) => (
-              <TouchableOpacity 
-                key={i} 
-                activeOpacity={0.6}
-                style={[
-                    styles.square, 
-                    square && styles.activeSquare,
-                    square === 'X' ? { borderColor: theme.primary + '60', backgroundColor: theme.primary + '10' } 
-                    : square === 'O' ? { borderColor: theme.secondary + '60', backgroundColor: theme.secondary + '10' } : null
-                ]} 
-                onPress={() => handleSquareClick(i)} 
-              >
-                {/* 🔥 DYNAMIC COLORS */}
-                <Text style={[styles.squareText, { color: square === 'X' ? theme.primary : square === 'O' ? theme.secondary : 'transparent' }]}>
-                  {square}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-
-        {/* Action Buttons */}
-        <View style={styles.footerActions}>
-            <TouchableOpacity style={[styles.resetBtn, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '40' }]} onPress={() => onReset(Math.random() < 0.5)} activeOpacity={0.8}>
-                <Ionicons name="refresh" size={18} color={theme.primary} style={{marginRight: 8}} />
-                <Text style={[styles.resetBtnText, { color: theme.primary }]}>Restart Activity</Text>
+          {/* Header Section */}
+          <View style={styles.gameHeader}>
+            <View>
+              <Text style={styles.gameTitle}>Tic Tac Toe</Text>
+              {gameType === 'tictactoe' && (
+                <Text style={[styles.gameSubTitle, { color: GOLD }]}>Interactive Skill Discover</Text>
+              )}
+            </View>
+            <TouchableOpacity onPress={onClose} activeOpacity={0.7} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="close-circle" size={32} color="rgba(255,255,255,0.5)" />
             </TouchableOpacity>
-        </View>
+          </View>
 
-      </BlurView>
+          {/* 🥊 VERSUS BAR: both players, the active side glows */}
+          <View style={styles.versusRow}>
+            <View style={[styles.playerSide, { opacity: !winner && !isXNext ? 0.5 : 1 }]}>
+              <PlayerMark role="X" photo={xPhoto} size={48} theme={theme} />
+              <Text style={styles.playerName} numberOfLines={1}>{xLabel}</Text>
+              {!winner && isXNext && <View style={[styles.turnDot, { backgroundColor: GOLD, shadowColor: GOLD }]} />}
+            </View>
+
+            <View style={styles.vsPill}>
+              <Text style={styles.vsText}>vs</Text>
+            </View>
+
+            <View style={[styles.playerSide, { opacity: !winner && isXNext ? 0.5 : 1 }]}>
+              <PlayerMark role="O" photo={oPhoto} size={48} theme={theme} />
+              <Text style={styles.playerName} numberOfLines={1}>{oLabel}</Text>
+              {!winner && !isXNext && <View style={[styles.turnDot, { backgroundColor: theme.accent, shadowColor: theme.accent }]} />}
+            </View>
+          </View>
+
+          <View style={{ alignItems: 'center' }}>
+            {/* 🔥 DYNAMIC Status Badge - Shows Result or Next Action */}
+            <View style={[
+                styles.statusBadge, 
+                { backgroundColor: winner ? GOLD + '22' : theme.secondary + '20', borderColor: winner ? GOLD + '80' : theme.secondary + '40' }
+            ]}>
+               {/* 🔥 SATTI FIX: ACCURATE RESULT DISPLAY 🔥 */}
+               <Text style={[styles.turnText, { color: winner ? GOLD : '#F1F5F9' }]}>
+                 {winner 
+                   ? `🎉 Result: ${winner === actualLocalRole ? 'You Win! 🏆' : (expertName || 'Opponent Wins')}` 
+                   : turnText
+                 }
+               </Text>
+            </View>
+            
+            {/* 3x3 Interaction Board */}
+            <View style={styles.board}>
+              {board && board.map((square, i) => {
+                const isWinCell = winningCells.includes(i);
+                return (
+                  <TouchableOpacity 
+                    key={i} 
+                    activeOpacity={0.6}
+                    style={[
+                        styles.square, 
+                        square === 'X' ? { borderColor: GOLD + '70' } 
+                        : square === 'O' ? { borderColor: theme.accent + '70' } : null,
+                        isWinCell && styles.winSquare
+                    ]} 
+                    onPress={() => handleSquareClick(i)} 
+                  >
+                    {square ? (
+                      <>
+                        <LinearGradient
+                          colors={square === 'X' ? [GOLD + '30', theme.primary + '25'] : [theme.accent + '30', theme.secondary + '35']}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={StyleSheet.absoluteFillObject}
+                        />
+                        <PlayerMark
+                          role={square === 'X' ? 'X' : 'O'}
+                          photo={square === 'X' ? xPhoto : oPhoto}
+                          size={54}
+                          theme={theme}
+                        />
+                      </>
+                    ) : (
+                      <View style={styles.emptyDot} />
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+          </View>
+
+          {/* Action Buttons */}
+          <View style={styles.footerActions}>
+              <TouchableOpacity onPress={() => onReset(Math.random() < 0.5)} activeOpacity={0.85}>
+                  <LinearGradient
+                    colors={[theme.primary, theme.secondary]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 0 }}
+                    style={styles.resetBtn}
+                  >
+                    <Ionicons name="refresh" size={18} color="#FFF" style={{marginRight: 8}} />
+                    <Text style={styles.resetBtnText}>Restart Activity</Text>
+                  </LinearGradient>
+              </TouchableOpacity>
+          </View>
+
+        </BlurView>
+      </LinearGradient>
 
       {/* 🔥 SATTI FIX: FIREWORKS SCREEN BLAST ANIMATION 🔥 */}
       {winner && (
@@ -256,17 +360,28 @@ const styles = StyleSheet.create({
     filter: 'blur(60px)',
     zIndex: -1
   },
+  // Gradient frame (acts as a 2px multicolor border)
+  frame: {
+    width: '90%',
+    padding: 2,
+    borderRadius: 42,
+  },
   gameContainer: { 
-    width: '88%', 
-    padding: 25, 
+    width: '100%', 
+    paddingHorizontal: 22,
+    paddingVertical: 24,
     borderRadius: 40, 
     alignItems: 'center', 
     overflow: 'hidden', 
   },
+  containerTint: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(8, 12, 26, 0.88)',
+  },
   alertBar: {
     backgroundColor: '#EF4444',
     width: '115%', 
-    marginTop: -25, 
+    marginTop: -24, 
     marginBottom: 20,
     paddingVertical: 10,
     flexDirection: 'row',
@@ -283,7 +398,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row', 
     justifyContent: 'space-between', 
     width: '100%', 
-    marginBottom: 25, 
+    marginBottom: 18, 
     alignItems: 'center' 
   },
   gameTitle: { 
@@ -295,15 +410,54 @@ const styles = StyleSheet.create({
   gameSubTitle: {
     fontSize: 12,
     fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
+    letterSpacing: 0.6,
     marginTop: 2
   },
+
+  // 🥊 Versus bar
+  versusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 18,
+    paddingHorizontal: 6,
+  },
+  playerSide: { alignItems: 'center', width: 96 },
+  playerName: {
+    color: '#F1F5F9',
+    fontSize: 12.5,
+    fontWeight: '700',
+    marginTop: 6,
+    maxWidth: 96,
+    textAlign: 'center',
+  },
+  turnDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    marginTop: 5,
+    shadowOpacity: 0.95,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 4,
+  },
+  vsPill: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.07)',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.2)',
+    marginBottom: 20,
+  },
+  vsText: { color: 'rgba(255,255,255,0.65)', fontSize: 12, fontWeight: '800', fontStyle: 'italic' },
+
   statusBadge: { 
     paddingHorizontal: 20, 
     paddingVertical: 10, 
     borderRadius: 20, 
-    marginBottom: 25,
+    marginBottom: 20,
     borderWidth: 1,
   },
   turnText: { 
@@ -321,22 +475,29 @@ const styles = StyleSheet.create({
   square: { 
     width: 78, 
     height: 78, 
-    backgroundColor: 'rgba(255,255,255,0.03)', 
+    backgroundColor: 'rgba(255,255,255,0.04)', 
     margin: 3, 
     borderRadius: 22, 
     justifyContent: 'center', 
     alignItems: 'center', 
     borderWidth: 1, 
-    borderColor: 'rgba(255,255,255,0.08)' 
+    borderColor: 'rgba(255,255,255,0.10)',
+    overflow: 'hidden',
   },
-  activeSquare: { 
+  winSquare: {
     borderWidth: 2,
+    borderColor: GOLD,
+    shadowColor: GOLD,
+    shadowOpacity: 0.9,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 0 },
+    elevation: 8,
   },
-  squareText: { 
-    fontSize: 36, 
-    fontWeight: '900',
-    textShadowColor: 'rgba(0,0,0,0.5)',
-    textShadowRadius: 10
+  emptyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255,255,255,0.14)',
   },
   footerActions: {
     width: '100%',
@@ -344,15 +505,15 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
   resetBtn: { 
-    marginTop: 20, 
+    marginTop: 14, 
     flexDirection: 'row', 
     alignItems: 'center', 
-    paddingHorizontal: 25, 
-    paddingVertical: 12, 
-    borderRadius: 20, 
-    borderWidth: 1,
+    paddingHorizontal: 28, 
+    paddingVertical: 13, 
+    borderRadius: 22, 
   },
   resetBtnText: { 
+    color: '#FFF',
     fontWeight: '800', 
     fontSize: 15 
   },

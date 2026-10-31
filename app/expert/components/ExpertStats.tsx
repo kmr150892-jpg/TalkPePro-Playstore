@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { addDoc, arrayUnion, collection, doc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
@@ -19,9 +19,11 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
+import Svg, { Circle, Defs, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
 import { auth, db } from '../../../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
+const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
 const getLevelConfig = (beans: number) => {
@@ -38,6 +40,325 @@ const getLevelConfig = (beans: number) => {
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
 };
 
+// 🆕 Level thresholds (hero level-progress bar-ku)
+const LEVEL_GOALS = [0, 30000, 100000, 300000, 1000000, 3000000, 5000000, 10000000, 30000000, 50000000, 100000000];
+
+// 🆕 PREMIUM CONSTANTS
+const GOLD = '#F5C84C';
+const DIST_COLORS = ['#22D3EE', '#F59E0B', '#FF5C9E', '#34D399']; // calls, call rewards, broadcast, forum
+
+// 👑 ROYAL PALETTE (base dark backgrounds + semantic colors - theme colors ippo LEVEL based)
+const ROYAL = {
+    bg0: '#05030F',
+    bg1: '#0A0620',
+    bg2: '#150B38',
+    card: 'rgba(10, 6, 28, 0.96)',
+    gold: '#F5C84C',
+    goldLight: '#FFE9A8',
+    goldDeep: '#B8860B',
+    violet: '#8B5CF6',
+    amethyst: '#C084FC',
+    ruby: '#F43F5E',
+    rose: '#FF5C9E',
+    sapphire: '#3B82F6',
+    cyan: '#22D3EE',
+    emerald: '#10B981',
+    mint: '#34D399',
+    amber: '#F59E0B',
+    ink: '#CBD5E1',
+    mute: '#CBD5E1',
+};
+
+// 🆕 COLOR HELPERS (level color -> light / dark / tinted background)
+const hexToRgb = (hex: string) => {
+    const h = (hex || '').replace('#', '');
+    if (h.length !== 6) return null;
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+};
+const blend = (c1: string, c2: string, t: number) => {
+    const a = hexToRgb(c1);
+    const b = hexToRgb(c2);
+    if (!a || !b) return c1;
+    const mix = (x: number, y: number) => Math.round(x * (1 - t) + y * t).toString(16).padStart(2, '0');
+    return `#${mix(a.r, b.r)}${mix(a.g, b.g)}${mix(a.b, b.b)}`;
+};
+const lighten = (hex: string, t: number) => blend(hex, '#FFFFFF', t);
+const darken = (hex: string, t: number) => blend(hex, '#000000', t);
+
+// 🆕 3D IMAGES (icons8 3D Fluency) - load aagalana automatic-a icon fallback varum
+const IMG = {
+    trophy: 'https://img.icons8.com/3d-fluency/512/trophy.png',
+    gift: 'https://img.icons8.com/3d-fluency/512/gift.png',
+    rocket: 'https://img.icons8.com/3d-fluency/512/rocket.png',
+    crown: 'https://img.icons8.com/3d-fluency/512/crown.png',
+    medal: 'https://img.icons8.com/3d-fluency/512/medal.png',
+    money: 'https://img.icons8.com/3d-fluency/512/money-bag.png',
+    star: 'https://img.icons8.com/3d-fluency/512/star.png',
+};
+
+const TAB_KEYS: ('STATS' | 'MONTHLY' | 'LEADERBOARD')[] = ['STATS', 'MONTHLY', 'LEADERBOARD'];
+const TAB_LABELS = ['STATS', 'MONTHLY', 'RANKING'];
+const TAB_ICONS = ['chart-areaspline', 'calendar-month', 'trophy'];
+
+// 🆕 Mission ring geometry
+const MISSION_RING = 104;
+const MISSION_STROKE = 9;
+const MISSION_R = (MISSION_RING - MISSION_STROKE) / 2;
+const MISSION_C = 2 * Math.PI * MISSION_R;
+
+// 🆕 Reward breakdown donut geometry
+const DONUT_SIZE = 132;
+const DONUT_STROKE = 15;
+const DONUT_R = (DONUT_SIZE - DONUT_STROKE) / 2;
+const DONUT_C = 2 * Math.PI * DONUT_R;
+
+// 🆕 3D image with auto icon fallback
+const Img3D = ({ uri, size, fallback, color = '#FFF', style }: any) => {
+    const [err, setErr] = useState(false);
+    if (err) return <MaterialCommunityIcons name={fallback} size={size * 0.7} color={color} />;
+    return <Image source={{ uri }} style={[{ width: size, height: size }, style]} resizeMode="contain" onError={() => setErr(true)} />;
+};
+
+// 🆕 Floating (bob + sway) wrapper
+const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                style,
+                {
+                    transform: [
+                        { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -amp] }) },
+                        { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] }) }
+                    ]
+                }
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// 🆕 ✨ Royal twinkling sparkle (gold / multi-color star)
+const RoyalSparkle = ({ x, y, size = 12, color = ROYAL.gold, delay = 0, dur = 1800 }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                left: x,
+                top: y,
+                opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.1, 1] }),
+                transform: [
+                    { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.15] }) },
+                    { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] }) }
+                ]
+            }}
+        >
+            <MaterialCommunityIcons name="star-four-points" size={size} color={color} />
+        </Animated.View>
+    );
+};
+
+// 🆕 Gradient-border glow card
+const GlowCard = ({ colors, radius = 24, children, style, innerStyle, glow }: any) => (
+    <View
+        style={[
+            {
+                borderRadius: radius,
+                backgroundColor: ROYAL.bg1,
+                shadowColor: glow || colors[0],
+                shadowOpacity: 0.4,
+                shadowRadius: 16,
+                shadowOffset: { width: 0, height: 6 },
+                elevation: 9
+            },
+            style
+        ]}
+    >
+        <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: radius, padding: 1.5 }}>
+            <View style={[{ borderRadius: radius - 1.5, overflow: 'hidden', backgroundColor: ROYAL.card }, innerStyle]}>{children}</View>
+        </LinearGradient>
+    </View>
+);
+
+// 🆕 Section title (royal ornament: icon + text + fading line + diamond)
+const SectionTitle = ({ title, icon, color }: any) => (
+    <View style={styles.sectionRow}>
+        <LinearGradient colors={[color, color + '66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sectionIcon}>
+            <MaterialCommunityIcons name={icon} size={14} color="#0B1026" />
+        </LinearGradient>
+        <Text style={styles.sectionText}>{title}</Text>
+        <LinearGradient colors={[color + '88', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.sectionLine} />
+        <View style={[styles.sectionDiamond, { backgroundColor: color, shadowColor: color }]} />
+    </View>
+);
+
+// 🆕 Loader pulse
+const LoaderPulse = ({ color }: { color: string }) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 1500, easing: Easing.out(Easing.ease), useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <View style={styles.loaderPulseBox}>
+            <Animated.View
+                style={[
+                    styles.loaderPulseRing,
+                    { borderColor: color, opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.6] }) }] }
+                ]}
+            />
+            <ActivityIndicator size="large" color={color} />
+        </View>
+    );
+};
+
+// 🆕 Performance tile (self stagger entrance + royal color + icon pulse)
+const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionicons", delay = 0 }: any) => {
+    const anim = useRef(new Animated.Value(0)).current;
+    const glowAnim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.spring(anim, { toValue: 1, delay, friction: 7, tension: 60, useNativeDriver: true }).start();
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(glowAnim, { toValue: 1, duration: 1800 + delay * 3, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(glowAnim, { toValue: 0, duration: 1800 + delay * 3, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            style={{
+                flex: 1,
+                opacity: anim,
+                transform: [
+                    { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) },
+                    { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }
+                ]
+            }}
+        >
+            <GlowCard colors={[color, color + '22', color + '77']} radius={26}>
+                <View style={styles.matrixCard}>
+                    <LinearGradient colors={[color + '30', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    <View style={styles.matrixWatermark} pointerEvents="none">
+                        {iconFamily === 'Ionicons' ? (
+                            <Ionicons name={icon} size={86} color={color + '14'} />
+                        ) : (
+                            <MaterialCommunityIcons name={icon} size={86} color={color + '14'} />
+                        )}
+                    </View>
+                    <Animated.View style={{ transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] }}>
+                        <LinearGradient colors={[color, color + '88']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.matrixIconCircle}>
+                            <LinearGradient colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']} style={styles.matrixIconGloss} pointerEvents="none" />
+                            {iconFamily === 'Ionicons' ? (
+                                <Ionicons name={icon} size={20} color="#FFF" />
+                            ) : (
+                                <MaterialCommunityIcons name={icon} size={20} color="#FFF" />
+                            )}
+                        </LinearGradient>
+                    </Animated.View>
+                    <Text style={styles.matrixValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{value}</Text>
+                    <Text style={styles.matrixLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
+                    <Animated.View style={[styles.bottomGlowLine, { backgroundColor: color, opacity: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) }]} />
+                </View>
+            </GlowCard>
+        </Animated.View>
+    );
+};
+
+// 🆕 Podium column (top 3)
+const PodiumCol = ({ user, pos, isMe, theme, delay }: any) => {
+    const anim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.spring(anim, { toValue: 1, delay, friction: 7, tension: 50, useNativeDriver: true }).start();
+    }, []);
+
+    const meta = [
+        { c0: '#FDE68A', c1: '#F59E0B', h: 138, av: 74 },
+        { c0: '#E2E8F0', c1: '#94A3B8', h: 106, av: 60 },
+        { c0: '#FDBA74', c1: '#D97706', h: 86, av: 60 },
+    ][pos];
+    const uConfig = getLevelConfig(user.totalBeansEarned || 0);
+
+    return (
+        <Animated.View
+            style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                opacity: anim,
+                transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) }]
+            }}
+        >
+            {pos === 0 ? (
+                <FloatBox amp={5} dur={1500} style={{ marginBottom: -4, zIndex: 5 }}>
+                    <Img3D uri={IMG.crown} size={38} fallback="crown" color={GOLD} />
+                </FloatBox>
+            ) : (
+                <View style={styles.podiumRankBadge}>
+                    <Text style={[styles.podiumRankText, { color: meta.c1 }]}>#{pos + 1}</Text>
+                </View>
+            )}
+            <View style={{ shadowColor: meta.c1, shadowOpacity: 0.8, shadowRadius: 14, shadowOffset: { width: 0, height: 0 }, elevation: 10 }}>
+                <LinearGradient colors={[meta.c0, meta.c1, '#FFFFFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ width: meta.av + 6, height: meta.av + 6, borderRadius: (meta.av + 6) / 2, padding: 3 }}>
+                    <Image
+                        source={{ uri: user.profilePic || `https://ui-avatars.com/api/?name=${user.name || 'U'}&background=0F172A&color=fff` }}
+                        style={{ width: '100%', height: '100%', borderRadius: meta.av / 2, backgroundColor: '#0F172A' }}
+                    />
+                </LinearGradient>
+                {isMe && <View style={[styles.podiumMeDot, { backgroundColor: theme.primary }]} />}
+                {pos === 0 && (
+                    <>
+                        <RoyalSparkle x={-10} y={4} size={12} color={theme.accent} delay={0} />
+                        <RoyalSparkle x={meta.av - 2} y={-4} size={10} color={theme.primary} delay={500} />
+                        <RoyalSparkle x={meta.av - 6} y={meta.av - 4} size={11} color={theme.secondary} delay={900} />
+                    </>
+                )}
+            </View>
+            <Text style={styles.podiumName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                {user.name || 'Host'}{isMe ? ' (You)' : ''}
+            </Text>
+            <View style={[styles.podiumLvl, { backgroundColor: uConfig.colors[0] + '30' }]}>
+                <Text style={{ color: lighten(uConfig.colors[0], 0.5), fontSize: 11, fontWeight: '900' }}>L{uConfig.lvl} • {uConfig.label.split(' ')[0]}</Text>
+            </View>
+            <LinearGradient colors={[meta.c0 + 'CC', meta.c1 + '44', 'rgba(2,6,23,0.2)']} style={[styles.podiumBlock, { height: meta.h, borderColor: meta.c1 + 'AA' }]}>
+                <LinearGradient colors={['rgba(255,255,255,0.35)', 'rgba(255,255,255,0)']} style={styles.podiumGloss} pointerEvents="none" />
+                <Text style={[styles.podiumBigNum, { color: '#FFF' }]}>{pos + 1}</Text>
+                <View style={styles.podiumRewardPill}>
+                    <Text style={{ fontSize: 11 }}>🎖️</Text>
+                    <Text style={styles.podiumRewardText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{user.totalBeansEarned?.toLocaleString() || 0}</Text>
+                </View>
+            </LinearGradient>
+        </Animated.View>
+    );
+};
+
 export default function ExpertStats({ expertData }: { expertData: any }) {
     const router = useRouter(); 
     const [loading, setLoading] = useState(true);
@@ -51,6 +372,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     });
 
     const [realTodayStats, setRealTodayStats] = useState<{calls: number, mins: number, beans: number} | null>(null);
+
+    // 🆕 Longest single session partner (name + photo)
+    const [longestCall, setLongestCall] = useState<{ name: string, pic: string | null, secs: number } | null>(null);
 
     const [historyLogs, setHistoryLogs] = useState<any[]>([]); 
     const [historyLoading, setHistoryLoading] = useState(true);
@@ -78,28 +402,67 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     const slideAnim = useRef(new Animated.Value(30)).current;
     const shimmerAnim = useRef(new Animated.Value(0)).current; 
 
-    const milestones = [
-        { target: 100000, bonus: 5000, label: "STARTER" },
-        { target: 300000, bonus: 10000, label: "PRO" },
-        { target: 500000, bonus: 15000, label: "ELITE" }
-    ];
+    // 🆕 PREMIUM ANIMATION VALUES
+    const rotAnim = useRef(new Animated.Value(0)).current;      // hero rotating frame
+    const sweepAnim = useRef(new Animated.Value(0)).current;    // hero shine sweep
+    const pulseAnim = useRef(new Animated.Value(0)).current;    // live dot / glow pulse
+    const heroCountAnim = useRef(new Animated.Value(0)).current;// hero count-up + level bar
+    const tabAnim = useRef(new Animated.Value(1)).current;      // tab content transition
+    const tabSlide = useRef(new Animated.Value(0)).current;     // tab pill slide
+    const distAnim = useRef(new Animated.Value(0)).current;     // distribution bar grow
+    const missionAnim = useRef(new Animated.Value(0)).current;  // mission ring fill
+    const [tabW, setTabW] = useState(0);
+    const [heroCount, setHeroCount] = useState(0);
+    const particles = useRef(
+        Array.from({ length: 14 }, (_, i) => ({
+            v: new Animated.Value(0),
+            x: ((i * 41) % 100) / 100 * width,
+            y: 140 + ((i * 59) % 460),
+            size: 2 + (i % 3),
+            dur: 6500 + (i % 5) * 1200,
+            delay: i * 500,
+        }))
+    ).current;
 
     const totalBeansEarned = stats?.totalBeansEarned || expertData?.totalBeansEarned || 0;
     const config = getLevelConfig(totalBeansEarned);
     
     const primary = config.colors?.[0] || '#ad57a6';
+    const mid = config.colors?.[1] || primary;
     const secondary = config.colors?.[2] || '#5e2a5b';
     
+    // 🆕 THEME = LEVEL BASED. Level maarina theme-um auto-a maarum (colors, glow, background tint ellame).
+    const tierColor = config.glow !== 'transparent' ? (config.glow || primary) : primary;
+    const bgTint = config.lvl >= 3 ? 0.18 : 0.12;
     const theme = {
         primary: primary,
-        secondary: secondary,
-        accent: config.glow !== 'transparent' ? (config.glow || primary) : primary,
+        secondary: mid,
+        accent: secondary,
+        tier: tierColor,
+        tierPrimary: primary,
+        tierSecondary: secondary,
+        light: lighten(tierColor, 0.62),
+        deep: darken(secondary, 0.35),
+        // 🆕 TEXT-SAFE colours (dark blue / dark accent colours text-la nalla theriya brighten panniruken)
+        accentText: lighten(secondary, 0.62),
+        tierText: lighten(tierColor, 0.45),
         bgGradient: [
-            config.lvl >= 7 ? `${config.colors[0]}40` : '#020617', 
-            config.lvl >= 3 ? `${config.colors[1]}20` : '#0F172A', 
-            '#020617'
-        ] as const 
+            blend(ROYAL.bg1, primary, bgTint),
+            blend('#110A2E', mid, bgTint),
+            ROYAL.bg0
+        ] as any
     };
+
+    // 🆕 Level based timeline + particle colors
+    const MONTH_COLORS = [theme.primary, theme.secondary, theme.accent, theme.tier, lighten(primary, 0.35), lighten(mid, 0.35), lighten(secondary, 0.35), darken(tierColor, 0.2)];
+    const PARTICLE_COLORS = [theme.accent, theme.primary, theme.secondary, theme.tier, '#FFFFFF'];
+
+    // 🆕 each milestone has own level-theme color pair (color, color2)
+    const milestones = [
+        { target: 100000, bonus: 5000, label: "STARTER", color: theme.primary, color2: theme.secondary },
+        { target: 300000, bonus: 10000, label: "PRO", color: theme.secondary, color2: theme.accent },
+        { target: 500000, bonus: 15000, label: "ELITE", color: theme.accent, color2: theme.primary }
+    ];
 
     const bonusLock = useRef(false);
 
@@ -206,6 +569,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 
                 let calcTodayCalls = 0;
                 let calcTodayMins = 0;
+                // 🆕 longest single call tracker
+                let longestSecs = 0;
+                let longestInfo: any = null;
                 const today = new Date();
                 const offset = today.getTimezoneOffset() * 60000;
                 const localDateStr = (new Date(Date.now() - offset)).toISOString().split('T')[0];
@@ -232,12 +598,42 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             }
                         }
 
+                        // 🆕 track longest session + who it was with
+                        const durSecs = Number(d.duration) || Number(d.callDuration) || 0;
+                        if (durSecs > longestSecs) {
+                            longestSecs = durSecs;
+                            longestInfo = {
+                                id: d.callerId,
+                                name: d.callerName,
+                                pic: d.callerPic || d.callerProfilePic || d.callerImage || d.callerPhoto || null
+                            };
+                        }
+
                         const expertEarnings = Number(d.expertEarnings) || 0;
                         if (expertEarnings > 0) { 
                             rawData.push({ id: docSnap.id, type: 'video_call', expertEarnings: expertEarnings, timestamp: timeVal || { seconds: 0 }, callerName: d.callerName, userId: d.callerId });
                         }
                     }
                 } catch(e) { console.log('Calls fetch error', e); }
+
+                // 🆕 Longest session partner: name + photo
+                try {
+                    if (longestInfo && longestSecs > 0) {
+                        let lName = longestInfo.name;
+                        let lPic = longestInfo.pic;
+                        if (longestInfo.id && (!lPic || !lName)) {
+                            try {
+                                const uSnap = await getDoc(doc(db, "users", longestInfo.id));
+                                if (uSnap.exists()) {
+                                    const u: any = uSnap.data();
+                                    lPic = lPic || u.profilePic || null;
+                                    lName = lName || u.name || null;
+                                }
+                            } catch (e) { console.log('Longest caller fetch error', e); }
+                        }
+                        setLongestCall({ name: lName || 'User', pic: lPic || null, secs: longestSecs });
+                    }
+                } catch (e) { console.log('Longest call error', e); }
 
                 // 2. TRANSACTIONS
                 try {
@@ -454,6 +850,36 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
           })
         ).start();
 
+        // 🆕 Hero rotating frame + shine sweep + pulse
+        const rotLoop = Animated.loop(Animated.timing(rotAnim, { toValue: 1, duration: 14000, easing: Easing.linear, useNativeDriver: true }));
+        rotLoop.start();
+        const sweepLoop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(2000),
+                Animated.timing(sweepAnim, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(sweepAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        );
+        sweepLoop.start();
+        const pulseLoop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+            ])
+        );
+        pulseLoop.start();
+
+        // 🆕 Floating particles
+        particles.forEach((p) => {
+            Animated.loop(
+                Animated.sequence([
+                    Animated.delay(p.delay),
+                    Animated.timing(p.v, { toValue: 1, duration: p.dur, easing: Easing.linear, useNativeDriver: true }),
+                    Animated.timing(p.v, { toValue: 0, duration: 0, useNativeDriver: true })
+                ])
+            ).start();
+        });
+
         const expertId = auth.currentUser?.uid;
         if (!expertId) return;
 
@@ -470,9 +896,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                 const totalBeans = Number(d.walletBalance) || 0; 
                 const lastCallerName = d.lastCallFrom || "Waiting...";
-                const eliteFan = d.topVipSupporter?.name && d.topVipSupporter.name !== 'None' 
-                    ? `${d.topVipSupporter.name} (💎${d.topVipSupporter.amount})` 
-                    : "No Key Users Yet";
+
+                // 🆕 KEY USER: name + diamond value thani thani (name mela, diamond kila)
+                const hasKeyUser = !!(d.topVipSupporter?.name && d.topVipSupporter.name !== 'None');
+                const eliteFan = hasKeyUser ? String(d.topVipSupporter.name) : "No Key Users Yet";
+                const eliteFanAmount = hasKeyUser ? (Number(d.topVipSupporter?.amount) || 0) : 0;
                 
                 const longestSecs = Number(d.longestCallDuration) || 0; 
                 const longestCallMinutes = Math.floor(longestSecs / 60);
@@ -497,6 +925,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                     todayMins: displayTodayMins,
                     longestCallDisplay: longestCallMinutes.toString(), 
                     topFanName: eliteFan,
+                    topFanAmount: eliteFanAmount,
+                    hasKeyUser: hasKeyUser,
                     lastCaller: lastCallerName,
                     statusLabel: d.isVerified === true ? "VERIFIED PRO" : "PENDING VERIFICATION",
                     statusColor: d.isVerified === true ? "#10B981" : "#F59E0B",
@@ -512,6 +942,46 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
         return () => unsub();
     }, []);
+
+    // 🆕 Hero count-up (total rewards) + level bar fill
+    useEffect(() => {
+        const target = Number(stats?.totalBeansEarned) || 0;
+        const id = heroCountAnim.addListener(({ value }) => setHeroCount(Math.floor(target * value)));
+        heroCountAnim.setValue(0);
+        Animated.timing(heroCountAnim, { toValue: 1, duration: 1600, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(({ finished }) => {
+            if (finished) setHeroCount(target);
+        });
+        return () => heroCountAnim.removeListener(id);
+    }, [stats?.totalBeansEarned]);
+
+    // 🆕 Tab pill slide + content transition
+    useEffect(() => {
+        Animated.spring(tabSlide, { toValue: TAB_KEYS.indexOf(mainTab), useNativeDriver: true, friction: 8, tension: 70 }).start();
+        tabAnim.setValue(0);
+        Animated.timing(tabAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, [mainTab]);
+
+    // 🆕 Distribution bar grow
+    useEffect(() => {
+        distAnim.setValue(0);
+        Animated.timing(distAnim, { toValue: 1, duration: 1100, delay: 250, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    }, [mainTab, breakdown.calls, breakdown.callGifts, breakdown.liveGifts, breakdown.partyGifts]);
+
+    // ---- Derived "today" values (early return-ku munnaadi, hooks order safe) ----
+    // 🆕 FIX: Firestore user doc = single source of truth. realTodayStats (archive scan) fallback-a mattum use aagum,
+    //         so reload pannina 46m / 36 calls / 88,420 rewards maaraama same-a irukkum.
+    const finalTodayCalls = stats?.todayCalls ?? realTodayStats?.calls ?? 0;
+    const finalTodayMins = stats?.todayMins ?? (realTodayStats ? Math.round(realTodayStats.mins).toString() : '0');
+    const finalTodayBeans = stats?.todayBeans ?? realTodayStats?.beans ?? 0;
+
+    const currentMilestone = milestones[activeTab] || milestones[0];
+    const progress = Math.min((finalTodayBeans || 0) / currentMilestone.target, 1);
+    const isCompleted = (finalTodayBeans || 0) >= currentMilestone.target;
+
+    // 🆕 Mission ring fill
+    useEffect(() => {
+        Animated.timing(missionAnim, { toValue: progress, duration: 1200, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    }, [progress]);
 
     const handleReasonSelect = (reason: string) => {
         if (!selectedUserToBlock || !auth.currentUser) return;
@@ -577,6 +1047,28 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
 
+    // 🆕 Interpolations
+    const spin = rotAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const sweepX = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.6, width * 1.1] });
+    const dotScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] });
+    const dotOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0.3] });
+    const trophyGlow = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.7] });
+    const crestScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
+
+    // 🆕 Hero level progress
+    const levelGoal = LEVEL_GOALS[config.lvl] || 0;
+    const levelPct = config.next > 0
+        ? Math.max(0, Math.min((totalBeansEarned - levelGoal) / (config.next - levelGoal), 1))
+        : 1;
+    const levelBarWidth = heroCountAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${levelPct * 100}%`] }) as any;
+
+    // 🆕 Mission colors (level theme; completed = green)
+    const missionColor = isCompleted ? ROYAL.emerald : currentMilestone.color;
+    const missionColor2 = isCompleted ? ROYAL.mint : currentMilestone.color2;
+
+    // 🆕 Longest session minutes (user doc + archive scan, edhu perusoo adhu)
+    const longestMins = Math.max(Number(stats?.longestCallDisplay) || 0, longestCall ? Math.floor(longestCall.secs / 60) : 0);
+
     const renderExpertHistoryItem = (item: any, index: number) => {
         const uniqueKey = item.id ? `${item.id}-${index}-${item.type}` : `log-${index}`;
         let iconName = "swap-horizontal";
@@ -588,14 +1080,15 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const targetUserName = item.callerName || item.senderName || 'User';
 
         if (itemType === 'video_call') {
-            iconName = "video-vintage"; iconColor = theme.primary; 
+            iconName = "video-vintage"; iconColor = DIST_COLORS[0]; 
             titleText = item.callerName ? `Call with ${item.callerName}` : "Call Reward";
         } else if (itemType.includes('gift')) {
-            iconName = "gift"; iconColor = theme.secondary; 
+            iconName = "gift"; 
+            iconColor = itemType === 'live_gift' ? DIST_COLORS[2] : itemType === 'party_gift' ? DIST_COLORS[3] : DIST_COLORS[1]; 
             let baseTitle = itemType === 'live_gift' ? "Broadcast Reward" : itemType === 'party_gift' ? "Forum Reward" : "Private Reward";
             titleText = `${baseTitle} (from ${targetUserName})`;
         } else if (itemType === 'daily_bonus') {
-            iconName = "star-shooting"; iconColor = "#8B5CF6";
+            iconName = "star-shooting"; iconColor = theme.accent;
             titleText = item.giftName || 'Daily Mission Bonus';
         }
 
@@ -607,16 +1100,18 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const itemBorder = index % 2 === 0 ? borderType2 : borderType1;
 
         return (
-            <View key={uniqueKey} style={[styles.historyCard, itemBorder]}>
-                <View style={[styles.historyIconBox, { backgroundColor: iconColor + '20', borderColor: iconColor + '40' }]}>
-                    <MaterialCommunityIcons name={iconName as any} size={20} color={iconColor} />
-                </View>
+            <View key={uniqueKey} style={styles.logCard}>
+                <LinearGradient colors={[iconColor + '22', 'rgba(255,255,255,0.02)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                <View style={[styles.logAccent, { backgroundColor: iconColor }]} />
+                <LinearGradient colors={[iconColor, iconColor + '77']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.logIconBox}>
+                    <MaterialCommunityIcons name={iconName as any} size={18} color="#FFF" />
+                </LinearGradient>
                 <View style={{ flex: 1, marginLeft: 12, paddingRight: 8, justifyContent: 'center' }}>
                     <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{titleText}</Text>
                     <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{displayTime}</Text>
                 </View>
-                <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
-                    <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                <View style={styles.logAmountPill}>
+                    <Text style={[styles.logAmountText, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                         +{amountValue.toLocaleString()} 🎖️
                     </Text>
                     <Text style={[styles.historyStatus, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
@@ -628,8 +1123,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     };
 
     const renderLeaderboardItem = (user: any, index: number) => {
-        let rankColor = theme.primary;
-        let rankGradient = ['rgba(15, 23, 42, 0.45)', 'rgba(15, 23, 42, 0.45)'];
+        let rankColor = theme.secondary;
+        let rankGradient = [theme.primary + '24', 'rgba(15, 10, 40, 0.55)'];
         let iconName = "medal-outline";
         let isTop3 = false;
 
@@ -640,6 +1135,82 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         const isMe = user.id === auth.currentUser?.uid;
         const uConfig = getLevelConfig(user.totalBeansEarned || 0);
 
+        // 🆕 ================= RANK 4+ : UNIQUE DESIGN =================
+        if (!isTop3) {
+            const lvlColor = uConfig.colors[0];
+            const topScore = Number(leaderboardData[0]?.totalBeansEarned) || 0;
+            const myScore = Number(user.totalBeansEarned) || 0;
+            const pctOfTop = topScore > 0 ? Math.max(0.04, Math.min(myScore / topScore, 1)) : 0;
+            const ringColors = isMe ? [lighten(theme.accent, 0.5), theme.accent] : [lighten(lvlColor, 0.45), lvlColor];
+
+            return (
+                <View key={`rank-${user.id}-${index}`} style={{ marginBottom: 14 }}>
+                    <GlowCard
+                        colors={(isMe ? [theme.accent, theme.secondary, theme.primary] : [lvlColor + 'CC', lvlColor + '22', theme.accent + '66']) as any}
+                        radius={24}
+                        glow={isMe ? theme.accent : lvlColor}
+                    >
+                        <View style={styles.rankCardInner}>
+                            <LinearGradient colors={[lvlColor + '26', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                            <Text style={[styles.rankWatermark, { color: lvlColor }]} pointerEvents="none">{index + 1}</Text>
+
+                            {/* RANK NUMBER (fixed box, perfectly centered) */}
+                            <LinearGradient colors={[lvlColor, lvlColor + '66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rankNumBox}>
+                                <LinearGradient colors={['rgba(255,255,255,0.35)', 'rgba(255,255,255,0)']} style={styles.rankNumGloss} pointerEvents="none" />
+                                <Text style={styles.rankNumText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{index + 1}</Text>
+                            </LinearGradient>
+
+                            {/* AVATAR with level ring */}
+                            <View style={styles.rankAvatarWrap}>
+                                <LinearGradient colors={ringColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rankAvatarRing}>
+                                    <Image
+                                        source={{ uri: user.profilePic || `https://ui-avatars.com/api/?name=${user.name || 'U'}&background=0F172A&color=fff` }}
+                                        style={styles.rankAvatarImg}
+                                    />
+                                </LinearGradient>
+                                {isMe && <View style={[styles.rankMeDot, { backgroundColor: theme.accent }]} />}
+                            </View>
+
+                            {/* NAME + LEVEL + PROGRESS vs #1 */}
+                            <View style={styles.rankInfo}>
+                                <Text style={styles.rankName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                                    {user.name || 'Host'}{isMe ? ' (You)' : ''}
+                                </Text>
+                                <View style={styles.rankLvlRow}>
+                                    <View style={[styles.rankLvlChip, { backgroundColor: lvlColor + '30', borderColor: lvlColor + '88' }]}>
+                                        <Text style={[styles.rankLvlChipText, { color: lighten(lvlColor, 0.5) }]}>L{uConfig.lvl}</Text>
+                                    </View>
+                                    <Text style={styles.rankLvlLabel} numberOfLines={1}>{uConfig.label.split(' ')[0]}</Text>
+                                </View>
+                                <View style={styles.rankTrack}>
+                                    <Animated.View
+                                        style={{
+                                            height: '100%',
+                                            borderRadius: 3,
+                                            backgroundColor: lvlColor,
+                                            width: distAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${pctOfTop * 100}%`] }) as any
+                                        }}
+                                    />
+                                </View>
+                            </View>
+
+                            {/* REWARDS */}
+                            <View style={styles.rankRewardCol}>
+                                <Text style={styles.rankRewardLabel}>REWARDS</Text>
+                                <View style={styles.rankRewardPill}>
+                                    <Text style={{ fontSize: 12, marginRight: 4 }}>🎖️</Text>
+                                    <Text style={styles.rankRewardText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                                        {user.totalBeansEarned?.toLocaleString() || 0}
+                                    </Text>
+                                </View>
+                            </View>
+                        </View>
+                    </GlowCard>
+                </View>
+            );
+        }
+
+        // ================= TOP 3 (fallback list when < 3 users) =================
         const scaleAnim = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.03, 1] }) : 1;
         const translateYAnim = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -4, 0] }) : 0;
         const glowOpacity = isTop3 ? shimmerAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 0.8, 0.3] }) : 0;
@@ -657,7 +1228,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 }}
             >
                 <LinearGradient
-                    colors={isMe && !isTop3 ? [theme.primary + '30', theme.primary + '10'] : (rankGradient as any)}
+                    colors={isMe && !isTop3 ? [theme.accent + '30', theme.accent + '10'] : (rankGradient as any)}
                     start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
                     style={{
                         flexDirection: 'row',
@@ -665,7 +1236,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         padding: 12, 
                         borderRadius: 24,
                         borderWidth: isTop3 || isMe ? 1.5 : 1,
-                        borderColor: isTop3 ? rankColor : (isMe ? theme.accent : 'rgba(255,255,255,0.1)'),
+                        borderColor: isTop3 ? rankColor : (isMe ? theme.accent : theme.secondary + '38'),
                         overflow: 'hidden',
                         position: 'relative'
                     }}
@@ -676,25 +1247,17 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         </View>
                     )}
 
+                    {/* 🆕 Rank badge: crown + number ellame ulla-ye center-a (veliya varaathu) */}
                     <View style={{
-                        width: 40, height: 40, borderRadius: 20, 
-                        backgroundColor: isTop3 ? rankColor : 'rgba(255,255,255,0.05)',
+                        width: 44, height: 44, borderRadius: 22, 
+                        backgroundColor: rankColor,
                         justifyContent: 'center', alignItems: 'center',
-                        shadowColor: rankColor, shadowOpacity: isTop3 ? 0.5 : 0, shadowRadius: 6, elevation: 5,
+                        shadowColor: rankColor, shadowOpacity: 0.5, shadowRadius: 6, elevation: 5,
                         marginRight: 10, 
-                        position: 'relative',
                         flexShrink: 0
                     }}>
-                        {isTop3 ? (
-                            <MaterialCommunityIcons name={iconName as any} size={20} color="#000" style={{ marginTop: -2 }} />
-                        ) : (
-                            <Text style={{ color: '#94A3B8', fontSize: 14, fontWeight: '900' }}>{index + 1}</Text>
-                        )}
-                        {isTop3 && (
-                            <View style={{ position: 'absolute', bottom: -6, backgroundColor: '#000', paddingHorizontal: 6, borderRadius: 6, borderWidth: 1, borderColor: rankColor }}>
-                                <Text style={{ color: rankColor, fontSize: 9, fontWeight: '900' }}>#{index + 1}</Text>
-                            </View>
-                        )}
+                        <MaterialCommunityIcons name={iconName as any} size={16} color="#000" />
+                        <Text style={{ color: '#000', fontSize: 13, fontWeight: '900', lineHeight: 15 }}>{index + 1}</Text>
                     </View>
 
                     <View style={{ position: 'relative', flexShrink: 0 }}>
@@ -706,27 +1269,27 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             }}
                         />
                         {isMe && (
-                            <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: theme.primary, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#020617' }} />
+                            <View style={{ position: 'absolute', top: -2, right: -2, backgroundColor: theme.accent, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#020617' }} />
                         )}
                     </View>
 
                     <View style={{ flex: 1, marginLeft: 12, marginRight: 8, justifyContent: 'center' }}>
                         <Text style={{ color: '#FFF', fontSize: 15, fontWeight: 'bold', letterSpacing: 0.5, lineHeight: 22 }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
-                            {user.name || 'Host'} {isMe && <Text style={{ color: theme.accent, fontSize: 12 }}> (You)</Text>}
+                            {user.name || 'Host'} {isMe && <Text style={{ color: theme.accentText, fontSize: 13 }}> (You)</Text>}
                         </Text>
                         
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
                             <View style={{ backgroundColor: uConfig.colors[0] + '30', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginRight: 6 }}>
-                                <Text style={{ color: uConfig.colors[0], fontSize: 9, fontWeight: '900' }}>L{uConfig.lvl}</Text>
+                                <Text style={{ color: lighten(uConfig.colors[0], 0.5), fontSize: 11, fontWeight: '900' }}>L{uConfig.lvl}</Text>
                             </View>
-                            <Text style={{ color: '#94A3B8', fontSize: 11, fontWeight: '700' }} numberOfLines={1} adjustsFontSizeToFit>
+                            <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700' }} numberOfLines={1} adjustsFontSizeToFit>
                                 {uConfig.label}
                             </Text>
                         </View>
                     </View>
 
                     <View style={{ alignItems: 'flex-end', flexShrink: 0 }}>
-                        <Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 4 }}>REWARDS</Text>
+                        <Text style={{ color: 'rgba(255,255,255,0.75)', fontSize: 11, fontWeight: '900', letterSpacing: 1, marginBottom: 4 }}>REWARDS</Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)' }}>
                             <Text style={{ fontSize: 12, marginRight: 4 }}>🎖️</Text>
                             <Text style={{ color: '#10B981', fontSize: 14, fontWeight: '900' }} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
@@ -741,304 +1304,639 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
     if (loading) return (
         <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color={theme.primary} />
-            <Text style={[styles.loaderText, { color: theme.primary }]}>CALIBRATING HUB...</Text>
+            <LoaderPulse color={theme.accent} />
+            <Text style={[styles.loaderText, { color: theme.accentText }]}>CALIBRATING HUB...</Text>
         </View>
     );
 
-    const finalTodayCalls = realTodayStats !== null ? realTodayStats.calls : stats?.todayCalls;
-    const finalTodayMins = realTodayStats !== null ? Math.round(realTodayStats.mins).toString() : stats?.todayMins;
-    const finalTodayBeans = realTodayStats !== null ? realTodayStats.beans : stats?.todayBeans;
+    // 🆕 Distribution data (Reward Breakdown)
+    const distItems = [
+        { label: 'Call Earnings', value: breakdown.calls, color: DIST_COLORS[0], icon: 'phone-in-talk' },
+        { label: 'Call Rewards', value: breakdown.callGifts, color: DIST_COLORS[1], icon: 'gift-outline' },
+        { label: 'Broadcast Rewards', value: breakdown.liveGifts, color: DIST_COLORS[2], icon: 'broadcast' },
+        { label: 'Forum Rewards', value: breakdown.partyGifts, color: DIST_COLORS[3], icon: 'account-group' },
+    ];
+    const distTotal = distItems.reduce((s, i) => s + i.value, 0);
+    const maxDist = Math.max(...distItems.map(i => i.value));
+    const activeSources = distItems.filter(i => i.value > 0).length;
 
-    const currentMilestone = milestones[activeTab] || milestones[0];
-    const progress = Math.min((finalTodayBeans || 0) / currentMilestone.target, 1);
-    const isCompleted = (finalTodayBeans || 0) >= currentMilestone.target;
+    // 🆕 Donut segments (each reward source = own coloured arc)
+    let donutAcc = 0;
+    const donutSegments = distItems.map((it) => {
+        const frac = distTotal > 0 ? it.value / distTotal : 0;
+        const full = frac * DONUT_C;
+        const gap = frac > 0 && activeSources > 1 ? 4 : 0;
+        const len = Math.max(full - gap, 0);
+        const seg = { color: it.color, len, start: donutAcc };
+        donutAcc += full;
+        return seg;
+    });
+
+    // 🆕 Individual reward box (thani thani box) - 4 box-um same size (fixed height + reserved tag slot)
+    const renderDistBox = (it: any, idx: number) => {
+        const pct = distTotal > 0 ? (it.value / distTotal) * 100 : 0;
+        const isTop = distTotal > 0 && it.value > 0 && it.value === maxDist;
+        return (
+            <GlowCard
+                key={`dist-${idx}`}
+                style={{ flex: 1, minWidth: 0 }}
+                colors={[it.color, it.color + '22', it.color + '77'] as any}
+                radius={24}
+                glow={it.color}
+            >
+                <View style={styles.distBox}>
+                    <LinearGradient colors={[it.color + '30', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    <View style={styles.distWatermark} pointerEvents="none">
+                        <MaterialCommunityIcons name={it.icon as any} size={80} color={it.color + '14'} />
+                    </View>
+                    <View style={styles.distBoxTop}>
+                        <LinearGradient colors={[it.color, it.color + '88']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.distIconBubble}>
+                            <MaterialCommunityIcons name={it.icon as any} size={20} color="#FFF" />
+                        </LinearGradient>
+                        <View style={[styles.distPctPill, { borderColor: it.color + '88', backgroundColor: it.color + '22' }]}>
+                            <Text style={[styles.distPctText, { color: lighten(it.color, 0.55) }]}>{Math.round(pct)}%</Text>
+                        </View>
+                    </View>
+                    <Text style={styles.distBoxLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{it.label}</Text>
+                    <Text style={styles.distBoxValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>🎖️ {it.value.toLocaleString()}</Text>
+                    <View style={styles.distMiniTrack}>
+                        <Animated.View
+                            style={{
+                                height: '100%',
+                                borderRadius: 3,
+                                backgroundColor: it.color,
+                                width: distAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${pct}%`] }) as any
+                            }}
+                        />
+                    </View>
+                    {/* 🆕 tag slot always reserved -> height maaraathu */}
+                    <View style={styles.topTagSlot}>
+                        {isTop && (
+                            <View style={[styles.topTag, { backgroundColor: it.color }]}>
+                                <MaterialCommunityIcons name="crown" size={10} color="#0B1026" />
+                                <Text style={styles.topTagText}>TOP SOURCE</Text>
+                            </View>
+                        )}
+                    </View>
+                </View>
+            </GlowCard>
+        );
+    };
+
+    const tabSegW = tabW > 0 ? (tabW - 10) / 3 : 0;
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#020617' }}>
+        <View style={{ flex: 1, backgroundColor: ROYAL.bg0 }}>
             <LinearGradient colors={theme.bgGradient} style={StyleSheet.absoluteFill} />
             <Animated.View style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
             <Animated.View style={[styles.shimmerOrb, { top: 450, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+            <Animated.View style={[styles.shimmerOrb, { top: 780, right: -80, backgroundColor: theme.accent, transform: [{ translateY: orbTranslateY }] }]} />
+            <Animated.View style={[styles.shimmerOrb, { top: 1100, left: -100, backgroundColor: theme.tier, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+
+            {/* 🆕 Floating particles (level theme embers) */}
+            {particles.map((p, i) => (
+                <Animated.View
+                    key={i}
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute',
+                        top: p.y,
+                        left: p.x,
+                        width: p.size,
+                        height: p.size,
+                        borderRadius: p.size / 2,
+                        backgroundColor: PARTICLE_COLORS[i % PARTICLE_COLORS.length],
+                        opacity: p.v.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.8, 0.5, 0] }),
+                        transform: [{ translateY: p.v.interpolate({ inputRange: [0, 1], outputRange: [0, -300] }) }]
+                    }}
+                />
+            ))}
 
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 150}}>
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
                     
-                    <View style={styles.eliteHeroWrapper}>
-                        <LinearGradient colors={[theme.primary, theme.secondary, '#020617']} start={{x:0, y:0}} end={{x:1, y:1}} style={[styles.eliteHeroCard, borderType1]}>
-                            <View style={styles.cyberCircle} />
-                            <View style={styles.cyberCircleSmall} />
-                            
-                            <View style={styles.heroHeaderRow}>
-                                <View style={styles.systemStatusBox}>
-                                    <View style={styles.pulseDot} />
-                                    <Text style={styles.systemStatusText}>ANALYTICS ACTIVE</Text>
-                                </View>
-                                <View style={[styles.statusTag, { backgroundColor: 'rgba(0,0,0,0.4)' }]}>
-                                    <MaterialCommunityIcons name="star-circle" size={14} color={theme.accent} />
-                                    <Text style={[styles.statusTagText, { color: theme.accent }]}>{config.label}</Text>
-                                </View>
-                            </View>
+                    {/* 🏆 PREMIUM ROYAL HERO */}
+                    <View style={[styles.eliteHeroWrapper, { shadowColor: theme.accent }]}>
+                        <View style={styles.heroFrame}>
+                            <Animated.View style={[styles.heroFrameSpin, { transform: [{ rotate: spin }] }]} pointerEvents="none">
+                                <LinearGradient
+                                    colors={[theme.accent, theme.primary, theme.secondary, theme.tier, theme.light, theme.accent] as any}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={StyleSheet.absoluteFill}
+                                />
+                            </Animated.View>
 
-                            <View style={styles.revenueDisplay}>
-                                <Text style={styles.revenueTitle}>GLOBAL GAINED REWARDS STREAM</Text>
-                                <View style={styles.revenueNumberContainer}>
-                                    <Text style={[styles.revenueSymbol, { color: theme.accent }]}>🎖️</Text>
-                                    <Text style={styles.revenueMainValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{stats?.totalBeansEarned?.toLocaleString()}</Text>
-                                    <Text style={[styles.revenueMainUnit, { color: theme.accent }]}>REWARDS</Text>
-                                </View>
-                            </View>
+                            {/* 🆕 Hero background tint kammi (66/33 -> 40/30) so text pinnaadi dark-a irukkum */}
+                            <LinearGradient colors={[theme.primary + '40', '#0A0620', theme.secondary + '30', '#060315'] as any} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.eliteHeroCard}>
+                                <View style={styles.cyberCircle} />
+                                <View style={styles.cyberCircleSmall} />
+                                <LinearGradient colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0)']} style={styles.heroSheen} pointerEvents="none" />
 
-                            <View style={styles.heroSummaryGrid}>
-                                <View style={styles.summaryItem}>
-                                    <Text style={styles.summaryLabel}>LAST INTERACTION</Text>
-                                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{stats?.lastCaller}</Text>
+                                {/* royal sparkles */}
+                                <RoyalSparkle x={width * 0.5} y={70} size={13} color={theme.accent} delay={0} />
+                                <RoyalSparkle x={width * 0.72} y={150} size={10} color={theme.primary} delay={600} />
+                                <RoyalSparkle x={24} y={190} size={11} color={theme.secondary} delay={1100} />
+                                <RoyalSparkle x={width * 0.3} y={250} size={9} color={theme.tier} delay={1500} />
+
+                                {/* shine sweep */}
+                                <Animated.View pointerEvents="none" style={[styles.heroSweep, { transform: [{ translateX: sweepX }, { rotate: '20deg' }] }]}>
+                                    <LinearGradient colors={['transparent', 'rgba(255,255,255,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                </Animated.View>
+
+                                <View style={styles.heroHeaderRow}>
+                                    <View style={styles.systemStatusBox}>
+                                        <View style={styles.pulseDotWrap}>
+                                            <Animated.View style={[styles.pulseDotRing, { opacity: dotOpacity, transform: [{ scale: dotScale }] }]} />
+                                            <View style={styles.pulseDot} />
+                                        </View>
+                                        <Text style={styles.systemStatusText}>ANALYTICS ACTIVE</Text>
+                                    </View>
+                                    <View style={[styles.statusTag, { backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: theme.tier + '99' }]}>
+                                        <MaterialCommunityIcons name="star-circle" size={14} color={theme.tierText} />
+                                        <Text style={[styles.statusTagText, { color: theme.tierText }]}>{config.label}</Text>
+                                    </View>
                                 </View>
-                                <View style={styles.vLine} />
-                                <View style={styles.summaryItem}>
-                                    <Text style={styles.summaryLabel}>KEY USER</Text>
-                                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{stats?.topFanName}</Text>
+
+                                {/* 🆕 ROYAL IDENTITY ROW */}
+                                <View style={[styles.identityRow, { borderColor: theme.accent + '40' }]}>
+                                    <Animated.View style={{ transform: [{ scale: crestScale }] }}>
+                                        <LinearGradient colors={[lighten(theme.accent, 0.5), theme.accent, theme.deep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.identityRing}>
+                                            <Image
+                                                source={{ uri: stats?.profilePic || expertData?.profilePic || `https://ui-avatars.com/api/?name=${stats?.name || expertData?.name || 'U'}&background=0F172A&color=fff` }}
+                                                style={styles.identityAvatar}
+                                            />
+                                        </LinearGradient>
+                                        <View style={styles.identityCrown}>
+                                            <MaterialCommunityIcons name="crown" size={16} color={theme.accentText} />
+                                        </View>
+                                    </Animated.View>
+                                    <View style={{ flex: 1, marginLeft: 12 }}>
+                                        <Text style={styles.identityName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{stats?.name || expertData?.name || 'Royal Host'}</Text>
+                                        <View style={styles.identityStatusRow}>
+                                            <MaterialCommunityIcons name={stats?.isVerified === true ? 'check-decagram' : 'clock-outline'} size={13} color={stats?.statusColor || ROYAL.amber} />
+                                            <Text style={[styles.identityStatusText, { color: stats?.statusColor || ROYAL.amber }]} numberOfLines={1}>{stats?.statusLabel}</Text>
+                                        </View>
+                                    </View>
                                 </View>
-                            </View>
-                        </LinearGradient>
+
+                                <View style={styles.heroMainRow}>
+                                    <View style={{ flex: 1, paddingRight: 6 }}>
+                                        <Text style={styles.revenueTitle}>GLOBAL STREAM</Text>
+                                        <View style={styles.revenueNumberContainer}>
+                                            <Text style={[styles.revenueSymbol, { color: theme.accentText }]}>🎖️</Text>
+                                            {/* 🆕 Big glow remove -> chinna dark shadow mattum (letters sharp) */}
+                                            <Text style={[styles.revenueMainValue, { color: theme.light, textShadowColor: 'rgba(0,0,0,0.5)' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{heroCount.toLocaleString()}</Text>
+                                        </View>
+                                        <Text style={[styles.revenueMainUnit, { color: theme.accentText }]}>REWARDS</Text>
+                                    </View>
+                                    <View style={styles.heroTrophyBox}>
+                                        <Animated.View style={[styles.heroTrophyGlow, { backgroundColor: theme.accent, opacity: trophyGlow }]} />
+                                        <FloatBox amp={7} dur={1700}>
+                                            <Img3D uri={IMG.trophy} size={96} fallback="trophy-award" color={theme.accent} />
+                                        </FloatBox>
+                                    </View>
+                                </View>
+
+                                {/* 🆕 LEVEL PROGRESS v2: periya % number + thick bar + current/next goal (clear-a theriyum) */}
+                                <View style={styles.levelBarWrap}>
+                                    <View style={styles.levelBarHeader}>
+                                        <View style={[styles.levelChip, { borderColor: theme.accent + '88' }]}>
+                                            <MaterialCommunityIcons name="shield-star" size={13} color={theme.accentText} />
+                                            <Text style={styles.levelChipText}>LEVEL {config.lvl}</Text>
+                                        </View>
+                                        <View style={styles.levelPctBox}>
+                                            <Text style={[styles.levelPctBig, { color: theme.light }]}>{Math.round(levelPct * 100)}%</Text>
+                                            <Text style={[styles.levelPctSub, { color: theme.accentText }]}>{config.next > 0 ? `TO L${config.lvl + 1}` : 'MAX RANK'}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.levelBarTrack}>
+                                        <Animated.View style={[styles.levelBarFillWrap, { width: levelBarWidth }]}>
+                                            <LinearGradient colors={[theme.primary, theme.secondary, theme.accent] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                            <View style={styles.levelBarCap} />
+                                        </Animated.View>
+                                    </View>
+                                    {config.next > 0 && (
+                                        <View style={styles.levelBarFooter}>
+                                            <Text style={styles.levelBarFooterText}>🎖️ {totalBeansEarned.toLocaleString()}</Text>
+                                            <Text style={styles.levelBarFooterText}>GOAL {config.next.toLocaleString()}</Text>
+                                        </View>
+                                    )}
+                                </View>
+
+                                {/* 🆕 Stat chips: text overflow fix (label shrink-to-fit, value 2 lines) */}
+                                <View style={styles.heroSummaryGrid}>
+                                    <BlurView intensity={20} tint="dark" style={styles.summaryChip}>
+                                        <View style={styles.summaryTopRow}>
+                                            <View style={[styles.summaryIconBubble, { backgroundColor: lighten(theme.primary, 0.4) + '30' }]}>
+                                                <MaterialCommunityIcons name="phone-in-talk" size={12} color={lighten(theme.primary, 0.4)} />
+                                            </View>
+                                            <Text style={styles.summaryLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>LAST INTERACTION</Text>
+                                        </View>
+                                        <Text style={styles.summaryValue} numberOfLines={2} ellipsizeMode="tail">{stats?.lastCaller}</Text>
+                                    </BlurView>
+                                    <BlurView intensity={20} tint="dark" style={styles.summaryChip}>
+                                        <View style={styles.summaryTopRow}>
+                                            <View style={[styles.summaryIconBubble, { backgroundColor: theme.accentText + '30' }]}>
+                                                <MaterialCommunityIcons name="crown" size={12} color={theme.accentText} />
+                                            </View>
+                                            <Text style={styles.summaryLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>KEY USER</Text>
+                                        </View>
+                                        {/* 🆕 Name mela */}
+                                        <Text style={styles.summaryValue} numberOfLines={1} ellipsizeMode="tail">{stats?.topFanName}</Text>
+                                        {/* 🆕 Diamond value kila */}
+                                        {stats?.hasKeyUser && (
+                                            <View style={styles.summaryDiamondRow}>
+                                                <Text style={styles.summaryDiamondEmoji}>💎</Text>
+                                                <Text style={[styles.summaryDiamondText, { color: theme.light }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>
+                                                    {Number(stats?.topFanAmount || 0).toLocaleString()}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </BlurView>
+                                </View>
+                            </LinearGradient>
+                        </View>
                     </View>
 
-                    <View style={styles.tabsRow}>
-                        <TouchableOpacity style={[styles.tabBtn, mainTab === 'STATS' && styles.tabBtnActive]} onPress={() => setMainTab('STATS')}>
-                            <Text style={[styles.tabText, mainTab === 'STATS' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>STATS</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.tabBtn, mainTab === 'MONTHLY' && styles.tabBtnActive]} onPress={() => setMainTab('MONTHLY')}>
-                            <Text style={[styles.tabText, mainTab === 'MONTHLY' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>MONTHLY</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity style={[styles.tabBtn, mainTab === 'LEADERBOARD' && styles.tabBtnActive]} onPress={() => setMainTab('LEADERBOARD')}>
-                            <Text style={[styles.tabText, mainTab === 'LEADERBOARD' && styles.tabTextActive]} numberOfLines={1} adjustsFontSizeToFit>RANKING</Text>
-                        </TouchableOpacity>
+                    {/* 🎚 ANIMATED SLIDING TABS (level theme pill) */}
+                    <View style={[styles.tabsRow, { borderColor: theme.accent + '2E' }]} onLayout={(e) => setTabW(e.nativeEvent.layout.width)}>
+                        {tabSegW > 0 && (
+                            <Animated.View
+                                style={[
+                                    styles.tabPill,
+                                    {
+                                        width: tabSegW,
+                                        borderColor: theme.accent,
+                                        shadowColor: theme.accent,
+                                        transform: [{ translateX: tabSlide.interpolate({ inputRange: [0, 1, 2], outputRange: [0, tabSegW, tabSegW * 2] }) }]
+                                    }
+                                ]}
+                            >
+                                <LinearGradient colors={[theme.primary + '88', theme.accent + '33']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                                <LinearGradient colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']} style={styles.tabPillGloss} pointerEvents="none" />
+                            </Animated.View>
+                        )}
+                        {TAB_KEYS.map((key, idx) => {
+                            const isActiveTab = mainTab === key;
+                            return (
+                                <TouchableOpacity key={key} style={styles.tabBtn} onPress={() => setMainTab(key)} activeOpacity={0.8}>
+                                    <MaterialCommunityIcons name={TAB_ICONS[idx] as any} size={15} color={isActiveTab ? theme.light : '#CBD5E1'} />
+                                    <Text style={[styles.tabText, isActiveTab && styles.tabTextActive, isActiveTab && { color: theme.light }]} numberOfLines={1} adjustsFontSizeToFit>{TAB_LABELS[idx]}</Text>
+                                </TouchableOpacity>
+                            );
+                        })}
                     </View>
 
-                    <View style={styles.menuBox}>
+                    <Animated.View
+                        style={[
+                            styles.menuBox,
+                            {
+                                opacity: tabAnim,
+                                transform: [{ translateY: tabAnim.interpolate({ inputRange: [0, 1], outputRange: [22, 0] }) }]
+                            }
+                        ]}
+                    >
                         
                         {mainTab === 'STATS' && (
                             <View>
-                                <Text style={styles.subHeading}>PERFORMANCE MATRIX</Text>
+                                <SectionTitle title="PERFORMANCE MATRIX" icon="chart-box" color={theme.primary} />
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="time-outline" label="Today Session" value={`${finalTodayMins}m`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="people-outline" label="Today Calls" value={finalTodayCalls} color={theme.primary} borderStyle={borderType1} />
+                                        <MatrixBox icon="time-outline" label="Today Session" value={`${finalTodayMins}m`} color={theme.primary} borderStyle={borderType2} delay={0} />
+                                        <MatrixBox icon="people-outline" label="Today Calls" value={finalTodayCalls} color={theme.secondary} borderStyle={borderType1} delay={80} />
                                     </View>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="stats-chart-outline" label="Total Time" value={`${stats?.displayMins}m`} color={theme.primary} borderStyle={borderType1} />
-                                        <MatrixBox icon="cash-outline" label="Paid Out" value={`₹${stats?.totalWithdrawn}`} color="#EF4444" borderStyle={borderType2} />
+                                        <MatrixBox icon="stats-chart-outline" label="Total Time" value={`${stats?.displayMins}m`} color={theme.accent} borderStyle={borderType1} delay={160} />
+                                        <MatrixBox icon="cash-outline" label="Paid Out" value={`₹${stats?.totalWithdrawn}`} color={theme.tier} borderStyle={borderType2} delay={240} />
                                     </View>
                                 </View>
 
-                                <Text style={styles.subHeading}>REWARD BREAKDOWN</Text>
-                                <View style={styles.matrixGrid}>
-                                    <View style={styles.matrixRow}>
-                                        <MatrixBox icon="videocam" label="Call Earnings" value={`🎖️${breakdown.calls.toLocaleString()}`} color={theme.primary} borderStyle={borderType2} />
-                                        <MatrixBox icon="gift" label="Call Rewards" value={`🎖️${breakdown.callGifts.toLocaleString()}`} color={theme.primary} borderStyle={borderType1} />
+                                {/* 🆕 REWARD BREAKDOWN v2: donut summary box + 4 thani thani source boxes */}
+                                <SectionTitle title="REWARD BREAKDOWN" icon="chart-donut" color={theme.secondary} />
+                                <GlowCard colors={['#22D3EE', '#F59E0B', '#FF5C9E', '#34D399'] as any} radius={28}>
+                                    <View style={styles.distCard}>
+                                        <LinearGradient colors={[theme.primary + '24', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                        <View style={styles.donutRow}>
+                                            <View style={styles.donutBox}>
+                                                <Animated.View
+                                                    style={{
+                                                        opacity: distAnim,
+                                                        transform: [
+                                                            { rotate: distAnim.interpolate({ inputRange: [0, 1], outputRange: ['-140deg', '0deg'] }) },
+                                                            { scale: distAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) }
+                                                        ]
+                                                    }}
+                                                >
+                                                    <Svg width={DONUT_SIZE} height={DONUT_SIZE} style={{ transform: [{ rotate: '-90deg' }] }}>
+                                                        <Circle cx={DONUT_SIZE / 2} cy={DONUT_SIZE / 2} r={DONUT_R} stroke="rgba(255,255,255,0.07)" strokeWidth={DONUT_STROKE} fill="transparent" />
+                                                        {distTotal > 0 && donutSegments.map((seg, i) => seg.len > 0 ? (
+                                                            <Circle
+                                                                key={`seg-${i}`}
+                                                                cx={DONUT_SIZE / 2}
+                                                                cy={DONUT_SIZE / 2}
+                                                                r={DONUT_R}
+                                                                stroke={seg.color}
+                                                                strokeWidth={DONUT_STROKE}
+                                                                fill="transparent"
+                                                                strokeDasharray={`${seg.len} ${DONUT_C - seg.len}`}
+                                                                strokeDashoffset={-seg.start}
+                                                                strokeLinecap="butt"
+                                                            />
+                                                        ) : null)}
+                                                    </Svg>
+                                                </Animated.View>
+                                                <View style={styles.donutCenter} pointerEvents="none">
+                                                    <Text style={styles.donutCenterEmoji}>🎖️</Text>
+                                                    <Text style={styles.donutCenterLabel}>TOTAL</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.donutInfo}>
+                                                <Text style={styles.donutInfoLabel}>TOTAL BREAKDOWN</Text>
+                                                <Text style={[styles.donutInfoValue, { color: theme.light }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>🎖️ {distTotal.toLocaleString()}</Text>
+                                                <View style={styles.donutChip}>
+                                                    <Text style={styles.donutChipText}>{activeSources} / 4 ACTIVE SOURCES</Text>
+                                                </View>
+                                            </View>
+                                        </View>
                                     </View>
-                                    <View style={styles.matrixRow}>
-                                        <MatrixBox icon="broadcast" iconFamily="MaterialCommunityIcons" label="Broadcast Rewards" value={`🎖️${breakdown.liveGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType1} />
-                                        <MatrixBox icon="party-popper" iconFamily="MaterialCommunityIcons" label="Forum Rewards" value={`🎖️${breakdown.partyGifts.toLocaleString()}`} color={theme.secondary} borderStyle={borderType2} />
+                                </GlowCard>
+
+                                <View style={styles.distGrid}>
+                                    <View style={styles.distRow}>
+                                        {renderDistBox(distItems[0], 0)}
+                                        {renderDistBox(distItems[1], 1)}
+                                    </View>
+                                    <View style={styles.distRow}>
+                                        {renderDistBox(distItems[2], 2)}
+                                        {renderDistBox(distItems[3], 3)}
                                     </View>
                                 </View>
 
+                                {/* 🎁 LIFETIME GIFT REWARDS */}
                                 <View style={styles.dailyFlowContainer}>
-                                    <BlurView intensity={20} tint="dark" style={[styles.holoFlowCardWrapper, borderType1]}>
-                                        <LinearGradient 
-                                            colors={['rgba(245, 158, 11, 0.2)', 'rgba(245, 158, 11, 0.05)', 'transparent']} 
-                                            start={{x:0, y:0}} end={{x:1, y:1}} 
-                                            style={[styles.dailyFlowPill, { borderColor: 'rgba(245, 158, 11, 0.4)' }]}
-                                        >
-                                            <View style={[styles.flowIconGlow, { backgroundColor: '#F59E0B' }]} />
-                                            <View style={[styles.flowIconBox, { backgroundColor: 'rgba(245, 158, 11, 0.15)', borderColor: 'rgba(245, 158, 11, 0.5)' }]}>
-                                                 <MaterialCommunityIcons name="gift-outline" size={24} color="#F59E0B" />
+                                    <GlowCard colors={[theme.accent, theme.secondary, theme.primary] as any} radius={30} glow={theme.accent}>
+                                        <View style={styles.dailyFlowPill}>
+                                            <LinearGradient colors={[theme.accent + '38', theme.accent + '0D', 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                            <RoyalSparkle x={74} y={10} size={9} color={theme.light} delay={300} />
+                                            <RoyalSparkle x={20} y={58} size={8} color={theme.secondary} delay={900} />
+                                            <View style={styles.flowImgBox}>
+                                                <View style={[styles.flowIconGlow, { backgroundColor: theme.accent }]} />
+                                                <FloatBox amp={5} dur={1500}>
+                                                    <Img3D uri={IMG.gift} size={62} fallback="gift-outline" color={theme.accent} />
+                                                </FloatBox>
                                             </View>
                                             <View style={styles.flowTextContainer}>
                                                 <Text style={styles.flowLabel} numberOfLines={1} adjustsFontSizeToFit>LIFETIME GIFT REWARDS</Text>
                                             </View>
                                             <View style={styles.flowValueNode}>
-                                                <View style={[styles.flowValueGlow, { backgroundColor: '#F59E0B' }]} />
-                                                <View style={[styles.flowValueBox, { backgroundColor: 'rgba(0,0,0,0.6)', borderColor: 'rgba(245, 158, 11, 0.5)' }]}>
-                                                    <Text style={[styles.flowBeanSymbol, {color: '#F59E0B', marginRight: 4}]}>🎖️</Text>
+                                                <View style={[styles.flowValueGlow, { backgroundColor: theme.accent }]} />
+                                                <View style={[styles.flowValueBox, { backgroundColor: 'rgba(0,0,0,0.6)', borderColor: theme.accent + '80' }]}>
+                                                    <Text style={[styles.flowBeanSymbol, {color: theme.accentText, marginRight: 4}]}>🎖️</Text>
                                                     <Text style={[styles.flowValText, { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                                                         {(breakdown.totalDeepGifts > 0 ? breakdown.totalDeepGifts : Math.floor((Number(stats?.totalDiamondsReceived) || 0) / 2)).toLocaleString()}
                                                     </Text>
                                                 </View>
                                             </View>
-                                        </LinearGradient>
-                                    </BlurView>
+                                        </View>
+                                    </GlowCard>
                                 </View>
 
-                                <Text style={styles.subHeading}>MISSION: DAILY GOAL</Text>
-                                <LinearGradient 
-                                    colors={['rgba(15, 23, 42, 0.9)', 'rgba(2, 6, 23, 1)']} 
-                                    style={[styles.massChallengeCard, borderType1, isCompleted && { borderLeftColor: '#10B981', borderRightColor: '#10B981' }]}
+                                <SectionTitle title="MISSION: DAILY GOAL" icon="flag-checkered" color={missionColor} />
+                                <GlowCard
+                                    colors={(isCompleted ? ['#10B981', '#34D399', '#22D3EE'] : [currentMilestone.color, currentMilestone.color2, theme.accent]) as any}
+                                    radius={34}
+                                    glow={missionColor}
                                 >
-                                    <View style={styles.massChallengeHeader}>
-                                        <View style={styles.massHeaderLeft}>
-                                            <View style={[styles.missionIconRing, { borderColor: isCompleted ? '#10B981' : theme.primary }]}>
-                                                <Ionicons name={isCompleted ? "checkmark-circle" : "rocket"} size={22} color={isCompleted ? '#10B981' : theme.primary} />
+                                    <View style={styles.massChallengeCard}>
+                                        <LinearGradient colors={['rgba(15, 10, 40, 0.9)', 'rgba(5, 3, 15, 1)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                        <LinearGradient colors={[missionColor + '22', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                        <View style={styles.massChallengeHeader}>
+                                            <View style={styles.massHeaderLeft}>
+                                                <View style={styles.missionImgBox}>
+                                                    <FloatBox amp={4} dur={1400}>
+                                                        {isCompleted
+                                                            ? <Img3D uri={IMG.medal} size={50} fallback="check-decagram" color="#10B981" />
+                                                            : <Img3D uri={IMG.rocket} size={50} fallback="rocket-launch" color={missionColor} />}
+                                                    </FloatBox>
+                                                </View>
+                                                <View style={styles.missionTextGroup}>
+                                                    <Text style={[styles.missionMainTitle, { color: isCompleted ? '#10B981' : '#FFF' }]}>
+                                                        {currentMilestone.label} MISSION
+                                                    </Text>
+                                                    <Text style={styles.missionSubText}>Reach {currentMilestone.target.toLocaleString()} Rewards to unlock</Text>
+                                                </View>
                                             </View>
-                                            <View style={styles.missionTextGroup}>
-                                                <Text style={[styles.missionMainTitle, { color: isCompleted ? '#10B981' : '#FFF' }]}>
-                                                    {currentMilestone.label} MISSION
-                                                </Text>
-                                                <Text style={styles.missionSubText}>Reach {currentMilestone.target.toLocaleString()} Rewards to unlock</Text>
+                                            <View style={[styles.bountyBox, { backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.15)' : missionColor + '20', borderColor: missionColor }]}>
+                                                <Text style={styles.bountyLabel}>REWARDS</Text>
+                                                <Text style={[styles.bountyValue, { color: isCompleted ? missionColor : lighten(missionColor, 0.55) }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{currentMilestone.bonus.toLocaleString()}</Text>
                                             </View>
                                         </View>
-                                        <View style={[styles.bountyBox, { backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.15)' : theme.primary + '20', borderColor: isCompleted ? '#10B981' : theme.primary }]}>
-                                            <Text style={styles.bountyLabel}>REWARDS</Text>
-                                            <Text style={[styles.bountyValue, { color: isCompleted ? '#10B981' : theme.primary }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{currentMilestone.bonus.toLocaleString()}</Text>
-                                        </View>
-                                    </View>
 
-                                    <View style={styles.holoTabContainer}>
-                                        {milestones.map((m, index) => {
-                                            const isTabActive = activeTab === index;
-                                            return (
-                                                <TouchableOpacity 
-                                                    key={index} 
-                                                    onPress={() => setActiveTab(index)} 
-                                                    style={[
-                                                        styles.holoTab, 
-                                                        isTabActive && { backgroundColor: theme.primary + '30', borderColor: theme.primary }
-                                                    ]}
-                                                    activeOpacity={0.7}
-                                                >
-                                                    {isTabActive && <View style={[styles.holoTabGlow, { backgroundColor: theme.primary }]} />}
-                                                    <Text style={[styles.holoTabText, isTabActive && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit>{m.label}</Text>
-                                                </TouchableOpacity>
-                                            );
-                                        })}
-                                    </View>
+                                        <View style={styles.holoTabContainer}>
+                                            {milestones.map((m, index) => {
+                                                const isTabActive = activeTab === index;
+                                                const tabDone = (finalTodayBeans || 0) >= m.target;
+                                                return (
+                                                    <TouchableOpacity 
+                                                        key={index} 
+                                                        onPress={() => setActiveTab(index)} 
+                                                        style={[
+                                                            styles.holoTab, 
+                                                            isTabActive && { backgroundColor: m.color + '30', borderColor: m.color }
+                                                        ]}
+                                                        activeOpacity={0.7}
+                                                    >
+                                                        {isTabActive && <View style={[styles.holoTabGlow, { backgroundColor: m.color }]} />}
+                                                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                                            {tabDone && <MaterialCommunityIcons name="check-decagram" size={12} color={ROYAL.emerald} />}
+                                                            <Text style={[styles.holoTabText, { color: isTabActive ? '#FFF' : lighten(m.color, 0.55) }]} numberOfLines={1} adjustsFontSizeToFit>{m.label}</Text>
+                                                        </View>
+                                                    </TouchableOpacity>
+                                                );
+                                            })}
+                                        </View>
 
-                                    <View style={styles.quantumProgressContainer}>
-                                        <View style={styles.quantumProgressHeader}>
-                                            <Text style={styles.quantumProgressLabel}>CORE SYNC STATUS</Text>
-                                            <Text style={[styles.quantumProgressPct, { color: isCompleted ? '#10B981' : theme.primary }]}>
-                                                {Math.round(progress * 100)}%
-                                            </Text>
-                                        </View>
-                                        <View style={styles.quantumTrack}>
-                                            <Animated.View 
-                                                style={[
-                                                    styles.quantumFill, 
-                                                    { 
-                                                        width: `${progress * 100}%`, 
-                                                        backgroundColor: isCompleted ? '#10B981' : theme.primary,
-                                                        shadowColor: isCompleted ? '#10B981' : theme.primary
-                                                    }
-                                                ]} 
-                                            />
-                                        </View>
-                                        <View style={styles.quantumFooter}>
-                                            <Text style={styles.quantumCollected}>{(finalTodayBeans || 0).toLocaleString()} / {currentMilestone.target.toLocaleString()}</Text>
-                                            <Text style={[styles.quantumRemaining, isCompleted && { color: '#10B981' }]}>
-                                                {isCompleted ? 'TRANSMISSION COMPLETE' : `${(currentMilestone.target - (finalTodayBeans || 0)).toLocaleString()} REWARDS REMAINING`}
-                                            </Text>
+                                        <View style={styles.quantumProgressContainer}>
+                                            <View style={styles.missionRingBox}>
+                                                <Svg width={MISSION_RING} height={MISSION_RING} style={{ transform: [{ rotate: '-90deg' }] }}>
+                                                    <Defs>
+                                                        <SvgLinearGradient id="missionGrad" x1="0" y1="0" x2="1" y2="1">
+                                                            <Stop offset="0" stopColor={missionColor} />
+                                                            <Stop offset="1" stopColor={missionColor2} />
+                                                        </SvgLinearGradient>
+                                                    </Defs>
+                                                    <Circle cx={MISSION_RING / 2} cy={MISSION_RING / 2} r={MISSION_R} stroke="rgba(255,255,255,0.08)" strokeWidth={MISSION_STROKE} fill="transparent" />
+                                                    <AnimatedCircle
+                                                        cx={MISSION_RING / 2}
+                                                        cy={MISSION_RING / 2}
+                                                        r={MISSION_R}
+                                                        stroke="url(#missionGrad)"
+                                                        strokeWidth={MISSION_STROKE}
+                                                        fill="transparent"
+                                                        strokeDasharray={MISSION_C}
+                                                        strokeDashoffset={missionAnim.interpolate({ inputRange: [0, 1], outputRange: [MISSION_C, 0] }) as any}
+                                                        strokeLinecap="round"
+                                                    />
+                                                </Svg>
+                                                <View style={styles.missionRingCenter} pointerEvents="none">
+                                                    <Text style={[styles.quantumProgressPct, { color: isCompleted ? '#10B981' : '#FFF' }]}>{Math.round(progress * 100)}%</Text>
+                                                    <Text style={styles.missionRingSub}>SYNC</Text>
+                                                </View>
+                                            </View>
+                                            <View style={{ flex: 1, marginLeft: 16, minWidth: 0 }}>
+                                                <Text style={styles.quantumProgressLabel}>CORE STATUS</Text>
+                                                <Text style={styles.quantumCollected} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{(finalTodayBeans || 0).toLocaleString()} / {currentMilestone.target.toLocaleString()}</Text>
+                                                {/* 🆕 REWARDS REMAINING: full-a theriyum (number thani line, label keela) */}
+                                                <View style={[styles.remainChip, isCompleted && { borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.12)' }]}>
+                                                    {isCompleted ? (
+                                                        <Text style={[styles.quantumRemaining, { color: '#10B981' }]} numberOfLines={2}>TRANSMISSION COMPLETE</Text>
+                                                    ) : (
+                                                        <>
+                                                            <Text style={styles.remainValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                                                                {(currentMilestone.target - (finalTodayBeans || 0)).toLocaleString()}
+                                                            </Text>
+                                                            <Text style={styles.remainLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>REWARDS REMAINING</Text>
+                                                        </>
+                                                    )}
+                                                </View>
+                                            </View>
                                         </View>
                                     </View>
-                                </LinearGradient>
+                                </GlowCard>
 
-                                <Text style={styles.subHeading}>VIP INSIGHTS</Text>
-                                <LinearGradient colors={['rgba(30, 41, 59, 0.4)', 'rgba(2, 6, 23, 0.9)']} style={[styles.insightPremiumCard, borderType2]}>
-                                    <View style={[styles.insightIconRing, { backgroundColor: theme.primary + '10', borderColor: theme.primary + '20' }]}>
-                                         <MaterialCommunityIcons name="trophy-variant" size={26} color={theme.accent} />
+                                <SectionTitle title="VIP INSIGHTS" icon="shield-star" color={theme.accent} />
+                                <GlowCard colors={[theme.accent, theme.secondary, theme.primary] as any} radius={30} glow={theme.accent}>
+                                    <View style={styles.insightPremiumCard}>
+                                        <LinearGradient colors={['rgba(30, 20, 60, 0.4)', 'rgba(5, 3, 15, 0.9)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                        <RoyalSparkle x={60} y={8} size={9} color={theme.light} delay={200} />
+                                        <RoyalSparkle x={width - 110} y={52} size={8} color={theme.secondary} delay={800} />
+                                        <View style={styles.insightTopRow}>
+                                            <View style={styles.insightImgBox}>
+                                                <View style={[styles.insightGlow, { backgroundColor: theme.accent }]} />
+                                                <FloatBox amp={5} dur={1600}>
+                                                    <Img3D uri={IMG.trophy} size={58} fallback="trophy-variant" color={theme.accent} />
+                                                </FloatBox>
+                                            </View>
+                                            <View style={{flex: 1, marginLeft: 15}}>
+                                                <Text style={[styles.insightTopTitle, { color: theme.accentText }]}>TOP LOYALTY RECORD</Text>
+                                                <Text style={styles.insightDescription}>Maximum focus: <Text style={{color: '#FFF', fontWeight: '900'}}>{longestMins} minutes</Text> single session.</Text>
+                                            </View>
+                                            <Ionicons name="shield-checkmark" size={20} color="#10B981" />
+                                        </View>
+
+                                        {/* 🆕 Yaar kooda pesunaanga: photo + name */}
+                                        {longestCall && (
+                                            <View style={[styles.insightPartnerRow, { borderColor: theme.accent + '40' }]}>
+                                                <LinearGradient colors={[lighten(theme.accent, 0.5), theme.accent, theme.deep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.insightPartnerRing}>
+                                                    <Image
+                                                        source={{ uri: longestCall.pic || `https://ui-avatars.com/api/?name=${longestCall.name || 'U'}&background=0F172A&color=fff` }}
+                                                        style={styles.insightPartnerImg}
+                                                    />
+                                                </LinearGradient>
+                                                <View style={{ flex: 1, marginLeft: 12, minWidth: 0 }}>
+                                                    <Text style={styles.insightPartnerLabel} numberOfLines={1}>LONGEST SESSION WITH</Text>
+                                                    <Text style={styles.insightPartnerName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{longestCall.name}</Text>
+                                                </View>
+                                                <View style={[styles.insightPartnerPill, { backgroundColor: theme.accent + '30', borderColor: theme.accent + '88' }]}>
+                                                    <MaterialCommunityIcons name="timer-outline" size={13} color={theme.accentText} />
+                                                    <Text style={[styles.insightPartnerPillText, { color: theme.light }]}>{Math.floor(longestCall.secs / 60)}m</Text>
+                                                </View>
+                                            </View>
+                                        )}
                                     </View>
-                                    <View style={{flex: 1, marginLeft: 15}}>
-                                        <Text style={[styles.insightTopTitle, { color: theme.accent }]}>TOP LOYALTY RECORD</Text>
-                                        <Text style={styles.insightDescription}>Maximum focus: <Text style={{color: '#FFF', fontWeight: '900'}}>{stats?.longestCallDisplay} minutes</Text> single session.</Text>
-                                    </View>
-                                    <Ionicons name="shield-checkmark" size={20} color="#10B981" />
-                                </LinearGradient>
+                                </GlowCard>
                             </View>
                         )}
 
                         {mainTab === 'MONTHLY' && (
                             <View>
-                                <View style={{ alignItems: 'center', marginBottom: 25, marginTop: 10 }}>
-                                     <Text style={[styles.totalTalkLabel, { color: theme.primary, marginBottom: 5 }]}>LIFETIME REWARDS ACCUMULATED</Text>
-                                     <Text style={{color: '#FFF', fontSize: 34, fontWeight: '900', letterSpacing: -1}} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
-                                         {stats?.totalBeansEarned?.toLocaleString() || 0} 🎖️
-                                     </Text>
+                                <View style={styles.lifetimeHeader}>
+                                    <FloatBox amp={6} dur={1700}>
+                                        <Img3D uri={IMG.money} size={70} fallback="cash-multiple" color={theme.accent} />
+                                    </FloatBox>
+                                    <Text style={[styles.totalTalkLabel, { color: theme.accentText, marginBottom: 5, marginTop: 8 }]}>LIFETIME REWARDS ACCUMULATED</Text>
+                                    <Text style={{color: theme.light, fontSize: 34, fontWeight: '900', letterSpacing: -1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 }}} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
+                                        {stats?.totalBeansEarned?.toLocaleString() || 0} 🎖️
+                                    </Text>
                                 </View>
 
                                 {historyLoading ? (
                                     <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                                        <ActivityIndicator size="large" color={theme.primary} />
-                                        <Text style={{ color: theme.primary, marginTop: 15, fontSize: 10, fontWeight: '900', letterSpacing: 2 }}>DECRYPTING ARCHIVES...</Text>
+                                        <ActivityIndicator size="large" color={theme.accent} />
+                                        <Text style={{ color: theme.accentText, marginTop: 15, fontSize: 11, fontWeight: '900', letterSpacing: 2 }}>DECRYPTING ARCHIVES...</Text>
                                     </View>
                                 ) : yearlyEarnings.length > 0 ? yearlyEarnings.map((y, yIdx) => {
                                     const isYearExpanded = expandedYear === y.year;
+                                    const yColor = MONTH_COLORS[yIdx % MONTH_COLORS.length];
 
                                     return (
-                                        <View key={`year-group-${yIdx}`} style={{ marginBottom: 15 }}>
-                                            <TouchableOpacity 
-                                                style={[
-                                                    styles.historyCard, borderType1, 
-                                                    { 
-                                                        borderColor: isYearExpanded ? theme.accent : theme.primary, 
-                                                        backgroundColor: isYearExpanded ? theme.primary + '15' : 'rgba(15, 23, 42, 0.45)',
-                                                        marginBottom: isYearExpanded ? 15 : 0
-                                                    }
-                                                ]}
-                                                activeOpacity={0.8}
-                                                onPress={() => setExpandedYear(isYearExpanded ? null : y.year)}
-                                            >
-                                                <View style={[styles.historyIconBox, { backgroundColor: theme.primary + '30', borderColor: theme.primary + '50' }]}>
-                                                    <MaterialCommunityIcons name="calendar-multiselect" size={24} color={theme.accent} />
-                                                </View>
-                                                <View style={{ flex: 1, marginLeft: 15 }}>
-                                                    <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit>{y.year}</Text>
-                                                    <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{y.months.length} Months Active</Text>
-                                                </View>
-                                                <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
-                                                    <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                                                        <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{y.total.toLocaleString()} 🎖️</Text>
-                                                        <Text style={[styles.historyStatus, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>YEAR TOTAL</Text>
+                                        <View key={`year-group-${yIdx}`} style={{ marginBottom: 16 }}>
+                                            <TouchableOpacity activeOpacity={0.85} onPress={() => setExpandedYear(isYearExpanded ? null : y.year)}>
+                                                <GlowCard
+                                                    colors={(isYearExpanded ? [theme.accent, yColor, theme.secondary] : [yColor, theme.accent + 'AA', yColor + '55']) as any}
+                                                    radius={26}
+                                                    style={{ marginBottom: isYearExpanded ? 14 : 0 }}
+                                                >
+                                                    <View style={styles.yearCard}>
+                                                        <LinearGradient colors={[yColor + (isYearExpanded ? '30' : '14'), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                                        <LinearGradient colors={[yColor, theme.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.yearIconBox}>
+                                                            <LinearGradient colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']} style={styles.matrixIconGloss} pointerEvents="none" />
+                                                            <MaterialCommunityIcons name="calendar-multiselect" size={24} color="#FFF" />
+                                                        </LinearGradient>
+                                                        <View style={{ flex: 1, marginLeft: 15 }}>
+                                                            <Text style={styles.yearTitle} numberOfLines={1} adjustsFontSizeToFit>{y.year}</Text>
+                                                            <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{y.months.length} Months Active</Text>
+                                                        </View>
+                                                        <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
+                                                            <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
+                                                                <Text style={[styles.historyAmount, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{y.total.toLocaleString()} 🎖️</Text>
+                                                                <Text style={[styles.historyStatus, { color: '#10B981' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>YEAR TOTAL</Text>
+                                                            </View>
+                                                            <Ionicons name={isYearExpanded ? "chevron-up" : "chevron-down"} size={20} color={theme.accentText} style={{marginLeft: 5}} />
+                                                        </View>
                                                     </View>
-                                                    <Ionicons name={isYearExpanded ? "chevron-up" : "chevron-down"} size={20} color={theme.accent} style={{marginLeft: 5}} />
-                                                </View>
+                                                </GlowCard>
                                             </TouchableOpacity>
 
                                             {isYearExpanded && (
-                                                <View style={{ paddingLeft: 15, paddingRight: 0 }}>
+                                                <View style={styles.timelineWrap}>
+                                                    <View style={[styles.timelineLine, { backgroundColor: yColor + '55' }]} />
                                                     {y.months.map((m, mIdx) => {
                                                         const monthUniqueKey = `${y.year}-${m.month}`;
                                                         const isMonthExpanded = expandedMonth === monthUniqueKey;
+                                                        const mColor = MONTH_COLORS[(mIdx + yIdx) % MONTH_COLORS.length];
 
                                                         return (
                                                             <View key={`month-group-${mIdx}`} style={{ marginBottom: 10 }}>
-                                                                <TouchableOpacity 
-                                                                    style={[
-                                                                        styles.historyCard, borderType2, 
-                                                                        { 
-                                                                            borderColor: isMonthExpanded ? theme.accent : theme.secondary, 
-                                                                            backgroundColor: isMonthExpanded ? theme.secondary + '15' : 'rgba(15, 23, 42, 0.45)',
-                                                                            marginBottom: isMonthExpanded ? 10 : 0,
-                                                                            padding: 12
-                                                                        }
-                                                                    ]}
-                                                                    activeOpacity={0.8}
-                                                                    onPress={() => setExpandedMonth(isMonthExpanded ? null : monthUniqueKey)}
-                                                                >
-                                                                    <View style={[styles.historyIconBox, { backgroundColor: theme.secondary + '30', borderColor: theme.secondary + '50', width: 40, height: 40 }]}>
-                                                                        <MaterialCommunityIcons name="calendar-month" size={20} color={theme.accent} />
-                                                                    </View>
-                                                                    <View style={{ flex: 1, marginLeft: 15 }}>
-                                                                        <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit>{m.month} {y.year}</Text>
-                                                                        <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{m.logs.length} Transactions</Text>
-                                                                    </View>
-                                                                    <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
-                                                                        <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
-                                                                            <Text style={[styles.historyAmount, { color: '#10B981', fontSize: 14 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{m.total.toLocaleString()} 🎖️</Text>
+                                                                <View style={[styles.timelineDot, { backgroundColor: isMonthExpanded ? theme.accent : mColor, shadowColor: mColor }]} />
+                                                                <TouchableOpacity activeOpacity={0.85} onPress={() => setExpandedMonth(isMonthExpanded ? null : monthUniqueKey)}>
+                                                                    <GlowCard
+                                                                        colors={(isMonthExpanded ? [theme.accent, mColor] : [mColor + 'AA', mColor + '33']) as any}
+                                                                        radius={22}
+                                                                        style={{ marginBottom: isMonthExpanded ? 10 : 0 }}
+                                                                    >
+                                                                        <View style={styles.monthCard}>
+                                                                            <LinearGradient colors={[mColor + (isMonthExpanded ? '30' : '14'), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                                                            <LinearGradient colors={[mColor, mColor + '99']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.monthIconBox}>
+                                                                                <MaterialCommunityIcons name="calendar-month" size={18} color="#FFF" />
+                                                                            </LinearGradient>
+                                                                            <View style={{ flex: 1, marginLeft: 14 }}>
+                                                                                <Text style={styles.historyTitle} numberOfLines={1} adjustsFontSizeToFit>{m.month} {y.year}</Text>
+                                                                                <Text style={styles.historyDate} numberOfLines={1} adjustsFontSizeToFit>{m.logs.length} Transactions</Text>
+                                                                            </View>
+                                                                            <View style={{ alignItems: 'flex-end', flexDirection: 'row', gap: 10, flexShrink: 1 }}>
+                                                                                <View style={{ alignItems: 'flex-end', flexShrink: 1 }}>
+                                                                                    <Text style={[styles.historyAmount, { color: '#10B981', fontSize: 14 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{m.total.toLocaleString()} 🎖️</Text>
+                                                                                </View>
+                                                                                <Ionicons name={isMonthExpanded ? "chevron-up" : "chevron-down"} size={18} color={lighten(mColor, 0.45)} style={{marginLeft: 5}} />
+                                                                            </View>
                                                                         </View>
-                                                                        <Ionicons name={isMonthExpanded ? "chevron-up" : "chevron-down"} size={18} color={theme.accent} style={{marginLeft: 5}} />
-                                                                    </View>
+                                                                    </GlowCard>
                                                                 </TouchableOpacity>
 
                                                                 {isMonthExpanded && (
-                                                                    <View style={{ paddingLeft: 10, paddingRight: 5 }}>
+                                                                    <View style={{ paddingLeft: 6, paddingRight: 2 }}>
                                                                         {m.logs.map((log, logIdx) => renderExpertHistoryItem(log, logIdx))}
                                                                     </View>
                                                                 )}
@@ -1051,7 +1949,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     );
                                 }) : (
                                     <View style={styles.emptyBox}>
-                                        <MaterialCommunityIcons name="calendar-blank" size={48} color="rgba(255,255,255,0.2)" />
+                                        <MaterialCommunityIcons name="calendar-blank" size={48} color="rgba(255,255,255,0.3)" />
                                         <Text style={styles.emptyText}>No monthly earnings recorded yet.</Text>
                                     </View>
                                 )}
@@ -1060,27 +1958,47 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                         {mainTab === 'LEADERBOARD' && (
                             <View style={{ marginTop: 10 }}>
-                                <View style={{ alignItems: 'center', marginBottom: 25 }}>
-                                    <Text style={[styles.totalTalkLabel, { color: theme.primary, marginBottom: 5 }]}>GLOBAL TOP PERFORMERS (LIFETIME)</Text>
-                                    <Text style={{color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: -0.5}}>LEADERBOARD</Text>
+                                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                                    <View>
+                                        <FloatBox amp={6} dur={1600}>
+                                            <Img3D uri={IMG.trophy} size={64} fallback="trophy" color={theme.accent} />
+                                        </FloatBox>
+                                        <RoyalSparkle x={-14} y={6} size={12} color={theme.accent} delay={0} />
+                                        <RoyalSparkle x={62} y={0} size={10} color={theme.primary} delay={500} />
+                                        <RoyalSparkle x={58} y={48} size={11} color={theme.secondary} delay={1000} />
+                                    </View>
+                                    <Text style={[styles.totalTalkLabel, { color: theme.accentText, marginBottom: 5, marginTop: 8 }]}>GLOBAL TOP PERFORMERS (LIFETIME)</Text>
+                                    <Text style={{color: theme.light, fontSize: 24, fontWeight: '900', letterSpacing: -0.5, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 }}}>LEADERBOARD</Text>
                                 </View>
                                 
                                 {isLeaderboardLoading ? (
                                     <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                                        <ActivityIndicator size="large" color={theme.primary} />
-                                        <Text style={{ color: theme.primary, marginTop: 15, fontSize: 10, fontWeight: '900', letterSpacing: 2 }}>SYNCING RANKS...</Text>
+                                        <ActivityIndicator size="large" color={theme.accent} />
+                                        <Text style={{ color: theme.accentText, marginTop: 15, fontSize: 11, fontWeight: '900', letterSpacing: 2 }}>SYNCING RANKS...</Text>
+                                    </View>
+                                ) : leaderboardData.length >= 3 ? (
+                                    <View>
+                                        {/* 🏆 PODIUM (top 3) */}
+                                        <View style={styles.podiumRow}>
+                                            <PodiumCol user={leaderboardData[1]} pos={1} isMe={leaderboardData[1].id === auth.currentUser?.uid} theme={theme} delay={150} />
+                                            <PodiumCol user={leaderboardData[0]} pos={0} isMe={leaderboardData[0].id === auth.currentUser?.uid} theme={theme} delay={0} />
+                                            <PodiumCol user={leaderboardData[2]} pos={2} isMe={leaderboardData[2].id === auth.currentUser?.uid} theme={theme} delay={300} />
+                                        </View>
+                                        <View style={{ marginTop: 22 }}>
+                                            {leaderboardData.slice(3).map((user, i) => renderLeaderboardItem(user, i + 3))}
+                                        </View>
                                     </View>
                                 ) : leaderboardData.length > 0 ? (
                                     leaderboardData.map((user, index) => renderLeaderboardItem(user, index))
                                 ) : (
                                     <View style={styles.emptyBox}>
-                                        <MaterialCommunityIcons name="trophy-broken" size={48} color="rgba(255,255,255,0.2)" />
+                                        <MaterialCommunityIcons name="trophy-broken" size={48} color="rgba(255,255,255,0.3)" />
                                         <Text style={styles.emptyText}>No rankings available yet.</Text>
                                     </View>
                                 )}
                             </View>
                         )}
-                    </View>
+                    </Animated.View>
                 </Animated.View>
             </ScrollView>
 
@@ -1111,7 +2029,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 disabled={isBlocking}
                             >
                                 <Text style={styles.reasonText}>{reason}</Text>
-                                <Ionicons name="chevron-forward" size={16} color={theme.primary} />
+                                <Ionicons name="chevron-forward" size={16} color={lighten(theme.primary, 0.4)} />
                             </TouchableOpacity>
                         ))}
 
@@ -1133,133 +2051,271 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     );
 }
 
-const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionicons" }: any) => (
-    <View style={[styles.matrixCardWrapper, borderStyle]}>
-        <BlurView intensity={15} tint="dark" style={styles.matrixCard}>
-            <View style={[styles.matrixIconCircle, { backgroundColor: color + '15' }]}>
-                {iconFamily === 'Ionicons' ? (
-                    <Ionicons name={icon} size={22} color={color} />
-                ) : (
-                    <MaterialCommunityIcons name={icon} size={22} color={color} />
-                )}
-            </View>
-            <View style={{alignItems: 'center', width: '100%', paddingHorizontal: 5, flexShrink: 1}}>
-                <Text style={styles.matrixValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>{value}</Text>
-                <Text style={styles.matrixLabel} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
-            </View>
-            <View style={[styles.bottomGlowLine, { backgroundColor: color }]} />
-        </BlurView>
-    </View>
-);
-
 const styles = StyleSheet.create({
     container: { flex: 1, padding: 20 },
-    loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: '#020617' },
-    loaderText: { marginTop: 15, fontSize: 11, fontWeight: '900', letterSpacing: 3 },
+    loaderContainer: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: '#05030F' },
+    loaderText: { marginTop: 15, fontSize: 12, fontWeight: '900', letterSpacing: 3 },
+    loaderPulseBox: { width: 90, height: 90, justifyContent: 'center', alignItems: 'center' },
+    loaderPulseRing: { position: 'absolute', width: 80, height: 80, borderRadius: 40, borderWidth: 2 },
     
     shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15 },
 
-    subHeading: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 3, marginBottom: 15, marginTop: 40, textTransform: 'uppercase' },
-    eliteHeroWrapper: { width: '100%', marginTop: 10 },
-    eliteHeroCard: { borderRadius: 40, padding: 25, overflow: 'hidden', elevation: 20 },
+    // section titles
+    sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 34, marginBottom: 16 },
+    sectionIcon: { width: 26, height: 26, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+    sectionText: { color: '#E9D8FF', fontSize: 12, fontWeight: '900', letterSpacing: 2.5, textTransform: 'uppercase' },
+    sectionLine: { flex: 1, height: 1.5, borderRadius: 1 },
+    sectionDiamond: { width: 7, height: 7, transform: [{ rotate: '45deg' }], shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+
+    // hero
+    eliteHeroWrapper: { width: '100%', marginTop: 10, borderRadius: 40, backgroundColor: '#0A0620', elevation: 22, shadowOpacity: 0.5, shadowRadius: 26, shadowOffset: { width: 0, height: 10 } },
+    heroFrame: { borderRadius: 40, overflow: 'hidden', padding: 2.5, backgroundColor: '#0A0620' },
+    heroFrameSpin: { position: 'absolute', top: '50%', left: '50%', width: 900, height: 900, marginLeft: -450, marginTop: -450 },
+    eliteHeroCard: { borderRadius: 37.5, padding: 22, overflow: 'hidden' },
     cyberCircle: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.03)' },
     cyberCircleSmall: { position: 'absolute', bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.05)' },
-    heroHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 35 },
+    heroSheen: { position: 'absolute', top: 0, left: 0, right: 0, height: 90 },
+    heroSweep: { position: 'absolute', top: -60, bottom: -60, width: 90 },
+    heroHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
     systemStatusBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    pulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', marginRight: 8 },
-    systemStatusText: { color: '#10B981', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+    pulseDotWrap: { width: 14, height: 14, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+    pulseDotRing: { position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
+    pulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+    systemStatusText: { color: '#10B981', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
     statusTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
-    statusTagText: { fontSize: 9, fontWeight: '900', letterSpacing: 1 },
-    revenueDisplay: { marginBottom: 35 },
-    revenueTitle: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '800', letterSpacing: 2 },
-    revenueNumberContainer: { flexDirection: 'row', alignItems: 'baseline', marginTop: 8, flexWrap: 'nowrap' },
+    statusTagText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+
+    // royal identity
+    identityRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, backgroundColor: 'rgba(0,0,0,0.28)', padding: 10, borderRadius: 22, borderWidth: 1, borderColor: 'rgba(245,200,76,0.25)' },
+    identityRing: { width: 54, height: 54, borderRadius: 27, padding: 2.5, justifyContent: 'center', alignItems: 'center' },
+    identityAvatar: { width: '100%', height: '100%', borderRadius: 25, backgroundColor: '#0F172A' },
+    identityCrown: { position: 'absolute', top: -11, alignSelf: 'center', left: 19 },
+    identityName: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+    identityStatusRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+    identityStatusText: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
+
+    heroMainRow: { flexDirection: 'row', alignItems: 'center' },
+    revenueTitle: { color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '800', letterSpacing: 2 },
+    revenueNumberContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'nowrap' },
     revenueSymbol: { fontSize: 24, fontWeight: '800', marginRight: 5 },
-    revenueMainValue: { color: '#FFF', fontSize: 52, fontWeight: '900', letterSpacing: -1, flexShrink: 1 },
-    revenueMainUnit: { fontSize: 14, fontWeight: '800', marginLeft: 10 },
-    heroSummaryGrid: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.2)', padding: 18, borderRadius: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    summaryItem: { flex: 1, overflow: 'hidden' }, 
-    summaryLabel: { color: 'rgba(255,255,255,0.3)', fontSize: 7, fontWeight: '900', marginBottom: 4 },
-    summaryValue: { color: '#FFF', fontSize: 13, fontWeight: '800' },
-    vLine: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 15 },
-    matrixGrid: { gap: 15 },
-    matrixRow: { flexDirection: 'row', gap: 15 },
-    matrixCardWrapper: { flex: 1, borderRadius: 30, overflow: 'hidden' },
-    matrixCard: { padding: 22, alignItems: 'center', width: '100%' },
-    matrixIconCircle: { width: 50, height: 50, borderRadius: 18, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
-    matrixValue: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: -0.5, textAlign: 'center' },
-    matrixLabel: { color: '#64748B', fontSize: 10, fontWeight: '800', marginTop: 4, textAlign: 'center' },
-    bottomGlowLine: { position: 'absolute', bottom: 0, width: '40%', height: 3, borderRadius: 2 },
+    // 🆕 Glow (radius 16) remove -> chinna dark shadow (radius 2) so letters sharp-a theriyum
+    revenueMainValue: { color: '#FFE9A8', fontSize: 40, fontWeight: '900', letterSpacing: -1, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 } },
+    revenueMainUnit: { fontSize: 14, fontWeight: '900', letterSpacing: 3, marginTop: 2 },
+    heroTrophyBox: { width: 104, height: 110, justifyContent: 'center', alignItems: 'center' },
+    heroTrophyGlow: { position: 'absolute', width: 80, height: 80, borderRadius: 40 },
+    levelBarWrap: { marginTop: 18 },
+    levelBarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+    levelBarLabel: { color: 'rgba(255,255,255,0.82)', fontSize: 11, fontWeight: '900', letterSpacing: 1.8 },
+    levelBarTrack: { height: 14, borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+    levelBarFillWrap: { height: '100%', borderRadius: 7, overflow: 'hidden' },
+    heroSummaryGrid: { flexDirection: 'row', gap: 10, marginTop: 18 },
+    summaryChip: { flex: 1, minWidth: 0, padding: 12, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(0,0,0,0.25)' },
+    summaryTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 },
+    summaryLabel: { flex: 1, color: 'rgba(255,255,255,0.72)', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8 },
+    summaryValue: { color: '#FFF', fontSize: 14, fontWeight: '800', lineHeight: 19 },
+
+    // 🆕 key user diamond row
+    summaryDiamondRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 5 },
+    summaryDiamondEmoji: { fontSize: 13 },
+    summaryDiamondText: { flexShrink: 1, fontSize: 15, fontWeight: '900', letterSpacing: 0.3 },
+
+    // 🆕 level bar v2 + summary chip icon
+    summaryIconBubble: { width: 20, height: 20, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
+    levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+    levelChipText: { color: '#FFF', fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+    levelPctBox: { alignItems: 'flex-end' },
+    levelPctBig: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5, lineHeight: 30, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } },
+    levelPctSub: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+    levelBarCap: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, backgroundColor: 'rgba(255,255,255,0.85)' },
+    levelBarFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 7 },
+    levelBarFooterText: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 },
+
+    // tabs
+    tabsRow: { flexDirection: 'row', marginHorizontal: 0, marginTop: 22, marginBottom: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 22, padding: 5, borderWidth: 1, borderColor: 'rgba(245,200,76,0.18)' },
+    tabPill: { position: 'absolute', top: 5, left: 5, bottom: 5, borderRadius: 17, borderWidth: 1.2, overflow: 'hidden', shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+    tabPillGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 18 },
+    tabBtn: { flex: 1, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, 
+    tabText: { color: '#CBD5E1', fontSize: 11, fontWeight: '900', letterSpacing: 1, flexShrink: 1 },
+    tabTextActive: { color: '#FFE9A8' },
+    menuBox: { paddingHorizontal: 0, marginTop: 0 },
+
+    // matrix tiles
+    matrixGrid: { gap: 14 },
+    matrixRow: { flexDirection: 'row', gap: 14 },
+    matrixCard: { padding: 18, alignItems: 'flex-start', width: '100%', overflow: 'hidden' },
+    matrixWatermark: { position: 'absolute', right: -14, bottom: -16 },
+    matrixIconCircle: { width: 42, height: 42, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginBottom: 14, overflow: 'hidden' },
+    matrixIconGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 18 },
+    matrixValue: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5, maxWidth: '100%' },
+    matrixLabel: { color: '#CBD5E1', fontSize: 12, fontWeight: '800', marginTop: 4, maxWidth: '100%' },
+    bottomGlowLine: { position: 'absolute', bottom: 0, left: 18, width: '34%', height: 3, borderRadius: 2 },
+
+    // distribution
+    distCard: { padding: 20 },
+    distHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 },
+    distHeaderLabel: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+    distHeaderValue: { color: '#FFE9A8', fontSize: 18, fontWeight: '900', maxWidth: '60%' },
+    distBar: { height: 16, borderRadius: 8, overflow: 'hidden', flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    distLegend: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 18, rowGap: 14 },
+    distLegendItem: { width: '50%', flexDirection: 'row', alignItems: 'center', paddingRight: 8 },
+    distDot: { width: 10, height: 10, borderRadius: 5, marginRight: 9, shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+    distLegendLabel: { color: '#E2E8F0', fontSize: 11.5, fontWeight: '800' },
+    distLegendValue: { color: '#FFF', fontSize: 14, fontWeight: '900', marginTop: 2 },
+    distLegendPct: { color: '#CBD5E1', fontSize: 11, fontWeight: '800' },
+
+    // 🆕 reward breakdown v2 (donut + separate boxes)
+    donutRow: { flexDirection: 'row', alignItems: 'center' },
+    donutBox: { width: DONUT_SIZE, height: DONUT_SIZE, justifyContent: 'center', alignItems: 'center' },
+    donutCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+    donutCenterEmoji: { fontSize: 24 },
+    donutCenterLabel: { color: '#CBD5E1', fontSize: 9, fontWeight: '900', letterSpacing: 2, marginTop: 2 },
+    donutInfo: { flex: 1, marginLeft: 16 },
+    donutInfoLabel: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+    donutInfoValue: { fontSize: 24, fontWeight: '900', marginTop: 6, letterSpacing: -0.5 },
+    donutChip: { alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.05)' },
+    donutChipText: { color: '#E2E8F0', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    distGrid: { marginTop: 14, gap: 14 },
+    distRow: { flexDirection: 'row', gap: 14 },
+    // 🆕 fixed height -> 4 box-um exact same size
+    distBox: { padding: 14, height: 178, overflow: 'hidden' },
+    distWatermark: { position: 'absolute', right: -12, bottom: -14 },
+    distBoxTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    distIconBubble: { width: 38, height: 38, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+    distPctPill: { paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, borderWidth: 1 },
+    distPctText: { fontSize: 12, fontWeight: '900' },
+    distBoxLabel: { color: '#E2E8F0', fontSize: 12, fontWeight: '800' },
+    distBoxValue: { color: '#FFF', fontSize: 19, fontWeight: '900', marginTop: 4, letterSpacing: -0.3 },
+    distMiniTrack: { height: 6, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.09)', overflow: 'hidden', marginTop: 12 },
+    // 🆕 reserved slot for TOP SOURCE tag
+    topTagSlot: { height: 22, marginTop: 8, justifyContent: 'center' },
+    topTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 },
+    topTagText: { color: '#0B1026', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
     
-    dailyFlowContainer: { marginTop: 15, marginBottom: 5 },
-    holoFlowCardWrapper: { borderRadius: 30, overflow: 'hidden' },
-    dailyFlowPill: { flexDirection: 'row', alignItems: 'center', padding: 20, borderWidth: 1, position: 'relative' },
-    flowIconGlow: { position: 'absolute', top: 20, left: 20, width: 50, height: 50, borderRadius: 25, opacity: 0.3 },
-    flowIconBox: { width: 56, height: 56, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 1, zIndex: 2 },
-    flowTextContainer: { flex: 1, paddingLeft: 18, justifyContent: 'center' },
-    flowLabel: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
+    // lifetime gift
+    dailyFlowContainer: { marginTop: 16, marginBottom: 0 },
+    dailyFlowPill: { flexDirection: 'row', alignItems: 'center', padding: 16, position: 'relative' },
+    flowImgBox: { width: 70, height: 70, justifyContent: 'center', alignItems: 'center' },
+    flowIconGlow: { position: 'absolute', width: 50, height: 50, borderRadius: 25, opacity: 0.35 },
+    flowTextContainer: { flex: 1, paddingLeft: 6, justifyContent: 'center' },
+    flowLabel: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 0.5 },
     flowValueNode: { position: 'relative', flexShrink: 1, maxWidth: '40%' },
     flowValueGlow: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, borderRadius: 20, opacity: 0.5 },
-    flowValueBox: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, zIndex: 2 },
-    flowValText: { fontSize: 18, fontWeight: '900', letterSpacing: -0.5, flexShrink: 1 },
+    flowValueBox: { paddingHorizontal: 14, paddingVertical: 11, borderRadius: 20, flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, zIndex: 2 },
+    flowValText: { fontSize: 17, fontWeight: '900', letterSpacing: -0.5, flexShrink: 1 },
     flowBeanSymbol: { fontSize: 16, fontWeight: '900' },
     
-    massChallengeCard: { borderRadius: 35, padding: 25, elevation: 15 },
-    massChallengeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+    // mission
+    massChallengeCard: { padding: 22 },
+    massChallengeHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 },
     massHeaderLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    missionIconRing: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 2, backgroundColor: 'rgba(0,0,0,0.3)' },
-    missionTextGroup: { marginLeft: 15, flex: 1 },
+    missionImgBox: { width: 54, height: 54, justifyContent: 'center', alignItems: 'center' },
+    missionTextGroup: { marginLeft: 10, flex: 1 },
     missionMainTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
-    missionSubText: { color: '#64748B', fontSize: 11, fontWeight: '700', marginTop: 3 },
+    missionSubText: { color: '#CBD5E1', fontSize: 12, fontWeight: '700', marginTop: 3 },
     bountyBox: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, maxWidth: '35%' },
-    bountyLabel: { color: '#FFF', fontSize: 8, fontWeight: '900', letterSpacing: 1.5, marginBottom: 2, opacity: 0.8 },
-    bountyValue: { fontSize: 14, fontWeight: '900', flexShrink: 1 },
+    bountyLabel: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 2, opacity: 0.9 },
+    bountyValue: { fontSize: 15, fontWeight: '900', flexShrink: 1 },
     
-    holoTabContainer: { flexDirection: 'row', gap: 10, marginBottom: 30, backgroundColor: 'rgba(0,0,0,0.2)', padding: 6, borderRadius: 20 },
+    holoTabContainer: { flexDirection: 'row', gap: 10, marginBottom: 20, backgroundColor: 'rgba(0,0,0,0.2)', padding: 6, borderRadius: 20 },
     holoTab: { flex: 1, paddingVertical: 12, borderRadius: 15, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'transparent', position: 'relative', overflow: 'hidden' },
     holoTabGlow: { position: 'absolute', bottom: 0, width: '50%', height: 2, borderRadius: 2, elevation: 5, shadowOpacity: 1, shadowRadius: 5 },
-    holoTabText: { color: '#475569', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+    holoTabText: { color: '#94A3B8', fontSize: 12, fontWeight: '900', letterSpacing: 1 },
     
-    quantumProgressContainer: { backgroundColor: 'rgba(0,0,0,0.25)', padding: 20, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.03)' },
-    quantumProgressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: 12 },
-    quantumProgressLabel: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 2 },
-    quantumProgressPct: { fontSize: 18, fontWeight: '900' },
-    quantumTrack: { width: '100%', height: 8, backgroundColor: '#020617', borderRadius: 4, overflow: 'hidden', marginBottom: 12 },
-    quantumFill: { height: '100%', borderRadius: 4, elevation: 10, shadowOpacity: 0.8, shadowRadius: 10, shadowOffset: { width: 0, height: 0 } },
-    quantumFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-    quantumCollected: { color: '#FFF', fontSize: 12, fontWeight: '800' },
-    quantumRemaining: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 0.5 },
+    quantumProgressContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+    missionRingBox: { width: MISSION_RING, height: MISSION_RING, justifyContent: 'center', alignItems: 'center' },
+    missionRingCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
+    missionRingSub: { color: '#CBD5E1', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginTop: 1 },
+    quantumProgressLabel: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 2, marginBottom: 6 },
+    quantumProgressPct: { fontSize: 22, fontWeight: '900' },
+    quantumCollected: { color: '#FFF', fontSize: 15, fontWeight: '900' },
+    // 🆕 remaining chip: full width, number + label (text cut aagaathu)
+    remainChip: { marginTop: 10, alignSelf: 'stretch', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.04)' },
+    remainValue: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.3 },
+    remainLabel: { color: '#CBD5E1', fontSize: 9.5, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
+    quantumRemaining: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
 
-    insightPremiumCard: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30 },
-    insightIconRing: { width: 58, height: 58, borderRadius: 29, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
-    insightTopTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
-    insightDescription: { color: '#94A3B8', fontSize: 13, marginTop: 5, lineHeight: 20 },
+    // vip insight
+    insightPremiumCard: { padding: 18 },
+    insightTopRow: { flexDirection: 'row', alignItems: 'center' },
+    insightImgBox: { width: 66, height: 66, justifyContent: 'center', alignItems: 'center' },
+    insightGlow: { position: 'absolute', width: 46, height: 46, borderRadius: 23, opacity: 0.3 },
+    insightTopTitle: { fontSize: 11, fontWeight: '900', letterSpacing: 2 },
+    insightDescription: { color: '#E2E8F0', fontSize: 13, marginTop: 5, lineHeight: 20 },
+    // 🆕 longest session partner
+    insightPartnerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, padding: 10, borderRadius: 20, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
+    insightPartnerRing: { width: 50, height: 50, borderRadius: 25, padding: 2.5, justifyContent: 'center', alignItems: 'center' },
+    insightPartnerImg: { width: '100%', height: '100%', borderRadius: 23, backgroundColor: '#0F172A' },
+    insightPartnerLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+    insightPartnerName: { color: '#FFF', fontSize: 15, fontWeight: '900', marginTop: 3 },
+    insightPartnerPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+    insightPartnerPillText: { fontSize: 13, fontWeight: '900' },
 
-    menuBox: { paddingHorizontal: 0, marginTop: 10 },
-    tabsRow: { flexDirection: 'row', marginHorizontal: 0, marginTop: 10, marginBottom: 15, backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 15, padding: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', justifyContent: 'space-between' },
-    tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 12, borderWidth: 1, borderColor: 'transparent', overflow: 'hidden' }, 
-    tabBtnActive: { backgroundColor: 'rgba(255,255,255,0.1)' },
-    tabText: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-    tabTextActive: { color: '#FFF' },
-    
-    historyCard: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(15, 23, 42, 0.45)', padding: 15, borderRadius: 16, marginBottom: 10, borderWidth: 1, borderColor: '#1E293B' },
-    historyIconBox: { width: 45, height: 45, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    // monthly
+    lifetimeHeader: { alignItems: 'center', marginBottom: 25, marginTop: 10 },
+    yearCard: { flexDirection: 'row', alignItems: 'center', padding: 16 },
+    yearIconBox: { width: 50, height: 50, borderRadius: 18, justifyContent: 'center', alignItems: 'center', overflow: 'hidden' },
+    yearTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
+    timelineWrap: { paddingLeft: 22, position: 'relative' },
+    timelineLine: { position: 'absolute', left: 6, top: 0, bottom: 0, width: 2, borderRadius: 1 },
+    timelineDot: { position: 'absolute', left: -20, top: 24, width: 12, height: 12, borderRadius: 6, borderWidth: 2, borderColor: '#05030F', shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 5, zIndex: 3 },
+    monthCard: { flexDirection: 'row', alignItems: 'center', padding: 12 },
+    monthIconBox: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    logCard: { flexDirection: 'row', alignItems: 'center', padding: 13, paddingLeft: 16, borderRadius: 18, marginBottom: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(15, 10, 40, 0.55)', overflow: 'hidden' },
+    logAccent: { position: 'absolute', left: 0, top: 10, bottom: 10, width: 3.5, borderTopRightRadius: 3, borderBottomRightRadius: 3 },
+    logIconBox: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    logAmountPill: { alignItems: 'flex-end', justifyContent: 'center', backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)', maxWidth: '38%' },
+    logAmountText: { fontSize: 13, fontWeight: '900' },
     historyTitle: { color: '#FFF', fontSize: 14, fontWeight: 'bold', marginBottom: 4, letterSpacing: 0.5, lineHeight: 20 },
-    historyDate: { color: '#64748B', fontSize: 10, fontWeight: '700', letterSpacing: 0.5 },
+    historyDate: { color: '#CBD5E1', fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5 },
     historyAmount: { fontSize: 16, fontWeight: '900', marginBottom: 4 },
-    historyStatus: { fontSize: 9, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
-    emptyBox: { alignItems: 'center', marginTop: 20, marginBottom: 20, opacity: 0.7 },
-    emptyText: { color: '#64748B', marginTop: 10, fontSize: 12, fontWeight: '700', letterSpacing: 1 },
-    talktimeHighlight: { alignItems: 'center' },
-    totalTalkLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
+    historyStatus: { fontSize: 11, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
+    emptyBox: { alignItems: 'center', marginTop: 20, marginBottom: 20, opacity: 0.9 },
+    emptyText: { color: '#CBD5E1', marginTop: 10, fontSize: 13, fontWeight: '700', letterSpacing: 1 },
+    totalTalkLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
+
+    // podium
+    podiumRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8, paddingTop: 8 },
+    podiumRankBadge: { backgroundColor: '#000', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, marginBottom: 4 },
+    podiumRankText: { fontSize: 11, fontWeight: '900' },
+    podiumMeDot: { position: 'absolute', top: 0, right: 0, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#05030F' },
+    podiumName: { color: '#FFF', fontSize: 12, fontWeight: '900', marginTop: 8, maxWidth: '96%', textAlign: 'center' },
+    podiumLvl: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, marginTop: 4, marginBottom: 8 },
+    podiumBlock: { width: '100%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderBottomWidth: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingHorizontal: 4 },
+    podiumGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 30 },
+    podiumBigNum: { fontSize: 38, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.4)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 2 } },
+    podiumRewardPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 9, marginTop: 4, maxWidth: '96%' },
+    podiumRewardText: { color: '#FFF', fontSize: 12, fontWeight: '900', flexShrink: 1 },
+
+    // 🆕 RANK 4+ unique cards
+    rankCardInner: { flexDirection: 'row', alignItems: 'center', padding: 12, minHeight: 84 },
+    rankWatermark: { position: 'absolute', right: 6, bottom: -14, fontSize: 84, fontWeight: '900', opacity: 0.07 },
+    rankNumBox: { width: 42, height: 42, borderRadius: 14, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', flexShrink: 0 },
+    rankNumGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 18 },
+    rankNumText: { color: '#FFF', fontSize: 17, fontWeight: '900', textAlign: 'center', includeFontPadding: false, textShadowColor: 'rgba(0,0,0,0.45)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 }, maxWidth: 34 },
+    rankAvatarWrap: { marginLeft: 12, flexShrink: 0 },
+    rankAvatarRing: { width: 54, height: 54, borderRadius: 27, padding: 2.5, justifyContent: 'center', alignItems: 'center' },
+    rankAvatarImg: { width: '100%', height: '100%', borderRadius: 25, backgroundColor: '#0F172A' },
+    rankMeDot: { position: 'absolute', top: -1, right: -1, width: 14, height: 14, borderRadius: 7, borderWidth: 2, borderColor: '#05030F' },
+    rankInfo: { flex: 1, minWidth: 0, marginLeft: 12, marginRight: 8, justifyContent: 'center' },
+    rankName: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 0.4 },
+    rankLvlRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
+    rankLvlChip: { paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, marginRight: 6 },
+    rankLvlChipText: { fontSize: 11, fontWeight: '900' },
+    rankLvlLabel: { color: '#E2E8F0', fontSize: 11.5, fontWeight: '800', flexShrink: 1 },
+    rankTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.09)', overflow: 'hidden', marginTop: 8 },
+    rankRewardCol: { alignItems: 'flex-end', flexShrink: 0, maxWidth: '34%' },
+    rankRewardLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
+    rankRewardPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)', maxWidth: '100%' },
+    rankRewardText: { color: '#10B981', fontSize: 14, fontWeight: '900', flexShrink: 1 },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
     modalContainer: { backgroundColor: '#0F172A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0 },
     modalIconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
     modalTitle: { color: '#EF4444', fontSize: 20, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
-    modalSubText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
-    modalLabel: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
+    modalSubText: { color: '#E2E8F0', fontSize: 13, fontWeight: '600', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
+    modalLabel: { color: '#CBD5E1', fontSize: 11, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
     reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1 },
     reasonText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
     cancelBtn: { marginTop: 15, padding: 16, alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
-    cancelBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '900', letterSpacing: 1 }
+    cancelBtnText: { color: '#E2E8F0', fontSize: 13, fontWeight: '900', letterSpacing: 1 }
 });

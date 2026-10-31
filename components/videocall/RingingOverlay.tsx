@@ -1,13 +1,16 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { doc, onSnapshot } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import Svg, { Circle, Defs, Stop, LinearGradient as SvgGradient } from 'react-native-svg';
 import { db } from '../../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+const GOLD = '#FFD66B';
 
 // 🔥 THE UNIVERSAL TIER ENGINE (LOCKED PROTOCOL)
 const calculateTier = (diamonds: number) => {
@@ -47,6 +50,25 @@ export default function RingingOverlay({
     
     const [profileData, setProfileData] = useState<any>(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
+    const rippleAnim = useRef(new Animated.Value(0)).current;
+    const enterAnim = useRef(new Animated.Value(0)).current;
+
+    // 🎬 Animations: gentle pulse + one expanding ripple + a single entrance glide
+    useEffect(() => {
+        const pulse = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        );
+        const ripple = Animated.loop(
+            Animated.timing(rippleAnim, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true })
+        );
+        pulse.start();
+        ripple.start();
+        Animated.timing(enterAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+        return () => { pulse.stop(); ripple.stop(); };
+    }, []);
 
     useEffect(() => {
         // 🔥 REAL-TIME INSTANT FETCH PROTOCOL
@@ -60,13 +82,6 @@ export default function RingingOverlay({
                 setProfileData(data);
             }
         });
-
-        Animated.loop(
-            Animated.sequence([
-                Animated.timing(pulseAnim, { toValue: 1.08, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-                Animated.timing(pulseAnim, { toValue: 1, duration: 1000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
-            ])
-        ).start();
 
         return () => unsub();
     }, [callerId, expertId]);
@@ -85,7 +100,7 @@ export default function RingingOverlay({
     const isConsultant = role === 'expert' || role === 'host';
 
     const displayAvatarName = isConsultant ? callerDisplayName : expertName;
-    const displayLabel = isConsultant ? `INCOMING ${tier.label}` : "ESTABLISHING UPLINK...";
+    const displayLabel = isConsultant ? `Incoming ${tier.label}` : "Establishing uplink...";
     const displayName = isConsultant ? callerDisplayName : expertName;
     
     // ✅ IMAGE SOURCE PRIORITY: Force Cloudinary -> Google -> Avatar
@@ -94,21 +109,46 @@ export default function RingingOverlay({
         ? { uri: finalImageSource } 
         : { uri: `https://ui-avatars.com/api/?name=${displayAvatarName}&background=0F172A&color=${tier.color.replace('#','')}&size=256&bold=true` };
 
+    const rippleScale = rippleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1.55] });
+    const rippleOpacity = rippleAnim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.45, 0] });
+
     return (
         <View style={styles.ringingOverlay}>
             <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
+            <View style={styles.darkTint} pointerEvents="none" />
             
-            {/* Background Tier Aura Magic */}
-            <View style={[styles.glowAura, { backgroundColor: tier.color, opacity: 0.15 }]} />
+            {/* Background Tier Aura Magic: two overlapping glows (tier colour + gold) */}
+            <View style={[styles.glowAura, { backgroundColor: tier.color, opacity: 0.16, top: height * 0.14 }]} />
+            <View style={[styles.glowAura, { backgroundColor: GOLD, opacity: 0.07, width: width * 0.55, height: width * 0.55, borderRadius: width * 0.275, top: height * 0.3, right: -width * 0.1 }]} />
 
-            <View style={styles.callerInfo}>
+            <Animated.View
+                style={[
+                    styles.callerInfo,
+                    { opacity: enterAnim, transform: [{ translateY: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [24, 0] }) }] },
+                ]}
+            >
                 <Animated.View style={[styles.roundTimerContainer, { transform: [{ scale: pulseAnim }] }]}>
+                    {/* Ripple: one ring that expands and fades, like a call signal */}
+                    <Animated.View
+                        style={[
+                            styles.ripple,
+                            { borderColor: tier.color, opacity: rippleOpacity, transform: [{ scale: rippleScale }] },
+                        ]}
+                    />
+
                     <Svg width={centerPoint * 2} height={centerPoint * 2} style={styles.absSvg}>
+                        <Defs>
+                            {/* Countdown ring blends tier colour into gold */}
+                            <SvgGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <Stop offset="0%" stopColor={tier.color} />
+                                <Stop offset="100%" stopColor={GOLD} />
+                            </SvgGradient>
+                        </Defs>
                         <Circle 
                             cx={centerPoint} 
                             cy={centerPoint} 
                             r={radius} 
-                            stroke="rgba(255,255,255,0.05)" 
+                            stroke="rgba(255,255,255,0.07)" 
                             strokeWidth={stroke} 
                             fill="transparent" 
                         />
@@ -116,7 +156,7 @@ export default function RingingOverlay({
                             cx={centerPoint} 
                             cy={centerPoint} 
                             r={radius} 
-                            stroke={tier.color} 
+                            stroke="url(#ringGrad)" 
                             strokeWidth={stroke} 
                             fill="transparent" 
                             strokeDasharray={circumference} 
@@ -127,7 +167,7 @@ export default function RingingOverlay({
                             strokeLinecap="round" 
                         />
                     </Svg>
-                    <View style={[styles.avatarWrapper, { borderColor: tier.color }]}>
+                    <View style={[styles.avatarWrapper, { borderColor: tier.color, shadowColor: tier.color }]}>
                         {/* ✅ STRICT OBJECT USAGE FOR IMAGE */}
                         <Image 
                             source={profilePicObj} 
@@ -138,32 +178,43 @@ export default function RingingOverlay({
                 </Animated.View>
 
                 <View style={styles.textGroup}>
-                    <View style={[styles.tierBadge, { borderColor: tier.color + '60' }]}>
-                         <MaterialCommunityIcons name="shield-check" size={12} color={tier.color} />
+                    <View style={[styles.tierBadge, { borderColor: tier.color + '70', backgroundColor: tier.color + '1A' }]}>
+                         <MaterialCommunityIcons name="shield-check" size={14} color={tier.color} />
                          <Text style={[styles.incomingLabel, { color: tier.color }]}>{displayLabel}</Text>
                     </View>
-                    <Text style={styles.callerName}>{displayName.toUpperCase()}</Text>
+                    <Text style={styles.callerName} numberOfLines={1}>{displayName}</Text>
                     <Text style={styles.subStatusText}>TalkPe Secure Connectivity Node</Text>
                 </View>
-            </View>
+            </Animated.View>
 
             <View style={styles.ringingActions}>
                 {/* Reject Button */}
-                <TouchableOpacity 
-                    activeOpacity={0.8}
-                    style={[styles.ringBtn, styles.rejectBtn]} 
-                    onPress={isConsultant ? onRejectCall : () => handleCallEnd(false, 'cancelled')}
-                >
-                    <Ionicons name="close" size={42} color="#FFF" />
-                    <Text style={styles.actionLabel}>DECLINE</Text>
-                </TouchableOpacity>
+                <View style={styles.actionItem}>
+                    <TouchableOpacity 
+                        activeOpacity={0.8}
+                        style={[styles.ringBtn, styles.rejectBtn]} 
+                        onPress={isConsultant ? onRejectCall : () => handleCallEnd(false, 'cancelled')}
+                    >
+                        <Ionicons name="close" size={38} color="#FFF" />
+                    </TouchableOpacity>
+                    <Text style={styles.actionLabel}>Decline</Text>
+                </View>
                 
                 {/* Accept Button (Only for Host) */}
                 {isConsultant && (
-                    <TouchableOpacity activeOpacity={0.8} style={[styles.ringBtn, styles.acceptBtn, { backgroundColor: tier.color }]} onPress={onAcceptCall}>
-                        <Ionicons name="videocam" size={38} color="#FFF" />
-                        <Text style={styles.actionLabel}>ACCEPT</Text>
-                    </TouchableOpacity>
+                    <View style={styles.actionItem}>
+                        <TouchableOpacity activeOpacity={0.8} onPress={onAcceptCall} style={[styles.acceptShadow, { shadowColor: tier.color }]}>
+                            <LinearGradient
+                                colors={[tier.color, tier.color + 'B0']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={[styles.ringBtn, styles.acceptBtn]}
+                            >
+                                <Ionicons name="videocam" size={36} color="#FFF" />
+                            </LinearGradient>
+                        </TouchableOpacity>
+                        <Text style={styles.actionLabel}>Accept</Text>
+                    </View>
                 )}
             </View>
         </View>
@@ -177,6 +228,10 @@ const styles = StyleSheet.create({
         justifyContent: 'center', 
         alignItems: 'center',
         backgroundColor: 'rgba(0,0,0,0.4)'
+    },
+    darkTint: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(4, 7, 18, 0.55)',
     },
     glowAura: {
         position: 'absolute',
@@ -192,6 +247,13 @@ const styles = StyleSheet.create({
         alignItems: 'center', 
         position: 'relative' 
     },
+    ripple: {
+        position: 'absolute',
+        width: 200,
+        height: 200,
+        borderRadius: 100,
+        borderWidth: 2,
+    },
     absSvg: { 
         position: 'absolute', 
         transform: [{ rotate: '-90deg' }] 
@@ -200,12 +262,13 @@ const styles = StyleSheet.create({
         width: 155,
         height: 155,
         borderRadius: 77.5,
-        borderWidth: 4,
+        borderWidth: 3,
         padding: 3,
         backgroundColor: '#000',
         elevation: 20,
-        shadowOpacity: 0.5,
-        shadowRadius: 15,
+        shadowOpacity: 0.7,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 0 },
         overflow: 'hidden'
     },
     callerAvatar: { 
@@ -215,69 +278,80 @@ const styles = StyleSheet.create({
     },
     callerInfo: { 
         alignItems: 'center', 
-        marginBottom: 80 
+        marginBottom: 70 
     },
     textGroup: {
         alignItems: 'center',
-        marginTop: 40
+        marginTop: 38,
+        paddingHorizontal: 24,
     },
     tierBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        paddingHorizontal: 16,
-        paddingVertical: 6,
+        gap: 7,
+        paddingHorizontal: 15,
+        paddingVertical: 7,
         borderRadius: 20,
         borderWidth: 1,
-        backgroundColor: 'rgba(0,0,0,0.4)'
     },
     incomingLabel: { 
-        fontSize: 10, 
-        fontWeight: '900', 
-        textTransform: 'uppercase', 
-        letterSpacing: 3 
+        fontSize: 12, 
+        fontWeight: '800', 
+        letterSpacing: 0.6 
     },
     callerName: { 
         color: '#FFF', 
-        fontSize: 38, 
-        fontWeight: '900', 
-        marginTop: 15,
-        letterSpacing: -1
+        fontSize: 34, 
+        fontWeight: '800', 
+        marginTop: 16,
+        letterSpacing: -0.5,
+        textAlign: 'center',
     },
     subStatusText: {
-        color: '#64748B',
-        fontSize: 12,
-        fontWeight: '700',
+        color: 'rgba(148,163,184,0.85)',
+        fontSize: 12.5,
+        fontWeight: '600',
         marginTop: 8,
-        letterSpacing: 1
+        letterSpacing: 0.4
     },
     ringingActions: { 
         flexDirection: 'row', 
-        gap: 50 
+        alignItems: 'flex-start',
+        gap: 56 
+    },
+    actionItem: {
+        alignItems: 'center',
     },
     ringBtn: { 
-        width: 85, 
-        height: 85, 
-        borderRadius: 25, 
+        width: 78, 
+        height: 78, 
+        borderRadius: 39, 
         justifyContent: 'center', 
         alignItems: 'center', 
-        elevation: 15,
-        borderWidth: 2,
-        borderColor: 'rgba(255,255,255,0.1)'
+        borderWidth: 1.5,
+        borderColor: 'rgba(255,255,255,0.22)'
     },
     actionLabel: {
-        position: 'absolute',
-        bottom: -25,
-        color: '#FFF',
-        fontSize: 10,
-        fontWeight: '900',
-        letterSpacing: 2
+        marginTop: 10,
+        color: 'rgba(255,255,255,0.9)',
+        fontSize: 13,
+        fontWeight: '700',
+        letterSpacing: 0.3
+    },
+    acceptShadow: {
+        borderRadius: 39,
+        shadowOpacity: 0.85,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 0 },
+        elevation: 16,
     },
     acceptBtn: { 
-        shadowColor: '#22C55E' 
+        width: 78,
+        height: 78,
     },
     rejectBtn: { 
         backgroundColor: '#EF4444',
-        shadowColor: '#EF4444'
+        shadowColor: '#EF4444',
+        elevation: 12,
     }
 });
