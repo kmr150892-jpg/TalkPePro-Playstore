@@ -7,6 +7,7 @@ import {
     addDoc,
     arrayUnion,
     collection,
+    deleteDoc,
     doc,
     getDoc,
     increment,
@@ -15,6 +16,7 @@ import {
     orderBy,
     query,
     serverTimestamp,
+    setDoc,
     updateDoc,
     where // 🔥 SATTI FIX: ADDED MISSING IMPORT 🔥
 } from 'firebase/firestore';
@@ -166,6 +168,41 @@ export default function PartyRoomScreen() {
 
     useEffect(() => { userDataRef.current = userData; }, [userData]);
     useEffect(() => { mySeatIndexRef.current = mySeatIndex; }, [mySeatIndex]);
+
+    const [isWaiting, setIsWaiting] = useState(false);
+
+    // Waiting list entry watch + room-ai vittu pona entry delete
+    useEffect(() => {
+        const myUid = auth.currentUser?.uid;
+        if (!roomId || !myUid || isHost) return;
+        const wRef = doc(db, "forum_rooms", roomId, "waitingList", myUid);
+        const unsubWait = onSnapshot(wRef, (snap) => setIsWaiting(snap.exists()));
+        return () => { unsubWait(); deleteDoc(wRef).catch(() => {}); };
+    }, [roomId, isHost]);
+
+    const requestSeat = async () => {
+        const myUid = auth.currentUser?.uid;
+        if (!myUid || isWaiting) return;
+        try {
+            const actualName = userData?.name || userData?.displayName || auth.currentUser?.displayName || "User";
+            const actualImage = userData?.profilePic || userData?.photoURL || auth.currentUser?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(actualName)}&background=0F172A&color=00F2FE`;
+            await setDoc(doc(db, "forum_rooms", roomId, "waitingList", myUid), {
+                uid: myUid,
+                name: actualName,
+                image: actualImage,
+                lvl: calculateUserLevel(userData?.totalSpentDiamonds || 0).lvl,
+                requestedAt: serverTimestamp()
+            });
+            Alert.alert("Request Sent ⏳", "Host unga request-a paakkuraar. Select pannina seat-la utkaruveenga.");
+        } catch (e) { console.log(e); }
+    };
+
+    const cancelSeatRequest = async () => {
+        const myUid = auth.currentUser?.uid;
+        if (!myUid) return;
+        try { await deleteDoc(doc(db, "forum_rooms", roomId, "waitingList", myUid)); } catch (e) { console.log(e); }
+    };
+
     useEffect(() => { roomDataRef.current = roomData; }, [roomData]);
 
     const requestMicrophonePermission = async () => {
@@ -506,6 +543,17 @@ export default function PartyRoomScreen() {
             return;
         }
         if (seat.uid || mySeatIndex !== null) return;
+        if (!isHost) {
+            if (isWaiting) {
+                Alert.alert("Waiting... ⏳", "Host approval-ku wait pannitu irukkeenga. Request cancel pannanuma?", [
+                    { text: "Keep Waiting", style: "cancel" },
+                    { text: "Cancel Request", style: "destructive", onPress: cancelSeatRequest }
+                ]);
+            } else {
+                requestSeat();
+            }
+            return;
+        }
         try {
             const updatedSeats = [...roomData.seats];
             const actualName = userData?.name || userData?.displayName || user?.displayName || "VIP User";
@@ -815,7 +863,7 @@ export default function PartyRoomScreen() {
                                         {seat.uid && <View style={styles.seatStatusDot} />}
                                         {seat.uid && seat.isMuted && <View style={styles.muteOverlay}><Ionicons name="mic-off" size={14} color="#FFF" /></View>}
                                     </View>
-                                    <Text style={[styles.seatName, seat.uid === user?.uid && { color: '#10B981', fontWeight: '900' }]} numberOfLines={1}>{seat.uid ? seat.name : `Seat ${index + 1}`}</Text>
+                                    <Text style={[styles.seatName, seat.uid === user?.uid && { color: '#10B981', fontWeight: '900' }]} numberOfLines={1}>{seat.uid ? seat.name : (isWaiting && !isHost ? 'Waiting...' : `Seat ${index + 1}`)}</Text>
                                 </TouchableOpacity>
                             ))}
                         </View>

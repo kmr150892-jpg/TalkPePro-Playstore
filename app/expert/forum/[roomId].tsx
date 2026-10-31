@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 // 🔥 FIXED: Added getDocs and limit to the import statement
-import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 // 🔥 NEW: RTDB IMPORT FOR PRESENCE SYSTEM 🔥
 import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database';
 import React, { useEffect, useRef, useState } from 'react';
@@ -73,6 +73,18 @@ export default function ExpertForumRoomScreen() {
     const agoraEngine = useRef<IRtcEngine | null>(null);
     const [isMuted, setIsMuted] = useState(false);
     const [isAgoraJoined, setIsAgoraJoined] = useState(false);
+
+    const [waitingList, setWaitingList] = useState<any[]>([]);
+    const [waitingModalVisible, setWaitingModalVisible] = useState(false);
+
+    useEffect(() => {
+        if (!roomId) return;
+        const wq = query(collection(db, "forum_rooms", roomId, "waitingList"), orderBy("requestedAt", "asc"));
+        const unsubWaiting = onSnapshot(wq, (snap) => {
+            setWaitingList(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        });
+        return () => unsubWaiting();
+    }, [roomId]);
 
     const [currentGift, setCurrentGift] = useState<any>(null);
     const giftAnimY = useRef(new Animated.Value(50)).current; 
@@ -620,6 +632,36 @@ export default function ExpertForumRoomScreen() {
         } catch (e) { console.log(e); }
     };
 
+    const getWaitText = (ts: any) => {
+        const ms = ts?.toMillis ? Date.now() - ts.toMillis() : 0;
+        const m = Math.floor(ms / 60000);
+        return m < 1 ? 'just now' : `${m} min`;
+    };
+
+    const assignWaitingUser = async (w: any) => {
+        if (!roomData?.seats) return;
+        // already seat-la irundha entry mattum delete
+        if (roomData.seats.some((s: any) => s.uid === w.id)) {
+            await deleteDoc(doc(db, "forum_rooms", roomId, "waitingList", w.id));
+            return;
+        }
+        const emptyIdx = roomData.seats.findIndex((s: any) => !s.uid);
+        if (emptyIdx === -1) {
+            Alert.alert("Seats Full", "Empty seat illa. Mudhalla oru seat free pannunga.");
+            return;
+        }
+        try {
+            const updatedSeats = [...roomData.seats];
+            updatedSeats[emptyIdx] = { uid: w.id, name: w.name || 'User', image: w.image || '', isMuted: false };
+            await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
+            await deleteDoc(doc(db, "forum_rooms", roomId, "waitingList", w.id));
+        } catch (e) { console.log(e); }
+    };
+
+    const removeWaitingUser = async (uid: string) => {
+        try { await deleteDoc(doc(db, "forum_rooms", roomId, "waitingList", uid)); } catch (e) { console.log(e); }
+    };
+
     const handleSeatClick = async (index: number) => {
         if (!roomData) return;
         const seat = roomData.seats[index];
@@ -856,6 +898,49 @@ export default function ExpertForumRoomScreen() {
                                 <TouchableOpacity style={styles.actionBtnSmall} onPress={toggleMic}>
                                     <Ionicons name={isMuted ? "mic-off" : "mic"} size={22} color={isMuted ? "#EF4444" : "#4F46E5"} />
                                 </TouchableOpacity>
+
+                                <TouchableOpacity style={styles.actionBtnSmall} onPress={() => setWaitingModalVisible(true)}>
+                                    <Ionicons name="hourglass-outline" size={22} color="#F59E0B" />
+                                    {waitingList.length > 0 && (
+                                        <View style={{ position: 'absolute', top: -4, right: -4, minWidth: 16, height: 16, borderRadius: 8, backgroundColor: '#EF4444', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 3 }}>
+                                            <Text style={{ color: '#FFF', fontSize: 9, fontWeight: '900' }}>{waitingList.length}</Text>
+                                        </View>
+                                    )}
+                                </TouchableOpacity>
+
+                                <Modal visible={waitingModalVisible} transparent animationType="slide" onRequestClose={() => setWaitingModalVisible(false)}>
+                                    <View style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' }}>
+                                        <View style={{ maxHeight: height * 0.6, backgroundColor: '#0F172A', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 20 }}>
+                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 }}>
+                                                <Text style={{ color: '#FFF', fontSize: 16, fontWeight: '900' }}>⏳ Waiting List ({waitingList.length})</Text>
+                                                <TouchableOpacity onPress={() => setWaitingModalVisible(false)}>
+                                                    <Ionicons name="close" size={22} color="#FFF" />
+                                                </TouchableOpacity>
+                                            </View>
+                                            {waitingList.length === 0 ? (
+                                                <Text style={{ color: '#94A3B8', textAlign: 'center', paddingVertical: 30 }}>Yarum waiting-la illa</Text>
+                                            ) : (
+                                                <ScrollView>
+                                                    {waitingList.map((w: any) => (
+                                                        <View key={w.id} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 14 }}>
+                                                            <Image source={{ uri: w.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(w.name || 'U')}` }} style={{ width: 44, height: 44, borderRadius: 22 }} />
+                                                            <View style={{ flex: 1, marginLeft: 10 }}>
+                                                                <Text style={{ color: '#FFF', fontWeight: '800' }} numberOfLines={1}>{w.name || 'User'}</Text>
+                                                                <Text style={{ color: '#94A3B8', fontSize: 11 }}>Level {w.lvl || 1} • {getWaitText(w.requestedAt)}</Text>
+                                                            </View>
+                                                            <TouchableOpacity onPress={() => assignWaitingUser(w)} style={{ backgroundColor: '#10B981', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 10, marginRight: 8 }}>
+                                                                <Text style={{ color: '#020617', fontWeight: '900', fontSize: 11 }}>SEAT</Text>
+                                                            </TouchableOpacity>
+                                                            <TouchableOpacity onPress={() => removeWaitingUser(w.id)} style={{ backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 10 }}>
+                                                                <Text style={{ color: '#EF4444', fontWeight: '900', fontSize: 11 }}>REMOVE</Text>
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    ))}
+                                                </ScrollView>
+                                            )}
+                                        </View>
+                                    </View>
+                                </Modal>
                                 
                                 {/* 🔥 NEW: TRIGGER DISCLAIMER FOR REFLEX ARENA INSTEAD OF DIRECT LAUNCH 🔥 */}
                                 <TouchableOpacity style={[styles.gameLaunchButton, { backgroundColor: 'rgb(0, 0, 0)', borderColor: 'rgb(0, 229, 255)', borderWidth: 1 }]} onPress={() => { setPendingGameType('reflex'); setDisclaimerVisible(true); }}>
