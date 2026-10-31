@@ -872,11 +872,7 @@ export default function UserLiveViewScreen() {
     };
 
     // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
-    const userDiamonds = Math.max(
-        userData?.totalDiamonds || 0,
-        userData?.walletBalance || 0,
-        userData?.balance || 0
-    );
+    const userDiamonds = userData?.totalSpentDiamonds || 0;
     const userTier = calculateUserLevel(userDiamonds);
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
 

@@ -67,11 +67,7 @@ export default function LegalScreen() {
     }, [user]);
 
     // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
-    const userDiamonds = Math.max(
-        userData?.totalDiamonds || 0,
-        userData?.walletBalance || 0,
-        userData?.balance || 0
-    );
+    const userDiamonds = userData?.totalSpentDiamonds || 0;
     const userTier = calculateUserLevel(userDiamonds);
 
     // Reusable Content Block for cleaner code

@@ -122,11 +122,7 @@ export default function MessageList() {
   }, [user]);
 
   // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display in Messages!
-  const userDiamonds = Math.max(
-      userData?.totalDiamonds || 0,
-      userData?.walletBalance || 0,
-      userData?.balance || 0
-  );
+  const userDiamonds = userData?.totalSpentDiamonds || 0;
   const userTier = calculateUserLevel(userDiamonds);
 
   const handleChatPress = (chatId: string, expertId: string, name: string) => {

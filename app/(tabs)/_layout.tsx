@@ -43,11 +43,7 @@ export default function TabLayout() {
   const pulseAnim = useRef(new Animated.Value(1)).current;
 
   // 🔥 SATTI FIX: Synced Highest Balance check for accurate Tab Theme display!
-  const userDiamonds = Math.max(
-      userData?.totalDiamonds || 0,
-      userData?.walletBalance || 0,
-      userData?.balance || 0
-  );
+  const userDiamonds = userData?.totalSpentDiamonds || 0;
   const config = calculateUserLevel(userDiamonds);
   
   // Syncing your custom tier engine to the button theme

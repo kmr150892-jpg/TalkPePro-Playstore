@@ -302,11 +302,7 @@ export default function UserPassbookDetail() {
   if (!userData && !loading) return <View style={styles.loader}><Text style={{color: '#FFF'}}>Account record not found in secure vault.</Text></View>;
 
   // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
-  const userDiamonds = Math.max(
-      userData?.totalDiamonds || 0,
-      userData?.walletBalance || 0,
-      userData?.balance || 0
-  );
+  const userDiamonds = userData?.totalSpentDiamonds || 0;
   const rank = calculateUserLevel(userDiamonds);
   const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=1E293B&color=fff&bold=true`;
 

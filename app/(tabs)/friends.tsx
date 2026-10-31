@@ -159,11 +159,7 @@ export default function FriendsList() {
 
 
   // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
-  const userDiamonds = Math.max(
-      userData?.totalDiamonds || 0,
-      userData?.walletBalance || 0,
-      userData?.balance || 0
-  );
+  const userDiamonds = userData?.totalSpentDiamonds || 0;
   const userTier = calculateUserLevel(userDiamonds);
 
   const handleChatPress = (expertId: string, expertName: string) => {

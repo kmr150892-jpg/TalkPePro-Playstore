@@ -129,11 +129,7 @@ export default function EditProfileScreen() {
           setUserRole(data.role || 'user'); 
           
           // 🔥 SATTI FIX INTEGRATED: Synced Highest Balance check for accurate Level display!
-          const userDiamonds = Math.max(
-              data.totalDiamonds || 0,
-              data.walletBalance || 0,
-              data.balance || 0
-          );
+          const userDiamonds = data.totalSpentDiamonds || 0;
           setTotalSpent(userDiamonds); 
 
           setGender(data.gender || '');

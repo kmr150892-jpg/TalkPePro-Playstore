@@ -249,11 +249,7 @@ export default function UserHome() {
 
 
     // 🔥 SATTI FIX: Fetching the Maximum of DIAMOND/RECHARGE fields only for accurate Home Screen Level
-    const userDiamonds = Math.max(
-        userData?.totalDiamonds || 0,
-        userData?.walletBalance || 0,
-        userData?.balance || 0
-    );
+    const userDiamonds = userData?.totalSpentDiamonds || 0;
 
     const userRank = calculateUserLevel(userDiamonds);
 

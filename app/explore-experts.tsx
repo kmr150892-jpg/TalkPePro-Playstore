@@ -172,7 +172,7 @@ export default function SwipeDiscoverScreen() {
                     const data = userSnap.data();
                     setUserRealPic(data.profilePic || data.photoURL || null);
                     setUserName(data.name || user.displayName || "User");
-                    setTier(calculateUserLevel(data.totalSpent || 0));
+                    setTier(calculateUserLevel(data.totalSpentDiamonds || 0));
                     
                     // 🔥 GHOST FILTER: Save user's block list to Ref
                     myBlockedUsersRef.current = data.blockedUsers || [];

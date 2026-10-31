@@ -176,11 +176,7 @@ export default function UserDetail() {
     if (loading) return <View style={styles.loader}><ActivityIndicator size="large" color="#6366F1" /></View>;
 
     // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
-    const userDiamonds = Math.max(
-        targetUser?.totalDiamonds || 0,
-        targetUser?.walletBalance || 0,
-        targetUser?.balance || 0
-    );
+    const userDiamonds = targetUser?.totalSpentDiamonds || 0;
     const userRank = calculateUserLevel(userDiamonds);
     const gender = targetUser?.gender || 'N/A';
 

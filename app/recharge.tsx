@@ -224,11 +224,7 @@ export default function RechargeScreen() {
     // 🆕 UPDATE 3: LEVEL FIX
     // Munnaadi: balance / walletBalance use panninom -> diamonds kharchu aanaa level kammi aagum.
     // Ippo: lifetime-la mattum athigam aagura totalSpentDiamonds (+ totalDiamonds) use panrom -> level kammi aagaadhu.
-    const userDiamonds = Math.max(
-        totalSpentDiamonds,
-        userData?.totalSpentDiamonds || 0,
-        userData?.totalDiamonds || 0
-    );
+    const userDiamonds = Math.max(totalSpentDiamonds, userData?.totalSpentDiamonds || 0);
     const userTier = calculateUserLevel(userDiamonds);
     
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
