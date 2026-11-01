@@ -4,7 +4,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { deleteUser } from 'firebase/auth';
-import { arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { arrayRemove, arrayUnion, collection, deleteDoc, deleteField, doc, onSnapshot, query, runTransaction, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -41,6 +41,146 @@ const UPLOAD_PRESET = "talkpe";
 const DEFAULT_COVER = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?q=80&w=2000&auto=format&fit=crop';
 const WALLET_BG = 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1200&auto=format&fit=crop';
 const BIO_BG = 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=1200&auto=format&fit=crop';
+
+// 🆕 3D IMAGES (icons8 3D Fluency) - load aagalana automatic-a icon fallback varum
+const IMG = {
+  crown: 'https://img.icons8.com/3d-fluency/512/crown.png',
+  money: 'https://img.icons8.com/3d-fluency/512/money-bag.png',
+  star: 'https://img.icons8.com/3d-fluency/512/star.png',
+};
+const MGOLD = '#F5C84C';
+const GENDER_ICONS: Record<string, string> = { Male: 'gender-male', Female: 'gender-female', Other: 'gender-non-binary' };
+
+// 🆕 color helpers
+const hexToRgb = (hex: string) => {
+  const h = (hex || '').replace('#', '');
+  if (h.length !== 6) return null;
+  return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+};
+const blend = (c1: string, c2: string, t: number) => {
+  const a = hexToRgb(c1);
+  const b = hexToRgb(c2);
+  if (!a || !b) return c1;
+  const mix = (x: number, y: number) => Math.round(x * (1 - t) + y * t).toString(16).padStart(2, '0');
+  return `#${mix(a.r, b.r)}${mix(a.g, b.g)}${mix(a.b, b.b)}`;
+};
+const lighten = (hex: string, t: number) => blend(hex, '#FFFFFF', t);
+
+// 🔥 NEW FIX: LEVEL-UP DUPLICATE GUARD (same rule as the notifications screen)
+// same level-up notification (same id / same title+message) is counted only ONCE on the bell badge
+const levelDedupKey = (n: any): string | null => {
+  if (n?.id && String(n.id).startsWith('level_up')) return String(n.id);
+  const title = String(n?.title || '');
+  if (n?.type !== 'call' && /level/i.test(title)) return `lvl|${title}|${n?.message || ''}`;
+  return null;
+};
+const dedupeLevelLogs = (list: any[]) => {
+  const seen = new Set<string>();
+  return list.filter((n: any) => {
+    const k = levelDedupKey(n);
+    if (!k) return true;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
+
+// 🔥 NEW FIX: "fixed ID" per level - the FIRST caller for a level wins (atomic transaction), everyone else gets false.
+// So one level = one level-up notification, even if this screen is mounted twice / the level flips many times / 2 devices.
+// (LEGACY helper - ippo level-up notification-ku niche irukkura notifyLevelUpAtomic use aagum. Idhu safe-ku appadiye irukku.)
+const claimLevelNotification = async (uid: string, lvl: number): Promise<boolean> => {
+  try {
+    const userRef = doc(db, "users", uid);
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(userRef);
+      const done: number[] = snap.exists() && Array.isArray(snap.data().levelNotified) ? snap.data().levelNotified : [];
+      if (done.includes(lvl)) return false;
+      tx.update(userRef, { levelNotified: arrayUnion(lvl) });
+      return true;
+    });
+  } catch (e) {
+    return false;
+  }
+};
+
+// 🔥 NEW FIX: level number calculated DIRECTLY from beans (DB-la irukkura currentLevel stale-ah irundhaalum idhu correct-ah irukkum)
+// (same thresholds as LevelInsights screen)
+const getLevelFromBeans = (beans: number): number => {
+  if (beans >= 100000000) return 10;
+  if (beans >= 50000000) return 9;
+  if (beans >= 30000000) return 8;
+  if (beans >= 10000000) return 7;
+  if (beans >= 5000000)  return 6;
+  if (beans >= 3000000)  return 5;
+  if (beans >= 1000000)  return 4;
+  if (beans >= 300000)   return 3;
+  if (beans >= 100000)   return 2;
+  if (beans >= 30000)    return 1;
+  return 0;
+};
+
+// 🔥 NEW FIX: ATOMIC LEVEL-UP NOTIFICATION
+// "levelNotified" mark + notification add - rendum ore Firestore transaction-la nadakkum.
+// So: notification anuppama level "claimed" aagi lost aagaadhu, and oru level-ku oru notification mattum varum.
+//  - 'sent'   : pudhu level-up -> notification add aagiduchu
+//  - 'seeded' : pazhaya user (first time) -> already notification irukku / L0 -> silent-ah mark mattum pannom
+//  - 'none'   : already notify pannaachu
+//  - 'error'  : transaction fail (console-la error theriyum, adutha snapshot-la thirumba try pannum)
+const notifyLevelUpAtomic = async (
+  uid: string,
+  lvl: number,
+  label: string,
+  rate: number
+): Promise<'sent' | 'seeded' | 'none' | 'error'> => {
+  try {
+    const userRef = doc(db, "users", uid);
+    return await runTransaction(db, async (tx) => {
+      const snap = await tx.get(userRef);
+      if (!snap.exists()) return 'none';
+      const d: any = snap.data();
+      const existing: any[] = Array.isArray(d.notifications) ? d.notifications : [];
+      const done: number[] | null = Array.isArray(d.levelNotified)
+        ? d.levelNotified.map((x: any) => Number(x)).filter((x: number) => !isNaN(x))
+        : null;
+
+      const levelsUpTo = Array.from({ length: lvl + 1 }, (_, i) => i);
+
+      // first time ever for this user -> don't spam: only notify if this level has NO notification yet
+      if (done === null) {
+        const alreadyHas = existing.some((n: any) => String(n?.message || '').includes(label));
+        if (lvl === 0 || alreadyHas) {
+          tx.update(userRef, { levelNotified: levelsUpTo });
+          return 'seeded';
+        }
+      } else {
+        const maxDone = done.length ? Math.max(...done) : -1;
+        if (lvl <= maxDone) return 'none';
+      }
+
+      const maxDoneNow = done && done.length ? Math.max(...done) : -1;
+      const missing: number[] = [];
+      for (let i = maxDoneNow + 1; i <= lvl; i++) missing.push(i);
+
+      const notif = {
+        title: "Level Upgraded! 🚀",
+        message: `Congratulations! You have reached ${label}. Your new call rate is ${rate}.`,
+        type: 'system',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+        read: false,
+        createdAt: Date.now()
+      };
+
+      tx.update(userRef, {
+        levelNotified: done === null ? levelsUpTo : arrayUnion(...missing),
+        notifications: [...existing, notif]
+      });
+      return 'sent';
+    });
+  } catch (e: any) {
+    console.error("❌ Level-up notification error:", e?.message || e);
+    return 'error';
+  }
+};
 
 // ⭕ RANK RING CONFIG
 const RING_SIZE = 116;
@@ -94,6 +234,288 @@ const FloatingDot = ({ delay, left, size, color, duration }: any) => {
         ]
       }}
     />
+  );
+};
+
+// ================= 🆕 MODAL PREMIUM COMPONENTS =================
+
+// 🆕 3D image with auto icon fallback
+const Img3D = ({ uri, size, fallback, color = '#FFF', style }: any) => {
+  const [err, setErr] = useState(false);
+  if (err) return <MaterialCommunityIcons name={fallback} size={size * 0.7} color={color} />;
+  return <Image source={{ uri }} style={[{ width: size, height: size }, style]} resizeMode="contain" onError={() => setErr(true)} />;
+};
+
+// 🆕 Floating (bob + sway) wrapper
+const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          transform: [
+            { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -amp] }) },
+            { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['-4deg', '4deg'] }) }
+          ]
+        }
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+// 🆕 Twinkling sparkle
+const MSparkle = ({ x, y, size = 12, color = MGOLD, delay = 0, dur = 1800 }: any) => {
+  const v = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(delay),
+        Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <Animated.View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        left: x,
+        top: y,
+        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.1, 1] }),
+        transform: [
+          { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.15] }) },
+          { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] }) }
+        ]
+      }}
+    >
+      <MaterialCommunityIcons name="star-four-points" size={size} color={color} />
+    </Animated.View>
+  );
+};
+
+// 🆕 Gradient-border glow card
+const MGlowCard = ({ colors, radius = 26, children, style, innerStyle, glow }: any) => (
+  <View
+    style={[
+      {
+        borderRadius: radius,
+        backgroundColor: '#0A0620',
+        shadowColor: glow || colors[0],
+        shadowOpacity: 0.45,
+        shadowRadius: 18,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 10
+      },
+      style
+    ]}
+  >
+    <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: radius, padding: 1.5 }}>
+      <View style={[{ borderRadius: radius - 1.5, overflow: 'hidden', backgroundColor: 'rgba(10, 6, 28, 0.97)' }, innerStyle]}>{children}</View>
+    </LinearGradient>
+  </View>
+);
+
+// 🆕 Section title (icon + text + fading line + right chip / diamond)
+const MSection = ({ title, icon, color, right }: any) => (
+  <View style={styles.mSectionRow}>
+    <LinearGradient colors={[color, color + '66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mSectionIcon}>
+      <MaterialCommunityIcons name={icon} size={14} color="#0B1026" />
+    </LinearGradient>
+    <Text style={[styles.mSectionText, { color: lighten(color, 0.55) }]}>{title}</Text>
+    <LinearGradient colors={[color + '88', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.mSectionLine} />
+    {right ? right : <View style={[styles.mSectionDiamond, { backgroundColor: color, shadowColor: color }]} />}
+  </View>
+);
+
+// 🆕 Input with focus glow animation
+const MField = ({ icon, color, style, multiline, ...rest }: any) => {
+  const [focused, setFocused] = useState(false);
+  const f = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(f, { toValue: focused ? 1 : 0, duration: 220, useNativeDriver: false }).start();
+  }, [focused]);
+  return (
+    <Animated.View
+      style={[
+        styles.mFieldWrap,
+        multiline && { alignItems: 'flex-start', paddingTop: 12 },
+        {
+          borderColor: f.interpolate({ inputRange: [0, 1], outputRange: [color + '44', color] }),
+          shadowColor: color,
+          shadowOpacity: f.interpolate({ inputRange: [0, 1], outputRange: [0, 0.7] }) as any,
+          shadowRadius: 12,
+          shadowOffset: { width: 0, height: 0 },
+          elevation: focused ? 6 : 0
+        },
+        style
+      ]}
+    >
+      {icon ? (
+        <LinearGradient colors={[color, color + '77']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.mFieldIcon}>
+          <Ionicons name={icon} size={15} color="#FFF" />
+        </LinearGradient>
+      ) : null}
+      <TextInput
+        style={[styles.mFieldInput, { minWidth: 0 }, multiline && { textAlignVertical: 'top', height: '100%' }]}
+        multiline={multiline}
+        onFocus={() => setFocused(true)}
+        onBlur={() => setFocused(false)}
+        {...rest}
+      />
+    </Animated.View>
+  );
+};
+
+// 🆕 Tag chip (press scale + gradient when selected)
+const MChip = ({ label, selected, color, color2, onPress }: any) => {
+  const scale = useRef(new Animated.Value(1)).current;
+  return (
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        activeOpacity={0.85}
+        onPress={onPress}
+        onPressIn={() => Animated.spring(scale, { toValue: 0.93, useNativeDriver: true }).start()}
+        onPressOut={() => Animated.spring(scale, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
+        style={[styles.mChip, { borderColor: selected ? color : 'rgba(255,255,255,0.12)' }, selected && { shadowColor: color, shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 5 }]}
+      >
+        {selected && <LinearGradient colors={[color + 'CC', color2 + 'AA']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+          {selected && <Ionicons name="checkmark-circle" size={13} color="#FFF" />}
+          <Text style={[styles.mChipText, selected && { color: '#FFF', fontWeight: '900' }]}>{label}</Text>
+        </View>
+      </TouchableOpacity>
+    </Animated.View>
+  );
+};
+
+// 🆕 Gradient button with shine sweep
+const MSweepBtn = ({ colors, onPress, disabled, loading, label, icon, shadow }: any) => {
+  const sw = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.delay(1400),
+        Animated.timing(sw, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(sw, { toValue: 0, duration: 0, useNativeDriver: true })
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+  return (
+    <ScaleBtn onPress={onPress} disabled={disabled} style={[styles.mBtnOuter, { shadowColor: shadow || colors[0] }]}>
+      <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.mBtnGrad}>
+        <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']} style={styles.mBtnGloss} pointerEvents="none" />
+        <Animated.View pointerEvents="none" style={[styles.mBtnSweep, { transform: [{ translateX: sw.interpolate({ inputRange: [0, 1], outputRange: [-120, 360] }) }, { rotate: '20deg' }] }]}>
+          <LinearGradient colors={['transparent', 'rgba(255,255,255,0.38)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+        {loading ? <ActivityIndicator color="#FFF" /> : (
+          <>
+            {icon ? <MaterialCommunityIcons name={icon} size={20} color="#FFF" /> : null}
+            <Text style={styles.mBtnText}>{label}</Text>
+          </>
+        )}
+      </LinearGradient>
+    </ScaleBtn>
+  );
+};
+
+// 🆕 Entrance wrapper (spring slide-up + fade)
+const MEnter = ({ children, delay = 0, style }: any) => {
+  const a = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(a, { toValue: 1, delay, friction: 7, tension: 55, useNativeDriver: true }).start();
+  }, []);
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: a,
+          transform: [
+            { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [34, 0] }) },
+            { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] }) }
+          ]
+        }
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+// 🆕 Animated range bar (rate modal)
+const RateBar = ({ pct, color, color2 }: any) => {
+  const w = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(w, { toValue: pct, duration: 450, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [pct]);
+  const wd = w.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) as any;
+  const knobLeft = w.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] }) as any;
+  return (
+    <View style={styles.rateBarWrap}>
+      <View style={styles.rateBarTrack}>
+        <Animated.View style={[styles.rateBarFill, { width: wd }]}>
+          <LinearGradient colors={[color, color2, '#FFFFFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+      </View>
+      <Animated.View style={[styles.rateKnobBox, { left: knobLeft }]}>
+        <View style={[styles.rateKnob, { backgroundColor: color, shadowColor: color }]} />
+      </Animated.View>
+    </View>
+  );
+};
+
+// 🆕🆕 NEW: Sliding-pill TAB BAR for the Update Identity modal (Basics / Skills / Vibes / Story)
+const MTabs = ({ tabs, active, onChange, color, color2 }: any) => {
+  const [w, setW] = useState(0);
+  const pos = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.spring(pos, { toValue: active, friction: 8, tension: 70, useNativeDriver: true }).start();
+  }, [active]);
+  const tabW = w / tabs.length;
+  return (
+    <View style={styles.tabsWrap} onLayout={(e) => setW(e.nativeEvent.layout.width)}>
+      {w > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            styles.tabIndicator,
+            {
+              width: tabW - 8,
+              transform: [{ translateX: pos.interpolate({ inputRange: [0, tabs.length - 1], outputRange: [4, 4 + tabW * (tabs.length - 1)] }) }]
+            }
+          ]}
+        >
+          <LinearGradient colors={[color, color2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+      )}
+      {tabs.map((t: any, i: number) => {
+        const on = i === active;
+        return (
+          <TouchableOpacity key={t.label} activeOpacity={0.8} style={styles.tabItem} onPress={() => onChange(i)}>
+            <MaterialCommunityIcons name={t.icon} size={16} color={on ? '#FFF' : '#64748B'} />
+            <Text style={[styles.tabText, on && { color: '#FFF' }]}>{t.label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
   );
 };
 
@@ -156,6 +578,14 @@ const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytic
     "DIY Crafts ✂️", "Podcasting 🎧", "Astrology ✨", "Pets & Animals 🐾",
     "Foodie & Cafe Hopping 🍕", "Vlogging 📹", "Board Games 🎲"];
 
+// 🆕🆕 NEW: tabs for the Update Identity modal
+const IDENTITY_TABS = [
+  { label: 'BASICS', icon: 'account-edit' },
+  { label: 'SKILLS', icon: 'medal' },
+  { label: 'VIBES', icon: 'heart-multiple' },
+  { label: 'STORY', icon: 'text-account' },
+];
+
 export default function ConsoleHome({ expertData: initialData, isOnline, setIsOnline }: any) {
   const router = useRouter();
   const [user, setUser] = useState(auth.currentUser);
@@ -175,6 +605,9 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
  
   const [editExpertise, setEditExpertise] = useState<string[]>([]);
   const [editHobbies, setEditHobbies] = useState<string[]>([]);
+
+  // 🆕🆕 NEW: active tab inside Update Identity modal
+  const [editTab, setEditTab] = useState(0);
 
   const [uploading, setUploading] = useState(false);
   const [coverUploading, setCoverUploading] = useState(false);
@@ -226,6 +659,11 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const pendingBeans = config.next - totalBeans;
 
   const prevLvlRef = useRef<number | null>(null);
+
+  // 🔥 NEW FIX: level from BEANS (source of truth) + guards for the level-up notification
+  const beansLevel = getLevelFromBeans(Number(totalBeans) || 0);
+  const levelCheckRef = useRef<number>(-1);   // last beans-level that was fully processed
+  const levelBusyRef = useRef(false);         // a level-up transaction is running
 
   useEffect(() => {
     const authUnsub = auth.onAuthStateChanged((u: any) => {
@@ -323,13 +761,15 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         //   (a) its read flag is not true, OR
         //   (b) it was created after the last time the Notifications screen was opened (notifSeenAt).
         // (b) means nothing else in the app (toast bar, background listeners...) can silently hide the count by flipping read:true.
+        // 🔥 FIX: the Notifications screen now saves notifSeenAt every time it is opened, so the badge clears after you look.
         if (data.notifSeenAt === undefined && !seenInitRef.current) {
           seenInitRef.current = true;
           updateDoc(doc(db, "users", user.uid), { notifSeenAt: Date.now() }).catch(() => {});
         }
         if (Array.isArray(data.notifications)) {
           const seenAt = data.notifSeenAt === undefined ? null : (Number(data.notifSeenAt) || 0);
-          const unread = data.notifications.filter((notif: any) => {
+          // 🔥 NEW FIX: duplicate level-up logs are counted only once on the bell
+          const unread = dedupeLevelLogs(data.notifications).filter((notif: any) => {
             const flagUnread = !(notif?.read === true || notif?.isRead === true);
             const newerThanSeen = seenAt !== null && typeof notif?.createdAt === 'number' && notif.createdAt > seenAt;
             return flagUnread || newerThanSeen;
@@ -389,31 +829,59 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               prevLvlRef.current = config.lvl;
           } else if (prevLvlRef.current !== config.lvl) {
               const newMaxRate = config.rate;
+              const newLvl = config.lvl;       // 🔥 NEW FIX: remember which level this run is for
+              const newLabel = config.label;
+              const uid = user.uid;
               setNewRate(String(newMaxRate));
               
-              updateDoc(doc(db, "users", user.uid), {
+              updateDoc(doc(db, "users", uid), {
                   pricePerMin: newMaxRate,
                   beansPerMin: newMaxRate,
                   userPrice: newMaxRate * 2,
                   lastRateUpdate: serverTimestamp()
-              }).then(() => {
-                  Alert.alert(
-                      "Level Updated! 🚀",
-                      `Your rank changed! Your Call Rate has been automatically updated to the new Max Price: ${newMaxRate} Rewards/Min!`
-                  );
-                  // 🔥 AUTO NOTIFICATION WHEN LEVEL UPGRADES 🔥
-                  sendNotificationToUser(
-                      user.uid,
-                      "Level Upgraded! 🚀",
-                      `Congratulations! You have reached ${config.label}. Your new call rate is ${newMaxRate}.`,
-                      "system"
-                  );
               }).catch(()=>{});
+              // 🔥 NEW FIX: level-up Alert + notification ippo kezhe irukkura "beans-level watcher" effect-la nadakkum
+              // (inge irundha DB-level-ah nambi miss aagitu irundhuchi - adhaan notification varama pona reason)
               
               prevLvlRef.current = config.lvl;
           }
       }
   }, [config.lvl, config.rate, expertData, user?.uid]);
+
+  // 🔥🔥 NEW FIX: LEVEL-UP WATCHER (beans-based, atomic, never misses)
+  // - beans-la irundhu level kandupidikkum (DB currentLevel stale-ah irundhaalum work aagum)
+  // - app close-la irundhu level ethiruchaalum / Levels tab-la irundhu vandhaalum, ConsoleHome open aanaa pudhu level notification varum
+  // - oru level-ku oru notification mattum (transaction-la levelNotified mark + notification serndhe save aagum)
+  useEffect(() => {
+      if (!expertData || !user?.uid) return;
+      if (levelBusyRef.current || levelCheckRef.current === beansLevel) return;
+
+      levelBusyRef.current = true;
+      const uid = user.uid;
+      const lvlObj = getLevelConfig({ currentLevel: beansLevel });
+
+      notifyLevelUpAtomic(uid, beansLevel, lvlObj.label, lvlObj.rate)
+        .then((res) => {
+            if (res !== 'error') levelCheckRef.current = beansLevel; // error-na adutha snapshot-la thirumba try pannum
+
+            if (res === 'sent') {
+                // new max rate auto update (same behaviour as before)
+                setNewRate(String(lvlObj.rate));
+                updateDoc(doc(db, "users", uid), {
+                    pricePerMin: lvlObj.rate,
+                    beansPerMin: lvlObj.rate,
+                    userPrice: lvlObj.rate * 2,
+                    lastRateUpdate: serverTimestamp()
+                }).catch(() => {});
+
+                Alert.alert(
+                    "Level Updated! 🚀",
+                    `Your rank changed! Your Call Rate has been automatically updated to the new Max Price: ${lvlObj.rate} Rewards/Min!`
+                );
+            }
+        })
+        .finally(() => { levelBusyRef.current = false; });
+  }, [beansLevel, user?.uid, expertData]);
 
   const handleOpenRateModal = () => {
       if (expertData?.lastRateUpdate) {
@@ -634,11 +1102,17 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     }
   };
 
+  // 🔒 GENDER LOCK: gender already saved aana, athai ini mathha mudiyathu
+  const genderLocked = !!expertData?.gender && String(expertData.gender).trim() !== '';
+
   const handleSaveProfile = async () => {
     if (!user?.uid) return;
     setSaving(true);
     try {
-      await updateDoc(doc(db, "users", user.uid), { name: editName, bio: editBio.trim(), location: editLocation, age: editAge, gender: editGender, expertiseTags: editExpertise, hobbies: editHobbies });
+      const payload: any = { name: editName, bio: editBio.trim(), location: editLocation, age: editAge, expertiseTags: editExpertise, hobbies: editHobbies };
+      // 🔒 gender locked-na save payload-la serkaathu (existing gender appadiye irukkum)
+      if (!genderLocked) payload.gender = editGender;
+      await updateDoc(doc(db, "users", user.uid), payload);
       setModalVisible(false);
     } catch (error) { Alert.alert("Error", "Save failed"); } finally { setSaving(false); }
   };
@@ -746,6 +1220,36 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
         setIsOnline(!status);
     }
   };
+
+  // 🆕 Rate modal derived values (live validation + quick chips + bar %)
+  const liveRate = parseInt(newRate);
+  const rateValid = !isNaN(liveRate) && liveRate >= 300 && liveRate <= config.rate;
+  const ratePct = config.rate > 300
+    ? Math.max(0, Math.min(((isNaN(liveRate) ? 300 : liveRate) - 300) / (config.rate - 300) * 100, 100))
+    : 100;
+  const quickRates = [
+    { label: 'MIN', val: 300 },
+    { label: '25%', val: Math.round(300 + (config.rate - 300) * 0.25) },
+    { label: '50%', val: Math.round(300 + (config.rate - 300) * 0.5) },
+    { label: '75%', val: Math.round(300 + (config.rate - 300) * 0.75) },
+    { label: 'MAX', val: config.rate },
+  ];
+  const rateColor2 = theme.accent;
+
+  // 🆕🆕 NEW: Update Identity derived values (profile strength meter + ID number)
+  const strengthChecks = [
+    !!editName.trim(),
+    !!String(editAge ?? '').trim(),
+    !!editLocation.trim(),
+    !!editGender,
+    editExpertise.length > 0,
+    editHobbies.length > 0,
+    editBio.trim().length >= 20,
+    !!expertData?.profilePic,
+  ];
+  const strengthPct = Math.round((strengthChecks.filter(Boolean).length / strengthChecks.length) * 100);
+  const idNumber = (user?.uid || 'TALKPE').slice(-6).toUpperCase();
+  const strengthLabel = strengthPct >= 100 ? 'LEGENDARY' : strengthPct >= 75 ? 'STRONG' : strengthPct >= 50 ? 'GROWING' : 'RAW';
 
   return (
     <View style={styles.rootContainer}>
@@ -937,7 +1441,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               </View>
 
               <View style={styles.expertActionRow}>
-                  <ScaleBtn onPress={() => setModalVisible(true)} style={{}}>
+                  <ScaleBtn onPress={() => { setEditTab(0); setModalVisible(true); }} style={{}}>
                     <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.editProfileGradient}>
                       <Feather name="edit-3" size={14} color="#FFF" />
                       <Text style={styles.editProfileText}>EDIT PROFILE</Text>
@@ -1159,63 +1663,327 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
 
       </View>
 
-      {/* ⚡ RATE MODAL */}
-      <Modal visible={rateModalVisible} animationType="fade" transparent={true}>
-        <View style={styles.overlay}><View style={[styles.modalBox, { borderWidth: 1, borderColor: theme.primary + '60' }]}>
-            <LinearGradient colors={[theme.primary + '25', 'transparent']} style={styles.modalGlow} pointerEvents="none" />
-            <Text style={styles.modalTitle}>Set Call Rate</Text>
-            <Text style={{color: '#94A3B8', fontSize: 12, marginBottom: 20}}>Rank: <Text style={{color: theme.primary}}>{config.label}</Text>. Max: <Text style={{color: '#FFF'}}>{config.rate}</Text> rewards.</Text>
-           
-            <Text style={styles.inputLabel}>Rewards Per Minute</Text>
-           
-            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 15}}>
-                <TextInput style={[styles.input, {flex: 1, marginBottom: 0}]} value={newRate} onChangeText={setNewRate} keyboardType="numeric" placeholderTextColor="#475569" />
-                <TouchableOpacity
-                    style={{backgroundColor: `${theme.primary}20`, padding: 15, borderRadius: 15, marginLeft: 10, borderWidth: 1, borderColor: theme.primary}}
-                    onPress={() => setNewRate(String(config.rate))}
-                >
-                    <Text style={{color: theme.primary, fontWeight: '900', fontSize: 10, letterSpacing: 1}}>SET MAX</Text>
-                </TouchableOpacity>
-            </View>
+      {/* ⚡ RATE MODAL (🆕 PREMIUM REDESIGN) */}
+      <Modal visible={rateModalVisible} animationType="fade" transparent={true} onRequestClose={() => setRateModalVisible(false)}>
+        <View style={styles.overlay}>
+          <MEnter>
+            <MGlowCard colors={[MGOLD, MGOLD + '22', theme.primary + 'AA']} radius={34} glow={MGOLD}>
+              <View style={styles.mCardPad}>
+                <LinearGradient colors={[MGOLD + '2E', 'transparent', theme.primary + '26']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                <MSparkle x={width * 0.55} y={14} size={12} color={MGOLD} delay={0} />
+                <MSparkle x={22} y={70} size={9} color={theme.primary} delay={700} />
+                <MSparkle x={width * 0.75} y={110} size={10} color="#FFF" delay={1200} />
 
-            <TouchableOpacity style={[styles.saveBtn, {backgroundColor: theme.primary}]} onPress={handleUpdateRate} disabled={saving}>{saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>CONFIRM RATE</Text>}</TouchableOpacity>
-            <TouchableOpacity onPress={() => setRateModalVisible(false)} style={{marginTop: 15, alignItems: 'center'}}><Text style={{color: '#F43F5E'}}>Cancel</Text></TouchableOpacity>
-        </View></View>
+                {/* header */}
+                <View style={styles.rateHeadRow}>
+                  <View style={{ flex: 1, paddingRight: 8 }}>
+                    <Text style={styles.mTitle}>Set Call Rate</Text>
+                    <View style={styles.rateChipRow}>
+                      <View style={[styles.mInfoChip, { backgroundColor: theme.primary + '26', borderColor: theme.primary + '88' }]}>
+                        <MaterialCommunityIcons name="star-circle" size={12} color={lighten(theme.primary, 0.5)} />
+                        <Text style={[styles.mInfoChipText, { color: lighten(theme.primary, 0.5) }]}>{config.label}</Text>
+                      </View>
+                      <View style={[styles.mInfoChip, { backgroundColor: MGOLD + '22', borderColor: MGOLD + '77' }]}>
+                        <MaterialCommunityIcons name="arrow-collapse-up" size={12} color={lighten(MGOLD, 0.4)} />
+                        <Text style={[styles.mInfoChipText, { color: lighten(MGOLD, 0.4) }]}>MAX {config.rate}</Text>
+                      </View>
+                    </View>
+                  </View>
+                  <View style={styles.rateImgBox}>
+                    <View style={[styles.rateImgGlow, { backgroundColor: MGOLD }]} />
+                    <FloatBox amp={6} dur={1600}>
+                      <Img3D uri={IMG.money} size={82} fallback="cash-multiple" color={MGOLD} />
+                    </FloatBox>
+                  </View>
+                </View>
+
+                {/* big live rate display */}
+                <View style={[styles.rateDisplay, { borderColor: rateValid ? MGOLD + '66' : '#EF444488' }]}>
+                  <LinearGradient colors={[(rateValid ? MGOLD : '#EF4444') + '26', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <Text style={styles.rateDisplayLabel}>REWARDS PER MINUTE</Text>
+                  <Text style={[styles.rateDisplayValue, { color: rateValid ? lighten(MGOLD, 0.35) : '#FCA5A5' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>
+                    {isNaN(liveRate) ? '--' : liveRate.toLocaleString()}
+                  </Text>
+                  <View style={styles.rateRupeeRow}>
+                    <MaterialCommunityIcons name="currency-inr" size={14} color="#10B981" />
+                    <Text style={styles.rateRupeeText}>{isNaN(liveRate) ? '--' : (liveRate * 0.01).toFixed(0)} PER MIN</Text>
+                  </View>
+                </View>
+
+                {/* range bar */}
+                <RateBar pct={ratePct} color={MGOLD} color2={rateColor2} />
+                <View style={styles.rateRangeRow}>
+                  <Text style={styles.rateRangeText}>300</Text>
+                  <Text style={styles.rateRangeText}>{config.rate}</Text>
+                </View>
+
+                {/* quick chips */}
+                <View style={styles.quickRow}>
+                  {quickRates.map((q) => {
+                    const active = liveRate === q.val;
+                    return (
+                      <TouchableOpacity
+                        key={q.label}
+                        activeOpacity={0.8}
+                        onPress={() => setNewRate(String(q.val))}
+                        style={[styles.quickChip, active && { backgroundColor: MGOLD + '33', borderColor: MGOLD }]}
+                      >
+                        <Text style={[styles.quickChipText, active && { color: '#FFF' }]}>{q.label}</Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+
+                {/* input + SET MAX */}
+                <Text style={[styles.mLabel, { color: lighten(MGOLD, 0.4) }]}>REWARDS PER MINUTE</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <View style={{ flex: 1 }}>
+                    <MField icon="flame-outline" color={MGOLD} value={newRate} onChangeText={setNewRate} keyboardType="numeric" placeholderTextColor="#64748B" placeholder="e.g. 1000" style={{ marginBottom: 0 }} />
+                  </View>
+                  <TouchableOpacity
+                    activeOpacity={0.8}
+                    style={[styles.setMaxBtn, { borderColor: theme.primary, backgroundColor: `${theme.primary}20` }]}
+                    onPress={() => setNewRate(String(config.rate))}
+                  >
+                    <Text style={[styles.setMaxText, { color: lighten(theme.primary, 0.4) }]}>SET MAX</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {/* validation hint */}
+                <View style={styles.rateHintRow}>
+                  <Ionicons name={rateValid ? 'checkmark-circle' : 'alert-circle'} size={14} color={rateValid ? '#10B981' : '#F87171'} />
+                  <Text style={[styles.rateHintText, { color: rateValid ? '#10B981' : '#F87171' }]}>
+                    {rateValid ? 'Great! This rate is allowed.' : `Allowed range: 300 - ${config.rate}`}
+                  </Text>
+                </View>
+                <View style={styles.rateLockRow}>
+                  <MaterialCommunityIcons name="timer-sand" size={13} color="#94A3B8" />
+                  <Text style={styles.rateLockText}>Rate can be updated once every 30 minutes.</Text>
+                </View>
+
+                <MSweepBtn colors={[MGOLD, theme.primary]} onPress={handleUpdateRate} disabled={saving} loading={saving} label="CONFIRM RATE" icon="check-decagram" shadow={MGOLD} />
+                <TouchableOpacity onPress={() => setRateModalVisible(false)} style={{ marginTop: 16, alignItems: 'center' }}>
+                  <Text style={{ color: '#F43F5E', fontWeight: '800', letterSpacing: 1 }}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </MGlowCard>
+          </MEnter>
+        </View>
       </Modal>
 
-      {/* ✏️ EDIT PROFILE MODAL */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
-        <View style={styles.overlay}><ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: 'center', paddingVertical: 40}} showsVerticalScrollIndicator={false}>
-          <View style={[styles.modalBoxLarge, { borderColor: theme.primary + '50' }]}>
-            <View style={{flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20}}>
-                <Text style={styles.modalTitle}>Update Identity</Text>
-                <TouchableOpacity onPress={() => setModalVisible(false)}><Ionicons name="close-circle" size={24} color="#475569" /></TouchableOpacity>
-            </View>
-            <Text style={[styles.inputLabel, {color: theme.primary}]}>Display Name</Text>
-            <TextInput style={styles.input} value={editName} onChangeText={setEditName} placeholderTextColor="#475569" />
-            <View style={{flexDirection: 'row', gap: 10}}>
-                <View style={{flex: 1}}><Text style={[styles.inputLabel, {color: theme.primary}]}>Age</Text><TextInput style={styles.input} value={editAge} onChangeText={setEditAge} keyboardType="numeric" placeholderTextColor="#475569" /></View>
-                <View style={{flex: 1.5}}><Text style={[styles.inputLabel, {color: theme.primary}]}>Location</Text><TextInput style={styles.input} value={editLocation} onChangeText={setEditLocation} placeholderTextColor="#475569" /></View>
-            </View>
-            <Text style={[styles.inputLabel, {color: theme.primary}]}>Gender</Text>
-            <View style={styles.genderRow}>{['Male', 'Female', 'Other'].map((g) => (
-                <TouchableOpacity key={g} onPress={() => setEditGender(g)} style={[styles.genderBtn, editGender === g && {backgroundColor: `${theme.primary}20`, borderColor: theme.primary}]}><Text style={[styles.genderBtnText, editGender === g && {color: theme.primary, fontWeight: '900'}]}>{g}</Text></TouchableOpacity>
-            ))}</View>
-            <Text style={[styles.inputLabel, {color: theme.primary}]}>Expertise (Max 3)</Text>
-            <View style={styles.tagsWrapper}>{EXPERTISE_TAGS.map((tag) => {
-                const isSel = editExpertise.includes(tag);
-                return <TouchableOpacity key={tag} onPress={() => toggleTag(tag, editExpertise, setEditExpertise, 3)} style={[styles.tagChip, isSel && {backgroundColor: theme.primary, borderColor: theme.primary}]}><Text style={[styles.tagChipText, isSel && {color: '#FFF'}]}>{tag}</Text></TouchableOpacity>
-            })}</View>
-            <Text style={[styles.inputLabel, {color: theme.primary}]}>Hobbies (Max 5)</Text>
-            <View style={styles.tagsWrapper}>{HOBBIES_TAGS.map((tag) => {
-                const isSel = editHobbies.includes(tag);
-                return <TouchableOpacity key={tag} onPress={() => toggleTag(tag, editHobbies, setEditHobbies, 5)} style={[styles.tagChip, isSel && {backgroundColor: theme.primary, borderColor: theme.primary}]}><Text style={[styles.tagChipText, isSel && {color: '#FFF'}]}>{tag}</Text></TouchableOpacity>
-            })}</View>
-            <Text style={[styles.inputLabel, {color: theme.primary}]}>Bio</Text>
-            <TextInput style={[styles.input, { height: 80, textAlignVertical: 'top' }]} value={editBio} onChangeText={setEditBio} multiline placeholderTextColor="#475569" />
-            <TouchableOpacity style={[styles.saveBtn, {backgroundColor: theme.primary}]} onPress={handleSaveProfile} disabled={saving}>{saving ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveBtnText}>SAVE PROFILE</Text>}</TouchableOpacity>
-          </View>
-        </ScrollView></View>
+      {/* ✏️ UPDATE IDENTITY MODAL (🆕🆕 NEW "HOLO ID STUDIO" DESIGN: live holo ID card + profile strength + sliding tabs + 🔒 locked gender) */}
+      <Modal visible={modalVisible} animationType="slide" transparent={true} onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.overlay}>
+          <ScrollView contentContainerStyle={{flexGrow: 1, justifyContent: 'center', paddingVertical: 40}} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+            <MEnter>
+              <MGlowCard colors={[theme.primary, theme.primary + '22', theme.secondary + 'AA']} radius={34} glow={theme.primary}>
+                <View style={styles.mCardPad}>
+                  <LinearGradient colors={[theme.primary + '2E', 'transparent', theme.secondary + '22']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                  <MSparkle x={width * 0.5} y={12} size={12} color={theme.primary} delay={0} />
+                  <MSparkle x={width * 0.74} y={70} size={10} color={theme.secondary} delay={700} />
+                  <MSparkle x={20} y={90} size={9} color={MGOLD} delay={1200} />
+
+                  {/* header */}
+                  <View style={styles.editHeadRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.mTitle}>Update Identity</Text>
+                      <Text style={styles.mSub}>Craft your ID card</Text>
+                    </View>
+                    <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.mCloseBtn} activeOpacity={0.8}>
+                      <Ionicons name="close" size={20} color="#FFF" />
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* 🪪 LIVE HOLO ID CARD (updates as you type) */}
+                  <View style={[styles.idCard, { borderColor: theme.primary + '66' }]}>
+                    <LinearGradient colors={[theme.primary + '66', '#0B1026', theme.secondary + '55']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    <Animated.View pointerEvents="none" style={[styles.idShine, { transform: [{ translateX: sweepX }, { skewX: '-20deg' }] }]} />
+
+                    <View style={styles.idCardTop}>
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.idBrand}>TALKPE PRO · HOST ID</Text>
+                        <Text style={styles.idNo}>NO. {idNumber}</Text>
+                      </View>
+                      <FloatBox amp={4} dur={1600}>
+                        <Img3D uri={IMG.crown} size={44} fallback="crown" color={theme.primary} />
+                      </FloatBox>
+                    </View>
+
+                    <View style={styles.idCardMid}>
+                      <LinearGradient colors={[lighten(theme.primary, 0.5), theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.idAvatarRing}>
+                        <Image
+                          source={{ uri: expertData?.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(editName || 'Host')}&background=0F172A&color=fff&size=200&bold=true` }}
+                          style={styles.previewAvatar}
+                        />
+                      </LinearGradient>
+                      <View style={{ flex: 1, marginLeft: 14, minWidth: 0 }}>
+                        <Text style={styles.idName} numberOfLines={1}>{editName || 'Your Name'}</Text>
+                        <View style={[styles.idLevelPill, { backgroundColor: theme.primary + '33', borderColor: theme.primary + '88' }]}>
+                          <MaterialCommunityIcons name="crown" size={11} color={lighten(theme.primary, 0.5)} />
+                          <Text style={[styles.idLevelText, { color: lighten(theme.primary, 0.5) }]}>{config.label}</Text>
+                        </View>
+                        <View style={styles.previewChips}>
+                          <View style={[styles.previewChip, { backgroundColor: theme.primary + '26', borderColor: theme.primary + '77' }]}>
+                            <Ionicons name="location-sharp" size={10} color={lighten(theme.primary, 0.5)} />
+                            <Text style={[styles.previewChipText, { color: lighten(theme.primary, 0.5) }]} numberOfLines={1}>{editLocation || 'Location'}</Text>
+                          </View>
+                          <View style={[styles.previewChip, { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' }]}>
+                            <MaterialCommunityIcons name="cake-variant" size={10} color="#CBD5E1" />
+                            <Text style={[styles.previewChipText, { color: '#CBD5E1' }]}>{String(editAge || '--')}</Text>
+                          </View>
+                          <View style={[styles.previewChip, { backgroundColor: 'rgba(255,255,255,0.06)', borderColor: 'rgba(255,255,255,0.15)' }]}>
+                            <MaterialCommunityIcons name={(GENDER_ICONS[editGender] || 'account') as any} size={10} color="#CBD5E1" />
+                            <Text style={[styles.previewChipText, { color: '#CBD5E1' }]}>{editGender || 'N/A'}</Text>
+                            {genderLocked && <Ionicons name="lock-closed" size={9} color="#FBBF24" />}
+                          </View>
+                        </View>
+                      </View>
+                    </View>
+
+                    {/* 📈 PROFILE STRENGTH METER */}
+                    <View style={styles.idStrengthRow}>
+                      <Text style={styles.idStrengthLabel}>PROFILE STRENGTH</Text>
+                      <Text style={[styles.idStrengthVal, { color: lighten(theme.primary, 0.5) }]}>{strengthLabel} · {strengthPct}%</Text>
+                    </View>
+                    <View style={styles.idStrengthTrack}>
+                      <LinearGradient colors={[theme.primary, theme.accent, '#FFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.idStrengthFill, { width: `${strengthPct}%` }]} />
+                    </View>
+
+                    {/* holo stripe */}
+                    <LinearGradient colors={[theme.primary, theme.secondary, MGOLD, theme.primary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.idStripe} />
+                  </View>
+
+                  {/* 🧭 SLIDING TABS */}
+                  <MTabs tabs={IDENTITY_TABS} active={editTab} onChange={setEditTab} color={theme.primary} color2={theme.secondary} />
+
+                  {/* TAB 0 · BASICS */}
+                  {editTab === 0 && (
+                    <MEnter key="tab-basics">
+                      <MSection title="PERSONAL INFO" icon="account-edit" color={theme.primary} />
+                      <MField icon="person-outline" color={theme.primary} value={editName} onChangeText={setEditName} placeholder="Display Name" placeholderTextColor="#64748B" />
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        <View style={{ flex: 1 }}>
+                          <MField icon="calendar-outline" color={theme.secondary} value={String(editAge ?? '')} onChangeText={setEditAge} keyboardType="numeric" placeholder="Age" placeholderTextColor="#64748B" />
+                        </View>
+                        <View style={{ flex: 1.5 }}>
+                          <MField icon="location-outline" color={theme.primary} value={editLocation} onChangeText={setEditLocation} placeholder="Location" placeholderTextColor="#64748B" />
+                        </View>
+                      </View>
+
+                      {/* GENDER (🔒 locked once saved) */}
+                      <MSection
+                        title="GENDER"
+                        icon="gender-male-female"
+                        color={theme.secondary}
+                        right={genderLocked ? (
+                          <View style={styles.lockBadge}>
+                            <Ionicons name="lock-closed" size={11} color="#FBBF24" />
+                            <Text style={styles.lockBadgeText}>LOCKED</Text>
+                          </View>
+                        ) : undefined}
+                      />
+                      {genderLocked ? (
+                        <>
+                          <View style={[styles.lockBox, { borderColor: theme.secondary + '66' }]}>
+                            <LinearGradient colors={[theme.secondary + '22', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                            <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.lockIconWrap}>
+                              <MaterialCommunityIcons name={(GENDER_ICONS[editGender] || 'account') as any} size={24} color="#FFF" />
+                            </LinearGradient>
+                            <View style={{ flex: 1, marginLeft: 14 }}>
+                              <Text style={styles.lockLabel}>YOUR GENDER</Text>
+                              <Text style={styles.lockValue}>{String(editGender).toUpperCase()}</Text>
+                            </View>
+                            <View style={styles.lockPadlock}>
+                              <Ionicons name="lock-closed" size={18} color="#FBBF24" />
+                            </View>
+                          </View>
+                          <View style={styles.lockNoteRow}>
+                            <Ionicons name="shield-checkmark-outline" size={13} color="#94A3B8" />
+                            <Text style={styles.lockNote}>Gender is permanently locked and cannot be changed.</Text>
+                          </View>
+                        </>
+                      ) : (
+                        <>
+                          <View style={styles.mGenderRow}>
+                            {['Male', 'Female', 'Other'].map((g) => {
+                              const sel = editGender === g;
+                              return (
+                                <TouchableOpacity
+                                  key={g}
+                                  activeOpacity={0.85}
+                                  onPress={() => setEditGender(g)}
+                                  style={[styles.mGenderBtn, sel && { borderColor: theme.primary, shadowColor: theme.primary, shadowOpacity: 0.6, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6 }]}
+                                >
+                                  {sel && <LinearGradient colors={[theme.primary + 'CC', theme.secondary + '88']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />}
+                                  <MaterialCommunityIcons name={GENDER_ICONS[g] as any} size={22} color={sel ? '#FFF' : '#64748B'} />
+                                  <Text style={[styles.mGenderText, sel && { color: '#FFF', fontWeight: '900' }]}>{g.toUpperCase()}</Text>
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </View>
+                          <View style={styles.lockNoteRow}>
+                            <Ionicons name="alert-circle-outline" size={13} color="#FBBF24" />
+                            <Text style={[styles.lockNote, { color: '#FBBF24' }]}>Choose carefully. Once saved, gender can never be changed.</Text>
+                          </View>
+                        </>
+                      )}
+                    </MEnter>
+                  )}
+
+                  {/* TAB 1 · SKILLS */}
+                  {editTab === 1 && (
+                    <MEnter key="tab-skills">
+                      <MSection
+                        title="EXPERTISE (MAX 3)"
+                        icon="medal"
+                        color={theme.primary}
+                        right={<View style={[styles.mCountChip, { backgroundColor: theme.primary + '26', borderColor: theme.primary + '77' }]}><Text style={[styles.mCountChipText, { color: lighten(theme.primary, 0.5) }]}>{editExpertise.length}/3</Text></View>}
+                      />
+                      <View style={styles.tagsWrapper}>
+                        {EXPERTISE_TAGS.map((tag) => (
+                          <MChip key={tag} label={tag} selected={editExpertise.includes(tag)} color={theme.primary} color2={theme.secondary} onPress={() => toggleTag(tag, editExpertise, setEditExpertise, 3)} />
+                        ))}
+                      </View>
+                    </MEnter>
+                  )}
+
+                  {/* TAB 2 · VIBES */}
+                  {editTab === 2 && (
+                    <MEnter key="tab-vibes">
+                      <MSection
+                        title="HOBBIES (MAX 5)"
+                        icon="heart-multiple"
+                        color={theme.secondary}
+                        right={<View style={[styles.mCountChip, { backgroundColor: theme.secondary + '26', borderColor: theme.secondary + '77' }]}><Text style={[styles.mCountChipText, { color: lighten(theme.secondary, 0.5) }]}>{editHobbies.length}/5</Text></View>}
+                      />
+                      <View style={styles.tagsWrapper}>
+                        {HOBBIES_TAGS.map((tag) => (
+                          <MChip key={tag} label={tag} selected={editHobbies.includes(tag)} color={theme.primary} color2={theme.secondary} onPress={() => toggleTag(tag, editHobbies, setEditHobbies, 5)} />
+                        ))}
+                      </View>
+                    </MEnter>
+                  )}
+
+                  {/* TAB 3 · STORY */}
+                  {editTab === 3 && (
+                    <MEnter key="tab-story">
+                      <MSection
+                        title="BIO"
+                        icon="text-account"
+                        color={theme.primary}
+                        right={<Text style={[styles.mCounterText, { color: lighten(theme.primary, 0.5) }]}>{editBio.length} chars</Text>}
+                      />
+                      <MField color={theme.secondary} multiline value={editBio} onChangeText={setEditBio} placeholder="Describe your professional skills..." placeholderTextColor="#64748B" style={{ height: 130, borderRadius: 24, marginBottom: 6 }} />
+                    </MEnter>
+                  )}
+
+                  <View style={{ height: 18 }} />
+                  <MSweepBtn colors={[theme.primary, theme.secondary]} onPress={handleSaveProfile} disabled={saving} loading={saving} label="SAVE PROFILE" icon="content-save-check" shadow={theme.primary} />
+                </View>
+              </MGlowCard>
+            </MEnter>
+          </ScrollView>
+        </View>
       </Modal>
 
     </Animated.ScrollView>
@@ -1349,7 +2117,7 @@ const styles = StyleSheet.create({
   genderRow: { flexDirection: 'row', gap: 10, marginBottom: 15 },
   genderBtn: { flex: 1, backgroundColor: '#1E293B', padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1 },
   genderBtnText: { color: '#94A3B8', fontSize: 12, fontWeight: '800' },
-  tagsWrapper: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
+  tagsWrapper: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 10 },
   tagChip: { backgroundColor: '#1E293B', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: '#334155' },
   tagChipText: { color: '#94A3B8', fontSize: 11, fontWeight: '700' },
   saveBtn: { padding: 18, borderRadius: 15, alignItems: 'center', marginTop: 10 },
@@ -1357,6 +2125,114 @@ const styles = StyleSheet.create({
   loaderCenter: { justifyContent: 'center', alignItems: 'center' },
   homeDeleteBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 20, paddingVertical: 15, borderRadius: 15, backgroundColor: 'rgba(239, 68, 68, 0.08)', borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.2)', width: '80%', alignSelf: 'center' },
   homeDeleteText: { color: '#EF4444', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+
+  // ================= 🆕 PREMIUM MODAL STYLES =================
+  mCardPad: { padding: 20 },
+  mTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 0.5 },
+  mSub: { color: '#94A3B8', fontSize: 11, fontWeight: '700', marginTop: 3, letterSpacing: 0.5 },
+  mLabel: { fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 8, marginTop: 4 },
+  mCloseBtn: { width: 38, height: 38, borderRadius: 13, backgroundColor: 'rgba(255,255,255,0.07)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)', justifyContent: 'center', alignItems: 'center' },
+
+  mSectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 22, marginBottom: 12 },
+  mSectionIcon: { width: 26, height: 26, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+  mSectionText: { fontSize: 11.5, fontWeight: '900', letterSpacing: 2.2, textTransform: 'uppercase' },
+  mSectionLine: { flex: 1, height: 1.5, borderRadius: 1 },
+  mSectionDiamond: { width: 7, height: 7, transform: [{ rotate: '45deg' }], shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+  mCountChip: { paddingHorizontal: 9, paddingVertical: 3, borderRadius: 9, borderWidth: 1 },
+  mCountChipText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  mCounterText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+
+  mFieldWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, paddingHorizontal: 12, height: 56, marginBottom: 12, borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0.35)' },
+  mFieldIcon: { width: 30, height: 30, borderRadius: 11, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  mFieldInput: { flex: 1, color: '#FFF', fontSize: 14, fontWeight: '700' },
+
+  mGenderRow: { flexDirection: 'row', gap: 10 },
+  mGenderBtn: { flex: 1, height: 66, borderRadius: 20, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', gap: 4, borderWidth: 1.2, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(0,0,0,0.35)' },
+  mGenderText: { color: '#64748B', fontSize: 10.5, fontWeight: '900', letterSpacing: 1 },
+
+  mChip: { paddingHorizontal: 13, paddingVertical: 9, borderRadius: 20, overflow: 'hidden', borderWidth: 1, backgroundColor: 'rgba(30,41,59,0.7)' },
+  mChipText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
+
+  mBtnOuter: { borderRadius: 30, overflow: 'hidden', elevation: 14, shadowOpacity: 0.6, shadowRadius: 14, shadowOffset: { width: 0, height: 7 } },
+  mBtnGrad: { paddingVertical: 19, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 10, overflow: 'hidden' },
+  mBtnGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 22 },
+  mBtnSweep: { position: 'absolute', top: -30, bottom: -30, width: 70 },
+  mBtnText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 2.5 },
+
+  mInfoChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 9, borderWidth: 1 },
+  mInfoChipText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.2 },
+
+  // edit modal header + preview
+  editHeadRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  editImgBox: { width: 70, height: 70, justifyContent: 'center', alignItems: 'center' },
+  editImgGlow: { position: 'absolute', width: 48, height: 48, borderRadius: 24, opacity: 0.35 },
+  previewStrip: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 22, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.3)', overflow: 'hidden' },
+  previewRing: { width: 54, height: 54, borderRadius: 27, padding: 2.5, justifyContent: 'center', alignItems: 'center' },
+  previewAvatar: { width: '100%', height: '100%', borderRadius: 25, backgroundColor: '#0F172A' },
+  previewName: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.4 },
+  previewChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 6 },
+  previewChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 3, borderRadius: 8, borderWidth: 1, maxWidth: 120 },
+  previewChipText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.6 },
+
+  // 🆕🆕 NEW: UPDATE IDENTITY (HOLO ID STUDIO) STYLES
+  idCard: { borderRadius: 26, borderWidth: 1, padding: 16, overflow: 'hidden', backgroundColor: '#0B1026' },
+  idShine: { position: 'absolute', top: -20, bottom: -20, width: 70, backgroundColor: 'rgba(255,255,255,0.10)' },
+  idCardTop: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+  idBrand: { color: 'rgba(255,255,255,0.85)', fontSize: 10, fontWeight: '900', letterSpacing: 2.2 },
+  idNo: { color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 2, marginTop: 3 },
+  idCardMid: { flexDirection: 'row', alignItems: 'center' },
+  idAvatarRing: { width: 78, height: 78, borderRadius: 39, padding: 3, justifyContent: 'center', alignItems: 'center' },
+  idName: { color: '#FFF', fontSize: 19, fontWeight: '900', letterSpacing: 0.4 },
+  idLevelPill: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9, borderWidth: 1, marginTop: 5 },
+  idLevelText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.2 },
+  idStrengthRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 },
+  idStrengthLabel: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 2 },
+  idStrengthVal: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+  idStrengthTrack: { height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', marginTop: 7 },
+  idStrengthFill: { height: '100%', borderRadius: 4 },
+  idStripe: { height: 3, borderRadius: 2, marginTop: 14, opacity: 0.9 },
+
+  tabsWrap: { flexDirection: 'row', height: 52, borderRadius: 26, marginTop: 18, backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', overflow: 'hidden' },
+  tabIndicator: { position: 'absolute', top: 4, left: 0, height: 44, borderRadius: 22, overflow: 'hidden' },
+  tabItem: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 2 },
+  tabText: { color: '#64748B', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.2 },
+
+  lockBox: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 24, borderWidth: 1.2, backgroundColor: 'rgba(0,0,0,0.35)', overflow: 'hidden' },
+  lockIconWrap: { width: 48, height: 48, borderRadius: 16, justifyContent: 'center', alignItems: 'center' },
+  lockLabel: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 2 },
+  lockValue: { color: '#FFF', fontSize: 17, fontWeight: '900', letterSpacing: 1.5, marginTop: 3 },
+  lockPadlock: { width: 38, height: 38, borderRadius: 13, backgroundColor: 'rgba(251,191,36,0.12)', borderWidth: 1, borderColor: 'rgba(251,191,36,0.4)', justifyContent: 'center', alignItems: 'center' },
+  lockBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9, backgroundColor: 'rgba(251,191,36,0.14)', borderWidth: 1, borderColor: 'rgba(251,191,36,0.45)' },
+  lockBadgeText: { color: '#FBBF24', fontSize: 9.5, fontWeight: '900', letterSpacing: 1.2 },
+  lockNoteRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+  lockNote: { color: '#94A3B8', fontSize: 10.5, fontWeight: '700', flex: 1 },
+
+  // rate modal
+  rateHeadRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  rateChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  rateImgBox: { width: 96, height: 96, justifyContent: 'center', alignItems: 'center' },
+  rateImgGlow: { position: 'absolute', width: 66, height: 66, borderRadius: 33, opacity: 0.35 },
+  rateDisplay: { alignItems: 'center', paddingVertical: 16, paddingHorizontal: 12, borderRadius: 24, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.3)', overflow: 'hidden' },
+  rateDisplayLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+  rateDisplayValue: { fontSize: 46, fontWeight: '900', letterSpacing: -1, marginTop: 4, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 }, maxWidth: '100%' },
+  rateRupeeRow: { flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 4, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, backgroundColor: 'rgba(16,185,129,0.14)', borderWidth: 1, borderColor: 'rgba(16,185,129,0.35)' },
+  rateRupeeText: { color: '#10B981', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+  rateBarWrap: { marginTop: 18, height: 16, justifyContent: 'center' },
+  rateBarTrack: { height: 10, borderRadius: 5, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+  rateBarFill: { height: '100%', borderRadius: 5, overflow: 'hidden' },
+  rateKnobBox: { position: 'absolute', top: 0, bottom: 0, width: 0, justifyContent: 'center', alignItems: 'center' },
+  rateKnob: { width: 18, height: 18, borderRadius: 9, borderWidth: 3, borderColor: '#FFF', shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+  rateRangeRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 },
+  rateRangeText: { color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 1 },
+  quickRow: { flexDirection: 'row', gap: 8, marginTop: 14, marginBottom: 14 },
+  quickChip: { flex: 1, paddingVertical: 9, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', backgroundColor: 'rgba(255,255,255,0.05)' },
+  quickChipText: { color: '#CBD5E1', fontSize: 10.5, fontWeight: '900', letterSpacing: 1 },
+  setMaxBtn: { paddingHorizontal: 14, height: 56, borderRadius: 20, marginLeft: 10, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+  setMaxText: { fontWeight: '900', fontSize: 10, letterSpacing: 1 },
+  rateHintRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
+  rateHintText: { fontSize: 11.5, fontWeight: '800' },
+  rateLockRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, marginBottom: 18 },
+  rateLockText: { color: '#94A3B8', fontSize: 10.5, fontWeight: '700' },
 
   compactTopBar: {
     width: 'auto',

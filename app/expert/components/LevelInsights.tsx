@@ -242,10 +242,26 @@ const GEM_POS = [0, 1, 2].map((i) => {
     return { x: HERO_STAGE / 2 + 67 * Math.cos(a) - 5, y: HERO_STAGE / 2 + 67 * Math.sin(a) - 5 };
 });
 
+// 👑 NEW: ULTRA PREMIUM LEVEL-UP EMBLEM geometry (god-rays + tick ring + shockwaves)
+const M_STAGE = 270;
+const M_RAYS = Array.from({ length: 28 }, (_, i) => i);
+const M_TICK = 244;
+const M_TICK_R = 118;
+const M_RING = 200;
+const M_RING_STROKE = 5;
+const M_RING_R = (M_RING - M_RING_STROKE) / 2;
+const M_GEMS = [0, 1, 2, 3, 4, 5].map((i) => {
+    const a = (i / 6) * 2 * Math.PI;
+    return { x: M_STAGE / 2 + 124 * Math.cos(a) - 6, y: M_STAGE / 2 + 124 * Math.sin(a) - 6 };
+});
+
 export default function LevelInsights({ expertData }: any) {
     const [showModal, setShowModal] = useState(false);
     const [displayBeans, setDisplayBeans] = useState(0);
     const [displayPercent, setDisplayPercent] = useState(0);
+    // 🆕 Level-up modal: previous level + animated count-up rates
+    const [prevLevel, setPrevLevel] = useState(0);
+    const [modalRates, setModalRates] = useState({ call: 0, quick: 0 });
     
     const totalBeans = expertData?.totalBeansEarned || expertData?.totalBeans || 0; 
     const currentLevelInfo = getLevelData(totalBeans);
@@ -293,6 +309,12 @@ export default function LevelInsights({ expertData }: any) {
     const itemAnims = useRef(ALL_LEVELS.map(() => new Animated.Value(0))).current; // roadmap stagger entrance
     const nextAnim = useRef(new Animated.Value(0)).current;    // 🆕 next-reward card entrance
     const medalScrollRef = useRef<ScrollView>(null);
+
+    // 👑 NEW: level-up modal animation values
+    const introAnim = useRef(new Animated.Value(0)).current;   // staggered cinematic entrance (emblem -> title -> rank flow -> cards -> button)
+    const modalCount = useRef(new Animated.Value(0)).current;  // rate count-up (old rate -> new rate)
+    const waves = useRef([0, 1, 2].map(() => new Animated.Value(0))).current; // expanding shockwave rings
+
     const particles = useRef(
         Array.from({ length: 20 }, (_, i) => ({
             v: new Animated.Value(0),
@@ -330,6 +352,12 @@ export default function LevelInsights({ expertData }: any) {
     const nextPalT = nextDuo ? nextDuo.text : [acc, acc2, acc];        // text-safe
     const deltaCall = nextLevelItem ? nextLevelItem.rate - currentLevelInfo.rate : 0;
     const deltaQuick = nextLevelItem ? nextLevelItem.qmRate - currentLevelInfo.qmRate : 0;
+
+    // 👑 NEW: previous rank data for the level-up modal (old -> new transition)
+    const prevItem = ALL_LEVELS.find((l) => l.lvl === prevLevel) || ALL_LEVELS[Math.max(0, currentLevelInfo.lvl - 1)];
+    const prevPal = levelPalette(prevItem.goal);
+    const modalDeltaCall = currentLevelInfo.rate - prevItem.rate;
+    const modalDeltaQuick = currentLevelInfo.qmRate - prevItem.qmRate;
 
     useEffect(() => {
         // Linear shimmer for progress bar
@@ -408,6 +436,41 @@ export default function LevelInsights({ expertData }: any) {
         return () => anims.forEach((a) => a.stop());
     }, [showModal]);
 
+    // 👑 NEW: cinematic intro + shockwave rings (modal open irukkumbodhu mattum)
+    useEffect(() => {
+        if (!showModal) return;
+        introAnim.setValue(0);
+        Animated.timing(introAnim, { toValue: 1, duration: 2200, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+
+        const waveLoops = waves.map((w, i) => {
+            w.setValue(0);
+            return Animated.loop(
+                Animated.sequence([
+                    Animated.delay(i * 800),
+                    Animated.timing(w, { toValue: 1, duration: 2400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+                    Animated.timing(w, { toValue: 0, duration: 0, useNativeDriver: true })
+                ])
+            );
+        });
+        waveLoops.forEach((a) => a.start());
+        return () => waveLoops.forEach((a) => a.stop());
+    }, [showModal]);
+
+    // 👑 NEW: rate count-up (old rate -> new rate) inside the level-up modal
+    useEffect(() => {
+        if (!showModal) return;
+        setModalRates({ call: prevItem.rate, quick: prevItem.qmRate });
+        modalCount.setValue(0);
+        const id = modalCount.addListener(({ value }) => {
+            setModalRates({
+                call: Math.round(prevItem.rate + (currentLevelInfo.rate - prevItem.rate) * value),
+                quick: Math.round(prevItem.qmRate + (currentLevelInfo.qmRate - prevItem.qmRate) * value),
+            });
+        });
+        Animated.timing(modalCount, { toValue: 1, duration: 1400, delay: 1000, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+        return () => modalCount.removeListener(id);
+    }, [showModal]);
+
     // 🆕 Count-up (total reward + percent) + ring fill animation
     useEffect(() => {
         const id = countAnim.addListener(({ value }) => {
@@ -443,7 +506,10 @@ export default function LevelInsights({ expertData }: any) {
                             beansPerMin: currentLevelInfo.rate 
                         });
 
-                        if (newLevel > dbLevel) triggerLevelUp();
+                        if (newLevel > dbLevel) {
+                            setPrevLevel(dbLevel); // 👑 NEW: old rank -> new rank transition kaattaradhukku
+                            triggerLevelUp();
+                        }
                     } catch (error: any) {
                         console.error("❌ Firestore ERROR:", error.message);
                     }
@@ -488,6 +554,20 @@ export default function LevelInsights({ expertData }: any) {
     const glowOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.75] });
     const glowScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
     const crownBob = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
+
+    // 👑 NEW: level-up modal staged entrance helpers
+    const stageIn = (a: number, b: number): any => ({
+        opacity: introAnim.interpolate({ inputRange: [a, b], outputRange: [0, 1], extrapolate: 'clamp' }),
+        transform: [{ translateY: introAnim.interpolate({ inputRange: [a, b], outputRange: [36, 0], extrapolate: 'clamp' }) }]
+    });
+    const emblemIn: any = {
+        opacity: introAnim.interpolate({ inputRange: [0, 0.18], outputRange: [0, 1], extrapolate: 'clamp' }),
+        transform: [
+            { scale: introAnim.interpolate({ inputRange: [0, 0.38], outputRange: [0.15, 1], extrapolate: 'clamp' }) },
+            { rotate: introAnim.interpolate({ inputRange: [0, 0.38], outputRange: ['-30deg', '0deg'], extrapolate: 'clamp' }) }
+        ]
+    };
+    const flashOpacity = introAnim.interpolate({ inputRange: [0, 0.22], outputRange: [0.85, 0], extrapolate: 'clamp' });
 
     const expertName = expertData?.name || expertData?.userName || 'TALKPE HOST';
     const avatarUri = expertData?.profilePic || expertData?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(expertName)}&background=0F172A&color=ffffff&size=256&bold=true`;
@@ -1077,9 +1157,20 @@ export default function LevelInsights({ expertData }: any) {
                 <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* 🔥 MASS LEVEL UP MODAL DYNAMIC */}
-            <Modal visible={showModal} transparent animationType="none">
+            {/* 👑 ULTRA PREMIUM LEVEL-UP EXPERIENCE (full-screen cinematic, no boring box) */}
+            <Modal visible={showModal} transparent animationType="none" onRequestClose={closeLevelUp}>
                 <BlurView intensity={95} tint="dark" style={styles.modalOverlay}>
+                    {/* Deep duotone atmosphere */}
+                    <LinearGradient
+                        colors={g([vc(0) + '55', '#05030FDD', vc(1) + '55'])}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={StyleSheet.absoluteFill}
+                        pointerEvents="none"
+                    />
+                    <Animated.View pointerEvents="none" style={[styles.mAura, { top: -90, right: -120, backgroundColor: vc(0), opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+                    <Animated.View pointerEvents="none" style={[styles.mAura, { bottom: -110, left: -130, backgroundColor: vc(1), opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+
                     {/* 🆕 Duotone confetti rain */}
                     {confetti.map((c, i) => (
                         <Animated.View
@@ -1100,49 +1191,261 @@ export default function LevelInsights({ expertData }: any) {
                             ]}
                         />
                     ))}
-                    <Animated.View style={[styles.modalContent, { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }]}>
-                        <LinearGradient colors={g([vc(0), vc(1) + 'CC', vc(0) + '88', '#020617'])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.modalGradient}>
-                            <View style={styles.fireworkContainer}>
-                                <MaterialCommunityIcons name="creation" size={40} color={accLight} />
-                            </View>
-                            {/* 🆕 Rank-up chevrons */}
-                            <Animated.View style={{ opacity: glowOpacity, transform: [{ translateY: crownBob }] }}>
-                                <MaterialCommunityIcons name="chevron-double-up" size={26} color={acc} />
-                            </Animated.View>
-                            <Text style={[styles.congratsLabel, { color: accLight }]}>NEW RANK UNLOCKED</Text>
-                            <Text style={styles.congratsTitle}>CONGRATULATIONS!</Text>
-                            
-                            <View style={[styles.modalRankCard, { borderColor: acc }]}>
-                                {/* 🆕 Rotating sparkles around crown */}
+
+                    <ScrollView
+                        style={styles.mScroll}
+                        contentContainerStyle={styles.mScrollContent}
+                        showsVerticalScrollIndicator={false}
+                    >
+                        <Animated.View style={[styles.mContent, { opacity: fadeAnim, transform: [{ scale: scaleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
+
+                            {/* ===== 1. HERO EMBLEM (god-rays + shockwaves + avatar + crown) ===== */}
+                            <Animated.View style={[styles.mStage, emblemIn]}>
+                                {/* soft core glow */}
+                                <Animated.View style={[styles.mGlow, { backgroundColor: vc(1), opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+
+                                {/* expanding shockwave rings */}
+                                {waves.map((w, i) => (
+                                    <Animated.View
+                                        key={i}
+                                        pointerEvents="none"
+                                        style={[
+                                            styles.mWave,
+                                            {
+                                                borderColor: i % 2 === 0 ? acc : acc2,
+                                                opacity: w.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.75, 0] }),
+                                                transform: [{ scale: w.interpolate({ inputRange: [0, 1], outputRange: [0.5, 2.5] }) }]
+                                            }
+                                        ]}
+                                    />
+                                ))}
+
+                                {/* rotating god-rays */}
+                                <Animated.View style={[styles.mRaysStage, { transform: [{ rotate: spin }] }]} pointerEvents="none">
+                                    {M_RAYS.map((i) => (
+                                        <View key={i} style={[styles.mRayArm, { transform: [{ rotate: `${i * (360 / M_RAYS.length)}deg` }] }]}>
+                                            <LinearGradient
+                                                colors={g([i % 2 === 0 ? acc : acc2, 'transparent'])}
+                                                style={[styles.mRayBeam, { height: i % 2 === 0 ? 38 : 22 }]}
+                                            />
+                                        </View>
+                                    ))}
+                                </Animated.View>
+
+                                {/* tick ring (reverse) */}
+                                <Animated.View style={[styles.mTickRing, { transform: [{ rotate: spinRev }] }]} pointerEvents="none">
+                                    <Svg width={M_TICK} height={M_TICK}>
+                                        <Circle
+                                            cx={M_TICK / 2}
+                                            cy={M_TICK / 2}
+                                            r={M_TICK_R}
+                                            stroke={acc}
+                                            strokeOpacity={0.75}
+                                            strokeWidth={2.5}
+                                            strokeDasharray="1.5 9"
+                                            fill="transparent"
+                                        />
+                                    </Svg>
+                                </Animated.View>
+
+                                {/* orbiting royal gems */}
+                                <Animated.View style={[styles.mRaysStage, { transform: [{ rotate: spinRev }] }]} pointerEvents="none">
+                                    {M_GEMS.map((s, i) => (
+                                        <MaterialCommunityIcons
+                                            key={i}
+                                            name="rhombus"
+                                            size={12}
+                                            color={i % 2 === 0 ? acc : acc2}
+                                            style={{ position: 'absolute', left: s.x, top: s.y }}
+                                        />
+                                    ))}
+                                </Animated.View>
+
+                                {/* dashed ring + gradient solid ring */}
+                                <Animated.View style={[styles.mDashed, { borderColor: acc2 + '99', transform: [{ rotate: spin }] }]} />
+                                <Svg width={M_RING} height={M_RING} style={styles.mRingSvg}>
+                                    <Defs>
+                                        <SvgLinearGradient id="mRingGrad" x1="0" y1="0" x2="1" y2="1">
+                                            <Stop offset="0" stopColor={vc(0)} />
+                                            <Stop offset="0.5" stopColor={vc(1)} />
+                                            <Stop offset="1" stopColor={vc(0)} />
+                                        </SvgLinearGradient>
+                                    </Defs>
+                                    <Circle
+                                        cx={M_RING / 2}
+                                        cy={M_RING / 2}
+                                        r={M_RING_R}
+                                        stroke="url(#mRingGrad)"
+                                        strokeWidth={M_RING_STROKE}
+                                        fill="transparent"
+                                    />
+                                </Svg>
+
+                                {/* avatar + orbiting sparkles */}
                                 <View style={styles.crownStage}>
-                                    <Animated.View style={[styles.crownGlow, { backgroundColor: vc(1), opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
-                                    <Animated.View style={[styles.sparkleOrbit, { transform: [{ rotate: spin }] }]}>
+                                    <Animated.View style={[styles.sparkleOrbit, { transform: [{ rotate: spin }] }]} pointerEvents="none">
                                         {SPARKLES.map((s, i) => (
                                             <MaterialCommunityIcons
                                                 key={i}
                                                 name="star-four-points"
-                                                size={18}
+                                                size={16}
                                                 color={i % 3 === 0 ? acc : i % 3 === 1 ? '#FFF' : acc2}
                                                 style={{ position: 'absolute', left: s.x, top: s.y }}
                                             />
                                         ))}
                                     </Animated.View>
-                                    <MaterialCommunityIcons name="crown" size={80} color={acc} />
+                                    <View style={[styles.mAvatarFrame, { borderColor: acc, shadowColor: vc(0) }]}>
+                                        <Image source={{ uri: avatarUri }} style={styles.avatarImg} />
+                                    </View>
                                 </View>
-                                <GradientText text={currentLevelInfo.label} colors={textGrad} style={styles.modalLevelName} />
-                                <View style={styles.newBenefitBox}>
-                                    <Text style={styles.benefitText}>NEW CALL RATE: {currentLevelInfo.rate} REWARDS</Text>
-                                    <Text style={styles.benefitText}>NEW QUICK RATE: {currentLevelInfo.qmRate} REWARDS</Text>
+
+                                {/* floating crown */}
+                                <Animated.View style={[styles.mCrown, { transform: [{ translateY: crownBob }] }]} pointerEvents="none">
+                                    <MaterialCommunityIcons name="crown" size={44} color={acc} />
+                                </Animated.View>
+
+                                {/* rank badge */}
+                                <LinearGradient colors={g([vc(0), vc(1)])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.mRankBadge, { borderColor: accLight }]}>
+                                    <MaterialCommunityIcons name={currentLevelInfo.lvl >= 7 ? 'crown' : 'star-face'} size={13} color="#FFF" />
+                                    <Text style={styles.mRankBadgeText}>RANK {currentLevelInfo.lvl}</Text>
+                                </LinearGradient>
+
+                                <RoyalSparkle x={M_STAGE - 56} y={34} size={14} color={acc} delay={0} />
+                                <RoyalSparkle x={30} y={M_STAGE - 80} size={12} color={acc2} delay={600} />
+                                <RoyalSparkle x={46} y={40} size={10} color={accLight} delay={1100} />
+                            </Animated.View>
+
+                            {/* ===== 2. TITLE BLOCK ===== */}
+                            <Animated.View style={[styles.mTitleBlock, stageIn(0.28, 0.5)]}>
+                                <View style={styles.mLabelRow}>
+                                    <LinearGradient colors={['transparent', acc]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.royalLine} />
+                                    <Animated.View style={{ opacity: glowOpacity, transform: [{ translateY: crownBob }] }}>
+                                        <MaterialCommunityIcons name="chevron-double-up" size={20} color={acc} />
+                                    </Animated.View>
+                                    <Text style={[styles.congratsLabel, { color: accLight }]}>NEW RANK UNLOCKED</Text>
+                                    <Animated.View style={{ opacity: glowOpacity, transform: [{ translateY: crownBob }] }}>
+                                        <MaterialCommunityIcons name="chevron-double-up" size={20} color={acc2} />
+                                    </Animated.View>
+                                    <LinearGradient colors={[acc2, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.royalLine} />
                                 </View>
+                                <Text style={[styles.congratsTitle, styles.mCongratsTitle, { textShadowColor: vc(0) }]}>CONGRATULATIONS!</Text>
+                                <GradientText text={currentLevelInfo.label} colors={textGrad} fit style={styles.mLevelName} />
+                                <Text style={styles.mSubText}>You have ascended to a higher tier of the Royal Network</Text>
+                            </Animated.View>
+
+                            {/* ===== 3. OLD RANK -> NEW RANK FLOW ===== */}
+                            <Animated.View style={[styles.mFlowRow, stageIn(0.42, 0.66)]}>
+                                <View style={styles.mFlowSide}>
+                                    <LinearGradient colors={g([prevPal.vivid[0], prevPal.vivid[1], '#020617'])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.mMedalSm, { borderColor: 'rgba(255,255,255,0.25)', opacity: 0.6 }]}>
+                                        <Text style={styles.mMedalSmText}>{prevItem.lvl}</Text>
+                                    </LinearGradient>
+                                    <Text style={styles.mFlowLabelOld}>{prevItem.label}</Text>
+                                </View>
+
+                                <Animated.View style={{ opacity: glowOpacity }}>
+                                    <MaterialCommunityIcons name="chevron-double-right" size={30} color={acc} />
+                                </Animated.View>
+
+                                <View style={styles.mFlowSide}>
+                                    <Animated.View style={[styles.mMedalHalo, { borderColor: acc, opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+                                    <LinearGradient colors={g([vc(0), vc(1), '#020617'])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.mMedalLg, { borderColor: acc }]}>
+                                        <Text style={styles.mMedalLgText}>{currentLevelInfo.lvl}</Text>
+                                    </LinearGradient>
+                                    <GradientText text={currentLevelInfo.label} colors={textGrad} style={styles.mFlowLabelNew} />
+                                </View>
+                            </Animated.View>
+
+                            {/* ===== 4. NEW RATE CARDS (old -> new count-up) ===== */}
+                            <View style={styles.mRateRow}>
+                                <Animated.View style={[styles.mRateWrap, stageIn(0.54, 0.78)]}>
+                                    <BlurView intensity={30} tint="dark" style={[styles.mRateCard, { borderColor: acc + '66' }]}>
+                                        <LinearGradient colors={g([vc(0), vc(1)])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.statTopLine} />
+                                        <View style={styles.statIconRow}>
+                                            <LinearGradient colors={g([vc(0), vc(1)])} style={styles.statIcon}>
+                                                <MaterialCommunityIcons name="phone-in-talk" size={13} color="#FFF" />
+                                            </LinearGradient>
+                                            <Text style={styles.hStatLabel}>NEW CALL RATE</Text>
+                                        </View>
+                                        <View style={styles.mOldRow}>
+                                            <Text style={styles.mOldRate}>{prevItem.rate}</Text>
+                                            <MaterialCommunityIcons name="arrow-right" size={12} color="#64748B" />
+                                        </View>
+                                        <Text style={[styles.mNewRate, { color: acc }]} numberOfLines={1} adjustsFontSizeToFit>{modalRates.call.toLocaleString()}</Text>
+                                        {modalDeltaCall > 0 ? (
+                                            <View style={[styles.mDeltaPill, { borderColor: ROYAL.emerald + '99' }]}>
+                                                <MaterialCommunityIcons name="trending-up" size={11} color={ROYAL.emerald} />
+                                                <Text style={[styles.perkText, { color: ROYAL.emerald }]}>+{modalDeltaCall}</Text>
+                                            </View>
+                                        ) : (
+                                            <View style={[styles.mDeltaPill, { borderColor: 'rgba(255,255,255,0.2)' }]}>
+                                                <Text style={[styles.perkText, { color: '#94A3B8' }]}>SAME RATE</Text>
+                                            </View>
+                                        )}
+                                    </BlurView>
+                                </Animated.View>
+
+                                <Animated.View style={[styles.mRateWrap, stageIn(0.64, 0.88)]}>
+                                    <BlurView intensity={30} tint="dark" style={[styles.mRateCard, { borderColor: acc2 + '66' }]}>
+                                        <LinearGradient colors={g([vc(1), vc(0)])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.statTopLine} />
+                                        <View style={styles.statIconRow}>
+                                            <LinearGradient colors={g([vc(1), vc(0)])} style={styles.statIcon}>
+                                                <MaterialCommunityIcons name="flash" size={13} color="#FFF" />
+                                            </LinearGradient>
+                                            <Text style={styles.hStatLabel}>NEW QUICK RATE</Text>
+                                        </View>
+                                        <View style={styles.mOldRow}>
+                                            <Text style={styles.mOldRate}>{prevItem.qmRate}</Text>
+                                            <MaterialCommunityIcons name="arrow-right" size={12} color="#64748B" />
+                                        </View>
+                                        <Text style={[styles.mNewRate, { color: acc2 }]} numberOfLines={1} adjustsFontSizeToFit>{modalRates.quick.toLocaleString()}</Text>
+                                        {modalDeltaQuick > 0 ? (
+                                            <View style={[styles.mDeltaPill, { borderColor: ROYAL.emerald + '99' }]}>
+                                                <MaterialCommunityIcons name="trending-up" size={11} color={ROYAL.emerald} />
+                                                <Text style={[styles.perkText, { color: ROYAL.emerald }]}>+{modalDeltaQuick}</Text>
+                                            </View>
+                                        ) : (
+                                            <View style={[styles.mDeltaPill, { borderColor: 'rgba(255,255,255,0.2)' }]}>
+                                                <Text style={[styles.perkText, { color: '#94A3B8' }]}>SAME RATE</Text>
+                                            </View>
+                                        )}
+                                    </BlurView>
+                                </Animated.View>
                             </View>
 
-                            <TouchableOpacity activeOpacity={0.85} onPress={closeLevelUp} style={styles.claimBtnWrap}>
-                                <LinearGradient colors={g([vc(0), vc(1)])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.claimBtn}>
-                                    <Text style={styles.claimBtnText}>MASSIVE!</Text>
-                                </LinearGradient>
-                            </TouchableOpacity>
-                        </LinearGradient>
-                    </Animated.View>
+                            {/* ===== 5. NEXT GOAL LINE ===== */}
+                            <Animated.View style={[styles.mNextRow, { borderColor: acc + '55' }, stageIn(0.72, 0.92)]}>
+                                {nextLevelItem ? (
+                                    <>
+                                        <MaterialCommunityIcons name="arrow-up-bold-circle" size={14} color={nextPalT[0]} />
+                                        <Text style={styles.mNextText} numberOfLines={1}>
+                                            NEXT: <Text style={{ color: nextPalT[0], fontWeight: '900' }}>{nextLevelItem.label}</Text> AT {nextLevelItem.goal.toLocaleString()}
+                                        </Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <MaterialCommunityIcons name="crown" size={14} color={acc} />
+                                        <Text style={[styles.mNextText, { color: acc }]} numberOfLines={1}>MAX RANK - YOU ARE A LEGEND</Text>
+                                    </>
+                                )}
+                            </Animated.View>
+
+                            {/* ===== 6. CLAIM BUTTON (shine sweep) ===== */}
+                            <Animated.View style={[styles.mBtnOuter, stageIn(0.8, 1)]}>
+                                <TouchableOpacity activeOpacity={0.85} onPress={closeLevelUp} style={styles.claimBtnWrap}>
+                                    <LinearGradient colors={g([vc(0), vc(1)])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.claimBtn, styles.mClaimBtn]}>
+                                        <Animated.View pointerEvents="none" style={[styles.cardSweep, { transform: [{ translateX: sweepX }, { rotate: '20deg' }] }]}>
+                                            <LinearGradient colors={['transparent', 'rgba(255,255,255,0.35)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                        </Animated.View>
+                                        <MaterialCommunityIcons name="crown" size={20} color="#FFF" />
+                                        <Text style={styles.claimBtnText}>MASSIVE! CLAIM</Text>
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </Animated.View>
+                        </Animated.View>
+                    </ScrollView>
+
+                    {/* cinematic entry flash */}
+                    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: accLight, opacity: flashOpacity }]} />
                 </BlurView>
             </Modal>
         </View>
@@ -1291,5 +1594,59 @@ const styles = StyleSheet.create({
     benefitText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
     claimBtnWrap: { width: '100%', borderRadius: 25, overflow: 'hidden', elevation: 10 },
     claimBtn: { width: '100%', padding: 20, alignItems: 'center' },
-    claimBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } }
+    claimBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } },
+
+    // 👑 NEW: ULTRA PREMIUM LEVEL-UP MODAL STYLES
+    mAura: { position: 'absolute', width: 420, height: 420, borderRadius: 210, filter: 'blur(90px)' },
+    mScroll: { width: '100%' },
+    mScrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 36 },
+    mContent: { width: width * 0.9, alignItems: 'center' },
+
+    // emblem
+    mStage: { width: M_STAGE, height: M_STAGE, justifyContent: 'center', alignItems: 'center' },
+    mGlow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, filter: 'blur(34px)' },
+    mWave: { position: 'absolute', width: 130, height: 130, borderRadius: 65, borderWidth: 2 },
+    mRaysStage: { position: 'absolute', width: M_STAGE, height: M_STAGE },
+    mRayArm: { position: 'absolute', width: M_STAGE, height: M_STAGE, alignItems: 'center' },
+    mRayBeam: { width: 2.5, height: 30, borderRadius: 2 },
+    mTickRing: { position: 'absolute', width: M_TICK, height: M_TICK },
+    mDashed: { position: 'absolute', width: 214, height: 214, borderRadius: 107, borderWidth: 1.5, borderStyle: 'dashed' },
+    mRingSvg: { position: 'absolute' },
+    mAvatarFrame: { width: 112, height: 112, borderRadius: 56, borderWidth: 3.5, overflow: 'hidden', backgroundColor: '#0F172A', elevation: 16, shadowOpacity: 0.9, shadowRadius: 18, shadowOffset: { width: 0, height: 0 } },
+    mCrown: { position: 'absolute', top: 30, alignSelf: 'center' },
+    mRankBadge: { position: 'absolute', bottom: 22, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, borderWidth: 1.5, elevation: 10 },
+    mRankBadgeText: { color: '#FFF', fontSize: 11.5, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
+
+    // title block
+    mTitleBlock: { width: '100%', alignItems: 'center', marginTop: 2 },
+    mLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, width: '100%' },
+    mCongratsTitle: { fontSize: 24, letterSpacing: 3, textShadowRadius: 14, textShadowOffset: { width: 0, height: 0 } },
+    mLevelName: { fontSize: 36, fontWeight: '900', letterSpacing: 1, marginTop: 2, width: '100%', textAlign: 'center' },
+    mSubText: { color: '#CBD5E1', fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, marginTop: 4, textAlign: 'center' },
+
+    // old -> new flow
+    mFlowRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 20 },
+    mFlowSide: { alignItems: 'center', justifyContent: 'center', width: 120 },
+    mMedalSm: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+    mMedalSmText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
+    mMedalLg: { width: 60, height: 60, borderRadius: 30, borderWidth: 2.5, justifyContent: 'center', alignItems: 'center', elevation: 10 },
+    mMedalLgText: { color: '#FFF', fontSize: 26, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
+    mMedalHalo: { position: 'absolute', top: -5, width: 70, height: 70, borderRadius: 35, borderWidth: 2 },
+    mFlowLabelOld: { color: '#94A3B8', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5, marginTop: 6 },
+    mFlowLabelNew: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5, marginTop: 6 },
+
+    // rate cards
+    mRateRow: { width: '100%', flexDirection: 'row', gap: 12, marginTop: 20 },
+    mRateWrap: { flex: 1 },
+    mRateCard: { padding: 12, borderRadius: 22, overflow: 'hidden', borderWidth: 1, alignItems: 'flex-start' },
+    mOldRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    mOldRate: { color: '#64748B', fontSize: 12, fontWeight: '800', textDecorationLine: 'line-through' },
+    mNewRate: { fontSize: 28, fontWeight: '900', letterSpacing: 0.5, width: '100%' },
+    mDeltaPill: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9, borderWidth: 1, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)' },
+
+    // next goal + button
+    mNextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 14, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)', maxWidth: '100%' },
+    mNextText: { color: '#E2E8F0', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flexShrink: 1 },
+    mBtnOuter: { width: '100%', marginTop: 22 },
+    mClaimBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, overflow: 'hidden' }
 });

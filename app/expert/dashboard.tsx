@@ -15,6 +15,7 @@ import {
     Image,
     Modal,
     Platform,
+    ScrollView,
     StatusBar,
     StyleSheet,
     Text,
@@ -41,6 +42,66 @@ const SPOTLIGHT_BG = 'https://images.unsplash.com/photo-1492684223066-81342ee5ff
 const TABS = ['DASH', 'WALLET', 'MESSAGES', 'LEVELS', 'STATS'];
 const NAV_ROW_W = width - 40;
 const NAV_ITEM_W = NAV_ROW_W / 5;
+
+// 🪑 NEW: 8 forum seats placed on a circle (used by the orbiting seats in the Studio Room)
+const SEAT_RADIUS = 38;
+const SEATS = Array.from({ length: 8 }, (_, i) => {
+    const a = (i / 8) * 2 * Math.PI;
+    return { x: Math.cos(a) * SEAT_RADIUS, y: Math.sin(a) * SEAT_RADIUS };
+});
+
+// 🆕🆕🆕 TOP BUTTON WIDTH (wide pill)
+const BTN_W = width; // full screen width
+const STUDIO_LABEL = 'HOST STUDIO'; // 🆕 top button name - inga mattum maathina podhum
+
+// 🆕🆕🆕 STUDIO ROOM floating dust / sparkle particles (rise from the stage floor)
+const PARTICLES = Array.from({ length: 16 }, (_, i) => ({
+    x: Math.random() * width,
+    size: 2 + Math.random() * 3,
+    dur: 5000 + Math.random() * 4000,
+    delay: Math.random() * 4000,
+    color: i % 3 === 0 ? '#F5D77A' : i % 3 === 1 ? '#FF8FA0' : '#FFFFFF'
+}));
+const Particle = ({ p }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(p.delay),
+                Animated.timing(a, { toValue: 1, duration: p.dur, easing: Easing.linear, useNativeDriver: true }),
+                Animated.timing(a, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        ).start();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                left: p.x,
+                bottom: -10,
+                width: p.size,
+                height: p.size,
+                borderRadius: p.size / 2,
+                backgroundColor: p.color,
+                opacity: a.interpolate({ inputRange: [0, 0.15, 0.85, 1], outputRange: [0, 0.85, 0.6, 0] }),
+                transform: [
+                    { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -height * 0.9] }) },
+                    { translateX: a.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 10, -6] }) }
+                ]
+            }}
+        />
+    );
+};
+
+// 🆕 brightness helper - level colors la romba dark color (ex: MYTHIC L9 '#0a0303') irundha button la theriyama pogum, adha avoid panna
+const lum = (hex: string) => {
+    const h = String(hex || '#000000').replace('#', '');
+    const r = parseInt(h.substr(0, 2), 16) / 255;
+    const g = parseInt(h.substr(2, 2), 16) / 255;
+    const b = parseInt(h.substr(4, 2), 16) / 255;
+    return 0.299 * r + 0.587 * g + 0.114 * b;
+};
 
 // ✨ EXPANDING RIPPLE RING (incoming call magic)
 const Ripple = ({ delay, color }: any) => {
@@ -161,6 +222,9 @@ export default function ExpertDashboard() {
     const [incomingCall, setIncomingCall] = useState<any>(null);
     const [showCallModal, setShowCallModal] = useState(false);
 
+    // 🆕🆕 NEW: STUDIO ROOM (Go Live / Forum / Premium Spotlight live inside this room)
+    const [studioOpen, setStudioOpen] = useState(false);
+
     const fadeAnim = useRef(new Animated.Value(0)).current;
     const slideAnim = useRef(new Animated.Value(20)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -172,6 +236,14 @@ export default function ExpertDashboard() {
     const navIndexAnim = useRef(new Animated.Value(0)).current; // sliding nav indicator
     const tabAnim = useRef(new Animated.Value(1)).current;       // tab switch transition
     const navStretch = useRef(new Animated.Value(1)).current;    // nav indicator stretch while sliding
+
+    // 🆕🆕 NEW: Studio Room animation values
+    const studioAnim = useRef(new Animated.Value(0)).current;    // room content entrance (staggered cards)
+    const curtainAnim = useRef(new Animated.Value(0)).current;   // velvet curtains opening
+    const flashAnim = useRef(new Animated.Value(0)).current;     // camera flash on entry
+    const flickAnim = useRef(new Animated.Value(1)).current;     // neon "ON AIR" flicker
+    const swayAnim = useRef(new Animated.Value(0)).current;      // 🆕 spotlight beams sway + cards float (smooth ping-pong)
+    const btnPress = useRef(new Animated.Value(0)).current;      // 🆕 3D press-down for the top Studio Room button
 
     // DYNAMIC THEME ENGINE
     const config = getLevelConfig(expertData);
@@ -186,6 +258,11 @@ export default function ExpertDashboard() {
             '#020617' 
         ] as const 
     };
+
+    // 🆕🆕🆕 LEVEL-THEMED colors for the top Studio Room button (every level gets its own look)
+    const btnC1 = lum(theme.primary) > 0.07 ? theme.primary : (config.colors[1] || theme.accent);
+    const btnC2 = lum(theme.secondary) > 0.07 ? theme.secondary : (config.colors[1] || theme.accent);
+    const btnC3 = theme.accent;
 
     const orbTranslateY = shimmerAnim.interpolate({
         inputRange: [0, 1],
@@ -202,6 +279,35 @@ export default function ExpertDashboard() {
     const acceptPulse = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [1, 1.14] });
     const navIndicatorX = navIndexAnim.interpolate({ inputRange: [0, 1, 2, 3, 4], outputRange: [0, NAV_ITEM_W, NAV_ITEM_W * 2, NAV_ITEM_W * 3, NAV_ITEM_W * 4] });
     const tabSlide = tabAnim.interpolate({ inputRange: [0, 1], outputRange: [26, 0] });
+
+    // 🆕🆕🆕 NEW: GO LIVE rings now stay INSIDE the card (small controlled expansion) + top banner chevron bob
+    const liveRingScale = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [1, 1.3] });
+    const liveRingOpacity = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [0.85, 0] });
+    const chevronBob = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [0, 3] });
+    const btnFaceY = btnPress.interpolate({ inputRange: [0, 1], outputRange: [0, 7] });
+    const btnZoom = pulseAnim.interpolate({ inputRange: [1, 1.05], outputRange: [1, 1.025] }); // 🆕 lite zoom in/out for top button
+    // 🆕🆕🆕 Studio Room: swaying spotlight beams + floating stage cards
+    const beamRotA = swayAnim.interpolate({ inputRange: [0, 1], outputRange: ['-16deg', '14deg'] });
+    const beamRotB = swayAnim.interpolate({ inputRange: [0, 1], outputRange: ['15deg', '-13deg'] });
+    const floatA = swayAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+    const floatB = swayAnim.interpolate({ inputRange: [0, 1], outputRange: [-5, 0] });
+
+    // 🆕🆕 NEW: Studio Room derived styles
+    const neonOpacity = flickAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] });
+    const curtainLeftX = curtainAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -width / 2 - 4] });
+    const curtainRightX = curtainAnim.interpolate({ inputRange: [0, 1], outputRange: [0, width / 2 + 4] });
+    const cardIn = (i: number) => {
+        const s = 0.2 + i * 0.16;
+        const e = Math.min(0.62 + i * 0.16, 1);
+        return {
+            opacity: studioAnim.interpolate({ inputRange: [s, e], outputRange: [0, 1], extrapolate: 'clamp' }),
+            transform: [
+                { translateY: studioAnim.interpolate({ inputRange: [s, e], outputRange: [60, 0], extrapolate: 'clamp' }) },
+                { scale: studioAnim.interpolate({ inputRange: [s, e], outputRange: [0.92, 1], extrapolate: 'clamp' }) },
+                { translateY: i % 2 === 0 ? floatA : floatB }
+            ]
+        };
+    };
 
     const borderType1 = {
         borderLeftWidth: 2,
@@ -270,6 +376,25 @@ export default function ExpertDashboard() {
             ])
         ).start();
 
+        // 🆕🆕 NEW: neon "ON AIR" sign flicker loop
+        Animated.loop(
+            Animated.sequence([
+                Animated.delay(1800),
+                Animated.timing(flickAnim, { toValue: 0.1, duration: 60, useNativeDriver: true }),
+                Animated.timing(flickAnim, { toValue: 1, duration: 70, useNativeDriver: true }),
+                Animated.timing(flickAnim, { toValue: 0.35, duration: 60, useNativeDriver: true }),
+                Animated.timing(flickAnim, { toValue: 1, duration: 90, useNativeDriver: true })
+            ])
+        ).start();
+
+        // 🆕🆕🆕 smooth ping-pong sway (spotlight beams + floating cards)
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(swayAnim, { toValue: 1, duration: 3600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(swayAnim, { toValue: 0, duration: 3600, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ).start();
+
         return () => authUnsub();
     }, []);
 
@@ -284,6 +409,11 @@ export default function ExpertDashboard() {
         tabAnim.setValue(0);
         Animated.timing(tabAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     }, [activeTab]);
+
+    // 🆕🆕 NEW: incoming call vandha Studio Room-a auto close pannidum (rendu modal overlap aagaama irukka)
+    useEffect(() => {
+        if (showCallModal) setStudioOpen(false);
+    }, [showCallModal]);
 
     useEffect(() => {
         if (!user?.uid) return;
@@ -429,6 +559,34 @@ export default function ExpertDashboard() {
             console.error("Live Stream Error: ", error);
             Alert.alert("Error", "Could not start live stream.");
         }
+    };
+
+    // 🆕🆕 NEW: STUDIO ROOM open / close / enter
+    const openStudio = () => {
+        if (isStartingLive || isStartingForum) return;
+        studioAnim.setValue(0);
+        curtainAnim.setValue(0);
+        flashAnim.setValue(0);
+        setStudioOpen(true);
+        // 📸 camera flash on entry
+        Animated.sequence([
+            Animated.timing(flashAnim, { toValue: 1, duration: 110, useNativeDriver: true }),
+            Animated.timing(flashAnim, { toValue: 0, duration: 420, useNativeDriver: true })
+        ]).start();
+        // 🎭 velvet curtains slide open
+        Animated.timing(curtainAnim, { toValue: 1, duration: 800, delay: 160, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }).start();
+        // 🎬 room content staggered entrance
+        Animated.timing(studioAnim, { toValue: 1, duration: 1100, delay: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    };
+
+    const closeStudio = () => {
+        Animated.timing(studioAnim, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setStudioOpen(false));
+    };
+
+    // room-ku ulla irundhu oru stage-a thoratha: modal-a close panni apram action run aagum
+    const enterStage = (action: () => void) => {
+        setStudioOpen(false);
+        setTimeout(action, 80);
     };
 
     const handleUploadTeaser = async () => {
@@ -601,107 +759,81 @@ export default function ExpertDashboard() {
         switch (activeTab) {
             case 'DASH': return (
                 <View style={{ flex: 1 }}>
-                    {/* 👑 ROYAL COMMAND DECK */}
-                    <View style={styles.royalWrap}>
-                        <LinearGradient colors={['#F5D77A', theme.primary, theme.secondary, '#F5D77A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.royalFrame}>
-                            <View style={styles.royalInner}>
-                                <LinearGradient
-                                    colors={['rgba(239, 68, 68, 0.16)', 'transparent', 'rgba(245, 158, 11, 0.14)']}
-                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                                    style={StyleSheet.absoluteFill}
-                                />
-
-                                <View style={styles.compactActionGrid}>
-                                    <View style={styles.compactRow}>
-                                        {/* 🔴 GO LIVE */}
-                                        <TouchableOpacity
-                                            style={[styles.royalBtn, { flex: 1, borderColor: 'rgba(255,140,150,0.6)', shadowColor: '#FF1F3D' }]}
-                                            onPress={startLiveStream}
-                                            disabled={isStartingLive || isStartingForum}
-                                            activeOpacity={0.85}
-                                        >
-                                            <LinearGradient
-                                                colors={['#FF1F3D', '#7F0A1E']}
-                                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                                                style={styles.royalBtnGradient}
-                                            >
-                                                <MaterialCommunityIcons name="broadcast" size={70} color="rgba(255,255,255,0.12)" style={styles.royalWatermark} />
-                                                <View style={styles.royalIconWrap}>
-                                                    {!isStartingLive && (
-                                                        <Animated.View style={[styles.royalIconPulse, { borderColor: '#FFB4BE', opacity: iconPulseOpacity, transform: [{ scale: iconPulseScale }] }]} />
-                                                    )}
-                                                    <View style={styles.royalIconCircle}>
-                                                        {isStartingLive ? (
-                                                            <ActivityIndicator size="small" color="#FFF" />
-                                                        ) : (
-                                                            <MaterialCommunityIcons name="broadcast" size={18} color="#FFF" />
-                                                        )}
-                                                    </View>
-                                                </View>
-                                                <Text style={styles.royalBtnText}>{isStartingLive ? "SYNCING..." : "GO LIVE"}</Text>
-                                                <Animated.View pointerEvents="none" style={[styles.btnSweep, { transform: [{ translateX: sweepX }, { skewX: '-20deg' }] }]} />
-                                            </LinearGradient>
-                                            <View style={styles.liveButtonGlow} />
-                                        </TouchableOpacity>
-
-                                        {/* 🟠 FORUM */}
-                                        <TouchableOpacity
-                                            style={[styles.royalBtn, { flex: 1, borderColor: 'rgba(253,211,120,0.65)', shadowColor: '#F59E0B' }]}
-                                            onPress={startForumRoom}
-                                            disabled={isStartingForum || isStartingLive}
-                                            activeOpacity={0.85}
-                                        >
-                                            <LinearGradient
-                                                colors={['#F59E0B', '#7C2D12']}
-                                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                                                style={styles.royalBtnGradient}
-                                            >
-                                                <MaterialCommunityIcons name="account-group" size={70} color="rgba(255,255,255,0.12)" style={styles.royalWatermark} />
-                                                <View style={styles.royalIconWrap}>
-                                                    {!isStartingForum && (
-                                                        <Animated.View style={[styles.royalIconPulse, { borderColor: '#FDE68A', opacity: iconPulseOpacity, transform: [{ scale: iconPulseScale }] }]} />
-                                                    )}
-                                                    <View style={styles.royalIconCircle}>
-                                                        {isStartingForum ? (
-                                                            <ActivityIndicator size="small" color="#FFF" />
-                                                        ) : (
-                                                            <MaterialCommunityIcons name="account-group" size={18} color="#FFF" />
-                                                        )}
-                                                    </View>
-                                                </View>
-                                                <Text style={[styles.royalBtnText, { textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 }]}>
-                                                    {isStartingForum ? "SYNCING..." : "FORUM"}
-                                                </Text>
-                                                <Animated.View pointerEvents="none" style={[styles.btnSweep, { transform: [{ translateX: sweepX }, { skewX: '-20deg' }] }]} />
-                                            </LinearGradient>
-                                            <View style={[styles.liveButtonGlow, { backgroundColor: '#F59E0B' }]} />
-                                        </TouchableOpacity>
-                                    </View>
-
-                                    {/* 👑 PREMIUM SPOTLIGHT - royal gold ribbon */}
-                                    <TouchableOpacity
-                                        style={styles.royalSpotlight}
-                                        onPress={() => router.push('/expert/masterclass' as any)}
-                                        activeOpacity={0.85}
+                    {/* 🚪 STUDIO ROOM TOP BUTTON (🆕🆕🆕 same gold-framed marquee design as THE STUDIO header, 3D press button, no close / no red dot) */}
+                    <Animated.View style={[styles.btnWrap, { shadowColor: btnC1, transform: [{ scale: btnZoom }] }]}>
+                        <TouchableOpacity
+                            activeOpacity={0.95}
+                            onPress={openStudio}
+                            onPressIn={() => Animated.timing(btnPress, { toValue: 1, duration: 80, useNativeDriver: true }).start()}
+                            onPressOut={() => Animated.timing(btnPress, { toValue: 0, duration: 140, useNativeDriver: true }).start()}
+                            disabled={isStartingLive || isStartingForum}
+                        >
+                            {/* 3D depth base (the thick bottom edge) - level color, darkened */}
+                            <View style={styles.btn3dBase}>
+                                <LinearGradient colors={[btnC1, btnC2]} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                <View style={styles.btn3dShade} pointerEvents="none" />
+                                <Animated.View style={{ transform: [{ translateY: btnFaceY }] }}>
+                                    <LinearGradient
+                                        colors={[btnC1, btnC1, '#FFFFFF', btnC2, btnC2]}
+                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                        style={styles.btnFrame}
                                     >
-                                        <Image source={{ uri: SPOTLIGHT_BG }} style={styles.spotlightBgImage} />
-                                        <LinearGradient
-                                            colors={['#6B4A0AE6', '#F5D77AE6', '#C9972BE6', '#F5D77AE6', '#6B4A0AE6']}
-                                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-                                            style={styles.royalSpotlightGradient}
-                                        >
-                                            <MaterialCommunityIcons name="crown" size={17} color="#3B2600" />
-                                            <View style={styles.royalDivider} />
-                                            <Text style={styles.royalSpotlightText}>PREMIUM SPOTLIGHT</Text>
-                                            <View style={styles.royalDivider} />
-                                            <MaterialCommunityIcons name="crown" size={17} color="#3B2600" />
-                                            <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 50, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
-                                        </LinearGradient>
-                                    </TouchableOpacity>
-                                </View>
+                                        <View style={styles.btnFace}>
+                                            <LinearGradient
+                                                colors={[btnC1 + 'F2', btnC2 + 'F2']}
+                                                start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }}
+                                                style={StyleSheet.absoluteFill}
+                                                pointerEvents="none"
+                                            />
+                                            {/* darken a bit so WHITE text always pops on both level colors */}
+                                            <View style={styles.btnFaceShade} pointerEvents="none" />
+                                            {/* 3D bevel: glossy top, shaded bottom, bright top edge */}
+                                            <LinearGradient colors={['rgba(255,255,255,0.38)', 'rgba(255,255,255,0)']} style={styles.btnSolidGloss} pointerEvents="none" />
+                                            <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.4)']} style={styles.btnBevelBottom} pointerEvents="none" />
+                                            <View style={styles.btnTopEdge} pointerEvents="none" />
+                                            <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 46, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
+
+                                            {/* left rotating emblem */}
+                                            <View style={styles.btnEmblemWrap}>
+                                                <View style={styles.btnEmblemClip}>
+                                                    <Animated.View style={{ width: 80, height: 80, transform: [{ rotate: spin }] }}>
+                                                        <LinearGradient colors={['#FFFFFF', 'transparent', btnC2, 'transparent', '#FFFFFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+                                                    </Animated.View>
+                                                </View>
+                                                <View style={[styles.btnEmblemInner, { borderColor: 'rgba(255,255,255,0.55)' }]}>
+                                                    <MaterialCommunityIcons name="movie-open" size={19} color="#FFFFFF" />
+                                                </View>
+                                            </View>
+
+                                            {/* name + diamond divider */}
+                                            <View style={{ flex: 1, alignItems: 'center', marginHorizontal: 8 }}>
+                                                <Text style={[styles.btnTitle, { textShadowColor: 'rgba(0,0,0,0.65)', textShadowRadius: 5, textShadowOffset: { width: 0, height: 2 } }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
+                                                    {isStartingLive ? 'STARTING LIVE...' : isStartingForum ? 'OPENING FORUM...' : STUDIO_LABEL}
+                                                </Text>
+                                                <View style={styles.btnDivider}>
+                                                    <LinearGradient colors={['transparent', '#FFFFFF']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.studioHeadDividerLine} />
+                                                    <View style={[styles.studioHeadDiamond, { backgroundColor: '#FFFFFF' }]} />
+                                                    <LinearGradient colors={['#FFFFFF', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.studioHeadDividerLine} />
+                                                </View>
+                                            </View>
+
+                                            {/* right rotating emblem (mirror) */}
+                                            <View style={styles.btnEmblemWrap}>
+                                                <View style={styles.btnEmblemClip}>
+                                                    <Animated.View style={{ width: 80, height: 80, transform: [{ rotate: spin }] }}>
+                                                        <LinearGradient colors={['#FFFFFF', 'transparent', btnC1, 'transparent', '#FFFFFF']} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={{ flex: 1 }} />
+                                                    </Animated.View>
+                                                </View>
+                                                <View style={[styles.btnEmblemInner, { borderColor: 'rgba(255,255,255,0.55)' }]}>
+                                                    <MaterialCommunityIcons name="crown" size={19} color="#FFFFFF" />
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </LinearGradient>
+                                </Animated.View>
                             </View>
-                        </LinearGradient>
-                    </View>
+                        </TouchableOpacity>
+                    </Animated.View>
 
                     <ConsoleHome expertData={expertData} isOnline={isOnline} setIsOnline={toggleOnlineStatus} />
                 </View>
@@ -753,6 +885,215 @@ export default function ExpertDashboard() {
                     </BlurView>
                 </View>
             </SafeAreaView>
+
+            {/* 🎭 STUDIO ROOM (🆕🆕 NEW: curtains open + camera flash, then 3 stages: GO LIVE / FORUM / PREMIUM SPOTLIGHT) */}
+            <Modal visible={studioOpen} transparent animationType="none" statusBarTranslucent onRequestClose={closeStudio}>
+                <View style={styles.studioRoot}>
+                    <LinearGradient colors={['#020617', '#14072E', '#020617']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                    <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: 40, left: -110, backgroundColor: '#FF1F3D', transform: [{ translateY: orbTranslateY }] }]} />
+                    <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { bottom: 20, right: -110, backgroundColor: '#F59E0B', transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+
+                    {/* 🔦 stage spotlight cone */}
+                    <Animated.View pointerEvents="none" style={[styles.studioCone, { opacity: studioAnim }]}>
+                        <LinearGradient colors={['rgba(255,255,255,0.16)', 'rgba(255,255,255,0.03)', 'transparent']} style={StyleSheet.absoluteFill} />
+                    </Animated.View>
+
+                    {/* 🆕🆕🆕 swaying stage spotlight beams */}
+                    <Animated.View pointerEvents="none" style={[styles.beamHolder, { left: width * 0.16 - 60, opacity: studioAnim, transform: [{ rotate: beamRotA }] }]}>
+                        <LinearGradient colors={['rgba(255,31,61,0.32)', 'rgba(255,31,61,0.07)', 'transparent']} style={styles.beamBody} />
+                    </Animated.View>
+                    <Animated.View pointerEvents="none" style={[styles.beamHolder, { left: width * 0.84 - 60, opacity: studioAnim, transform: [{ rotate: beamRotB }] }]}>
+                        <LinearGradient colors={['rgba(245,215,122,0.30)', 'rgba(245,215,122,0.06)', 'transparent']} style={styles.beamBody} />
+                    </Animated.View>
+
+                    {/* 🆕🆕🆕 stage floor glow + rising sparkles */}
+                    <LinearGradient pointerEvents="none" colors={['transparent', 'rgba(245,215,122,0.10)', 'rgba(255,31,61,0.16)']} style={styles.studioFloor} />
+                    <View pointerEvents="none" style={StyleSheet.absoluteFill}>
+                        {PARTICLES.map((p, i) => <Particle key={i} p={p} />)}
+                    </View>
+
+                    <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+                        {/* 🆕🆕🆕 header - gold-framed glass marquee. Close button is LAST + highest layer, so nothing can hide it */}
+                        <Animated.View style={[styles.studioHead, { opacity: studioAnim, transform: [{ translateY: studioAnim.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) }] }]}>
+                            <LinearGradient
+                                colors={['#F5D77A', 'rgba(255,31,61,0.55)', '#F5D77A', 'rgba(245,158,11,0.55)', '#F5D77A']}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                style={styles.studioHeadFrame}
+                            >
+                                <View style={styles.studioHeadInner}>
+                                    <LinearGradient
+                                        colors={['rgba(255,31,61,0.22)', 'transparent', 'rgba(245,158,11,0.20)']}
+                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                        style={StyleSheet.absoluteFill}
+                                        pointerEvents="none"
+                                    />
+                                    {/* light sweep sits UNDER the content now */}
+                                    <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 46, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
+
+                                    {/* rotating emblem */}
+                                    <View style={styles.studioEmblemWrap}>
+                                        <View style={styles.studioEmblemClip}>
+                                            <Animated.View style={{ width: 90, height: 90, transform: [{ rotate: spin }] }}>
+                                                <LinearGradient colors={['#F5D77A', 'transparent', '#FF1F3D', 'transparent', '#F5D77A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+                                            </Animated.View>
+                                        </View>
+                                        <View style={styles.studioEmblemInner}>
+                                            <MaterialCommunityIcons name="movie-open" size={22} color="#F5D77A" />
+                                        </View>
+                                    </View>
+
+                                    <View style={{ flex: 1, marginLeft: 12, marginRight: 8 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                            <Animated.View style={{ opacity: blinkOpacity }}>
+                                                <View style={styles.studioHeadDot} />
+                                            </Animated.View>
+                                            <Text style={styles.studioHeadTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>STUDIO ROOM</Text>
+                                        </View>
+                                        <View style={styles.studioHeadDivider}>
+                                            <LinearGradient colors={['#F5D77A', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.studioHeadDividerLine} />
+                                            <View style={styles.studioHeadDiamond} />
+                                            <LinearGradient colors={['transparent', '#F5D77A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.studioHeadDividerLine, { flex: 0.35 }]} />
+                                        </View>
+                                        <Text style={styles.studioHeadSub} numberOfLines={2}>Pick your stage. The spotlight is yours.</Text>
+                                    </View>
+
+                                    <TouchableOpacity onPress={closeStudio} style={styles.studioClose} activeOpacity={0.8} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                                        <Ionicons name="close" size={20} color="#FFF" />
+                                    </TouchableOpacity>
+                                </View>
+                            </LinearGradient>
+                        </Animated.View>
+
+                        <ScrollView contentContainerStyle={styles.studioScroll} showsVerticalScrollIndicator={false}>
+                            {/* 🔴 STAGE 1 · GO LIVE */}
+                            <Animated.View style={cardIn(0)}>
+                                <TouchableOpacity
+                                    activeOpacity={0.88}
+                                    style={[styles.stageCard, { borderColor: 'rgba(255,140,150,0.6)', shadowColor: '#FF1F3D', height: 168 }]}
+                                    onPress={() => enterStage(startLiveStream)}
+                                    disabled={isStartingLive || isStartingForum}
+                                >
+                                    <LinearGradient colors={['#FF1F3D', '#5B0716', '#12020A']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.stageGrad}>
+                                        <MaterialCommunityIcons name="broadcast" size={150} color="rgba(255,255,255,0.08)" style={styles.stageWatermark} />
+                                        <LinearGradient colors={['transparent', 'rgba(255,255,255,0.55)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.stageSheen} pointerEvents="none" />
+
+                                        <View style={{ flex: 1, justifyContent: 'space-between' }}>
+                                            {/* neon ON AIR sign */}
+                                            <Animated.View style={[styles.onAirSign, { opacity: neonOpacity }]}>
+                                                <View style={styles.onAirDot} />
+                                                <Text style={styles.onAirText}>ON AIR</Text>
+                                            </Animated.View>
+                                            <View>
+                                                <Text style={styles.stageTitle}>GO LIVE</Text>
+                                                <Text style={styles.stageSub}>Broadcast to everyone, instantly</Text>
+                                            </View>
+                                        </View>
+
+                                        {/* 🆕🆕🆕 big pulsing record button - rings now perfectly centered & kept INSIDE the card */}
+                                        <View style={styles.liveBtnWrap}>
+                                            <View style={styles.liveStage}>
+                                                <Animated.View style={[styles.liveRing, { opacity: liveRingOpacity, transform: [{ scale: liveRingScale }] }]} />
+                                                <Animated.View style={[styles.liveRing, { opacity: Animated.multiply(liveRingOpacity, 0.6), transform: [{ scale: Animated.multiply(liveRingScale, 0.85) }] }]} />
+                                                <View style={styles.liveBtnCircle}>
+                                                    <Ionicons name="radio-button-on" size={34} color="#FFF" />
+                                                </View>
+                                            </View>
+                                            <Text style={styles.stageTap}>TAP TO START</Text>
+                                        </View>
+
+                                        <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 46, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </Animated.View>
+
+                            {/* 🟠 STAGE 2 · FORUM */}
+                            <Animated.View style={[cardIn(1), { marginTop: 14 }]}>
+                                <TouchableOpacity
+                                    activeOpacity={0.88}
+                                    style={[styles.stageCard, { borderColor: 'rgba(253,211,120,0.65)', shadowColor: '#F59E0B', height: 140 }]}
+                                    onPress={() => enterStage(startForumRoom)}
+                                    disabled={isStartingForum || isStartingLive}
+                                >
+                                    <LinearGradient colors={['#F59E0B', '#7C2D12', '#1A0A04']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.stageGrad}>
+                                        <MaterialCommunityIcons name="account-group" size={130} color="rgba(255,255,255,0.08)" style={styles.stageWatermark} />
+                                        <LinearGradient colors={['transparent', 'rgba(255,255,255,0.55)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.stageSheen} pointerEvents="none" />
+
+                                        <View style={{ flex: 1, justifyContent: 'center' }}>
+                                            <View style={styles.stageTag}>
+                                                <MaterialCommunityIcons name="microphone" size={11} color="#FDE68A" />
+                                                <Text style={styles.stageTagText}>8 SEATS · VOICE ROOM</Text>
+                                            </View>
+                                            <Text style={[styles.stageTitle, { marginTop: 8 }]}>FORUM</Text>
+                                            <Text style={styles.stageSub}>Host a round-table with your fans</Text>
+                                        </View>
+
+                                        {/* 🪑 orbiting seats */}
+                                        <View style={styles.seatBox}>
+                                            <Animated.View style={[StyleSheet.absoluteFill, { transform: [{ rotate: spin }] }]}>
+                                                {SEATS.map((s, i) => (
+                                                    <View
+                                                        key={i}
+                                                        style={[
+                                                            styles.seatDot,
+                                                            { left: 48 + s.x - 6, top: 48 + s.y - 6, opacity: i % 2 === 0 ? 1 : 0.55 }
+                                                        ]}
+                                                    />
+                                                ))}
+                                            </Animated.View>
+                                            <View style={styles.seatCenter}>
+                                                <MaterialCommunityIcons name="account-group" size={22} color="#FFF" />
+                                            </View>
+                                        </View>
+
+                                        <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 46, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </Animated.View>
+
+                            {/* 👑 STAGE 3 · PREMIUM SPOTLIGHT */}
+                            <Animated.View style={[cardIn(2), { marginTop: 14 }]}>
+                                <TouchableOpacity
+                                    activeOpacity={0.88}
+                                    style={[styles.stageCard, { borderColor: 'rgba(255,236,170,0.85)', shadowColor: '#F5D77A', height: 112 }]}
+                                    onPress={() => enterStage(() => router.push('/expert/masterclass' as any))}
+                                >
+                                    <Image source={{ uri: SPOTLIGHT_BG }} style={styles.spotlightBgImage} />
+                                    <LinearGradient
+                                        colors={['#6B4A0AE6', '#F5D77AE6', '#C9972BE6', '#F5D77AE6', '#6B4A0AE6']}
+                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                                        style={[styles.stageGrad, { alignItems: 'center', justifyContent: 'center' }]}
+                                    >
+                                        <View style={{ alignItems: 'center' }}>
+                                            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                                                <MaterialCommunityIcons name="crown" size={20} color="#3B2600" />
+                                                <View style={styles.royalDivider} />
+                                                <Text style={styles.royalSpotlightText}>PREMIUM SPOTLIGHT</Text>
+                                                <View style={styles.royalDivider} />
+                                                <MaterialCommunityIcons name="crown" size={20} color="#3B2600" />
+                                            </View>
+                                            <Text style={styles.spotSub}>YOUR 30-SECOND CINEMATIC SHOWCASE</Text>
+                                        </View>
+                                        <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 50, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
+                                    </LinearGradient>
+                                </TouchableOpacity>
+                            </Animated.View>
+                        </ScrollView>
+                    </SafeAreaView>
+
+                    {/* 🎭 VELVET CURTAINS (slide apart on entry) */}
+                    <Animated.View pointerEvents="none" style={[styles.curtain, { left: 0, transform: [{ translateX: curtainLeftX }] }]}>
+                        <LinearGradient colors={['#2B0509', '#9B1226', '#4A0A14']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                        <View style={[styles.curtainSeam, { right: 0 }]} />
+                    </Animated.View>
+                    <Animated.View pointerEvents="none" style={[styles.curtain, { right: 0, transform: [{ translateX: curtainRightX }] }]}>
+                        <LinearGradient colors={['#4A0A14', '#9B1226', '#2B0509']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                        <View style={[styles.curtainSeam, { left: 0 }]} />
+                    </Animated.View>
+
+                    {/* 📸 CAMERA FLASH */}
+                    <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: '#FFF', opacity: flashAnim }]} />
+                </View>
+            </Modal>
 
             <Modal visible={showPreviewModal} transparent animationType="slide" onRequestClose={() => setShowPreviewModal(false)}>
                 <BlurView intensity={95} tint="dark" style={styles.previewModalOverlay}>
@@ -929,6 +1270,91 @@ const styles = StyleSheet.create({
     royalSpotlightGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 14, overflow: 'hidden' },
     royalSpotlightText: { color: '#2B1B00', fontSize: 13, fontWeight: '900', letterSpacing: 4 },
     royalDivider: { width: 22, height: 1.5, backgroundColor: 'rgba(43,27,0,0.55)', marginHorizontal: 10 },
+
+    // 🚪 NEW: STUDIO ROOM PORTAL (slim bar on the dashboard) - old styles kept
+    portalWrap: { marginHorizontal: 15, marginTop: 8, marginBottom: 6, borderRadius: 24, overflow: 'hidden', elevation: 10, shadowColor: '#F5D77A', shadowOpacity: 0.35, shadowRadius: 12 },
+    portalFrame: { padding: 1.5, borderRadius: 24 },
+    portalInner: { flexDirection: 'row', alignItems: 'center', height: 54, borderRadius: 22.5, paddingHorizontal: 14, backgroundColor: 'rgba(2, 6, 23, 0.94)', overflow: 'hidden' },
+    portalDotWrap: { width: 22, height: 22, justifyContent: 'center', alignItems: 'center' },
+    portalDotPulse: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF1F3D' },
+    portalDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF1F3D', shadowColor: '#FF1F3D', shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+    portalTitle: { color: '#FFF', fontSize: 12, fontWeight: '900', letterSpacing: 2.2 },
+    portalSub: { color: '#94A3B8', fontSize: 8.5, fontWeight: '800', letterSpacing: 1, marginTop: 2 },
+    portalMiniRow: { flexDirection: 'row', gap: 5, marginRight: 10 },
+    portalMini: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    portalEnter: { flexDirection: 'row', alignItems: 'center', gap: 2, paddingHorizontal: 11, height: 28, borderRadius: 14, backgroundColor: '#F5D77A' },
+    portalEnterText: { color: '#2B1B00', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+
+    // 🆕🆕🆕 NEW: TOP BANNER DOCK (full-width, fused with the notification banner, only the name)
+    bannerWrap: { marginTop: 0, marginBottom: 8, elevation: 10, shadowColor: '#F5D77A', shadowOpacity: 0.3, shadowRadius: 12, shadowOffset: { width: 0, height: 4 } },
+    bannerDock: { height: 40, borderBottomLeftRadius: 24, borderBottomRightRadius: 24, overflow: 'hidden', justifyContent: 'center', backgroundColor: 'rgba(2, 6, 23, 0.9)' },
+    bannerTopLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 1 },
+    bannerBottomLine: { position: 'absolute', bottom: 0, left: 36, right: 36, height: 1.5 },
+    bannerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18 },
+    bannerSideLine: { flex: 1, height: 1, marginHorizontal: 12, maxWidth: 70 },
+    bannerDotWrap: { width: 18, height: 18, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+    bannerTitle: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 6, textShadowColor: 'rgba(245, 215, 122, 0.85)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 10 },
+
+    // 🆕🆕🆕 NEW: TOP STUDIO ROOM BUTTON (wide pill, running light border)
+    btnWrap: { marginHorizontal: 6, marginTop: 8, marginBottom: 10, borderRadius: 26, elevation: 14, shadowColor: '#F5D77A', shadowOpacity: 0.6, shadowRadius: 14, shadowOffset: { width: 0, height: 9 } },
+    btn3dBase: { borderRadius: 27, backgroundColor: '#7A5A0E', paddingBottom: 8, overflow: 'hidden' },
+    btnBevelBottom: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 20 },
+    btnTopEdge: { position: 'absolute', top: 0, left: 20, right: 20, height: 1.5, borderRadius: 1, backgroundColor: 'rgba(255,255,255,0.75)' },
+    btnFaceShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.22)' },
+    btn3dShade: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.5)' },
+    btnFrame: { padding: 1.5, borderRadius: 26 },
+    btnFace: { flexDirection: 'row', alignItems: 'center', height: 58, paddingHorizontal: 10, borderRadius: 24.5, backgroundColor: 'rgba(2, 6, 23, 0.96)', overflow: 'hidden' },
+    btnEmblemWrap: { width: 44, height: 44, justifyContent: 'center', alignItems: 'center' },
+    btnEmblemClip: { width: 44, height: 44, borderRadius: 22, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+    btnEmblemInner: { position: 'absolute', width: 38, height: 38, borderRadius: 19, backgroundColor: '#0B0618', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(245,215,122,0.35)' },
+    btnDivider: { flexDirection: 'row', alignItems: 'center', alignSelf: 'stretch', marginTop: 4 },
+    btnSolidGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 30 },
+    btnTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '900', letterSpacing: 5, textAlign: 'center', textShadowColor: 'rgba(245,215,122,0.85)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12 },
+
+    // 🆕🆕🆕 NEW: Studio Room beams + floor
+    beamHolder: { position: 'absolute', top: -height * 0.75, width: 120, height: height * 1.5 },
+    beamBody: { position: 'absolute', top: height * 0.75, left: 0, right: 0, bottom: 0, borderBottomLeftRadius: 60, borderBottomRightRadius: 60 },
+    studioFloor: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 180 },
+
+    // 🎭 NEW: STUDIO ROOM (full-screen immersive room)
+    studioRoot: { flex: 1, backgroundColor: '#020617', overflow: 'hidden' },
+    studioCone: { position: 'absolute', top: 0, left: width * 0.1, right: width * 0.1, height: height * 0.7, borderBottomLeftRadius: 400, borderBottomRightRadius: 400, overflow: 'hidden' },
+    studioHead: { paddingHorizontal: 16, paddingTop: 10, paddingBottom: 6 },
+    studioHeadFrame: { padding: 1.5, borderRadius: 26 },
+    studioHeadInner: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 14, borderRadius: 24.5, backgroundColor: 'rgba(2, 6, 23, 0.94)', overflow: 'hidden' },
+    studioEmblemWrap: { width: 56, height: 56, justifyContent: 'center', alignItems: 'center' },
+    studioEmblemClip: { width: 56, height: 56, borderRadius: 28, overflow: 'hidden', justifyContent: 'center', alignItems: 'center' },
+    studioEmblemInner: { position: 'absolute', width: 48, height: 48, borderRadius: 24, backgroundColor: '#0B0618', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(245,215,122,0.35)' },
+    studioHeadDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: '#FF1F3D', marginRight: 9, shadowColor: '#FF1F3D', shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+    studioHeadTitle: { flexShrink: 1, color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 3.5, textShadowColor: 'rgba(245,215,122,0.75)', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 12 },
+    studioHeadDivider: { flexDirection: 'row', alignItems: 'center', marginTop: 6, marginBottom: 5 },
+    studioHeadDividerLine: { flex: 1, height: 1 },
+    studioHeadDiamond: { width: 6, height: 6, backgroundColor: '#F5D77A', transform: [{ rotate: '45deg' }], marginHorizontal: 6 },
+    studioHeadSub: { color: '#94A3B8', fontSize: 11, fontWeight: '700', letterSpacing: 0.5 },
+    studioClose: { width: 42, height: 42, borderRadius: 21, flexShrink: 0, zIndex: 30, backgroundColor: 'rgba(255,31,61,0.22)', borderWidth: 1.5, borderColor: '#FF8FA0', shadowColor: '#FF1F3D', shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 8, justifyContent: 'center', alignItems: 'center' },
+    studioScroll: { flexGrow: 1, justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 20 },
+    stageCard: { borderRadius: 28, overflow: 'hidden', borderWidth: 1, elevation: 12, shadowOpacity: 0.55, shadowRadius: 16, shadowOffset: { width: 0, height: 8 } },
+    stageGrad: { flex: 1, flexDirection: 'row', padding: 18, overflow: 'hidden' },
+    stageSheen: { position: 'absolute', top: 0, left: 28, right: 28, height: 1.5 },
+    stageWatermark: { position: 'absolute', right: -24, bottom: -30, transform: [{ rotate: '-14deg' }] },
+    stageTitle: { color: '#FFF', fontSize: 30, fontWeight: '900', letterSpacing: 3, textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
+    stageSub: { color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '700', marginTop: 3, letterSpacing: 0.4 },
+    stageTap: { color: 'rgba(255,255,255,0.85)', fontSize: 8.5, fontWeight: '900', letterSpacing: 2, marginTop: 4 },
+    stageTag: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 9, backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 1, borderColor: 'rgba(253,230,138,0.5)' },
+    stageTagText: { color: '#FDE68A', fontSize: 9, fontWeight: '900', letterSpacing: 1.4 },
+    onAirSign: { flexDirection: 'row', alignItems: 'center', gap: 7, alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderWidth: 1.5, borderColor: '#FFB4BE', backgroundColor: 'rgba(0,0,0,0.35)', shadowColor: '#FF1F3D', shadowOpacity: 1, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 8 },
+    onAirDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: '#FF1F3D' },
+    onAirText: { color: '#FFD1D8', fontSize: 12, fontWeight: '900', letterSpacing: 3.5, textShadowColor: '#FF1F3D', textShadowRadius: 10, textShadowOffset: { width: 0, height: 0 } },
+    liveBtnWrap: { width: 100, alignItems: 'center', justifyContent: 'center' },
+    liveStage: { width: 96, height: 96, alignItems: 'center', justifyContent: 'center' },
+    liveRing: { position: 'absolute', top: 11, left: 11, width: 74, height: 74, borderRadius: 37, borderWidth: 2, borderColor: '#FFB4BE' },
+    liveBtnCircle: { width: 74, height: 74, borderRadius: 37, marginTop: 0, backgroundColor: 'rgba(255,255,255,0.18)', borderWidth: 2, borderColor: 'rgba(255,255,255,0.55)', justifyContent: 'center', alignItems: 'center' },
+    seatBox: { width: 96, height: 96, alignSelf: 'center', justifyContent: 'center', alignItems: 'center' },
+    seatDot: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#FDE68A', shadowColor: '#FDE68A', shadowOpacity: 0.9, shadowRadius: 5, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
+    seatCenter: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(255,255,255,0.2)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)', justifyContent: 'center', alignItems: 'center' },
+    spotSub: { color: 'rgba(43,27,0,0.8)', fontSize: 9, fontWeight: '900', letterSpacing: 2.5, marginTop: 8 },
+    curtain: { position: 'absolute', top: 0, bottom: 0, width: width / 2 + 2, overflow: 'hidden' },
+    curtainSeam: { position: 'absolute', top: 0, bottom: 0, width: 3, backgroundColor: '#F5D77A', opacity: 0.85 },
 
     previewModalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.85)' },
     closePreviewBtn: { position: 'absolute', top: Platform.OS === 'ios' ? 60 : 40, right: 20, zIndex: 100, shadowColor: '#000', shadowOpacity: 0.8, shadowRadius: 10 },

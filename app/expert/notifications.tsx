@@ -2,7 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { collection, doc, getDoc, limit, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
+import { collection, doc, getDoc, limit, onSnapshot, query, runTransaction, updateDoc, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -71,6 +71,25 @@ const lighten = (hex: string, t: number) => blend(hex, '#FFFFFF', t);
 
 // 🆕 UNREAD helpers (same rule the bell badge on the home screen uses)
 const isUnread = (n: any) => !(n?.read === true || n?.isRead === true);
+
+// 🆕 LEVEL-UP DUPLICATE GUARD: same level-up notification (same id / same title+message) is shown only ONCE
+// (old duplicate logs already saved in Firestore are hidden too)
+const levelDedupKey = (n: any): string | null => {
+  if (n?.id && String(n.id).startsWith('level_up')) return String(n.id);
+  const title = String(n?.title || '');
+  if (n?.type !== 'call' && /level/i.test(title)) return `lvl|${title}|${n?.message || ''}`;
+  return null;
+};
+const dedupeLevelLogs = (list: any[]) => {
+  const seen = new Set<string>();
+  return list.filter((n: any) => {
+    const k = levelDedupKey(n);
+    if (!k) return true;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
+};
 
 // 🆕 stable key per notification (same content + same time => numbered #0, #1...) so repeated snapshots never double count
 const buildKeys = (list: any[]) => {
@@ -362,6 +381,15 @@ export default function NotificationsScreen() {
   const isFocusedRef = useRef(true);
   const notifsRef = useRef<any[]>([]);
 
+  // 🔥 NEW FIX: last "seen" time saved in Firestore (same value the home bell badge uses)
+  const seenAtRef = useRef<number | null>(null);
+  // 🔥 NEW FIX: a notification is "fresh" if it is unread OR newer than the last seen time (this is exactly the bell badge rule)
+  const isFresh = (n: any) =>
+    isUnread(n) || (seenAtRef.current !== null && typeof n?.createdAt === 'number' && n.createdAt > seenAtRef.current);
+
+  // 🔥 NEW FIX: same level-up shown only once in list + counts
+  const shownNotifications = dedupeLevelLogs(notifications);
+
   const ringTimerAnim = useRef(new Animated.Value(1)).current;
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const floatAnim = useRef(new Animated.Value(0)).current; 
@@ -393,8 +421,9 @@ export default function NotificationsScreen() {
   // 🆕 remember which notifications are NEW (unread) - safe to call many times (keys are stable)
   const registerNew = (list: any[]) => {
     const keys = buildKeys(list);
+    const visible = new Set(dedupeLevelLogs(list)); // hidden duplicates are never counted
     const fresh: string[] = [];
-    list.forEach((n: any, i: number) => { if (isUnread(n)) fresh.push(keys[i]); });
+    list.forEach((n: any, i: number) => { if (visible.has(n) && isFresh(n)) fresh.push(keys[i]); });
     if (fresh.length === 0) return false;
     setNewKeys(prev => {
       const next = [...prev];
@@ -405,12 +434,25 @@ export default function NotificationsScreen() {
   };
 
   // 🆕 mark everything as read in Firestore (this is what clears the bell badge on the home screen)
-  const markAllRead = async (list: any[]) => {
+  // 🔥 FIX: also saves "notifSeenAt" - the home bell badge also counts notifications newer than this time,
+  // so without updating it the badge never cleared even after reading.
+  // Runs in a transaction so a notification that arrives at the same moment is never overwritten.
+  const markAllRead = async (_list?: any[]) => {
     const user = auth.currentUser;
     if (!user) return;
     try {
-      await updateDoc(doc(db, "users", user.uid), {
-        notifications: list.map((n: any) => ({ ...n, read: true }))
+      const userRef = doc(db, "users", user.uid);
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(userRef);
+        if (!snap.exists()) return;
+        const latest: any[] = Array.isArray(snap.data().notifications) ? snap.data().notifications : [];
+        // seen time = now (or the newest notification time if the clocks differ) so nothing stays "newer than seen"
+        let seenAt = Date.now();
+        latest.forEach((n: any) => { if (typeof n?.createdAt === 'number' && n.createdAt > seenAt) seenAt = n.createdAt; });
+        tx.update(userRef, {
+          notifications: latest.map((n: any) => ({ ...n, read: true })),
+          notifSeenAt: seenAt
+        });
       });
     } catch (err) {
       console.error("Error updating read status: ", err);
@@ -424,11 +466,15 @@ export default function NotificationsScreen() {
     useCallback(() => {
       isFocusedRef.current = true;
       const pending = notifsRef.current;
-      if (pending.some(isUnread)) {
+      if (pending.some(isFresh)) {
         registerNew(pending);
         markAllRead(pending);
       }
-      return () => { isFocusedRef.current = false; };
+      return () => {
+        isFocusedRef.current = false;
+        // 🔥 NEW FIX: once you leave the screen, these are "seen" - clear the NEW highlights so they don't come back next visit
+        setNewKeys([]);
+      };
     }, [])
   );
 
@@ -441,11 +487,13 @@ export default function NotificationsScreen() {
       if (docSnap.exists()) {
         const data = docSnap.data();
         const notifs = data.notifications || [];
+        // 🔥 NEW FIX: keep the saved seen-time so "fresh" matches the home bell badge rule
+        seenAtRef.current = data.notifSeenAt === undefined ? null : (Number(data.notifSeenAt) || 0);
         setNotifications(notifs); 
         notifsRef.current = notifs;
 
         // 🔥 FIX: Mark unread notifications as read when screen is opened (only while focused)
-        const hasUnread = notifs.some(isUnread);
+        const hasUnread = notifs.some(isFresh);
         if (hasUnread) {
             registerNew(notifs); // keep them highlighted + counted as NEW for this visit
             if (isFocusedRef.current) {
@@ -526,14 +574,14 @@ export default function NotificationsScreen() {
 
   // 🆕 Hero count-up
   useEffect(() => {
-    const target = notifications.length;
+    const target = shownNotifications.length;
     const id = countAnim.addListener(({ value }) => setHeroCount(Math.floor(target * value)));
     countAnim.setValue(0);
     Animated.timing(countAnim, { toValue: 1, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start(({ finished }) => {
       if (finished) setHeroCount(target);
     });
     return () => countAnim.removeListener(id);
-  }, [notifications.length]);
+  }, [shownNotifications.length]);
 
   // 🆕 Filter pill slide
   useEffect(() => {
@@ -668,8 +716,10 @@ export default function NotificationsScreen() {
         style: "destructive",
         onPress: async () => {
           try {
+            // 🔥 NEW FIX: for a level-up log, also remove its hidden duplicates so they don't reappear after delete
+            const dk = levelDedupKey(item);
             await updateDoc(doc(db, "users", user.uid), {
-              notifications: notifications.filter((n: any) => n !== item)
+              notifications: notifications.filter((n: any) => n !== item && !(dk && levelDedupKey(n) === dk))
             });
           } catch (e) { console.log("Delete notification error:", e); }
         }
@@ -735,10 +785,10 @@ export default function NotificationsScreen() {
   const displayPic = callerProfilePic || `https://ui-avatars.com/api/?name=${displayName}&background=0F172A&color=00F2FE&size=512&bold=true`;
 
   // 🆕 derived values
-  const totalLogs = notifications.length;
-  const callLogs = notifications.filter((n: any) => n?.type === 'call').length;
+  const totalLogs = shownNotifications.length;
+  const callLogs = shownNotifications.filter((n: any) => n?.type === 'call').length;
   const alertLogs = totalLogs - callLogs;
-  const listData = [...notifications].reverse().filter((n: any) =>
+  const listData = [...shownNotifications].reverse().filter((n: any) =>
     filter === 'ALL' ? true : filter === 'CALLS' ? n?.type === 'call' : n?.type !== 'call'
   );
 
