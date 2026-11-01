@@ -39,7 +39,11 @@ const ReportedUsers = () => {
         // 🔥 SYSTEM LOGIC: Fetching Internal Host Safety Alerts
         const qAlerts = query(collection(db, "admin_alerts"), orderBy("timestamp", "desc"));
         const unsubAlerts = onSnapshot(qAlerts, (snap) => {
-            setAdminAlerts(snap.docs.map(d => ({ id: d.id, _collection: 'admin_alerts', ...d.data() })));
+           setAdminAlerts(
+    snap.docs
+        .filter(d => d.data().type !== 'TRUST_SAFETY_REPORT')
+        .map(d => ({ id: d.id, _collection: 'admin_alerts', ...d.data() }))
+);
         });
 
         return () => { 

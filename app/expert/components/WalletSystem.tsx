@@ -1,25 +1,28 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { BlurView } from 'expo-blur';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { addDoc, collection, doc, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    Image,
-    Modal,
-    Pressable,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  Image,
+  Keyboard,
+  Modal,
+  PanResponder,
+  Platform,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../../../firebaseConfig';
 import { sendNotificationToUser } from '../../../utils/notificationHelper'; // 🔥 NOTIFICATION IMPORT
 
@@ -31,7 +34,14 @@ const CARD_BG = 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&
 const BANK_BG = 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=1200&auto=format&fit=crop';
 
 const CARD_WIDTH = width - 40;
-const CARD_HEIGHT = 238;
+const CARD_HEIGHT = 264;
+
+const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
+
+// ✨ LEVEL START POINTS (used only for the level progress bar on the rewards card)
+const LEVEL_FLOORS = [0, 30000, 100000, 300000, 1000000, 3000000, 5000000, 10000000, 30000000, 50000000, 100000000];
+
+const clamp = (v: number, min = -1, max = 1) => Math.max(min, Math.min(max, v));
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
 const getLevelConfig = (beans: number) => {
@@ -46,6 +56,79 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 100000)   return { lvl: 2, label: 'BRONZE L2', colors: ['#ff8604', '#f29d0a', '#1505fc'], glow: 'transparent', next: 300000, prev: 30000, rate: 1800 };
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
+};
+
+// 📄 FULL-SCREEN FORM PAGE (replaces bottom sheets)
+// Nothing here moves when the keyboard opens: header stays on top, the form scrolls, and extra scroll room is added at the bottom
+// so the last buttons can always be scrolled above the keyboard.
+// 🔧 KEYBOARD FIX: no statusBarTranslucent on the Modal (it makes Android pan the whole window), no focus timers,
+// no dismiss-on-drag. Auto-scroll of the focused field is controlled by the AUTO_SCROLL switch below.
+const ScrollCtx = createContext<(y: number) => void>(() => {});
+
+// 🔧 AUTO_SCROLL = false  -> keyboard open-a irukkum pothu screen thaana scroll aagaadhu (jump illa, safe)
+// 🔧 AUTO_SCROLL = true   -> focus pannina field-a keyboard-ku mela thookum (jump aana thirumba false pannunga)
+const AUTO_SCROLL = true;
+
+const FormPage = ({ visible, onClose, theme, header, children }: any) => {
+    const insets = useSafeAreaInsets();
+    const scrollRef = useRef<ScrollView>(null);
+    const [kb, setKb] = useState(0);
+    const kbRef = useRef(0);
+    const focusY = useRef(0);
+
+    const doScroll = () => {
+        scrollRef.current?.scrollTo({ y: Math.max(0, focusY.current - 110), animated: true });
+    };
+
+    useEffect(() => {
+        if (!visible || Platform.OS !== 'android') return;
+        const s = Keyboard.addListener('keyboardDidShow', (e: any) => {
+            const h = e?.endCoordinates?.height || 0;
+            kbRef.current = h;
+            setKb(h);
+            // padding set aana APRAM scroll (only when AUTO_SCROLL is on)
+            if (AUTO_SCROLL) setTimeout(doScroll, 60);
+        });
+        const h = Keyboard.addListener('keyboardDidHide', () => { kbRef.current = 0; setKb(0); });
+        return () => { s.remove(); h.remove(); kbRef.current = 0; setKb(0); };
+    }, [visible]);
+
+    // focus-la timer illa: field position-a mattum note panrom, keyboard already open-a irundha mattum udane scroll
+    const scrollToY = useCallback((y: number) => {
+        focusY.current = y;
+        if (AUTO_SCROLL && (Platform.OS === 'ios' || kbRef.current > 0)) doScroll();
+    }, []);
+
+    return (
+        <Modal visible={visible} animationType="slide" onRequestClose={onClose}>
+            <View style={styles.pageRoot}>
+                <LinearGradient colors={theme.bgGradient} style={StyleSheet.absoluteFill} />
+                <LinearGradient colors={[theme.primary + '22', 'transparent']} style={styles.sheetGlow} pointerEvents="none" />
+
+                <View style={{ paddingTop: insets.top + 14, paddingHorizontal: 24, paddingBottom: 6 }}>
+                    {header}
+                </View>
+
+                <ScrollView
+                    ref={scrollRef}
+                    style={{ flex: 1 }}
+                    contentContainerStyle={{
+                        paddingHorizontal: 24,
+                        paddingTop: 16,
+                        paddingBottom: insets.bottom + 40 + (Platform.OS === 'android' ? kb : 0)
+                    }}
+                    keyboardShouldPersistTaps="handled"
+                    keyboardDismissMode="none"
+                    automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
+                    showsVerticalScrollIndicator={false}
+                >
+                    <ScrollCtx.Provider value={scrollToY}>
+                        {children}
+                    </ScrollCtx.Provider>
+                </ScrollView>
+            </View>
+        </Modal>
+    );
 };
 
 // ✨ PRESS-SCALE BUTTON (ovvoru tap-kum springy premium feel)
@@ -97,6 +180,152 @@ const FloatingDot = ({ delay, left, size, color, duration }: any) => {
     );
 };
 
+// ✨ 3D TILT CARD: sways on its own, follows your finger on horizontal drag, glare shine
+const Tilt3D = ({ children, style, radius = 28, max = 10 }: any) => {
+    const rx = useRef(new Animated.Value(0)).current;
+    const ry = useRef(new Animated.Value(0)).current;
+    const sw = useRef(new Animated.Value(0)).current;
+    const dims = useRef({ w: 300, h: 160 });
+
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(sw, { toValue: 1, duration: 3400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(sw, { toValue: 0, duration: 3400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+
+    const release = () => {
+        Animated.parallel([
+            Animated.spring(rx, { toValue: 0, useNativeDriver: true, friction: 4, tension: 40 }),
+            Animated.spring(ry, { toValue: 0, useNativeDriver: true, friction: 4, tension: 40 }),
+        ]).start();
+    };
+
+    const pan = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => false,
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 8 && Math.abs(g.dx) > Math.abs(g.dy),
+            onPanResponderMove: (_, g) => {
+                ry.setValue(clamp(g.dx / (dims.current.w / 2)));
+                rx.setValue(clamp(g.dy / dims.current.h));
+            },
+            onPanResponderRelease: release,
+            onPanResponderTerminate: release,
+        })
+    ).current;
+
+    const rotateX = rx.interpolate({ inputRange: [-1, 1], outputRange: [`${max}deg`, `-${max}deg`] });
+    const rotateY = ry.interpolate({ inputRange: [-1, 1], outputRange: [`-${max}deg`, `${max}deg`] });
+    const swayY = sw.interpolate({ inputRange: [0, 1], outputRange: ['-5deg', '5deg'] });
+    const swayX = sw.interpolate({ inputRange: [0, 1], outputRange: ['2.5deg', '-2.5deg'] });
+    const glareX = Animated.add(
+        ry.interpolate({ inputRange: [-1, 1], outputRange: [-130, 130] }),
+        sw.interpolate({ inputRange: [0, 1], outputRange: [-70, 70] })
+    );
+
+    return (
+        <Animated.View
+            {...pan.panHandlers}
+            onLayout={(e) => { dims.current = { w: e.nativeEvent.layout.width || 300, h: e.nativeEvent.layout.height || 160 }; }}
+            style={[
+                style,
+                { transform: [{ perspective: 900 }, { rotateX }, { rotateY }, { rotateY: swayY }, { rotateX: swayX }] }
+            ]}
+        >
+            {children}
+            <View pointerEvents="none" style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
+                <Animated.View style={[styles.glareStrip, { transform: [{ translateX: glareX }, { rotate: '18deg' }] }]} />
+            </View>
+        </Animated.View>
+    );
+};
+
+// ✨ 3D SPINNING REWARD COIN (front = star, back = your level)
+const RewardCoin = ({ lvl, c1, c2 }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.timing(a, { toValue: 1, duration: 4200, easing: Easing.linear, useNativeDriver: true })
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const frontRot = a.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const backRot = a.interpolate({ inputRange: [0, 1], outputRange: ['180deg', '540deg'] });
+    return (
+        <View style={styles.coinWrap}>
+            <Animated.View style={[styles.coinFace, { transform: [{ perspective: 500 }, { rotateY: frontRot }] }]}>
+                <LinearGradient colors={[c1, c2] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.coinGrad}>
+                    <MaterialCommunityIcons name="star-four-points" size={26} color="#000" />
+                </LinearGradient>
+            </Animated.View>
+            <Animated.View style={[styles.coinFace, { transform: [{ perspective: 500 }, { rotateY: backRot }] }]}>
+                <LinearGradient colors={[c2, c1] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.coinGrad}>
+                    <Text style={styles.coinText}>L{lvl}</Text>
+                </LinearGradient>
+            </Animated.View>
+        </View>
+    );
+};
+
+// ✨ 3D FLOATING SHIELD ORB (payout details hero)
+const ShieldOrb = ({ c1, c2 }: any) => {
+    const sway = useRef(new Animated.Value(0)).current;
+    const bob = useRef(new Animated.Value(0)).current;
+    const ring = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        const l1 = Animated.loop(
+            Animated.sequence([
+                Animated.timing(sway, { toValue: 1, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(sway, { toValue: 0, duration: 2600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+            ])
+        );
+        const l2 = Animated.loop(
+            Animated.sequence([
+                Animated.timing(bob, { toValue: 1, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(bob, { toValue: 0, duration: 2100, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+            ])
+        );
+        const l3 = Animated.loop(
+            Animated.timing(ring, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true })
+        );
+        l1.start(); l2.start(); l3.start();
+        return () => { l1.stop(); l2.stop(); l3.stop(); };
+    }, []);
+
+    const rotY = sway.interpolate({ inputRange: [0, 1], outputRange: ['-28deg', '28deg'] });
+    const rotX = sway.interpolate({ inputRange: [0, 1], outputRange: ['8deg', '-8deg'] });
+    const ty = bob.interpolate({ inputRange: [0, 1], outputRange: [0, -6] });
+    const ringScale = ring.interpolate({ inputRange: [0, 1], outputRange: [1, 1.9] });
+    const ringOpacity = ring.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
+
+    return (
+        <View style={styles.orbWrap}>
+            <Animated.View pointerEvents="none" style={[styles.orbRing, { borderColor: c1, opacity: ringOpacity, transform: [{ scale: ringScale }] }]} />
+            <Animated.View style={{ transform: [{ translateY: ty }, { perspective: 600 }, { rotateY: rotY }, { rotateX: rotX }] }}>
+                <LinearGradient colors={[c1, c2] as const} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.orbCore}>
+                    <Ionicons name="shield-checkmark" size={34} color="#FFF" />
+                </LinearGradient>
+            </Animated.View>
+            <FloatingDot delay={0} left={8} size={4} color="#FFF" duration={3200} />
+            <FloatingDot delay={900} left={60} size={3} color={c1} duration={3600} />
+            <FloatingDot delay={1500} left={96} size={4} color="#FFF" duration={3000} />
+        </View>
+    );
+};
+
+// ✨ DISPLAY-ONLY STATUS LABELS (database values stay exactly the same)
+const getStatusLabel = (status: string) => {
+    if (status === 'PENDING') return 'IN REVIEW';
+    if (status === 'REJECTED') return 'DECLINED';
+    return status;
+};
+
 // ✨ LEDGER ROW (slide-in animation, status accent bar, status chip)
 const LedgerRow = ({ tx, index, theme, borderStyle }: any) => {
     const a = useRef(new Animated.Value(0)).current;
@@ -126,7 +355,7 @@ const LedgerRow = ({ tx, index, theme, borderStyle }: any) => {
                     />
                 </View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={styles.ledgerType}>{tx.type || 'Redeem'}</Text>
+                    <Text style={styles.ledgerType}>{!tx.type || tx.type === 'Redeem' ? 'Reward Redemption' : tx.type}</Text>
                     <Text style={styles.ledgerDate}>{tx.createdAt?.toDate().toLocaleDateString('en-IN', { day: '2-digit', month: 'short' }) || 'RECENT'}</Text>
                 </View>
                 <View style={{ alignItems: 'flex-end' }}>
@@ -135,7 +364,7 @@ const LedgerRow = ({ tx, index, theme, borderStyle }: any) => {
                         - ₹{tx.amountRupee || tx.amount}
                     </Text>
                     <View style={[styles.ledgerStatusChip, { backgroundColor: statusColor + '22', borderColor: statusColor + '55' }]}>
-                        <Text style={[styles.ledgerStatus, { color: statusColor }]}>{tx.status}</Text>
+                        <Text style={[styles.ledgerStatus, { color: statusColor }]}>{getStatusLabel(tx.status)}</Text>
                     </View>
                 </View>
             </View>
@@ -145,7 +374,7 @@ const LedgerRow = ({ tx, index, theme, borderStyle }: any) => {
                 <View style={[styles.rejectReasonBox, { marginTop: 8 }]}>
                     <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{ marginTop: 2 }} />
                     <View style={{ marginLeft: 8, flex: 1 }}>
-                        <Text style={styles.rejectLabel}>REJECTION REASON</Text>
+                        <Text style={styles.rejectLabel}>REVIEW NOTE</Text>
                         <Text style={styles.rejectReasonText}>{tx.rejectReason}</Text>
                     </View>
                 </View>
@@ -154,12 +383,137 @@ const LedgerRow = ({ tx, index, theme, borderStyle }: any) => {
     );
 };
 
+// 🎁 REDEEM FORM (local state: typing never re-renders the big Rewards screen)
+const RedeemBody = ({ theme, borderType1, availableRupees, loading, onSubmit }: any) => {
+    const [amount, setAmount] = useState('');
+    return (
+        <>
+            <View style={styles.inputArea}>
+                <Text style={styles.currencyLabel}>ENTER REDEEM AMOUNT</Text>
+                <TextInput 
+                    style={styles.giantInput} 
+                    placeholder="0" 
+                    placeholderTextColor="rgba(255,255,255,0.1)" 
+                    keyboardType="numeric" 
+                    value={amount} 
+                    onChangeText={(t: string) => setAmount(t)}
+                />
+
+                {/* ⚡ QUICK AMOUNT CHIPS */}
+                <View style={styles.quickRow}>
+                    {QUICK_AMOUNTS.map((v) => {
+                        const active = amount === String(v);
+                        return (
+                            <TouchableOpacity
+                                key={v}
+                                onPress={() => setAmount(String(v))}
+                                style={[styles.quickChip, active && { backgroundColor: theme.primary + '30', borderColor: theme.primary }]}
+                            >
+                                <Text style={[styles.quickChipText, active && { color: '#FFF' }]}>₹{v.toLocaleString()}</Text>
+                            </TouchableOpacity>
+                        );
+                    })}
+                </View>
+
+                {/* 🔥 DUAL TONE INFO BOX (TYPE 1) */}
+                <View style={[styles.feeInfoBox, borderType1]}>
+                    <Text style={styles.feeText}>PROCESSING FEE: <Text style={{color: '#FFF'}}>₹100</Text></Text>
+                    <View style={styles.feeDot} />
+                    <Text style={styles.feeText}>TOTAL REWARDS USED: <Text style={{color: '#FFF'}}>₹{(Number(amount) || 0) + 100}</Text></Text>
+                </View>
+                <Text style={styles.availableHint}>Available: ₹{availableRupees.toLocaleString()}</Text>
+                <Text style={styles.reviewNote}>Redemption requests are subject to review and verification before processing.</Text>
+            </View>
+
+            <ScaleBtn style={styles.finalSubmitBtn} onPress={() => onSubmit(amount)} disabled={loading}>
+                <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.finalSubmitGrad}>
+                    {loading ? <ActivityIndicator color="#FFF" /> : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Ionicons name="paper-plane" size={16} color="#FFF" />
+                            <Text style={styles.finalSubmitText}>SUBMIT REQUEST</Text>
+                        </View>
+                    )}
+                </LinearGradient>
+            </ScaleBtn>
+        </>
+    );
+};
+
+// 🛡️ PAYOUT FORM (local state: typing never re-renders the big Rewards screen)
+const PayoutFormBody = ({ initial, idProofImage, loading, theme, borderType1, borderType2, onPickId, onCancel, onSubmit }: any) => {
+    const [details, setDetails] = useState({
+        holderName: initial?.holderName || '',
+        accountNumber: initial?.accountNumber || '',
+        ifsc: initial?.ifsc || '',
+        upiId: initial?.upiId || ''
+    });
+
+    return (
+        <>
+            {/* 🔐 TRUST CHIPS */}
+            <View style={styles.trustRow}>
+                <View style={styles.trustChip}>
+                    <Ionicons name="lock-closed" size={13} color={theme.primary} />
+                    <Text style={styles.trustChipText}>PRIVATE</Text>
+                </View>
+                <View style={styles.trustChip}>
+                    <MaterialCommunityIcons name="file-search-outline" size={14} color={theme.primary} />
+                    <Text style={styles.trustChipText}>TEAM REVIEWED</Text>
+                </View>
+                <View style={styles.trustChip}>
+                    <Ionicons name="checkmark-done" size={14} color={theme.primary} />
+                    <Text style={styles.trustChipText}>APPROVAL BASED</Text>
+                </View>
+            </View>
+
+            {/* 🔥 DUAL TONE INPUT NODES (ALTERNATING) */}
+            <InputNode label="ACCOUNT HOLDER" icon="person-outline" accent={theme.primary} value={details.holderName} onChange={(t: string) => setDetails((d) => ({ ...d, holderName: t }))} borderStyle={borderType1} />
+            <InputNode label="ACCOUNT NUMBER" icon="card-outline" accent={theme.primary} value={details.accountNumber} onChange={(t: string) => setDetails((d) => ({ ...d, accountNumber: t }))} keyboard="numeric" borderStyle={borderType2} />
+            <InputNode label="IFSC CODE" icon="business-outline" accent={theme.primary} value={details.ifsc} onChange={(t: string) => setDetails((d) => ({ ...d, ifsc: t }))} autoCap="characters" borderStyle={borderType1} />
+            <InputNode label="UPI ID / VPA" icon="at-outline" accent={theme.primary} value={details.upiId} onChange={(t: string) => setDetails((d) => ({ ...d, upiId: t }))} borderStyle={borderType2} />
+
+            <Text style={styles.nodeLabel}>ID VERIFICATION DOCUMENT</Text>
+            <TouchableOpacity style={[styles.uploadNode, borderType1]} onPress={onPickId}>
+                {loading ? (
+                    <ActivityIndicator color={theme.primary} />
+                ) : idProofImage ? (
+                    <View style={styles.uploadSuccess}>
+                        <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
+                        <Text style={styles.uploadSuccessText}>SECURELY ATTACHED</Text>
+                    </View>
+                ) : (
+                    <View style={{ alignItems: 'center' }}>
+                        <Ionicons name="cloud-upload" size={28} color={theme.primary} />
+                        <Text style={styles.uploadHint}>Upload Aadhaar or PAN Card</Text>
+                    </View>
+                )}
+            </TouchableOpacity>
+
+            {/* 🔒 PRIVACY NOTE */}
+            <View style={styles.privacyNote}>
+                <MaterialCommunityIcons name="lock-outline" size={14} color="#64748B" />
+                <Text style={styles.privacyNoteText}>Your details are used only to verify your identity and process approved reward redemptions. They are submitted for review by our team.</Text>
+            </View>
+
+            <View style={styles.modalActionRow}>
+                <TouchableOpacity style={styles.cancelNode} onPress={onCancel}>
+                    <Text style={styles.cancelNodeText}>CANCEL</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.saveNode} onPress={() => onSubmit(details)} disabled={loading}>
+                    <LinearGradient colors={['#10B981', '#059669']} style={styles.saveNodeGrad}>
+                        {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveNodeText}>SUBMIT FOR VERIFICATION</Text>}
+                    </LinearGradient>
+                </TouchableOpacity>
+            </View>
+        </>
+    );
+};
+
 export default function WalletSystem({ expertData }: any) {
     const [user, setUser] = useState(auth.currentUser); 
     const [modalVisible, setModalVisible] = useState(false);
     const [editBankVisible, setEditBankVisible] = useState(false);
     const [loading, setLoading] = useState(false);
-    const [amount, setAmount] = useState('');
     const [transactions, setTransactions] = useState<any[]>([]);
     
     const [bankDetails, setBankDetails] = useState({
@@ -171,6 +525,10 @@ export default function WalletSystem({ expertData }: any) {
 
     const [idProofImage, setIdProofImage] = useState(expertData?.idProof || null);
 
+    // keeps track of whether the payout page is open so background data refreshes never overwrite what the user is typing
+    const editOpenRef = useRef(false);
+    useEffect(() => { editOpenRef.current = editBankVisible; }, [editBankVisible]);
+
     // 🔥 ANIMATION REFS
     const shimmerAnim = useRef(new Animated.Value(0)).current;
     const floatAnim = useRef(new Animated.Value(0)).current;       // card floating
@@ -178,7 +536,8 @@ export default function WalletSystem({ expertData }: any) {
     const pulseAnim = useRef(new Animated.Value(0)).current;       // ACTIVE badge pulse
     const balanceAnim = useRef(new Animated.Value(0)).current;     // balance count-up
     const progressAnim = useRef(new Animated.Value(0)).current;    // min-redeem progress bar
-    const sectionAnims = useRef(Array.from({ length: 6 }, () => new Animated.Value(0))).current; // staggered entrance
+    const levelAnim = useRef(new Animated.Value(0)).current;       // level progress bar on card
+    const sectionAnims = useRef(Array.from({ length: 7 }, () => new Animated.Value(0))).current; // staggered entrance
     const [balanceShown, setBalanceShown] = useState(0);
 
     // 🔥 DYNAMIC THEME CALCULATION
@@ -201,6 +560,12 @@ export default function WalletSystem({ expertData }: any) {
     const walletBalanceBeans = expertData?.walletBalance || 0; 
     const availableRupees = Math.floor(walletBalanceBeans / 100); 
     const pendingACTIVITY_REWARD = expertData?.pendingACTIVITY_REWARD || 0;
+
+    // ✨ level progress (0-100)
+    const levelFloor = LEVEL_FLOORS[config.lvl] || 0;
+    const levelPct = config.next === 0
+        ? 100
+        : Math.max(0, Math.min(((totalBeans - levelFloor) / Math.max(1, config.next - levelFloor)) * 100, 100));
 
     useEffect(() => {
         const authUnsub = auth.onAuthStateChanged((u:any) => setUser(u));
@@ -236,7 +601,7 @@ export default function WalletSystem({ expertData }: any) {
             Animated.timing(pulseAnim, { toValue: 1, duration: 1700, easing: Easing.out(Easing.quad), useNativeDriver: true })
         ).start();
 
-        // ✨ NEW: staggered entrance of every section
+        // ✨ NEW: staggered 3D entrance of every section
         Animated.stagger(
             110,
             sectionAnims.map((a) =>
@@ -269,6 +634,16 @@ export default function WalletSystem({ expertData }: any) {
         }).start();
     }, [availableRupees]);
 
+    // ✨ NEW: level progress bar fill
+    useEffect(() => {
+        Animated.timing(levelAnim, {
+            toValue: levelPct,
+            duration: 1300,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: false
+        }).start();
+    }, [levelPct]);
+
     useEffect(() => {
         if (!user?.uid) return;
 
@@ -292,9 +667,17 @@ export default function WalletSystem({ expertData }: any) {
         return () => unsubscribe();
     }, [user]);
 
+    // 🔧 never overwrite details while the payout page is open
     useEffect(() => {
+        if (editOpenRef.current) return;
         if (expertData?.bankDetails) {
-            setBankDetails(expertData.bankDetails);
+            setBankDetails({
+                holderName: '',
+                accountNumber: '',
+                ifsc: '',
+                upiId: '',
+                ...expertData.bankDetails
+            });
         }
         if (expertData?.idProof) {
             setIdProofImage(expertData.idProof);
@@ -333,7 +716,7 @@ export default function WalletSystem({ expertData }: any) {
     const pickIdProof = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
-            Alert.alert("Permission Needed", "We need access to your gallery to upload ID proof.");
+            Alert.alert("Permission Needed", "We need access to your gallery to upload your ID for verification.");
             return;
         }
 
@@ -348,30 +731,30 @@ export default function WalletSystem({ expertData }: any) {
             const uploadedUrl = await uploadToCloudinary(result.assets[0].uri);
             if (uploadedUrl) {
                 setIdProofImage(uploadedUrl); 
-                Alert.alert("Success", "ID Proof uploaded to cloud!");
+                Alert.alert("Success", "ID uploaded for verification!");
             } else {
-                Alert.alert("Error", "Cloudinary upload failed.");
+                Alert.alert("Error", "Upload failed. Please try again.");
             }
             setLoading(false);
         }
     };
 
-    const handleWithdrawal = async () => {
+    const handleWithdrawal = async (amountStr: string) => {
         if (!bankDetails.accountNumber || !isBankVerified) {
-            Alert.alert("Bank Details Required", "Please link and verify your bank details first.");
+            Alert.alert("Payout Details Required", "Please add and verify your payout details first.");
             return;
         }
 
         // 🔥 MASTER UPDATE: CHANGED MINIMUM FROM 3000 TO 500
         if (availableRupees < 500) {
-            Alert.alert("Insufficient Balance", "Minimum ₹500 balance required to Redeem.");
+            Alert.alert("Insufficient Rewards", "Minimum ₹500 reward balance required to redeem.");
             return;
         }
 
-        const numAmtRupee = Number(amount);
+        const numAmtRupee = Number(amountStr);
         
         if (numAmtRupee > 5000 && !expertData?.idProof) {
-            Alert.alert("Identity Verification Required", "Above ₹5,000 requires ID proof.");
+            Alert.alert("Identity Verification Required", "Redemptions above ₹5,000 require ID verification.");
             return;
         }
 
@@ -380,13 +763,13 @@ export default function WalletSystem({ expertData }: any) {
         const requiredBeans = totalDeductionRupee * 100;
         
         // 🔥 MASTER UPDATE: CHANGED MINIMUM AMOUNT CHECK FROM 3000 TO 500
-        if (!amount || isNaN(numAmtRupee) || numAmtRupee < 500) {
-            Alert.alert("Minimum Limit", "Minimum ₹500 required.");
+        if (!amountStr || isNaN(numAmtRupee) || numAmtRupee < 500) {
+            Alert.alert("Minimum Limit", "Minimum redemption is ₹500.");
             return;
         }
 
         if (requiredBeans > walletBalanceBeans) {
-            Alert.alert("Error", `Required: ₹${totalDeductionRupee} in wallet.`);
+            Alert.alert("Error", `Required: ₹${totalDeductionRupee} in rewards (includes ₹${transactionCharge} processing fee).`);
             return;
         }
 
@@ -416,29 +799,29 @@ export default function WalletSystem({ expertData }: any) {
                 // 🔥 NOTIFICATION TRIGGER 1: Redeem Request Update
                 await sendNotificationToUser(
                     user.uid,
-                    "Withdrawal Requested 💸",
-                    `Your redeem request for ₹${numAmtRupee} is being processed. It will be credited soon.`,
+                    "Redemption Requested 🎁",
+                    `Your reward redemption request for ₹${numAmtRupee} is under review. We will update you once it is processed.`,
                     "payment"
                 );
 
-                Alert.alert("Success ✅", "Request sent for processing!");
+                Keyboard.dismiss();
+                Alert.alert("Success ✅", "Redemption request sent for review!");
                 setModalVisible(false);
-                setAmount('');
             }
         } catch (e) {
-            Alert.alert("Error", "Transaction failed.");
+            Alert.alert("Error", "Redemption request failed. Please try again.");
         } finally {
             setLoading(false);
         }
     };
 
-    const saveBankDetails = async () => {
+    const saveBankDetails = async (details: any) => {
         const ifscRegex = /^[A-Z]{4}0[A-Z0-9]{6}$/;
-        if (!bankDetails.holderName || bankDetails.accountNumber.length < 9) {
-            Alert.alert("Invalid Input", "Check Name and Account.");
+        if (!details.holderName || details.accountNumber.length < 9) {
+            Alert.alert("Invalid Input", "Check account holder name and account number.");
             return;
         }
-        if (!ifscRegex.test(bankDetails.ifsc.toUpperCase())) {
+        if (!ifscRegex.test(details.ifsc.toUpperCase())) {
             Alert.alert("Invalid IFSC", "Enter valid 11-digit IFSC.");
             return;
         }
@@ -447,7 +830,7 @@ export default function WalletSystem({ expertData }: any) {
         try {
             if (user?.uid && auth.currentUser) {
                 await updateDoc(doc(db, "users", user.uid), { 
-                    bankDetails: bankDetails,
+                    bankDetails: details,
                     idProof: idProofImage, 
                     isBankVerified: false 
                 });
@@ -458,17 +841,19 @@ export default function WalletSystem({ expertData }: any) {
                     expertName: expertData?.name || 'Host',
                     status: 'pending',
                     createdAt: serverTimestamp(),
-                    details: { ...bankDetails, idProof: idProofImage }
+                    details: { ...details, idProof: idProofImage }
                 });
 
                 // 🔥 NOTIFICATION TRIGGER 2: Bank Details Saved Update
                 await sendNotificationToUser(
                     user.uid,
-                    "Bank Configured 🏦",
-                    "Your bank details have been submitted. Waiting for admin verification.",
+                    "Payout Details Submitted 🛡️",
+                    "Your payout details have been submitted. Waiting for verification.",
                     "system"
                 );
 
+                setBankDetails(details);
+                Keyboard.dismiss();
                 Alert.alert("Updated ✅", "Details submitted for verification.");
                 setEditBankVisible(false);
             }
@@ -478,6 +863,9 @@ export default function WalletSystem({ expertData }: any) {
             setLoading(false);
         }
     };
+
+    const closeEdit = () => { Keyboard.dismiss(); setEditBankVisible(false); };
+    const closeRedeem = () => { Keyboard.dismiss(); setModalVisible(false); };
 
     const orbTranslateY = shimmerAnim.interpolate({
         inputRange: [0, 1],
@@ -490,10 +878,16 @@ export default function WalletSystem({ expertData }: any) {
     const dotPulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.8] });
     const dotPulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
     const progressWidth = progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+    const levelWidth = levelAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
 
+    // ✨ 3D flip-up reveal
     const reveal = (i: number) => ({
         opacity: sectionAnims[i],
-        transform: [{ translateY: sectionAnims[i].interpolate({ inputRange: [0, 1], outputRange: [46, 0] }) }]
+        transform: [
+            { perspective: 1000 },
+            { translateY: sectionAnims[i].interpolate({ inputRange: [0, 1], outputRange: [46, 0] }) },
+            { rotateX: sectionAnims[i].interpolate({ inputRange: [0, 1], outputRange: ['28deg', '0deg'] }) }
+        ]
     });
 
     // 🔥 ALTERNATING BORDER STYLES WITH REDUCED THICKNESS (2px)
@@ -522,7 +916,6 @@ export default function WalletSystem({ expertData }: any) {
     };
 
     const last4 = bankDetails.accountNumber ? bankDetails.accountNumber.slice(-4) : '';
-    const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
 
     return (
         <View style={[styles.mainWrapper, { backgroundColor: '#020617' }]}>
@@ -542,8 +935,8 @@ export default function WalletSystem({ expertData }: any) {
                 {/* 👑 HEADER */}
                 <Animated.View style={[styles.headerRow, reveal(0)]}>
                     <View>
-                        <Text style={styles.headerEyebrow}>TALKPE PRO</Text>
-                        <Text style={styles.headerTitle}>My Wallet</Text>
+                        <Text style={styles.headerEyebrow}>TALKPE PRO CREATOR</Text>
+                        <Text style={styles.headerTitle}>Rewards Center</Text>
                     </View>
                     <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.levelPill}>
                         <MaterialCommunityIcons name="crown" size={13} color="#FFF" />
@@ -551,62 +944,80 @@ export default function WalletSystem({ expertData }: any) {
                     </LinearGradient>
                 </Animated.View>
                 
-                {/* 💳 PREMIUM CARD */}
+                {/* 🎁 REWARDS CARD (3D tilt + float) */}
                 <Animated.View style={[styles.heroSection, reveal(1)]}>
                     <Animated.View style={{ transform: [{ translateY: cardFloatY }] }}>
-                        <View style={[styles.premiumCard, { shadowColor: theme.primary, elevation: 20 }]}>
-                            <Image source={{ uri: CARD_BG }} style={styles.cardBgImage} />
-                            <LinearGradient
-                                colors={[theme.primary + 'CC', '#020617E6', theme.secondary + 'AA']}
-                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
-                                style={StyleSheet.absoluteFill}
-                            />
-                            <View style={styles.cardGlow} />
-                            <View style={[styles.cardRingOne, { borderColor: theme.accent + '40' }]} />
-                            <View style={[styles.cardRingTwo, { borderColor: theme.primary + '35' }]} />
-                            <Animated.View pointerEvents="none" style={[styles.cardSweep, { transform: [{ translateX: cardSweepX }, { skewX: '-20deg' }] }]} />
+                        <Tilt3D radius={32} max={10} style={{ borderRadius: 32 }}>
+                            <View style={[styles.premiumCard, { shadowColor: theme.primary, elevation: 20 }]}>
+                                <Image source={{ uri: CARD_BG }} style={styles.cardBgImage} />
+                                <LinearGradient
+                                    colors={[theme.primary + 'CC', '#020617E6', theme.secondary + 'AA']}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                    style={StyleSheet.absoluteFill}
+                                />
+                                <View style={styles.cardGlow} />
+                                <View style={[styles.cardRingOne, { borderColor: theme.accent + '40' }]} />
+                                <View style={[styles.cardRingTwo, { borderColor: theme.primary + '35' }]} />
+                                <Animated.View pointerEvents="none" style={[styles.cardSweep, { transform: [{ translateX: cardSweepX }, { skewX: '-20deg' }] }]} />
 
-                            <FloatingDot delay={0}    left={CARD_WIDTH * 0.10} size={5} color="#FFF"          duration={4200} />
-                            <FloatingDot delay={1100} left={CARD_WIDTH * 0.34} size={4} color={theme.accent}  duration={3800} />
-                            <FloatingDot delay={600}  left={CARD_WIDTH * 0.58} size={6} color="#FFF"          duration={4600} />
-                            <FloatingDot delay={1800} left={CARD_WIDTH * 0.84} size={4} color={theme.primary} duration={4000} />
+                                <FloatingDot delay={0}    left={CARD_WIDTH * 0.10} size={5} color="#FFF"          duration={4200} />
+                                <FloatingDot delay={1100} left={CARD_WIDTH * 0.34} size={4} color={theme.accent}  duration={3800} />
+                                <FloatingDot delay={600}  left={CARD_WIDTH * 0.58} size={6} color="#FFF"          duration={4600} />
+                                <FloatingDot delay={1800} left={CARD_WIDTH * 0.84} size={4} color={theme.primary} duration={4000} />
 
-                            <View style={styles.cardContentHeader}>
-                                <View>
-                                    <Text style={styles.cardLabelText}>AVAILABLE FOR ACTIVITY_REWARD</Text>
-                                    <View style={styles.rupeeRow}>
-                                        <Text style={styles.symbolText}>₹</Text>
-                                        <Text style={styles.mainBalanceText}>{balanceShown.toLocaleString()}</Text>
+                                <View style={styles.cardContentHeader}>
+                                    <View>
+                                        <Text style={styles.cardLabelText}>REWARD BALANCE</Text>
+                                        <View style={styles.rupeeRow}>
+                                            <Text style={styles.symbolText}>₹</Text>
+                                            <Text style={styles.mainBalanceText}>{balanceShown.toLocaleString()}</Text>
+                                        </View>
+                                    </View>
+                                    <View style={styles.chipWrapper}>
+                                        <RewardCoin lvl={config.lvl} c1={theme.primary} c2={theme.accent} />
                                     </View>
                                 </View>
-                                <View style={styles.chipWrapper}>
-                                    <MaterialCommunityIcons name="integrated-circuit-chip" size={42} color="rgba(255,255,255,0.85)" />
-                                </View>
-                            </View>
 
-                            <View style={styles.cardNumberRow}>
-                                <Text style={styles.cardNumberText}>••••  ••••  ••••  {last4 || '••••'}</Text>
-                                <Text style={styles.cardHolderText} numberOfLines={1}>{(bankDetails.holderName || expertData?.name || 'HOST').toUpperCase()}</Text>
-                            </View>
-
-                            <View style={styles.ACTIVITY_REWARDDetailRow}>
-                                <View>
-                                    <Text style={styles.ACTIVITY_REWARDLabel}>PENDING CLEARANCE</Text>
-                                    <Text style={styles.ACTIVITY_REWARDValue}>₹{pendingACTIVITY_REWARD.toLocaleString()}</Text>
-                                </View>
-                                <ScaleBtn
-                                    // 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN DISABLED CHECK
-                                    style={[styles.massWithdrawBtn, (availableRupees < 500 || !isBankVerified) && { opacity: 0.5 }]}
-                                    onPress={() => setModalVisible(true)}
-                                    disabled={availableRupees < 500 || !isBankVerified}
-                                >
-                                    <View style={styles.whiteActionBtn}>
-                                        <Text style={styles.blackBtnText}>Claim Reward</Text>
-                                        <Ionicons name="arrow-forward" size={14} color="#020617" style={{ marginLeft: 6 }} />
+                                <View style={styles.cardNumberRow}>
+                                    <View style={styles.payoutPill}>
+                                        <MaterialCommunityIcons name="shield-check-outline" size={13} color="rgba(255,255,255,0.85)" />
+                                        <Text style={styles.payoutPillText}>{last4 ? `PAYOUT •••• ${last4}` : 'PAYOUT NOT LINKED'}</Text>
                                     </View>
-                                </ScaleBtn>
+                                    <Text style={styles.cardHolderText} numberOfLines={1}>{(bankDetails.holderName || expertData?.name || 'HOST').toUpperCase()}</Text>
+                                </View>
+
+                                {/* 📈 LEVEL PROGRESS */}
+                                <View>
+                                    <View style={styles.levelRowTop}>
+                                        <Text style={styles.levelRowLabel}>LEVEL PROGRESS</Text>
+                                        <Text style={styles.levelRowValue}>{config.next === 0 ? 'MAX LEVEL' : `${Math.round(levelPct)}% TO NEXT`}</Text>
+                                    </View>
+                                    <View style={styles.levelTrack}>
+                                        <Animated.View style={[styles.levelFillWrap, { width: levelWidth }]}>
+                                            <LinearGradient colors={['#FFFFFF', theme.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                        </Animated.View>
+                                    </View>
+                                </View>
+
+                                <View style={styles.ACTIVITY_REWARDDetailRow}>
+                                    <View>
+                                        <Text style={styles.ACTIVITY_REWARDLabel}>UNDER REVIEW</Text>
+                                        <Text style={styles.ACTIVITY_REWARDValue}>₹{pendingACTIVITY_REWARD.toLocaleString()}</Text>
+                                    </View>
+                                    <ScaleBtn
+                                        // 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN DISABLED CHECK
+                                        style={[styles.massWithdrawBtn, (availableRupees < 500 || !isBankVerified) && { opacity: 0.5 }]}
+                                        onPress={() => setModalVisible(true)}
+                                        disabled={availableRupees < 500 || !isBankVerified}
+                                    >
+                                        <View style={styles.whiteActionBtn}>
+                                            <Text style={styles.blackBtnText}>Redeem Rewards</Text>
+                                            <Ionicons name="arrow-forward" size={14} color="#020617" style={{ marginLeft: 6 }} />
+                                        </View>
+                                    </ScaleBtn>
+                                </View>
                             </View>
-                        </View>
+                        </Tilt3D>
                     </Animated.View>
 
                     {/* 🔥 MASTER UPDATE: CHANGED FROM 3000 TO 500 IN UI WARNING (+ animated progress to unlock) */}
@@ -621,7 +1032,7 @@ export default function WalletSystem({ expertData }: any) {
                                     <LinearGradient colors={[theme.primary, theme.accent]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
                                 </Animated.View>
                             </View>
-                            <Text style={styles.unlockText}>₹{availableRupees.toLocaleString()} / ₹500 to unlock Claim Reward</Text>
+                            <Text style={styles.unlockText}>₹{availableRupees.toLocaleString()} / ₹500 to unlock Redeem Rewards</Text>
                         </View>
                     )}
                 </Animated.View>
@@ -634,9 +1045,9 @@ export default function WalletSystem({ expertData }: any) {
                         <Text style={styles.ruleLabel}>MIN REDEEM</Text>
                     </View>
                     <View style={[styles.ruleTile, borderType1]}>
-                        <Ionicons name="cash-outline" size={18} color={theme.primary} />
+                        <Ionicons name="pricetag-outline" size={18} color={theme.primary} />
                         <Text style={styles.ruleValue}>₹100</Text>
-                        <Text style={styles.ruleLabel}>TRANS. CHARGE</Text>
+                        <Text style={styles.ruleLabel}>PROCESSING FEE</Text>
                     </View>
                     <View style={[styles.ruleTile, borderType2]}>
                         <Ionicons name="swap-horizontal" size={18} color={theme.primary} />
@@ -645,26 +1056,46 @@ export default function WalletSystem({ expertData }: any) {
                     </View>
                 </Animated.View>
 
-                {/* 🏦 BANKING DETAILS */}
-                <Animated.View style={reveal(3)}>
+                {/* 📘 HOW REWARDS WORK (transparency note) */}
+                <Animated.View style={[styles.infoCard, borderType1, reveal(3)]}>
+                    <View style={styles.infoHeader}>
+                        <MaterialCommunityIcons name="information-outline" size={16} color={theme.primary} />
+                        <Text style={[styles.infoTitle, { color: theme.primary }]}>HOW REWARDS WORK</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                        <MaterialCommunityIcons name="star-circle-outline" size={16} color="#94A3B8" />
+                        <Text style={styles.infoText}>Rewards are earned through your creator activity on TalkPe Pro.</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                        <MaterialCommunityIcons name="file-search-outline" size={16} color="#94A3B8" />
+                        <Text style={styles.infoText}>Every redemption request is reviewed and verified before it is processed.</Text>
+                    </View>
+                    <View style={styles.infoRow}>
+                        <MaterialCommunityIcons name="lock-outline" size={16} color="#94A3B8" />
+                        <Text style={styles.infoText}>Your payout details and ID are used only for verification and for processing approved redemptions.</Text>
+                    </View>
+                </Animated.View>
+
+                {/* 🛡️ PAYOUT DETAILS */}
+                <Animated.View style={reveal(4)}>
                     <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitleMain}>BANKING DETAILS</Text>
+                        <Text style={styles.sectionTitleMain}>PAYOUT DETAILS</Text>
                         <TouchableOpacity onPress={() => setEditBankVisible(true)} style={styles.nodeEditBtn}>
                             <Ionicons name="settings-sharp" size={14} color={theme.primary} />
-                            <Text style={[styles.nodeEditText, { color: theme.primary }]}>CONFIG</Text>
+                            <Text style={[styles.nodeEditText, { color: theme.primary }]}>MANAGE</Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* 🔥 DYNAMIC DUAL-TONE BANK CARD (TYPE 1) */}
+                    {/* 🔥 DYNAMIC DUAL-TONE PAYOUT CARD (TYPE 1) */}
                     <ScaleBtn style={[styles.bankDetailCard, borderType1]} onPress={() => setEditBankVisible(true)}>
                         <Image source={{ uri: BANK_BG }} style={styles.bankBgImage} />
                         <View style={styles.bankInner}>
                             <View style={[styles.bankIconContainer, { backgroundColor: `${theme.primary}22` }]}>
-                                <Ionicons name="business" size={22} color={theme.primary} />
+                                <Ionicons name="shield-checkmark" size={22} color={theme.primary} />
                             </View>
                             <View style={{ flex: 1, marginLeft: 15 }}>
-                                <Text style={styles.bankTitleText}>PRIMARY ACCOUNT</Text>
-                                <Text style={styles.bankValueText}>{bankDetails.accountNumber ? `•••• ${bankDetails.accountNumber.slice(-4)}` : 'DISCONNECTED'}</Text>
+                                <Text style={styles.bankTitleText}>LINKED PAYOUT ACCOUNT</Text>
+                                <Text style={styles.bankValueText}>{bankDetails.accountNumber ? `•••• ${bankDetails.accountNumber.slice(-4)}` : 'NOT LINKED'}</Text>
                                 {!!bankDetails.holderName && (
                                     <Text style={styles.bankHolderText} numberOfLines={1}>{bankDetails.holderName}</Text>
                                 )}
@@ -675,37 +1106,37 @@ export default function WalletSystem({ expertData }: any) {
                                         <Animated.View style={[styles.activeDotPulse, { opacity: dotPulseOpacity, transform: [{ scale: dotPulseScale }] }]} />
                                         <View style={styles.activeDot} />
                                     </View>
-                                    <Text style={styles.badgeLabelText}>ACTIVE</Text>
+                                    <Text style={styles.badgeLabelText}>VERIFIED</Text>
                                 </View>
                             ) : expertData?.bankRejectReason ? (
-                                <View style={[styles.statusBadgeYellow, { backgroundColor: '#EF444420', borderColor: '#EF444440' }]}><Text style={[styles.badgeLabelText, { color: '#EF4444' }]}>REJECTED</Text></View>
+                                <View style={[styles.statusBadgeYellow, { backgroundColor: '#EF444420', borderColor: '#EF444440' }]}><Text style={[styles.badgeLabelText, { color: '#EF4444' }]}>ACTION NEEDED</Text></View>
                             ) : (
-                                <View style={styles.statusBadgeYellow}><Text style={styles.badgeLabelText}>PENDING</Text></View>
+                                <View style={styles.statusBadgeYellow}><Text style={styles.badgeLabelText}>IN REVIEW</Text></View>
                             )}
                         </View>
                     </ScaleBtn>
 
-                    {/* 🔥 NEW UI: BANK KYC REJECTION REASON DISPLAY BOX 🔥 */}
+                    {/* 🔥 NEW UI: VERIFICATION FEEDBACK DISPLAY BOX 🔥 */}
                     {!isBankVerified && expertData?.bankRejectReason && (
                         <View style={[styles.rejectReasonBox, { marginBottom: 25 }]}>
                             <MaterialCommunityIcons name="alert-circle-outline" size={16} color="#EF4444" style={{marginTop: 2}} />
                             <View style={{ marginLeft: 8, flex: 1 }}>
-                                <Text style={styles.rejectLabel}>KYC REJECTION REASON</Text>
+                                <Text style={styles.rejectLabel}>VERIFICATION FEEDBACK</Text>
                                 <Text style={styles.rejectReasonText}>{expertData.bankRejectReason}</Text>
-                                <Text style={{ color: theme.primary, fontSize: 10, fontWeight: '800', marginTop: 5 }}>* Tap CONFIG above to fix and resubmit details.</Text>
+                                <Text style={{ color: theme.primary, fontSize: 10, fontWeight: '800', marginTop: 5 }}>* Tap MANAGE above to fix and resubmit details.</Text>
                             </View>
                         </View>
                     )}
                 </Animated.View>
 
-                {/* 🧾 LEDGER HISTORY */}
-                <Animated.View style={reveal(4)}>
-                    <Text style={styles.sectionTitleMain}>LEDGER HISTORY</Text>
+                {/* 🧾 REDEMPTION HISTORY */}
+                <Animated.View style={reveal(5)}>
+                    <Text style={styles.sectionTitleMain}>REDEMPTION HISTORY</Text>
                 </Animated.View>
                 {transactions.length === 0 ? (
-                    <Animated.View style={[styles.emptyLedger, reveal(5)]}>
-                        <Ionicons name="receipt-outline" size={40} color="#1e293b" />
-                        <Text style={styles.emptyLedgerText}>No Activity Recorded</Text>
+                    <Animated.View style={[styles.emptyLedger, reveal(6)]}>
+                        <Ionicons name="gift-outline" size={40} color="#1e293b" />
+                        <Text style={styles.emptyLedgerText}>No redemptions yet</Text>
                     </Animated.View>
                 ) : (
                     transactions.map((tx, index) => (
@@ -721,124 +1152,71 @@ export default function WalletSystem({ expertData }: any) {
                 <View style={{ height: 120 }} />
             </ScrollView>
 
-            {/* MODALS RENDERED WITH DYNAMIC BG AND DUAL-TONE INPUTS */}
-            <Modal visible={modalVisible} transparent animationType="slide">
-                <View style={styles.modalBg}>
-                    <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalSheet, { backgroundColor: theme.bgGradient[0], borderTopColor: theme.primary + '60' }]}>
-                        <LinearGradient colors={[theme.primary + '22', 'transparent']} style={styles.sheetGlow} pointerEvents="none" />
-                        <View style={styles.modalDragger} />
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}> Redeem Rewards</Text>
-                            <TouchableOpacity onPress={() => setModalVisible(false)} style={styles.modalClose}>
-                                <Ionicons name="close" size={22} color="#FFF" />
-                            </TouchableOpacity>
-                        </View>
-                        
-                        <View style={styles.inputArea}>
-                            <Text style={styles.currencyLabel}>ENTER REDEEM AMOUNT</Text>
-                            <TextInput 
-                                style={styles.giantInput} 
-                                placeholder="0" 
-                                placeholderTextColor="rgba(255,255,255,0.1)" 
-                                keyboardType="numeric" 
-                                value={amount} 
-                                onChangeText={(t: string) => setAmount(t)}
-                            />
-
-                            {/* ⚡ QUICK AMOUNT CHIPS */}
-                            <View style={styles.quickRow}>
-                                {QUICK_AMOUNTS.map((v) => {
-                                    const active = amount === String(v);
-                                    return (
-                                        <TouchableOpacity
-                                            key={v}
-                                            onPress={() => setAmount(String(v))}
-                                            style={[styles.quickChip, active && { backgroundColor: theme.primary + '30', borderColor: theme.primary }]}
-                                        >
-                                            <Text style={[styles.quickChipText, active && { color: '#FFF' }]}>₹{v.toLocaleString()}</Text>
-                                        </TouchableOpacity>
-                                    );
-                                })}
-                            </View>
-
-                            {/* 🔥 DUAL TONE INFO BOX (TYPE 1) */}
-                            <View style={[styles.feeInfoBox, borderType1]}>
-                                <Text style={styles.feeText}>TRANS. CHARGE: <Text style={{color: '#FFF'}}>₹100</Text></Text>
-                                <View style={styles.feeDot} />
-                                <Text style={styles.feeText}>EST. DEDUCTION: <Text style={{color: '#FFF'}}>₹{(Number(amount) || 0) + 100}</Text></Text>
-                            </View>
-                            <Text style={styles.availableHint}>Available: ₹{availableRupees.toLocaleString()}</Text>
-                        </View>
-
-                        <ScaleBtn style={styles.finalSubmitBtn} onPress={handleWithdrawal} disabled={loading}>
-                            <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.finalSubmitGrad}>
-                                {loading ? <ActivityIndicator color="#FFF" /> : (
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <Ionicons name="paper-plane" size={16} color="#FFF" />
-                                        <Text style={styles.finalSubmitText}>INITIALIZE TRANSFER</Text>
-                                    </View>
-                                )}
-                            </LinearGradient>
-                        </ScaleBtn>
+            {/* 🎁 REDEEM REWARDS PAGE */}
+            <FormPage
+                visible={modalVisible}
+                onClose={closeRedeem}
+                theme={theme}
+                header={
+                    <View style={styles.modalHeader}>
+                        <Text style={styles.modalTitle}> Redeem Rewards</Text>
+                        <TouchableOpacity onPress={closeRedeem} style={styles.modalClose}>
+                            <Ionicons name="close" size={22} color="#FFF" />
+                        </TouchableOpacity>
                     </View>
-                </View>
-            </Modal>
+                }
+            >
+                <RedeemBody
+                    theme={theme}
+                    borderType1={borderType1}
+                    availableRupees={availableRupees}
+                    loading={loading}
+                    onSubmit={handleWithdrawal}
+                />
+            </FormPage>
 
-            <Modal visible={editBankVisible} transparent animationType="fade">
-                <View style={styles.modalBg}>
-                    <BlurView intensity={95} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={[styles.modalSheet, { height: height * 0.85, backgroundColor: theme.bgGradient[0], borderTopColor: theme.primary + '60' }]}>
-                        <LinearGradient colors={[theme.primary + '22', 'transparent']} style={styles.sheetGlow} pointerEvents="none" />
-                        <View style={styles.modalDragger} />
-                        <Text style={styles.modalTitle}>Banking Configuration</Text>
-                        <ScrollView style={{ marginTop: 25 }} showsVerticalScrollIndicator={false}>
-                            {/* 🔥 DUAL TONE INPUT NODES (ALTERNATING) */}
-                            <InputNode label="ACCOUNT HOLDER" icon="person-outline" accent={theme.primary} value={bankDetails.holderName} onChange={(t: string) => setBankDetails({...bankDetails, holderName: t})} borderStyle={borderType1} />
-                            <InputNode label="ACCOUNT NUMBER" icon="card-outline" accent={theme.primary} value={bankDetails.accountNumber} onChange={(t: string) => setBankDetails({...bankDetails, accountNumber: t})} keyboard="numeric" borderStyle={borderType2} />
-                            <InputNode label="IFSC CODE" icon="business-outline" accent={theme.primary} value={bankDetails.ifsc} onChange={(t: string) => setBankDetails({...bankDetails, ifsc: t})} autoCap="characters" borderStyle={borderType1} />
-                            <InputNode label="UPI ID / VPA" icon="at-outline" accent={theme.primary} value={bankDetails.upiId} onChange={(t: string) => setBankDetails({...bankDetails, upiId: t})} borderStyle={borderType2} />
-                            
-                            <Text style={styles.nodeLabel}>ID VERIFICATION DOCUMENTS</Text>
-                            <TouchableOpacity style={[styles.uploadNode, borderType1]} onPress={pickIdProof}>
-                                {loading ? (
-                                    <ActivityIndicator color={theme.primary} />
-                                ) : idProofImage ? (
-                                    <View style={styles.uploadSuccess}>
-                                        <Ionicons name="checkmark-done-circle" size={24} color="#10B981" />
-                                        <Text style={styles.uploadSuccessText}>SECURELY ATTACHED</Text>
-                                    </View>
-                                ) : (
-                                    <View style={{ alignItems: 'center' }}>
-                                        <Ionicons name="cloud-upload" size={28} color={theme.primary} />
-                                        <Text style={styles.uploadHint}>Upload Aadhaar or PAN Card</Text>
-                                    </View>
-                                )}
-                            </TouchableOpacity>
-                        </ScrollView>
-                        
-                        <View style={styles.modalActionRow}>
-                            <TouchableOpacity style={styles.cancelNode} onPress={() => setEditBankVisible(false)}>
-                                <Text style={styles.cancelNodeText}>CANCEL</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity style={styles.saveNode} onPress={saveBankDetails} disabled={loading}>
-                                <LinearGradient colors={['#10B981', '#059669']} style={styles.saveNodeGrad}>
-                                    {loading ? <ActivityIndicator color="#FFF" /> : <Text style={styles.saveNodeText}>SAVE CONFIG</Text>}
-                                </LinearGradient>
-                            </TouchableOpacity>
+            {/* 🛡️ PAYOUT DETAILS PAGE */}
+            <FormPage
+                visible={editBankVisible}
+                onClose={closeEdit}
+                theme={theme}
+                header={
+                    <View style={styles.editHero}>
+                        <ShieldOrb c1={theme.primary} c2={theme.secondary} />
+                        <View style={{ flex: 1, marginLeft: 6 }}>
+                            <Text style={styles.modalTitle}>Payout Details</Text>
+                            <Text style={styles.editSubtitle}>Secure verification for approved reward redemptions</Text>
                         </View>
+                        <TouchableOpacity onPress={closeEdit} style={styles.modalClose}>
+                            <Ionicons name="close" size={22} color="#FFF" />
+                        </TouchableOpacity>
                     </View>
-                </View>
-            </Modal>
+                }
+            >
+                <PayoutFormBody
+                    initial={bankDetails}
+                    idProofImage={idProofImage}
+                    loading={loading}
+                    theme={theme}
+                    borderType1={borderType1}
+                    borderType2={borderType2}
+                    onPickId={pickIdProof}
+                    onCancel={closeEdit}
+                    onSubmit={saveBankDetails}
+                />
+            </FormPage>
         </View>
     );
 }
 
-// ✨ INPUT NODE (icon + focus glow)
+// ✨ INPUT NODE (icon + focus glow + auto-scroll into view)
+// 🔧 Android-la focus-la elevation/shadow remove (adhu layout-a maathi jump aakkum). iOS-la glow apadiye irukku.
 const InputNode = ({ label, value, onChange, keyboard = "default", autoCap = "none", borderStyle, icon, accent }: any) => {
     const [focused, setFocused] = useState(false);
+    const scrollTo = useContext(ScrollCtx);
+    const yRef = useRef(0);
     return (
-        <View style={styles.inputNodeBox}>
+        <View style={styles.inputNodeBox} onLayout={(e) => { yRef.current = e.nativeEvent.layout.y; }}>
             <Text style={styles.nodeLabel}>{label}</Text>
             <View
                 style={[
@@ -849,11 +1227,12 @@ const InputNode = ({ label, value, onChange, keyboard = "default", autoCap = "no
                         borderRightColor: accent,
                         borderTopColor: accent,
                         borderBottomColor: accent,
-                        shadowColor: accent,
-                        shadowOpacity: 0.55,
-                        shadowRadius: 12,
-                        shadowOffset: { width: 0, height: 0 },
-                        elevation: 6
+                        ...(Platform.OS === 'ios' ? {
+                            shadowColor: accent,
+                            shadowOpacity: 0.55,
+                            shadowRadius: 12,
+                            shadowOffset: { width: 0, height: 0 }
+                        } : {})
                     }
                 ]}
             >
@@ -864,8 +1243,9 @@ const InputNode = ({ label, value, onChange, keyboard = "default", autoCap = "no
                     onChangeText={(t: string) => onChange(t)} 
                     keyboardType={keyboard} 
                     autoCapitalize={autoCap} 
+                    autoCorrect={false}
                     placeholderTextColor="#334155"
-                    onFocus={() => setFocused(true)}
+                    onFocus={() => { setFocused(true); scrollTo(yRef.current); }}
                     onBlur={() => setFocused(false)}
                 />
             </View>
@@ -894,15 +1274,27 @@ const styles = StyleSheet.create({
     cardRingOne: { position: 'absolute', right: -60, bottom: -70, width: 210, height: 210, borderRadius: 105, borderWidth: 1.5 },
     cardRingTwo: { position: 'absolute', right: -20, bottom: -30, width: 130, height: 130, borderRadius: 65, borderWidth: 1.5 },
     cardSweep: { position: 'absolute', top: -30, bottom: -30, width: 70, backgroundColor: 'rgba(255,255,255,0.16)' },
+    glareStrip: { position: 'absolute', top: -40, bottom: -40, width: 90, backgroundColor: 'rgba(255,255,255,0.12)' },
     cardContentHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
     cardLabelText: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
     rupeeRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5 },
     symbolText: { color: '#FFF', fontSize: 24, fontWeight: '400', marginRight: 5 },
     mainBalanceText: { color: '#FFF', fontSize: 46, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowOffset: { width: 0, height: 3 }, textShadowRadius: 10 },
-    chipWrapper: { padding: 5, backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+    chipWrapper: { padding: 5, backgroundColor: 'rgba(0,0,0,0.18)', borderRadius: 30, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+    coinWrap: { width: 46, height: 46 },
+    coinFace: { position: 'absolute', width: 46, height: 46, borderRadius: 23, overflow: 'hidden', backfaceVisibility: 'hidden', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.5)' },
+    coinGrad: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    coinText: { color: '#000', fontWeight: '900', fontSize: 14 },
     cardNumberRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     cardNumberText: { color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: '800', letterSpacing: 2.5 },
+    payoutPill: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(0,0,0,0.22)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+    payoutPillText: { color: 'rgba(255,255,255,0.85)', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
     cardHolderText: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '900', letterSpacing: 1.5, maxWidth: CARD_WIDTH * 0.34 },
+    levelRowTop: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 },
+    levelRowLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+    levelRowValue: { color: '#FFF', fontSize: 8, fontWeight: '900', letterSpacing: 1 },
+    levelTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden' },
+    levelFillWrap: { height: '100%', borderRadius: 3, overflow: 'hidden' },
     ACTIVITY_REWARDDetailRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 14, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.2)' },
     ACTIVITY_REWARDLabel: { color: 'rgba(255,255,255,0.6)', fontSize: 9, fontWeight: '800' },
     ACTIVITY_REWARDValue: { color: '#FFF', fontSize: 18, fontWeight: '900', marginTop: 2 },
@@ -917,10 +1309,17 @@ const styles = StyleSheet.create({
     unlockFillWrap: { height: '100%', borderRadius: 4, overflow: 'hidden' },
     unlockText: { color: '#64748B', fontSize: 9, fontWeight: '800', marginTop: 8, letterSpacing: 0.5 },
 
-    rulesRow: { flexDirection: 'row', gap: 10, marginBottom: 26 },
+    rulesRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
     ruleTile: { flex: 1, borderRadius: 22, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
     ruleValue: { color: '#FFF', fontSize: 14, fontWeight: '900', marginTop: 6 },
     ruleLabel: { color: '#64748B', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginTop: 3 },
+
+    // 📘 HOW REWARDS WORK
+    infoCard: { borderRadius: 24, padding: 18, marginBottom: 26 },
+    infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
+    infoTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+    infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 9 },
+    infoText: { flex: 1, color: '#94A3B8', fontSize: 11, fontWeight: '600', lineHeight: 16 },
 
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, marginTop: 10 },
     sectionTitleMain: { color: '#475569', fontSize: 11, fontWeight: '900', letterSpacing: 3, marginBottom: 14 },
@@ -959,11 +1358,13 @@ const styles = StyleSheet.create({
     rejectLabel: { color: '#EF4444', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 2 },
     rejectReasonText: { color: '#FFF', fontSize: 11, fontWeight: '700', lineHeight: 16 },
     
+    // 📄 FULL-SCREEN FORM PAGE
+    pageRoot: { flex: 1, backgroundColor: '#020617' },
     modalBg: { flex: 1, justifyContent: 'flex-end' },
-    modalSheet: { borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, borderTopWidth: 1.5, overflow: 'hidden' },
+    modalSheet: { borderTopLeftRadius: 40, borderTopRightRadius: 40, padding: 30, borderTopWidth: 1.5, overflow: 'hidden', flexShrink: 1 },
     sheetGlow: { position: 'absolute', top: 0, left: 0, right: 0, height: 140 },
     modalDragger: { width: 50, height: 5, backgroundColor: '#334155', borderRadius: 10, alignSelf: 'center', marginBottom: 20 },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     modalTitle: { color: '#FFF', fontSize: 24, fontWeight: '900' },
     modalClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center' },
     inputArea: { marginBottom: 30 },
@@ -976,6 +1377,7 @@ const styles = StyleSheet.create({
     feeText: { color: '#475569', fontSize: 10, fontWeight: '800' },
     feeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: '#334155' },
     availableHint: { color: '#64748B', fontSize: 10, fontWeight: '800', textAlign: 'center', marginTop: 12, letterSpacing: 0.5 },
+    reviewNote: { color: '#64748B', fontSize: 10, fontWeight: '600', textAlign: 'center', marginTop: 10, lineHeight: 15 },
     finalSubmitBtn: { borderRadius: 25, overflow: 'hidden' },
     finalSubmitGrad: { paddingVertical: 20, alignItems: 'center' },
     finalSubmitText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 2 },
@@ -987,10 +1389,22 @@ const styles = StyleSheet.create({
     uploadHint: { color: '#475569', fontSize: 11, fontWeight: '800', marginTop: 8 },
     uploadSuccess: { flexDirection: 'row', alignItems: 'center', gap: 10 },
     uploadSuccessText: { color: '#10B981', fontSize: 12, fontWeight: '900' },
+    privacyNote: { flexDirection: 'row', alignItems: 'flex-start', gap: 8, marginTop: 18 },
+    privacyNoteText: { flex: 1, color: '#64748B', fontSize: 10, fontWeight: '600', lineHeight: 15 },
     modalActionRow: { flexDirection: 'row', gap: 12, marginTop: 25 },
     cancelNode: { flex: 1, paddingVertical: 18, alignItems: 'center', backgroundColor: '#1e293b', borderRadius: 20 },
     cancelNodeText: { color: '#94A3B8', fontWeight: '900', fontSize: 13 },
     saveNode: { flex: 2, borderRadius: 20, overflow: 'hidden' },
     saveNodeGrad: { paddingVertical: 18, alignItems: 'center' },
-    saveNodeText: { color: '#FFF', fontWeight: '900', fontSize: 13 }
+    saveNodeText: { color: '#FFF', fontWeight: '900', fontSize: 13 },
+
+    // ✨ PAYOUT PAGE: 3D SHIELD HERO + TRUST CHIPS
+    editHero: { flexDirection: 'row', alignItems: 'center' },
+    editSubtitle: { color: '#94A3B8', fontSize: 10, fontWeight: '700', marginTop: 3, lineHeight: 14 },
+    orbWrap: { width: 84, height: 84, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+    orbRing: { position: 'absolute', width: 56, height: 56, borderRadius: 28, borderWidth: 1.5 },
+    orbCore: { width: 58, height: 58, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' },
+    trustRow: { flexDirection: 'row', gap: 8, marginBottom: 22 },
+    trustChip: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 10, borderRadius: 14, backgroundColor: 'rgba(30,41,59,0.55)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    trustChipText: { color: '#94A3B8', fontSize: 8, fontWeight: '900', letterSpacing: 0.8 }
 });

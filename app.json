@@ -59,7 +59,8 @@
         {
           "photosPermission": "Allow TalkPe Pro to access your gallery to update your professional profile picture."
         }
-      ]
+      ],
+      "expo-build-properties"
     ],
     "experiments": {
       "typedRoutes": true

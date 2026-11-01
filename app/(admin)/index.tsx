@@ -36,6 +36,9 @@ const AdminPanel = () => {
     const [minVersion, setMinVersion] = useState("1.0.5");
     const [savingVersion, setSavingVersion] = useState(false);
 
+    // 🆕🆕 NEW: Support Hub-la irundhu vara review pannaadha (unread) reports count
+    const [supportReportCount, setSupportReportCount] = useState(0);
+
     const fadeAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
@@ -93,6 +96,19 @@ const AdminPanel = () => {
             if (error.code === 'permission-denied') console.log("Safe Ignore: Bank requests listener detached on logout");
         });
         unsubs.push(unsubBank);
+
+        // 🆕🆕 NEW: Support Hub reports (unread) live count - SUPPORT REPORTS button-la badge-ah kaattum
+        const qSupport = query(
+            collection(db, "admin_alerts"),
+            where("type", "==", "TRUST_SAFETY_REPORT"),
+            where("status", "==", "unread")
+        );
+        const unsubSupport = onSnapshot(qSupport, (snap) => {
+            setSupportReportCount(snap.size);
+        }, (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Support reports listener detached on logout");
+        });
+        unsubs.push(unsubSupport);
 
         return () => unsubs.forEach(unsub => unsub());
     }, []);
@@ -211,7 +227,7 @@ const AdminPanel = () => {
         }
     };
 
-    const SecurityLink = ({ title, sub, icon, route, color }: any) => (
+    const SecurityLink = ({ title, sub, icon, route, color, badge }: any) => (
         <TouchableOpacity
             style={[styles.expertLinkCard, { borderColor: `${color}40`, backgroundColor: `${color}10` }]}
             onPress={() => router.push(route as any)}
@@ -220,6 +236,12 @@ const AdminPanel = () => {
                 <Text style={[styles.linkTitle, { color: color }]}>{title}</Text>
                 <Text style={styles.linkSub}>{sub}</Text>
             </View>
+            {/* 🆕🆕 NEW: unread count badge (venum-na mattum varum) */}
+            {badge > 0 && (
+                <View style={styles.linkBadge}>
+                    <Text style={styles.linkBadgeText}>{badge > 99 ? '99+' : badge}</Text>
+                </View>
+            )}
             <MaterialCommunityIcons name={icon} size={26} color={color} />
         </TouchableOpacity>
     );
@@ -320,6 +342,8 @@ const AdminPanel = () => {
 
                             <Text style={styles.sectionTitle}>SECURITY & COMPLIANCE</Text>
                             <SecurityLink title="REPORTS & FLAGS" sub="Community moderation alerts" icon="alert-octagon" route="/management/reports" color="#F43F5E" />
+                            {/* 🆕🆕 NEW: Support Hub-la irundhu host anuppura reports (thaniya) */}
+                            <SecurityLink title="SUPPORT REPORTS" sub="Host trust & safety reports from Support Hub" icon="headset" route="/reports" color="#6366F1" badge={supportReportCount} />
                             <SecurityLink title="SESSION LOGS" sub="Interaction monitoring logs" icon="shield-search" route="/logs/call-logs" color="#F59E0B" />
                             <SecurityLink title="ENGINE DIAGNOSTICS" sub="Connectivity performance audit" icon="speedometer" route="/logs/system-latency" color="#10B981" />
 
@@ -462,6 +486,9 @@ const styles = StyleSheet.create({
     saveBtnText: { color: '#fff', fontWeight: '900', fontSize: 12, marginLeft: 8 },
     linkTitle: { fontWeight: '900', fontSize: 14, letterSpacing: 0.5 },
     linkSub: { color: '#475569', fontSize: 11, marginTop: 2 },
+    // 🆕🆕 NEW: unread count badge on SecurityLink
+    linkBadge: { backgroundColor: '#F43F5E', minWidth: 22, height: 22, borderRadius: 11, paddingHorizontal: 6, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
+    linkBadgeText: { color: '#fff', fontSize: 11, fontWeight: '900' },
     expertHubMainBtn: { marginTop: 15, padding: 20, borderRadius: 28, borderWidth: 1.5, borderColor: '#6366F180', backgroundColor: '#0F172A' },
     expertHubContent: { flexDirection: 'row', alignItems: 'center' },
     expertHubIconBox: { backgroundColor: '#6366F1', padding: 10, borderRadius: 15 },

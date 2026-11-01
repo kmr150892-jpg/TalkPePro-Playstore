@@ -1364,7 +1364,7 @@ export default function LevelInsights({ expertData }: any) {
                                             <LinearGradient colors={g([vc(0), vc(1)])} style={styles.statIcon}>
                                                 <MaterialCommunityIcons name="phone-in-talk" size={13} color="#FFF" />
                                             </LinearGradient>
-                                            <Text style={styles.hStatLabel}>NEW CALL RATE</Text>
+                                            <Text style={styles.hStatLabel}>NEW CALL REWARD</Text>
                                         </View>
                                         <View style={styles.mOldRow}>
                                             <Text style={styles.mOldRate}>{prevItem.rate}</Text>
@@ -1391,7 +1391,7 @@ export default function LevelInsights({ expertData }: any) {
                                             <LinearGradient colors={g([vc(1), vc(0)])} style={styles.statIcon}>
                                                 <MaterialCommunityIcons name="flash" size={13} color="#FFF" />
                                             </LinearGradient>
-                                            <Text style={styles.hStatLabel}>NEW QUICK RATE</Text>
+                                            <Text style={styles.hStatLabel}>NEW QUICK REWARD</Text>
                                         </View>
                                         <View style={styles.mOldRow}>
                                             <Text style={styles.mOldRate}>{prevItem.qmRate}</Text>

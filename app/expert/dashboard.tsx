@@ -1071,7 +1071,7 @@ export default function ExpertDashboard() {
                                                 <View style={styles.royalDivider} />
                                                 <MaterialCommunityIcons name="crown" size={20} color="#3B2600" />
                                             </View>
-                                            <Text style={styles.spotSub}>YOUR 30-SECOND CINEMATIC SHOWCASE</Text>
+                                            <Text style={styles.spotSub}>YOUR 30-SECOND SKILL SHOWCASE</Text>
                                         </View>
                                         <Animated.View pointerEvents="none" style={[styles.btnSweep, { width: 50, transform: [{ translateX: bannerSweepX }, { skewX: '-20deg' }] }]} />
                                     </LinearGradient>

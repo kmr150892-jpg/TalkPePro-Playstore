@@ -163,7 +163,7 @@ const notifyLevelUpAtomic = async (
 
       const notif = {
         title: "Level Upgraded! 🚀",
-        message: `Congratulations! You have reached ${label}. Your new call rate is ${rate}.`,
+        message: `Congratulations! You have reached ${label}. Your new call Reward is ${rate}.`,
         type: 'system',
         time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         read: false,
@@ -586,7 +586,7 @@ const IDENTITY_TABS = [
   { label: 'STORY', icon: 'text-account' },
 ];
 
-export default function ConsoleHome({ expertData: initialData, isOnline, setIsOnline }: any) {
+export default function ConsoleHome({ expertData: initialData, isOnline, setIsOnline, bannerOverlay }: any) {
   const router = useRouter();
   const [user, setUser] = useState(auth.currentUser);
   const isAdmin = user?.uid === ADMIN_UID;
@@ -876,7 +876,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
 
                 Alert.alert(
                     "Level Updated! 🚀",
-                    `Your rank changed! Your Call Rate has been automatically updated to the new Max Price: ${lvlObj.rate} Rewards/Min!`
+                    `Your rank changed! Your Call Reward has been automatically updated to the new Max Price: ${lvlObj.rate} Rewards/Min!`
                 );
             }
         })
@@ -1317,6 +1317,12 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
               </TouchableOpacity>
             </View>
          </Animated.View>
+
+         {/* 🆕 BANNER OVERLAY SLOT */}
+         {!!bannerOverlay && (
+           <View style={styles.bannerOverlaySlot} pointerEvents="box-none">{bannerOverlay}</View>
+         )}
+
          <ScaleBtn wrapStyle={styles.shareCoverWrap} style={styles.shareCoverBtn} onPress={handleShareApp}>
              <Ionicons name="share-social" size={14} color="#FFF" />
              <Text style={styles.editCoverText}>Share</Text>
@@ -1482,7 +1488,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                 <FontAwesome5 name="fire-alt" size={18} color="#FBBF24" />
               </View>
               <Text style={styles.statValue}>{expertData?.pricePerMin || 1000}</Text>
-              <Text style={styles.statLabel}>EDIT RATE</Text>
+              <Text style={styles.statLabel}>EDIT REWARD</Text>
             </ScaleBtn>
             <View style={{ flex: 1 }}>
               <View style={[styles.fluidStatCard, borderType2]}>
@@ -1677,7 +1683,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                 {/* header */}
                 <View style={styles.rateHeadRow}>
                   <View style={{ flex: 1, paddingRight: 8 }}>
-                    <Text style={styles.mTitle}>Set Call Rate</Text>
+                    <Text style={styles.mTitle}>Set Call Reward</Text>
                     <View style={styles.rateChipRow}>
                       <View style={[styles.mInfoChip, { backgroundColor: theme.primary + '26', borderColor: theme.primary + '88' }]}>
                         <MaterialCommunityIcons name="star-circle" size={12} color={lighten(theme.primary, 0.5)} />
@@ -1997,6 +2003,7 @@ const styles = StyleSheet.create({
   shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
   coverContainer: { width: '100%', height: 300, position: 'relative', overflow: 'hidden' },
   coverTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 110 },
+  bannerOverlaySlot: { position: 'absolute', top: 54, left: 12, right: 12, zIndex: 12 },
   coverImage: { width: '100%', height: '100%', resizeMode: 'cover' },
   headerBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', position: 'absolute', top: 5, left: 10, right: 5, zIndex: 10 },
   logoText: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
