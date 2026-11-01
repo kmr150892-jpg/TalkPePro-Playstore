@@ -981,7 +981,7 @@ export default function WalletSystem({ expertData }: any) {
                                 <View style={styles.cardNumberRow}>
                                     <View style={styles.payoutPill}>
                                         <MaterialCommunityIcons name="shield-check-outline" size={13} color="rgba(255,255,255,0.85)" />
-                                        <Text style={styles.payoutPillText}>{last4 ? `PAYOUT •••• ${last4}` : 'PAYOUT NOT LINKED'}</Text>
+                                        <Text style={styles.payoutPillText}>{last4 ? `REDEMPTION •••• ${last4}` : 'REDEMPTION NOT LINKED'}</Text>
                                     </View>
                                     <Text style={styles.cardHolderText} numberOfLines={1}>{(bankDetails.holderName || expertData?.name || 'HOST').toUpperCase()}</Text>
                                 </View>
@@ -1072,14 +1072,14 @@ export default function WalletSystem({ expertData }: any) {
                     </View>
                     <View style={styles.infoRow}>
                         <MaterialCommunityIcons name="lock-outline" size={16} color="#94A3B8" />
-                        <Text style={styles.infoText}>Your payout details and ID are used only for verification and for processing approved redemptions.</Text>
+                        <Text style={styles.infoText}>Your redemption details and ID are used only for verification and for processing approved redemptions.</Text>
                     </View>
                 </Animated.View>
 
                 {/* 🛡️ PAYOUT DETAILS */}
                 <Animated.View style={reveal(4)}>
                     <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitleMain}>PAYOUT DETAILS</Text>
+                        <Text style={styles.sectionTitleMain}>REDEMPTION DETAILS</Text>
                         <TouchableOpacity onPress={() => setEditBankVisible(true)} style={styles.nodeEditBtn}>
                             <Ionicons name="settings-sharp" size={14} color={theme.primary} />
                             <Text style={[styles.nodeEditText, { color: theme.primary }]}>MANAGE</Text>
@@ -1094,7 +1094,7 @@ export default function WalletSystem({ expertData }: any) {
                                 <Ionicons name="shield-checkmark" size={22} color={theme.primary} />
                             </View>
                             <View style={{ flex: 1, marginLeft: 15 }}>
-                                <Text style={styles.bankTitleText}>LINKED PAYOUT ACCOUNT</Text>
+                                <Text style={styles.bankTitleText}>LINKED REDEMPTION ACCOUNT</Text>
                                 <Text style={styles.bankValueText}>{bankDetails.accountNumber ? `•••• ${bankDetails.accountNumber.slice(-4)}` : 'NOT LINKED'}</Text>
                                 {!!bankDetails.holderName && (
                                     <Text style={styles.bankHolderText} numberOfLines={1}>{bankDetails.holderName}</Text>

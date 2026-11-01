@@ -20,7 +20,9 @@ import {
     Easing,
     FlatList,
     Image,
+    ImageBackground,
     Modal,
+    PanResponder,
     StatusBar,
     StyleSheet,
     Text,
@@ -44,6 +46,27 @@ import { auth, db } from '../../firebaseConfig';
 const { height, width } = Dimensions.get('window');
 
 
+
+// 🖼️ PREMIUM IMAGE ASSETS (replace with your own local images: require('../../assets/xxx.jpg') if you like)
+const IMG_WALLET_BG = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=900&q=80';
+const IMG_CONNECT_BG = 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=900&q=80';
+
+// ✨ TWINKLING STAR FIELD POSITIONS
+const STARS = [
+    { top: 60, left: 30, size: 3 }, { top: 120, left: width * 0.8, size: 2 }, { top: 210, left: width * 0.5, size: 3 },
+    { top: 320, left: 20, size: 2 }, { top: 430, left: width * 0.9, size: 3 }, { top: 520, left: width * 0.3, size: 2 },
+    { top: 640, left: width * 0.7, size: 3 }, { top: 760, left: 40, size: 2 }, { top: 150, left: width * 0.15, size: 2 },
+    { top: 580, left: width * 0.55, size: 2 },
+];
+
+
+
+// 🛡️ SAFE ALPHA HELPER: some tier colors are already 8-digit hex (e.g. '#f52b6092'),
+// so adding another alpha made an INVALID color -> LinearGradient native crash. This always normalizes first.
+const withAlpha = (hex: string, alpha: string = 'FF') => {
+    const base = (hex || '#000000').length >= 7 ? hex.slice(0, 7) : hex;
+    return base + alpha;
+};
 
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
 
@@ -100,6 +123,69 @@ const getExpertThemeColor = (earned: number) => {
 
 
 
+// 🆕 PRESS-SCALE 3D CARD WRAPPER (spring squish + optional perspective tilt)
+const PressCard = ({ children, style, onPress, tilt = 0, activeOpacity = 0.9 }: any) => {
+    const s = useRef(new Animated.Value(1)).current;
+    return (
+        <Animated.View style={{ transform: [{ perspective: 900 }, { rotateY: `${tilt}deg` }, { scale: s }] }}>
+            <TouchableOpacity
+                activeOpacity={activeOpacity}
+                style={style}
+                onPress={onPress}
+                onPressIn={() => Animated.spring(s, { toValue: 0.94, friction: 6, useNativeDriver: true }).start()}
+                onPressOut={() => Animated.spring(s, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
+            >
+                {children}
+            </TouchableOpacity>
+        </Animated.View>
+    );
+};
+
+
+
+// 🆕 CARD SIZES
+const LIVE_W = 176;
+const FRAME_H = 240;
+const LIVE_H = 288;
+const FORUM_W = 276;
+const FORUM_H = 150;
+
+// 🆕 ROTATING NEON BORDER FRAME (light beam circles the card edge) - rt/rb = top/bottom radius (arch support)
+const NeonFrame = ({ w, h, rt, rb, c1, c2, rotate, children }: any) => {
+    const diag = Math.sqrt(w * w + h * h) + 24;
+    const k1 = withAlpha(c1, 'FF'), k1t = withAlpha(c1, '00');
+    const k2 = withAlpha(c2, 'FF'), k2t = withAlpha(c2, '00');
+    return (
+        <View style={{ width: w, height: h, borderTopLeftRadius: rt, borderTopRightRadius: rt, borderBottomLeftRadius: rb, borderBottomRightRadius: rb, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' }}>
+            <Animated.View style={{ position: 'absolute', width: diag, height: diag, transform: [{ rotate }] }}>
+                <LinearGradient colors={[k1, k1t, k2, k2t, k1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+            </Animated.View>
+            <View style={{ position: 'absolute', top: 2.5, left: 2.5, right: 2.5, bottom: 2.5, borderTopLeftRadius: rt - 2.5, borderTopRightRadius: rt - 2.5, borderBottomLeftRadius: rb - 2.5, borderBottomRightRadius: rb - 2.5, overflow: 'hidden', backgroundColor: '#050816' }}>
+                {children}
+            </View>
+        </View>
+    );
+};
+
+// 🆕 LIVE AUDIO EQUALIZER BARS (forum cards)
+const EqBars = ({ loop, color }: any) => {
+    const sets = [
+        [0.3, 1, 0.5, 0.9, 0.3],
+        [1, 0.4, 0.9, 0.3, 1],
+        [0.5, 0.9, 0.3, 1, 0.5],
+        [0.9, 0.3, 1, 0.5, 0.9],
+    ];
+    return (
+        <View style={{ flexDirection: 'row', alignItems: 'center', height: 18, gap: 3 }}>
+            {sets.map((out, i) => (
+                <Animated.View key={i} style={{ width: 3, height: 18, borderRadius: 2, backgroundColor: color, transform: [{ scaleY: loop.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: out }) }] }} />
+            ))}
+        </View>
+    );
+};
+
+
+
 export default function UserHome() {
 
     const router = useRouter();
@@ -130,6 +216,35 @@ export default function UserHome() {
     const shakeAnim = useRef(new Animated.Value(0)).current;
     const trailX = useRef(new Animated.Value(-width)).current;
     const shimmerAnim = useRef(new Animated.Value(0)).current; 
+
+    // 🆕 NEW ANIMATION VALUES
+    const enter = useRef(new Animated.Value(0)).current;        // staggered entrance
+    const tiltX = useRef(new Animated.Value(0)).current;        // wallet 3D tilt (vertical drag)
+    const tiltY = useRef(new Animated.Value(0)).current;        // wallet 3D tilt (horizontal drag)
+    const shineAnim = useRef(new Animated.Value(0)).current;    // quick-connect shine sweep
+    const pulseAnim = useRef(new Animated.Value(0)).current;    // glow pulse (live dot / connect button)
+    const holoAnim = useRef(new Animated.Value(0)).current;     // wallet holographic sweep
+
+
+
+    // 🆕 WALLET CARD DRAG-TO-TILT (3D)
+    const panResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
+            onPanResponderMove: (_, g) => {
+                tiltY.setValue(Math.max(-1, Math.min(1, g.dx / 120)));
+                tiltX.setValue(Math.max(-1, Math.min(1, g.dy / 80)));
+            },
+            onPanResponderRelease: () => {
+                Animated.spring(tiltX, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+                Animated.spring(tiltY, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+            },
+            onPanResponderTerminate: () => {
+                Animated.spring(tiltX, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+                Animated.spring(tiltY, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+            },
+        })
+    ).current;
 
 
 
@@ -192,6 +307,31 @@ export default function UserHome() {
                 })
             ])
         ).start();
+
+
+
+        // 🆕 ENTRANCE (one orchestrated reveal on load)
+        Animated.timing(enter, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+
+        // 🆕 QUICK CONNECT SHINE SWEEP
+        Animated.loop(Animated.sequence([
+            Animated.timing(shineAnim, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            Animated.delay(1800),
+            Animated.timing(shineAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])).start();
+
+        // 🆕 GLOW PULSE
+        Animated.loop(Animated.sequence([
+            Animated.timing(pulseAnim, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            Animated.timing(pulseAnim, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])).start();
+
+        // 🆕 WALLET HOLOGRAPHIC SWEEP
+        Animated.loop(Animated.sequence([
+            Animated.delay(1200),
+            Animated.timing(holoAnim, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+            Animated.timing(holoAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])).start();
 
 
 
@@ -325,6 +465,33 @@ export default function UserHome() {
 
 
 
+    // 🆕 STAGGERED REVEAL HELPER
+    const reveal = (i: number) => {
+        const start = Math.min(i * 0.12, 0.5);
+        const end = Math.min(start + 0.5, 1);
+        return {
+            opacity: enter.interpolate({ inputRange: [start, end], outputRange: [0, 1], extrapolate: 'clamp' }),
+            transform: [{ translateY: enter.interpolate({ inputRange: [start, end], outputRange: [50, 0], extrapolate: 'clamp' }) }],
+        };
+    };
+
+    // 🆕 WALLET 3D TILT + HOLO
+    const walletTilt = {
+        transform: [
+            { perspective: 1000 },
+            { rotateX: tiltX.interpolate({ inputRange: [-1, 1], outputRange: ['14deg', '-14deg'] }) },
+            { rotateY: tiltY.interpolate({ inputRange: [-1, 1], outputRange: ['-20deg', '20deg'] }) },
+        ],
+    };
+    const holoX = holoAnim.interpolate({ inputRange: [0, 1], outputRange: [-width, width] });
+    const shineX = shineAnim.interpolate({ inputRange: [0, 1], outputRange: [-160, width] });
+    const pulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
+    const pulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] });
+    const orbitRotate = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const orbitRotateRev = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+
+
+
     // 🔥 ALTERNATING BORDER STYLES (FLUID, 2px)
     const borderType1 = {
         borderLeftWidth: 2,
@@ -333,8 +500,8 @@ export default function UserHome() {
         borderBottomWidth: 0.5,
         borderLeftColor: userRank.color,
         borderRightColor: userRank.color,
-        borderTopColor: userRank.secondaryColor + '80',
-        borderBottomColor: userRank.secondaryColor + '80',
+        borderTopColor: withAlpha(userRank.secondaryColor, '80'),
+        borderBottomColor: withAlpha(userRank.secondaryColor, '80'),
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
 
@@ -347,8 +514,8 @@ export default function UserHome() {
         borderBottomWidth: 0.5,
         borderLeftColor: userRank.secondaryColor,
         borderRightColor: userRank.secondaryColor,
-        borderTopColor: userRank.color + '80',
-        borderBottomColor: userRank.color + '80',
+        borderTopColor: withAlpha(userRank.color, '80'),
+        borderBottomColor: withAlpha(userRank.color, '80'),
         backgroundColor: 'rgba(15, 23, 42, 0.65)',
     };
 
@@ -420,106 +587,54 @@ export default function UserHome() {
             
             {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
             <LinearGradient colors={userRank.themeBg as any} style={StyleSheet.absoluteFill} />
+
+            {/* 🆕 TWINKLING STAR FIELD */}
+            {STARS.map((st, i) => (
+                <Animated.View
+                    key={`star-${i}`}
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute', top: st.top, left: st.left, width: st.size, height: st.size, borderRadius: st.size,
+                        backgroundColor: '#FFF',
+                        opacity: shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: i % 2 === 0 ? [0.1, 0.9] : [0.9, 0.1] }),
+                    }}
+                />
+            ))}
             
-            {/* 🔥 FLOATING SHIMMER ORBS */}
-            <Animated.View style={[styles.shimmerOrb, { top: 100, left: -60, backgroundColor: userRank.color, transform: [{ translateY: orbTranslateY }] }]} />
-            <Animated.View style={[styles.shimmerOrb, { bottom: 200, right: -60, backgroundColor: userRank.color, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+            {/* 🔥 FLOATING SHIMMER ORBS (now with scroll parallax) */}
+            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: parallaxAura }] }]}>
+                <Animated.View style={[styles.shimmerOrb, { top: 100, left: -60, backgroundColor: userRank.color, transform: [{ translateY: orbTranslateY }] }]} />
+                <Animated.View style={[styles.shimmerOrb, { bottom: 200, right: -60, backgroundColor: userRank.color, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+            </Animated.View>
 
 
 
+            {/* 🆕 COMPACT FIXED HEADER (glass) */}
             <SafeAreaView style={styles.topSection} edges={['top']}>
-                <View style={styles.topEliteHeader}>
+                <Animated.View style={[styles.topEliteHeader, reveal(0)]}>
                     <View style={styles.brandContainer}>
                         <Text style={styles.welcomeLabelText}>WELCOME TO</Text>
                         <View style={styles.brandRow}>
                             <Text style={styles.brandTitleWhite}>TALKPE </Text>
                             <Text style={[styles.brandTitleIndigo, { color: userRank.color }]}>PRO</Text>
                         </View>
+                        <Text style={[styles.rankStatusText, { color: userRank.color }]}>{userRank.status}</Text>
                     </View>
                     
                     <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/two' as any)}>
-                         <View style={[styles.syncedAvatarRing, { borderColor: userRank.color, shadowColor: userRank.color }]}>
-                            <Image source={{ uri: uPic }} style={styles.syncedAvatarImg} />
-                         </View>
+                        <View style={styles.avatarOrbitWrap}>
+                            {/* 🆕 ORBITING RINGS */}
+                            <Animated.View style={[styles.orbitRing, { borderColor: userRank.color, transform: [{ rotate: orbitRotate }] }]} />
+                            <Animated.View style={[styles.orbitRingInner, { borderColor: userRank.secondaryColor, transform: [{ rotate: orbitRotateRev }] }]} />
+                            <View style={[styles.syncedAvatarRing, { borderColor: userRank.color, shadowColor: userRank.color }]}>
+                                <Image source={{ uri: uPic }} style={styles.syncedAvatarImg} />
+                            </View>
+                            <View style={[styles.levelBadgeMini, { backgroundColor: userRank.color }]}>
+                                <Text style={styles.levelBadgeMiniText}>L{userRank.lvl}</Text>
+                            </View>
+                        </View>
                     </TouchableOpacity>
-                </View>
-
-
-
-                <Animated.View style={[styles.walletArea, getWalletStyle(), { scaleX: cardScale, scaleY: cardScale }]}>
-                    <View style={[styles.stealthBoxBase, borderType1]}>
-                        <Animated.View style={[styles.glowTrail, { backgroundColor: userRank.color, transform: [{ translateX: trailX }] }]} />
-                        <View style={styles.walletContentRow}>
-                            <View style={styles.walletInfo}>
-                                <Text style={styles.cardSubTitle}>DIAMOND ASSETS</Text>
-                                <View style={styles.balanceRow}>
-                                    <MaterialCommunityIcons name="diamond-stone" size={26} color="#FFF" />
-                                    <Text style={styles.mainBalanceValue} numberOfLines={1} adjustsFontSizeToFit>{(userData?.balance || 0).toLocaleString()}</Text>
-                                </View>
-                                <View style={styles.userNameContainer}>
-                                    <Text style={styles.walletUserName}>{userData?.name?.toUpperCase() || 'AGENT_IDENTIFIED'}</Text>
-                                    <Text style={[styles.walletUserID, { color: userRank.color }]}>{userRank.label}</Text>
-                                </View>
-                            </View>
-                            <View style={styles.rightAction}>
-                                <MaterialCommunityIcons name="integrated-circuit-chip" size={32} color="rgba(255,255,255,0.5)" />
-                                <TouchableOpacity style={[styles.glassAddBtn, {borderColor: userRank.color + '50'}]} onPress={() => router.push('/recharge' as any)}>
-                                    <BlurView intensity={20} style={styles.btnBlur}>
-                                        <Text style={[styles.btnTxt, {color: userRank.color}]}>TOPUP</Text>
-                                    </BlurView>
-                                </TouchableOpacity>
-                            </View>
-                        </View>
-                    </View>
                 </Animated.View>
-
-
-
-                {/* 🔥 QUICK Discover BUTTON WITH LEVEL RESTRICTION & POLICY MODAL 🔥 */}
-                <TouchableOpacity 
-                    activeOpacity={0.9} 
-                    onPress={() => {
-                        if (userRank.lvl === 1) {
-                            // 🔥 strict Alert update when clicked 🔥
-                            Alert.alert(
-                                "🔒 UNLOCK AT LEVEL 2", 
-                                "Level 1 Agents cannot access Quick Connect. Please upgrade to Level 2 (GOLD OPERATIVE) by topping up diamonds to unlock this feature!"
-                            );
-                        } else {
-                            // Level 2+ Proceed (Check if Policy was accepted for the session)
-                            if (dontShowToday) {
-                                router.push('/explore-experts' as any);
-                            } else {
-                                setShowPolicyModal(true);
-                            }
-                        }
-                    }}
-                    style={[styles.DiscoverTriggerMass, { shadowColor: userRank.color }]}
-                >
-                    <LinearGradient 
-                        colors={[userRank.color, userRank.secondaryColor]} 
-                        style={styles.DiscoverGradient}
-                        start={{x: 0, y: 0}}
-                        end={{x: 1, y: 1}}
-                    >
-                        <MaterialCommunityIcons name="lightning-bolt" size={20} color="#FFF" />
-                        <Text style={styles.DiscoverBtnText}>QUICK CONNECT</Text>
-                        <View style={styles.liveIndicatorDiscover}>
-                            <View style={styles.liveDotDiscover} />
-                            {/* 🔥 NUMBER CHANGED TO USE DYNAMIC STATE 🔥 */}
-                            <Text style={styles.liveCountDiscover}>{safeLives.length + safeExperts.length + dynamicOffset} Online</Text>
-                        </View>
-                    </LinearGradient>
-                </TouchableOpacity>
-
-
-
-                <View style={styles.searchSection}>
-                    <BlurView intensity={10} tint="dark" style={[styles.searchBarMass, borderType2]}>
-                        <Ionicons name="search" size={18} color={userRank.color} />
-                        <TextInput placeholder="search host" placeholderTextColor="#475569" style={styles.searchInputMass} value={searchQuery} onChangeText={setSearchQuery} />
-                    </BlurView>
-                </View>
             </SafeAreaView>
 
 
@@ -527,40 +642,194 @@ export default function UserHome() {
             <Animated.ScrollView 
                 showsVerticalScrollIndicator={false} 
                 contentContainerStyle={styles.scrollContent}
+                scrollEventThrottle={16}
                 onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: false })}
             >
+
+                {/* 💳 3D TILT WALLET CARD (drag it!) */}
+                <Animated.View style={{ transform: [{ scaleX: cardScale }, { scaleY: cardScale }] }}>
+                    <Animated.View style={[styles.walletArea, reveal(1)]}>
+                        <Animated.View style={getWalletStyle()}>
+                            <Animated.View style={[walletTilt]} {...panResponder.panHandlers}>
+                                <View style={[styles.walletGlowShadow, { shadowColor: userRank.color }]}>
+                                    <View style={[styles.stealthBoxBase, borderType1]}>
+                                        <ImageBackground source={{ uri: IMG_WALLET_BG }} style={StyleSheet.absoluteFill} imageStyle={{ opacity: 0.35 }} />
+                                        <LinearGradient
+                                            colors={['rgba(0,0,0,0.55)', withAlpha(userRank.color, '30'), 'rgba(0,0,0,0.7)']}
+                                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                            style={StyleSheet.absoluteFill}
+                                        />
+                                        <Animated.View style={[styles.glowTrail, { backgroundColor: userRank.color, transform: [{ translateX: trailX }, { rotate: '35deg' }] }]} />
+                                        {/* 🆕 HOLOGRAPHIC SWEEP */}
+                                        <Animated.View pointerEvents="none" style={[styles.holoStripe, { transform: [{ translateX: holoX }, { rotate: '25deg' }] }]} />
+                                        <View style={styles.walletContentRow}>
+                                            <View style={styles.walletInfo}>
+                                                <Text style={styles.cardSubTitle}>DIAMOND ASSETS</Text>
+                                                <View style={styles.balanceRow}>
+                                                    <MaterialCommunityIcons name="diamond-stone" size={26} color="#FFF" />
+                                                    <Text style={styles.mainBalanceValue} numberOfLines={1} adjustsFontSizeToFit>{(userData?.balance || 0).toLocaleString()}</Text>
+                                                </View>
+                                                <View style={styles.userNameContainer}>
+                                                    <Text style={styles.walletUserName}>{userData?.name?.toUpperCase() || 'AGENT_IDENTIFIED'}</Text>
+                                                    <Text style={[styles.walletUserID, { color: userRank.color }]}>{userRank.label}</Text>
+                                                </View>
+                                            </View>
+                                            <View style={styles.rightAction}>
+                                                <MaterialCommunityIcons name="integrated-circuit-chip" size={32} color="rgba(255,255,255,0.5)" />
+                                                <TouchableOpacity style={[styles.glassAddBtn, {borderColor: withAlpha(userRank.color, '50')}]} onPress={() => router.push('/recharge' as any)}>
+                                                    <BlurView intensity={20} style={styles.btnBlur}>
+                                                        <Text style={[styles.btnTxt, {color: userRank.color}]}>TOPUP</Text>
+                                                    </BlurView>
+                                                </TouchableOpacity>
+                                            </View>
+                                        </View>
+                                    </View>
+                                </View>
+                            </Animated.View>
+                        </Animated.View>
+                    </Animated.View>
+                </Animated.View>
+
+
+
+                {/* 🔥 QUICK Discover BUTTON WITH LEVEL RESTRICTION & POLICY MODAL 🔥 */}
+                <Animated.View style={reveal(2)}>
+                    <TouchableOpacity 
+                        activeOpacity={0.9} 
+                        onPress={() => {
+                            if (userRank.lvl === 1) {
+                                // 🔥 strict Alert update when clicked 🔥
+                                Alert.alert(
+                                    "🔒 UNLOCK AT LEVEL 2", 
+                                    "Level 1 Agents cannot access Quick Connect. Please upgrade to Level 2 (GOLD OPERATIVE) by topping up diamonds to unlock this feature!"
+                                );
+                            } else {
+                                // Level 2+ Proceed (Check if Policy was accepted for the session)
+                                if (dontShowToday) {
+                                    router.push('/explore-experts' as any);
+                                } else {
+                                    setShowPolicyModal(true);
+                                }
+                            }
+                        }}
+                        style={[styles.DiscoverTriggerMass, { shadowColor: userRank.color }]}
+                    >
+                        <View style={styles.DiscoverClip}>
+                            <ImageBackground source={{ uri: IMG_CONNECT_BG }} style={StyleSheet.absoluteFill} imageStyle={{ opacity: 0.45 }} />
+                            <LinearGradient 
+                                colors={[withAlpha(userRank.color, 'EE'), withAlpha(userRank.secondaryColor, 'CC')]} 
+                                style={styles.DiscoverGradient}
+                                start={{x: 0, y: 0}}
+                                end={{x: 1, y: 1}}
+                            >
+                                {/* LEFT: energy orb with pulsing rings */}
+                                <View style={styles.connectOrb}>
+                                    <Animated.View style={[styles.connectRing, { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                                    <Animated.View style={[styles.connectRingDash, { transform: [{ rotate: orbitRotate }] }]} />
+                                    <View style={styles.connectOrbCore}>
+                                        <MaterialCommunityIcons name="lightning-bolt" size={24} color="#FFF" />
+                                    </View>
+                                </View>
+
+                                {/* MIDDLE: title + online pill (never cut) */}
+                                <View style={styles.connectTextCol}>
+                                    <Text style={styles.DiscoverBtnText} numberOfLines={1} adjustsFontSizeToFit>QUICK CONNECT</Text>
+                                    <View style={styles.liveIndicatorDiscover}>
+                                        <View style={styles.liveDotDiscover} />
+                                        {/* 🔥 NUMBER CHANGED TO USE DYNAMIC STATE 🔥 */}
+                                        <Text style={styles.liveCountDiscover} numberOfLines={1}>{safeLives.length + safeExperts.length + dynamicOffset} Online</Text>
+                                    </View>
+                                </View>
+
+                                {/* RIGHT: go button (lock for level 1) */}
+                                <View style={styles.connectGoBtn}>
+                                    <Ionicons name={userRank.lvl === 1 ? 'lock-closed' : 'chevron-forward'} size={20} color="#FFF" />
+                                </View>
+                            </LinearGradient>
+                            {/* 🆕 SHINE SWEEP */}
+                            <Animated.View pointerEvents="none" style={[styles.shineBar, { transform: [{ translateX: shineX }, { rotate: '20deg' }] }]} />
+                        </View>
+                    </TouchableOpacity>
+                </Animated.View>
+
+
+
+                <Animated.View style={[styles.searchSection, reveal(3)]}>
+                    <BlurView intensity={10} tint="dark" style={[styles.searchBarMass, borderType2]}>
+                        <Ionicons name="search" size={18} color={userRank.color} />
+                        <TextInput placeholder="search host" placeholderTextColor="#475569" style={styles.searchInputMass} value={searchQuery} onChangeText={setSearchQuery} />
+                    </BlurView>
+                </Animated.View>
+
+
+
                 {safeLives.length > 0 && (
-                    <View style={styles.sectionArea}>
+                    <Animated.View style={[styles.sectionArea, reveal(4)]}>
                         <View style={styles.sectionHeaderMass}>
-                            <View style={styles.rowCenter}><View style={styles.livePulseDot} /><Text style={styles.sectionTitleMass}>ACTIVE BROADCASTS</Text></View>
+                            <View style={styles.rowCenter}>
+                                <View style={styles.pulseDotWrap}>
+                                    <Animated.View style={[styles.pulseDotHalo, { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                                    <View style={styles.livePulseDot} />
+                                </View>
+                                <Text style={styles.sectionTitleMass}>ACTIVE BROADCASTS</Text>
+                            </View>
                             <Text style={styles.onlineCountText}>{safeLives.length} NODES</Text>
                         </View>
-                        <FlatList horizontal snapToInterval={width * 0.45 + 15} decelerationRate="fast" showsHorizontalScrollIndicator={false}
-                            data={safeLives} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20 }}
+                        <FlatList horizontal snapToInterval={LIVE_W + 16} decelerationRate="fast" showsHorizontalScrollIndicator={false}
+                            data={safeLives} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20, paddingVertical: 14, paddingRight: 10 }}
+                            style={{ overflow: 'visible' }}
                             onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}
                             renderItem={({ item, index }) => {
                                 const isActive = item.id === activeLiveId && isFocused;
-                                const liveBorder = index % 2 === 0 ? borderType1 : borderType2;
+                                const c1 = index % 2 === 0 ? userRank.color : userRank.secondaryColor;
+                                const c2 = index % 2 === 0 ? userRank.secondaryColor : userRank.color;
+                                const k1 = withAlpha(c1, 'FF');
                                 return (
                                     // 🔥 FIX 1: LIVE GOES TO LIVE 🔥
-                                    <TouchableOpacity activeOpacity={0.9} style={[styles.massLiveCard, liveBorder]} onPress={() => router.push({ pathname: "/(tabs)/live/[liveId]", params: { liveId: item.id } } as any)}>
-                                        {isActive ? <LivePreview liveId={item.id} /> : <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.massLiveThumb} />}
-                                        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.9)']} style={styles.massLiveOverlay}>
-                                            <View style={styles.liveBadge}><Text style={styles.liveBadgeText}>LIVE</Text></View>
-                                            <Text style={styles.liveHostNameMass} numberOfLines={1}>{item.hostName || 'Host'}</Text>
-                                        </LinearGradient>
-                                    </TouchableOpacity>
+                                    <PressCard tilt={index % 2 === 0 ? 5 : -5} style={styles.liveCardWrap} onPress={() => router.push({ pathname: "/(tabs)/live/[liveId]", params: { liveId: item.id } } as any)}>
+                                        {/* 📸 FULL-VISIBLE PHOTO FRAME (nothing covers the picture) */}
+                                        <View style={[styles.liveFrameShadow, { shadowColor: k1 }]}>
+                                            <NeonFrame w={LIVE_W} h={FRAME_H} rt={26} rb={26} c1={c1} c2={c2} rotate={index % 2 === 0 ? orbitRotate : orbitRotateRev}>
+                                                {isActive ? <LivePreview liveId={item.id} /> : <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.massLiveThumb} />}
+                                                {/* only a whisper of shade at the very bottom */}
+                                                <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']} style={styles.liveSoftShade} />
+
+                                                {/* 🎥 VIEWFINDER CORNER BRACKETS */}
+                                                <View pointerEvents="none" style={[styles.vfCorner, { top: 12, left: 12, borderTopWidth: 2, borderLeftWidth: 2, borderTopLeftRadius: 8, borderColor: k1 }]} />
+                                                <View pointerEvents="none" style={[styles.vfCorner, { top: 12, right: 12, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 8, borderColor: k1 }]} />
+                                                <View pointerEvents="none" style={[styles.vfCorner, { bottom: 12, left: 12, borderBottomWidth: 2, borderLeftWidth: 2, borderBottomLeftRadius: 8, borderColor: k1 }]} />
+                                                <View pointerEvents="none" style={[styles.vfCorner, { bottom: 12, right: 12, borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 8, borderColor: k1 }]} />
+
+                                                {/* REC-style LIVE pill (small, top center) */}
+                                                <View pointerEvents="none" style={styles.archBadgeWrap}>
+                                                    <View style={styles.liveBadgeNew}>
+                                                        <Animated.View style={[styles.liveBadgeDot, { opacity: pulseOpacity }]} />
+                                                        <Text style={styles.liveBadgeText}>LIVE</Text>
+                                                    </View>
+                                                </View>
+                                            </NeonFrame>
+                                        </View>
+
+                                        {/* 🏷️ NAME TAG HANGS BELOW THE PHOTO */}
+                                        <View style={styles.liveNameRow}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.liveHostNameMass} numberOfLines={1}>{item.hostName || 'Host'}</Text>
+                                                <View style={[styles.liveNameLine, { backgroundColor: k1 }]} />
+                                            </View>
+                                            <EqBars loop={mainLoop} color={k1} />
+                                        </View>
+                                    </PressCard>
                                 );
                             }}
                         />
-                    </View>
+                    </Animated.View>
                 )}
 
 
 
                 {/* 🔥 NEW: VIP Session ARENAS SECTION 🔥 */}
                 {safeParties.length > 0 && (
-                    <View style={styles.sectionArea}>
+                    <Animated.View style={[styles.sectionArea, reveal(5)]}>
                         <View style={styles.sectionHeaderMass}>
                             <View style={styles.rowCenter}>
                                 <MaterialCommunityIcons name="party-popper" size={16} color={userRank.color} style={{marginRight: 8}} />
@@ -568,42 +837,75 @@ export default function UserHome() {
                             </View>
                             <Text style={styles.onlineCountText}>{safeParties.length} ROOMS</Text>
                         </View>
-                        <FlatList horizontal showsHorizontalScrollIndicator={false} data={safeParties} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20 }}
+                        <FlatList horizontal showsHorizontalScrollIndicator={false} data={safeParties} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20, paddingVertical: 14, paddingRight: 10 }}
+                            style={{ overflow: 'visible' }}
                             renderItem={({ item, index }) => {
-                                const partyBorder = index % 2 === 0 ? borderType1 : borderType2;
+                                const fc1 = index % 2 === 0 ? '#6366F1' : userRank.color;
+                                const fc2 = index % 2 === 0 ? userRank.color : '#6366F1';
                                 return (
                                     // 🔥 FIX 2: THE ULTIMATE ROOT FOLDER PATH FIX (/forum/[roomId]) 🔥
-                                    <TouchableOpacity activeOpacity={0.9} style={[styles.massPartyCard, partyBorder]} onPress={() => router.push({ pathname: "/forum/[roomId]", params: { roomId: item.roomId || item.id } } as any)}>
-                                        <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.massPartyThumb} />
-                                        <LinearGradient colors={['transparent', 'rgba(0,0,0,0.9)']} style={styles.massLiveOverlay}>
-                                            <View style={[styles.liveBadge, {backgroundColor: '#4F46E5'}]}><Text style={styles.liveBadgeText}>FORUM</Text></View>
-                                            <View style={{flexDirection: 'row', alignItems: 'center', marginBottom: 4}}>
-                                                <View style={styles.liveDotDiscover} />
-                                                <Text style={{color: '#10B981', fontSize: 10, fontWeight: '900', marginLeft: 4}}>{item.viewerCount || 0} Online</Text>
+                                    <PressCard tilt={index % 2 === 0 ? 4 : -4} style={[styles.neonWrapForum, { shadowColor: '#6366F1' }]} onPress={() => router.push({ pathname: "/forum/[roomId]", params: { roomId: item.roomId || item.id } } as any)}>
+                                        <NeonFrame w={FORUM_W} h={FORUM_H} rt={30} rb={30} c1={fc1} c2={fc2} rotate={index % 2 === 0 ? orbitRotateRev : orbitRotate}>
+                                            {/* blurred backdrop (cropping is fine here) */}
+                                            <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} blurRadius={22} style={styles.forumBackdrop} />
+                                            <LinearGradient pointerEvents="none" colors={['rgba(49,46,129,0.80)', 'rgba(2,6,23,0.55)', 'rgba(2,6,23,0.92)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+
+                                            <View pointerEvents="none" style={styles.forumRow}>
+                                                {/* full, uncropped square photo */}
+                                                <View style={[styles.forumThumbWrap, { borderColor: withAlpha(fc1, 'FF') }]}>
+                                                    <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.forumThumb} />
+                                                </View>
+                                                <View style={styles.forumInfo}>
+                                                    <View style={styles.forumBadge}>
+                                                        <Ionicons name="chatbubbles" size={10} color="#FFF" />
+                                                        <Text style={styles.liveBadgeText}>FORUM</Text>
+                                                    </View>
+                                                    <Text style={styles.forumRoomName} numberOfLines={2}>{item.roomName}</Text>
+                                                    <View style={styles.forumHostRow}>
+                                                        <Ionicons name="mic" size={11} color="#A5B4FC" />
+                                                        <Text style={styles.forumHostText} numberOfLines={1}>Host: {item.hostName}</Text>
+                                                    </View>
+                                                    <View style={styles.forumFooter}>
+                                                        <EqBars loop={mainLoop} color={withAlpha(fc2, 'FF')} />
+                                                        <View style={[styles.joinChip, { backgroundColor: withAlpha(fc1, 'FF') }]}>
+                                                            <Text style={styles.joinChipText}>JOIN</Text>
+                                                            <Ionicons name="arrow-forward" size={10} color="#000" />
+                                                        </View>
+                                                    </View>
+                                                </View>
                                             </View>
-                                            <Text style={styles.liveHostNameMass} numberOfLines={1}>{item.roomName}</Text>
-                                            <Text style={{color: '#94A3B8', fontSize: 10, fontWeight: '700', marginTop: 2}}>Host: {item.hostName}</Text>
-                                        </LinearGradient>
-                                    </TouchableOpacity>
+                                        </NeonFrame>
+                                    </PressCard>
                                 );
                             }}
                         />
-                    </View>
+                    </Animated.View>
                 )}
 
 
 
                 <View style={styles.sectionArea}>
                     <View style={styles.sectionHeaderMass}>
-                        <Text style={styles.sectionTitleMass}>FEATURED HOSTS</Text>
+                        <View style={styles.rowCenter}>
+                            <View style={[styles.sectionAccentBar, { backgroundColor: userRank.color }]} />
+                            <Text style={styles.sectionTitleMass}>FEATURED HOSTS</Text>
+                        </View>
                         <TouchableOpacity><Text style={[styles.seeMoreText, { color: userRank.color }]}>DISCOVER</Text></TouchableOpacity>
                     </View>
-                    <FlatList horizontal showsHorizontalScrollIndicator={false} data={spotlightExperts} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 10 }}
+                    <FlatList horizontal showsHorizontalScrollIndicator={false} data={spotlightExperts} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 14, paddingRight: 10, paddingVertical: 14 }}
+                        style={{ overflow: 'visible' }}
                         renderItem={({ item }) => {
                             const liveNode = safeLives.find(l => l.hostId === item.id);
                             return (
                                 <TouchableOpacity activeOpacity={0.8} style={styles.circleBtn} onPress={() => liveNode ? router.push({ pathname: "/(tabs)/live/[liveId]", params: { liveId: liveNode.id } } as any) : router.push({ pathname: '/expert-detail', params: { id: item.id } } as any)}>
-                                    <LevelAvatar image={item.profilePic || item.photoURL} beans={item.totalBeansEarned || 0} size={64} />
+                                    <View style={styles.circleGlow}>
+                                        {/* 🆕 centered counter-rotating halos (no clipping) */}
+                                        <Animated.View style={[styles.circleHalo, { borderColor: withAlpha(userRank.color, 'AA'), transform: [{ rotate: orbitRotate }] }]} />
+                                        <Animated.View style={[styles.circleHaloInner, { borderColor: withAlpha(userRank.secondaryColor, 'CC'), transform: [{ rotate: orbitRotateRev }] }]} />
+                                        <View style={styles.circleAvatarCenter}>
+                                            <LevelAvatar image={item.profilePic || item.photoURL} beans={item.totalBeansEarned || 0} size={64} />
+                                        </View>
+                                    </View>
                                     <Text style={styles.circleNameText} numberOfLines={1}>{item.name}</Text>
                                 </TouchableOpacity>
                             );
@@ -614,18 +916,22 @@ export default function UserHome() {
 
 
                 <View style={styles.listArea}>
-                    <Text style={styles.sectionTitleMass}>RECOMMENDED HOSTS</Text>
+                    <View style={[styles.rowCenter, { marginBottom: 18 }]}>
+                        <View style={[styles.sectionAccentBar, { backgroundColor: userRank.color }]} />
+                        <Text style={styles.sectionTitleMass}>RECOMMENDED HOSTS</Text>
+                    </View>
                     {loading ? ( <ActivityIndicator color={userRank.color} style={{ marginTop: 40 }} /> ) : (
                         safeExperts.filter(e => (e.name || '').toLowerCase().includes(searchQuery.toLowerCase())).map((expert, index) => {
                                 const diamondRate = Number(expert.userPrice || (expert.beansPerMin * 2) || 1000);
                                 const liveSession = safeLives.find(live => live.hostId === expert.id);
                                 const expertThemeColor = getExpertThemeColor(expert.totalBeansEarned || 0);
+                                const isBusyNow = expert.isBusy === true || expert.isBusy === "true";
                                 
                                 // 🔥 Alternating Border Logic
                                 const expertBorderStyle = index % 2 === 0 ? borderType2 : borderType1;
 
                                 return (
-                                    <TouchableOpacity 
+                                    <PressCard 
                                         key={expert.id} 
                                         activeOpacity={0.85} 
                                         style={[styles.eliteNodeRow, expertBorderStyle]} 
@@ -633,21 +939,37 @@ export default function UserHome() {
                                         onPress={() => handleExpertCallClick(expert, liveSession)}
                                     >
                                         <View style={styles.nodeLead}>
-                                            <View style={[styles.nodeAvatarRing, { borderColor: expertThemeColor }]}>
+                                            <View style={[styles.nodeAvatarRing, { borderColor: expertThemeColor, shadowColor: expertThemeColor }]}>
                                                 <Image source={{ uri: expert.profilePic || 'https://i.pravatar.cc/100' }} style={styles.nodeAvatarImg} />
                                             </View>
                                             {liveSession && <View style={styles.livePing}><Text style={styles.livePingText}>LIVE</Text></View>}
+                                            {/* 🆕 availability dot */}
+                                            <View style={[styles.statusDot, { backgroundColor: liveSession ? '#EF4444' : isBusyNow ? '#F59E0B' : '#10B981' }]} />
                                         </View>
                                         <View style={styles.nodeMain}>
                                             <Text style={styles.nodeName}>{expert.name}</Text>
                                             <Text style={[styles.nodeRateText, { color: expertThemeColor }]}>💎 {diamondRate.toLocaleString()} / MIN</Text>
+                                            {/* 🆕 rating + busy chips */}
+                                            <View style={styles.chipRow}>
+                                                {expert.rating ? (
+                                                    <View style={styles.miniChip}>
+                                                        <Ionicons name="star" size={9} color="#F59E0B" />
+                                                        <Text style={styles.miniChipText}>{Number(expert.rating).toFixed(1)}</Text>
+                                                    </View>
+                                                ) : null}
+                                                {!liveSession && isBusyNow ? (
+                                                    <View style={[styles.miniChip, { backgroundColor: 'rgba(245,158,11,0.15)' }]}>
+                                                        <Text style={[styles.miniChipText, { color: '#F59E0B' }]}>BUSY</Text>
+                                                    </View>
+                                                ) : null}
+                                            </View>
                                         </View>
                                         
                                         {/* 🔥 FLAME OR VIDEO ICON 🔥 */}
-                                        <LinearGradient colors={liveSession ? ['#EF4444', '#7F1D1D'] : [userRank.color, userRank.secondaryColor || '#1E1B4B']} style={styles.nodeCallBtn}>
+                                        <LinearGradient colors={liveSession ? ['#EF4444', '#7F1D1D'] : [withAlpha(userRank.color, 'FF'), withAlpha(userRank.secondaryColor || '#1E1B4B', 'FF')]} style={[styles.nodeCallBtn, { shadowColor: liveSession ? '#EF4444' : userRank.color }]}>
                                             <Ionicons name={liveSession ? "flame" : "videocam"} size={18} color="#FFF" />
                                         </LinearGradient>
-                                    </TouchableOpacity>
+                                    </PressCard>
                                 );
                             })
                     )}
@@ -673,19 +995,29 @@ const styles = StyleSheet.create({
     brandRow: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
     brandTitleWhite: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: -1 },
     brandTitleIndigo: { fontSize: 22, fontWeight: '900', letterSpacing: -1, marginLeft: 6 },
+    rankStatusText: { fontSize: 8, fontWeight: '900', letterSpacing: 2.5, marginTop: 3, opacity: 0.85 },
     
-    syncedAvatarRing: { width: 60, height: 60, borderRadius: 30, borderWidth: 2, padding: 2, elevation: 15, backgroundColor: '#020617' },
-    syncedAvatarImg: { width: '100%', height: '100%', borderRadius: 28 },
+    // 🆕 AVATAR ORBIT
+    avatarOrbitWrap: { width: 78, height: 78, justifyContent: 'center', alignItems: 'center' },
+    orbitRing: { position: 'absolute', width: 76, height: 76, borderRadius: 38, borderWidth: 1.5, borderStyle: 'dashed', opacity: 0.8 },
+    orbitRingInner: { position: 'absolute', width: 68, height: 68, borderRadius: 34, borderWidth: 1, borderStyle: 'dotted', opacity: 0.7 },
+    levelBadgeMini: { position: 'absolute', bottom: 2, right: 2, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8 },
+    levelBadgeMiniText: { color: '#000', fontSize: 8, fontWeight: '900' },
 
-    walletArea: { paddingHorizontal: 20, marginTop: 20 },
+    syncedAvatarRing: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, padding: 2, elevation: 15, backgroundColor: '#020617', shadowOpacity: 0.9, shadowRadius: 12, shadowOffset: { width: 0, height: 0 } },
+    syncedAvatarImg: { width: '100%', height: '100%', borderRadius: 26 },
+
+    walletArea: { paddingHorizontal: 20, marginTop: 10 },
+    walletGlowShadow: { borderRadius: 35, shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 12 }, elevation: 20 },
     // 🔥 ZERO BOX FLUID SHAPE
-    stealthBoxBase: { height: 130, borderRadius: 35, overflow: 'hidden', elevation: 20 },
-    glowTrail: { position: 'absolute', width: 120, height: '200%', top: '-50%', opacity: 0.2, transform: [{ rotate: '35deg' }] },
+    stealthBoxBase: { height: 150, borderRadius: 35, overflow: 'hidden', elevation: 20 },
+    glowTrail: { position: 'absolute', width: 120, height: '200%', top: '-50%', opacity: 0.2 },
+    holoStripe: { position: 'absolute', width: 70, height: '220%', top: '-60%', backgroundColor: 'rgba(255,255,255,0.14)' },
     walletContentRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', height: '100%', paddingHorizontal: 22, zIndex: 10 },
     walletInfo: { flex: 1 },
     cardSubTitle: { color: 'rgba(255,255,255,0.6)', fontSize: 8, fontWeight: '900', letterSpacing: 2 },
     balanceRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4, flexWrap: 'nowrap' },
-    mainBalanceValue: { color: '#FFF', fontSize: 32, fontWeight: '900', flexShrink: 1 },
+    mainBalanceValue: { color: '#FFF', fontSize: 32, fontWeight: '900', flexShrink: 1, textShadowColor: 'rgba(255,255,255,0.35)', textShadowRadius: 12 },
     userNameContainer: { marginTop: 8 },
     walletUserName: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
     walletUserID: { fontSize: 9, fontWeight: '900', marginTop: 2, letterSpacing: 1.5 },
@@ -695,22 +1027,29 @@ const styles = StyleSheet.create({
     btnTxt: { fontWeight: '900', fontSize: 9, letterSpacing: 1 },
 
     // 🔥 QUICK Discover BUTTON STYLES
-    DiscoverTriggerMass: { marginHorizontal: 20, marginTop: 25, borderRadius: 30, elevation: 15, shadowOpacity: 0.6, shadowRadius: 12 },
-    DiscoverGradient: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, gap: 15 },
-    DiscoverBtnText: { color: '#FFF', fontSize: 19, fontWeight: '900', letterSpacing: 1.5 },
-    liveIndicatorDiscover: { marginLeft: 'auto', backgroundColor: 'rgba(0,0,0,0.3)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 5 },
+    DiscoverTriggerMass: { marginHorizontal: 20, marginTop: 25, borderRadius: 30, elevation: 15, shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 8 } },
+    DiscoverClip: { borderRadius: 30, overflow: 'hidden' },
+    DiscoverGradient: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, paddingHorizontal: 18, borderRadius: 30, gap: 14 },
+    DiscoverBtnText: { color: '#FFF', fontSize: 19, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 6 },
+    boltWrap: { width: 30, height: 30, justifyContent: 'center', alignItems: 'center' },
+    boltHalo: { position: 'absolute', width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.5)' },
+    shineBar: { position: 'absolute', top: -40, bottom: -40, width: 60, backgroundColor: 'rgba(255,255,255,0.22)' },
+    liveIndicatorDiscover: { alignSelf: 'flex-start', marginTop: 8, backgroundColor: 'rgba(0,0,0,0.35)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, flexDirection: 'row', alignItems: 'center', gap: 6 },
     liveDotDiscover: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
     liveCountDiscover: { color: '#10B981', fontSize: 10, fontWeight: '800' },
 
     searchSection: { paddingHorizontal: 20, marginTop: 20 },
-    searchBarMass: { flexDirection: 'row', borderRadius: 25, paddingHorizontal: 18, height: 50, alignItems: 'center' },
+    searchBarMass: { flexDirection: 'row', borderRadius: 25, paddingHorizontal: 18, height: 50, alignItems: 'center', overflow: 'hidden' },
     searchInputMass: { flex: 1, marginLeft: 12, color: '#FFF', fontSize: 13, fontWeight: '700' },
     
     scrollContent: { paddingTop: 10 },
     sectionArea: { marginTop: 35 },
     sectionHeaderMass: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginHorizontal: 20, marginBottom: 15 },
     rowCenter: { flexDirection: 'row', alignItems: 'center' },
-    livePulseDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', marginRight: 10, shadowColor: '#EF4444', shadowRadius: 5, elevation: 5 },
+    sectionAccentBar: { width: 4, height: 16, borderRadius: 2, marginRight: 10 },
+    pulseDotWrap: { width: 20, height: 20, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+    pulseDotHalo: { position: 'absolute', width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444' },
+    livePulseDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#EF4444', shadowColor: '#EF4444', shadowRadius: 5, elevation: 5 },
     sectionTitleMass: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 1 },
     onlineCountText: { color: '#475569', fontSize: 9, fontWeight: '900' },
     seeMoreText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
@@ -722,25 +1061,82 @@ const styles = StyleSheet.create({
     massPartyCard: { width: 160, height: 160, marginRight: 18, borderRadius: 25, overflow: 'hidden' },
     massPartyThumb: { width: '100%', height: '100%', opacity: 0.7 },
 
+    // 🆕 NEON FRAME CARDS (broadcast + forum)
+    neonWrap: { width: LIVE_W, height: LIVE_H, marginRight: 16, borderRadius: 34, shadowOpacity: 0.6, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 },
+    neonWrapForum: { width: FORUM_W, height: FORUM_H, marginRight: 16, borderRadius: 30, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
+    liveTopRow: { position: 'absolute', top: 14, left: 14, right: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    liveBadgeNew: { backgroundColor: '#EF4444', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 5 },
+    viewerPill: { backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
+    viewerPillText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
+    liveGlassPanel: { position: 'absolute', left: 10, right: 10, bottom: 10, borderRadius: 24, paddingHorizontal: 10, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.06)' },
+    liveMiniAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 1.5, padding: 1.5 },
+    liveMiniAvatarImg: { width: '100%', height: '100%', borderRadius: 18 },
+    watchHint: { fontSize: 8, fontWeight: '900', letterSpacing: 1.5, marginTop: 2 },
+    playCircle: { width: 28, height: 28, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
+    forumTopRow: { position: 'absolute', top: 12, left: 14, right: 14, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    forumBadge: { backgroundColor: '#4F46E5', paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 4 },
+    forumOnlinePill: { backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 5 },
+    forumBottom: { position: 'absolute', left: 16, right: 16, bottom: 14, flexDirection: 'row', alignItems: 'flex-end', gap: 12 },
+    forumRoomName: { color: '#FFF', fontSize: 15, marginTop: 6, fontWeight: '900', letterSpacing: 0.3, textShadowColor: '#000', textShadowRadius: 6 },
+    forumHostRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+    forumHostText: { color: '#A5B4FC', fontSize: 10, fontWeight: '700' },
+
+    // 🆕 QUICK CONNECT PARTS
+    connectOrb: { width: 58, height: 58, justifyContent: 'center', alignItems: 'center' },
+    connectRing: { position: 'absolute', width: 58, height: 58, borderRadius: 29, backgroundColor: 'rgba(255,255,255,0.45)' },
+    connectRingDash: { position: 'absolute', width: 58, height: 58, borderRadius: 29, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(255,255,255,0.8)' },
+    connectOrbCore: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
+    connectTextCol: { flex: 1 },
+    connectGoBtn: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.35)', justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.45)' },
+
+    // 🆕 ARCH BROADCAST + FORUM TICKET
+    neonWrapArch: { width: LIVE_W, height: LIVE_H, marginRight: 16, borderTopLeftRadius: LIVE_W / 2, borderTopRightRadius: LIVE_W / 2, borderBottomLeftRadius: 30, borderBottomRightRadius: 30, shadowOpacity: 0.6, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 },
+    archBadgeWrap: { position: 'absolute', top: 14, left: 0, right: 0, alignItems: 'center' },
+    forumBackdrop: { position: 'absolute', width: '100%', height: '100%', opacity: 0.7 },
+    forumRow: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'center', padding: 14, gap: 14 },
+    forumThumbWrap: { width: 104, height: 104, borderRadius: 26, borderWidth: 2, padding: 2 },
+    forumThumb: { width: '100%', height: '100%', borderRadius: 22 },
+    forumInfo: { flex: 1, justifyContent: 'center' },
+    forumFooter: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 },
+    joinChip: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+    joinChipText: { color: '#000', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+
+    // 🆕 BROADCAST: VIEWFINDER CARD
+    liveCardWrap: { width: LIVE_W, height: LIVE_H, marginRight: 16 },
+    liveFrameShadow: { width: LIVE_W, height: FRAME_H, borderRadius: 26, backgroundColor: '#020617', shadowOpacity: 0.65, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
+    liveSoftShade: { position: 'absolute', left: 0, right: 0, bottom: 0, height: 60 },
+    vfCorner: { position: 'absolute', width: 20, height: 20 },
+    liveNameRow: { height: 46, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 6, marginTop: 8, gap: 10 },
+    liveNameLine: { width: 28, height: 3, borderRadius: 2, marginTop: 5 },
+
     massLiveOverlay: { ...StyleSheet.absoluteFillObject, justifyContent: 'flex-end', padding: 18 },
-    liveBadge: { position: 'absolute', top: 15, left: 15, backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 }, 
+    liveBadge: { position: 'absolute', top: 15, left: 15, backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4 }, 
+    liveBadgeDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: '#FFF' },
     liveBadgeText: { color: '#FFF', fontSize: 8, fontWeight: '900' },
     liveHostNameMass: { color: '#FFF', fontSize: 14, fontWeight: '900', textShadowColor: '#000', textShadowRadius: 5 },
     
-    circleBtn: { alignItems: 'center', marginRight: 22, width: 75 },
-    circleNameText: { color: '#FFF', fontSize: 10, fontWeight: '900', marginTop: 10 },
+    circleBtn: { alignItems: 'center', marginRight: 14, width: 96 },
+    circleGlow: { width: 88, height: 88, justifyContent: 'center', alignItems: 'center' },
+    circleHalo: { position: 'absolute', top: 0, left: 0, width: 88, height: 88, borderRadius: 44, borderWidth: 1.5, borderStyle: 'dashed' },
+    circleHaloInner: { position: 'absolute', top: 7, left: 7, width: 74, height: 74, borderRadius: 37, borderWidth: 1, borderStyle: 'dotted' },
+    circleAvatarCenter: { width: 64, height: 64, justifyContent: 'center', alignItems: 'center' },
+    circleNameText: { color: '#FFF', fontSize: 10, fontWeight: '900', marginTop: 8, textAlign: 'center', width: 90 },
     
     listArea: { marginTop: 45, paddingHorizontal: 20 },
     eliteNodeRow: { flexDirection: 'row', alignItems: 'center', padding: 15, borderRadius: 35, marginBottom: 15 },
     nodeLead: { position: 'relative' },
-    nodeAvatarRing: { width: 54, height: 54, borderRadius: 27, borderWidth: 1.5, padding: 2 },
+    nodeAvatarRing: { width: 54, height: 54, borderRadius: 27, borderWidth: 1.5, padding: 2, shadowOpacity: 0.7, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } },
     nodeAvatarImg: { width: '100%', height: '100%', borderRadius: 25 },
+    statusDot: { position: 'absolute', bottom: 0, right: 0, width: 13, height: 13, borderRadius: 7, borderWidth: 2, borderColor: '#020617' },
     livePing: { position: 'absolute', top: -5, left: -5, backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, zIndex: 10 },
     livePingText: { color: '#FFF', fontSize: 7, fontWeight: '900' },
     nodeMain: { flex: 1, marginLeft: 16 },
     nodeName: { color: '#FFF', fontWeight: '900', fontSize: 16, letterSpacing: 0.2 },
     nodeRateText: { fontSize: 12, fontWeight: '900', marginTop: 3 },
-    nodeCallBtn: { width: 48, height: 48, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 12 },
+    chipRow: { flexDirection: 'row', gap: 6, marginTop: 5 },
+    miniChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+    miniChipText: { color: '#E2E8F0', fontSize: 9, fontWeight: '900' },
+    nodeCallBtn: { width: 48, height: 48, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 12, shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
 
     // ==========================================
     // 🔥 NEW HIGH-END PREMIUM POLICY MODAL STYLES 🔥

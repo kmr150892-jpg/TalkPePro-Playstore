@@ -25,6 +25,9 @@ import { auth, db } from '../../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 
+// 🆕 Safe alpha helper (8-digit hex colors-kum work aagum, e.g. '#09bbf1fe' + '50' invalid aagaadhu)
+const alpha = (c: string, a: string) => (c || '#000000').slice(0, 7) + a;
+
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC FROM MEMORY V2)
 const calculateUserLevel = (totalSpent: number) => {
   if (totalSpent >= 500000001) return { 
@@ -54,6 +57,134 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
+// 🆕 Floating star-dust particles (fixed positions, shimmer driver-la drift + twinkle aagum)
+const PARTICLES = [
+  { x: 0.06, y: 0.16, s: 3 }, { x: 0.22, y: 0.30, s: 2 }, { x: 0.38, y: 0.12, s: 4 }, { x: 0.55, y: 0.26, s: 2 },
+  { x: 0.72, y: 0.14, s: 3 }, { x: 0.90, y: 0.28, s: 2 }, { x: 0.12, y: 0.48, s: 3 }, { x: 0.33, y: 0.58, s: 2 },
+  { x: 0.50, y: 0.44, s: 4 }, { x: 0.68, y: 0.60, s: 2 }, { x: 0.86, y: 0.50, s: 3 }, { x: 0.18, y: 0.76, s: 2 },
+  { x: 0.44, y: 0.82, s: 3 }, { x: 0.78, y: 0.78, s: 2 }
+];
+
+// 🆕 Date separator helpers
+const dayKey = (m: any) => (m?.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000) : new Date()).toDateString();
+const dayLabel = (m: any) => {
+  const d = m?.createdAt?.seconds ? new Date(m.createdAt.seconds * 1000) : new Date();
+  const today = new Date();
+  const yest = new Date();
+  yest.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'TODAY';
+  if (d.toDateString() === yest.toDateString()) return 'YESTERDAY';
+  return d.toLocaleDateString([], { day: '2-digit', month: 'short', year: 'numeric' }).toUpperCase();
+};
+
+// 🆕 Quick starter chips (empty chat-la) - tap pannina input-la mattum varum, auto-send aagaadhu
+const STARTERS = ['👋 Hi!', 'How are you?', "Let's connect"];
+
+// 🆕 3D EXTRUDED MESSAGE BUBBLE - depth layer, glass sheen, avatar, date chip, entrance flip + press tilt
+const MessageBubble = ({ item, isMine, tier, onLongPress, showAvatar, avatarUri, showDate, dateLabel, tight }: any) => {
+  const enter = useRef(new Animated.Value(0)).current;
+  const press = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(enter, { toValue: 1, friction: 7, tension: 60, useNativeDriver: true }).start();
+  }, []);
+
+  const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [30, 0] });
+  const translateX = enter.interpolate({ inputRange: [0, 1], outputRange: [isMine ? 50 : -50, 0] });
+  const rotateX = enter.interpolate({ inputRange: [0, 1], outputRange: ['32deg', '0deg'] });
+  const rotateYEnter = enter.interpolate({ inputRange: [0, 1], outputRange: [isMine ? '-22deg' : '22deg', '0deg'] });
+  const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.95] });
+
+  const pIn = () => Animated.spring(press, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+  const pOut = () => Animated.spring(press, { toValue: 0, friction: 5, useNativeDriver: true }).start();
+
+  return (
+    <Animated.View
+      style={[
+        styles.msgWrapper,
+        { marginBottom: tight ? 6 : 20 },
+        { opacity: enter, transform: [{ perspective: 900 }, { translateY }, { translateX }, { rotateX }, { rotateY: rotateYEnter }, { scale }] }
+      ]}
+    >
+      {showDate && (
+        <View style={styles.dateRow}>
+          <LinearGradient colors={['transparent', alpha(tier.color, '55')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.dateLine} />
+          <View style={[styles.dateChip, { borderColor: alpha(tier.color, '40') }]}>
+            <Text style={[styles.dateText, { color: tier.color }]}>{dateLabel}</Text>
+          </View>
+          <LinearGradient colors={[alpha(tier.color, '55'), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.dateLine} />
+        </View>
+      )}
+
+      <View style={[styles.rowLine, isMine ? { justifyContent: 'flex-end' } : { justifyContent: 'flex-start' }]}>
+        {!isMine && (
+          showAvatar ? (
+            <LinearGradient colors={[tier.color, tier.secondaryColor]} style={styles.bubbleAvatarRing}>
+              <Image source={{ uri: avatarUri }} style={styles.bubbleAvatar} />
+            </LinearGradient>
+          ) : (
+            <View style={styles.avatarSpacer} />
+          )
+        )}
+
+        <View style={{ maxWidth: '78%', alignItems: isMine ? 'flex-end' : 'flex-start' }}>
+          {/* 🔥 UNIVERSAL DELETE: TouchableOpacity wraps BOTH bubbles now! 🔥 */}
+          <TouchableOpacity 
+              activeOpacity={0.85} 
+              onLongPress={() => onLongPress(item.id)}
+              onPressIn={pIn}
+              onPressOut={pOut}
+          >
+              {isMine ? (
+                  <View>
+                      {/* 3D depth layer (extrude) */}
+                      <View style={[styles.depthMine, { backgroundColor: alpha(tier.secondaryColor, '99') }]} />
+                      <LinearGradient 
+                        colors={[tier.color, tier.secondaryColor]} 
+                        start={{x:0, y:0}} end={{x:1, y:1}} 
+                        style={[styles.myBubble, { shadowColor: tier.color }]}
+                      >
+                          <LinearGradient
+                            colors={['rgba(255,255,255,0.30)', 'rgba(255,255,255,0.04)', 'transparent']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0.9, y: 0.8 }}
+                            style={styles.bubbleSheenMine}
+                            pointerEvents="none"
+                          />
+                          <Text style={styles.msgText}>{item.text}</Text>
+                      </LinearGradient>
+                  </View>
+              ) : (
+                  <View>
+                      <View style={[styles.depthTheirs, { backgroundColor: alpha(tier.secondaryColor, '33') }]} />
+                      <LinearGradient
+                        colors={[alpha(tier.secondaryColor, 'AA'), 'rgba(255,255,255,0.06)', alpha(tier.color, '88')]}
+                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                        style={[styles.theirBorder, { shadowColor: tier.secondaryColor }]}
+                      >
+                          <BlurView intensity={30} tint="dark" style={styles.theirBubble}>
+                              <LinearGradient
+                                colors={['rgba(255,255,255,0.12)', 'transparent']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 0.9, y: 0.7 }}
+                                style={StyleSheet.absoluteFill}
+                                pointerEvents="none"
+                              />
+                              <Text style={styles.msgText}>{item.text}</Text>
+                          </BlurView>
+                      </LinearGradient>
+                  </View>
+              )}
+          </TouchableOpacity>
+          <Text style={styles.timeText}>
+              {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
+          </Text>
+        </View>
+      </View>
+    </Animated.View>
+  );
+};
+
 export default function ChatScreen() {
   // 🔥 SATTI FIX: Mapped parameters to support both direct chat and profile chat routes 🔥
   const { chatId, receiverId, receiverName, userId, userName } = useLocalSearchParams();
@@ -68,14 +199,28 @@ export default function ChatScreen() {
   const [userData, setUserData] = useState<any>(null); // ✅ Current Logged-in User Data
   const [receiverData, setReceiverData] = useState<any>(null); // 🔥 SATTI FIX: Opponent User Data
 
+  const [msgsLoaded, setMsgsLoaded] = useState(false); // 🆕 empty-state flash aagaama irukka
+  const [showJump, setShowJump] = useState(false); // 🆕 scroll-to-latest button
+
   const user = auth.currentUser;
   const router = useRouter();
+  const listRef = useRef<FlatList>(null);
 
   // 🔥 SATTI FIX: Universal Chat Room Generator
   const activeChatId = (chatId as string) || (user?.uid && actualReceiverId ? [user.uid, actualReceiverId].sort().join('_') : '');
 
   // 🌀 ANIMATION ENGINE REFS
   const shimmerAnim = useRef(new Animated.Value(0)).current;
+  // 🆕 new animation drivers
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const spinRevAnim = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const headerEnter = useRef(new Animated.Value(0)).current;
+  const inputEnter = useRef(new Animated.Value(0)).current;
+  const focusAnim = useRef(new Animated.Value(0)).current;
+  const sendPop = useRef(new Animated.Value(0)).current;
+  const floatIcon = useRef(new Animated.Value(0)).current;
+  const jumpAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     if (!activeChatId || !user) return;
@@ -135,6 +280,7 @@ export default function ChatScreen() {
       (snap) => {
         const msgs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setMessages(msgs);
+        setMsgsLoaded(true);
       },
       (error) => {
         if (error.code === 'permission-denied') console.log("Safe Ignore: Chat listener detached on logout.");
@@ -143,6 +289,45 @@ export default function ChatScreen() {
 
     return () => { unsubscribe(); unsubUser(); unsubReceiver(); };
   }, [activeChatId, user, actualReceiverId]);
+
+  // 🆕 One-time UI animations (avatar rings, status pulse, entrances, floating icon)
+  useEffect(() => {
+    Animated.loop(
+      Animated.timing(spinAnim, { toValue: 1, duration: 7000, easing: Easing.linear, useNativeDriver: true })
+    ).start();
+
+    Animated.loop(
+      Animated.timing(spinRevAnim, { toValue: 1, duration: 11000, easing: Easing.linear, useNativeDriver: true })
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1100, easing: Easing.out(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+      ])
+    ).start();
+
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatIcon, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(floatIcon, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+      ])
+    ).start();
+
+    Animated.spring(headerEnter, { toValue: 1, friction: 8, tension: 50, useNativeDriver: true }).start();
+    Animated.spring(inputEnter, { toValue: 1, friction: 8, tension: 50, delay: 150, useNativeDriver: true }).start();
+  }, []);
+
+  // 🆕 send button pop when text available
+  const hasText = message.trim().length > 0;
+  useEffect(() => {
+    Animated.spring(sendPop, { toValue: hasText ? 1 : 0, friction: 5, tension: 120, useNativeDriver: true }).start();
+  }, [hasText]);
+
+  // 🆕 jump-to-latest button show/hide
+  useEffect(() => {
+    Animated.spring(jumpAnim, { toValue: showJump ? 1 : 0, friction: 7, tension: 90, useNativeDriver: true }).start();
+  }, [showJump]);
 
   // 2. Transmit Message Logic
   const sendMessage = async () => {
@@ -202,15 +387,11 @@ export default function ChatScreen() {
                   text: "Clear All", style: "destructive", 
                   onPress: async () => {
                       try {
-                          // 1. Fetch and delete all messages in subcollection
                           const msgsSnap = await getDocs(collection(db, "chats", activeChatId, "messages"));
                           const deletePromises = msgsSnap.docs.map(msgDoc => deleteDoc(doc(db, "chats", activeChatId, "messages", msgDoc.id)));
                           await Promise.all(deletePromises);
                           
-                          // 2. Delete main chat document
                           await deleteDoc(doc(db, "chats", activeChatId));
-                          
-                          // 3. Eject user back to previous screen
                           router.back();
                       } catch (error) {
                           Alert.alert("Error", "Could not clear the session.");
@@ -230,7 +411,7 @@ export default function ChatScreen() {
   const borderType1 = {
       borderLeftWidth: 2, borderRightWidth: 2, borderTopWidth: 0.5, borderBottomWidth: 0.5,
       borderLeftColor: userTier.color, borderRightColor: userTier.color,
-      borderTopColor: userTier.secondaryColor + '80', borderBottomColor: userTier.secondaryColor + '80',
+      borderTopColor: alpha(userTier.secondaryColor, '80'), borderBottomColor: alpha(userTier.secondaryColor, '80'),
       backgroundColor: 'rgba(15, 23, 42, 0.85)',
   };
 
@@ -239,6 +420,28 @@ export default function ChatScreen() {
   const isBlockedByThem = Array.isArray(receiverData?.blockedUsers) && receiverData.blockedUsers.includes(user?.uid);
   const isChatBlocked = isBlockedByMe || isBlockedByThem;
 
+  const avatarUri = receiverImage || `https://ui-avatars.com/api/?name=${actualReceiverName || 'Host'}&background=1E293B&color=fff`;
+
+  // 🆕 interpolations
+  const ringRotate = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const ringRotateRev = spinRevAnim.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+  const dotScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] });
+  const dotOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] });
+  const haloScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
+  const haloOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+  const headerY = headerEnter.interpolate({ inputRange: [0, 1], outputRange: [-60, 0] });
+  const headerRotX = headerEnter.interpolate({ inputRange: [0, 1], outputRange: ['-35deg', '0deg'] });
+  const inputY = inputEnter.interpolate({ inputRange: [0, 1], outputRange: [80, 0] });
+  const sendScale = sendPop.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.08] });
+  const sendRotate = sendPop.interpolate({ inputRange: [0, 1], outputRange: ['-25deg', '0deg'] });
+  const sendRingOpacity = Animated.multiply(sendPop, haloOpacity);
+  const floatY = floatIcon.interpolate({ inputRange: [0, 1], outputRange: [0, -14] });
+  const floatRotY = floatIcon.interpolate({ inputRange: [0, 1], outputRange: ['-16deg', '16deg'] });
+  const avatarRotY = floatIcon.interpolate({ inputRange: [0, 1], outputRange: ['-12deg', '12deg'] });
+  const blobX1 = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, 50] });
+  const blobX2 = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -60] });
+  const jumpScale = jumpAnim.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1] });
+
   return (
     <View style={styles.mainContainer}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -246,131 +449,219 @@ export default function ChatScreen() {
       {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
       <LinearGradient colors={userTier.themeBg as any} style={StyleSheet.absoluteFill} />
       
-      {/* 🔥 FLOATING SHIMMER ORBS */}
-      <Animated.View style={[styles.shimmerOrb, { top: 150, right: -80, backgroundColor: userTier.secondaryColor, transform: [{ translateY: orbTranslateY }] }]} />
-      <Animated.View style={[styles.shimmerOrb, { bottom: 100, left: -80, backgroundColor: userTier.color, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+      {/* 🔥 FLOATING SHIMMER ORBS (aurora) */}
+      <Animated.View style={[styles.shimmerOrb, { top: 150, right: -80, backgroundColor: userTier.secondaryColor, transform: [{ translateY: orbTranslateY }, { translateX: blobX2 }] }]} />
+      <Animated.View style={[styles.shimmerOrb, { bottom: 100, left: -80, backgroundColor: userTier.color, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }, { translateX: blobX1 }] }]} />
+      <Animated.View style={[styles.shimmerOrbSmall, { top: height * 0.38, left: width * 0.35, backgroundColor: userTier.color, transform: [{ translateY: Animated.multiply(orbTranslateY, 0.6) }, { translateX: blobX1 }] }]} />
 
-      {/* --- MASS HEADER HUD --- */}
-      <SafeAreaView edges={['top']} style={[styles.headerSafe, { borderColor: userTier.color + '40' }]}>
-        <View style={styles.headerHud}>
-           <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: userTier.secondaryColor + '50' }]}>
-              <Ionicons name="chevron-back" size={24} color="#FFF" />
-           </TouchableOpacity>
-           
-           <View style={styles.headerInfo}>
-              <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.headerAvatarRing}>
-                  <Image 
-                    source={{ uri: receiverImage || `https://ui-avatars.com/api/?name=${actualReceiverName || 'Host'}&background=1E293B&color=fff` }} 
-                    style={styles.headerAvatar} 
-                  />
-              </LinearGradient>
-              <View style={{marginLeft: 12}}>
-                  <Text style={styles.headerName}>{actualReceiverName || "Host Node"}</Text>
-                  <View style={styles.statusRow}>
-                     <View style={[styles.pulseDot, { backgroundColor: isChatBlocked ? '#EF4444' : userTier.color }]} />
-                     <Text style={[styles.statusText, { color: isChatBlocked ? '#EF4444' : userTier.color }]}>
-                         {isChatBlocked ? "UPLINK SEVERED" : "ENCRYPTED LINK"}
-                     </Text>
-                  </View>
-              </View>
-           </View>
+      {/* 🆕 star-dust particles */}
+      {PARTICLES.map((p, i) => {
+        const up = i % 2 === 0;
+        const ty = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: up ? [0, -40 - (i % 3) * 14] : [-30 - (i % 3) * 10, 0] });
+        const op = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: up ? [0.15, 0.85] : [0.85, 0.15] });
+        return (
+          <Animated.View
+            key={i}
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              left: p.x * width,
+              top: p.y * height,
+              width: p.s,
+              height: p.s,
+              borderRadius: p.s / 2,
+              backgroundColor: i % 3 === 0 ? '#FFFFFF' : userTier.color,
+              opacity: op,
+              transform: [{ translateY: ty }]
+            }}
+          />
+        );
+      })}
 
-           {/* 🔥 SATTI FIX: Added Wipeout Trash Button to Header 🔥 */}
-           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-               <TouchableOpacity onPress={handleWipeoutChat} style={styles.headerAction}>
-                  <Ionicons name="trash-outline" size={22} color="#EF4444" />
-               </TouchableOpacity>
-               <TouchableOpacity style={styles.headerAction}>
-                  <MaterialCommunityIcons name={isChatBlocked ? "shield-off-outline" : "shield-lock-outline"} size={22} color={isChatBlocked ? "#EF4444" : userTier.color} />
-               </TouchableOpacity>
-           </View>
-        </View>
+      {/* --- FLOATING GLASS HEADER HUD --- */}
+      <Animated.View style={{ opacity: headerEnter, transform: [{ perspective: 1000 }, { translateY: headerY }, { rotateX: headerRotX }] }}>
+      <SafeAreaView edges={['top']} style={styles.headerSafe}>
+        <LinearGradient
+          colors={[alpha(userTier.color, 'CC'), alpha(userTier.secondaryColor, '33'), alpha(userTier.color, 'CC')]}
+          start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+          style={[styles.headerBorder, { shadowColor: userTier.color }]}
+        >
+          <BlurView intensity={60} tint="dark" style={styles.headerHud}>
+             <LinearGradient colors={['rgba(255,255,255,0.10)', 'transparent']} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFill} pointerEvents="none" />
+
+             <TouchableOpacity onPress={() => router.back()} style={[styles.backBtn, { borderColor: alpha(userTier.secondaryColor, '50') }]}>
+                <Ionicons name="chevron-back" size={24} color="#FFF" />
+             </TouchableOpacity>
+             
+             <View style={styles.headerInfo}>
+                <Animated.View style={[styles.avatarBox, { transform: [{ perspective: 600 }, { rotateY: avatarRotY }] }]}>
+                    <Animated.View style={[styles.avatarHalo, { backgroundColor: userTier.color, opacity: haloOpacity, transform: [{ scale: haloScale }] }]} />
+                    <Animated.View style={{ position: 'absolute', transform: [{ rotate: ringRotateRev }] }}>
+                        <LinearGradient colors={[userTier.secondaryColor, 'transparent', userTier.secondaryColor, 'transparent']} style={styles.headerAvatarRingOuter} />
+                    </Animated.View>
+                    <Animated.View style={{ position: 'absolute', transform: [{ rotate: ringRotate }] }}>
+                        <LinearGradient colors={[userTier.color, userTier.secondaryColor, userTier.color]} style={styles.headerAvatarRing} />
+                    </Animated.View>
+                    <Image source={{ uri: avatarUri }} style={styles.headerAvatar} />
+                </Animated.View>
+                <View style={{ marginLeft: 12, flex: 1 }}>
+                    <Text style={styles.headerName} numberOfLines={1}>{actualReceiverName || "Host Node"}</Text>
+                    <View style={[styles.statusPill, { borderColor: alpha(isChatBlocked ? '#EF4444' : userTier.color, '55'), backgroundColor: alpha(isChatBlocked ? '#EF4444' : userTier.color, '15') }]}>
+                       <View style={styles.pulseWrap}>
+                          <Animated.View style={[styles.pulseRing, { backgroundColor: isChatBlocked ? '#EF4444' : userTier.color, opacity: dotOpacity, transform: [{ scale: dotScale }] }]} />
+                          <View style={[styles.pulseDot, { backgroundColor: isChatBlocked ? '#EF4444' : userTier.color }]} />
+                       </View>
+                       <Text style={[styles.statusText, { color: isChatBlocked ? '#EF4444' : userTier.color }]}>
+                           {isChatBlocked ? "UPLINK SEVERED" : "CHAT"}
+                       </Text>
+                    </View>
+                </View>
+             </View>
+
+             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                 <TouchableOpacity onPress={handleWipeoutChat} style={[styles.headerAction, { borderColor: 'rgba(239,68,68,0.40)' }]}>
+                    <Ionicons name="trash-outline" size={19} color="#EF4444" />
+                 </TouchableOpacity>
+                 <TouchableOpacity style={[styles.headerAction, { borderColor: isChatBlocked ? 'rgba(239,68,68,0.40)' : alpha(userTier.color, '55') }]}>
+                    <MaterialCommunityIcons name={isChatBlocked ? "shield-off-outline" : "shield-lock-outline"} size={19} color={isChatBlocked ? "#EF4444" : userTier.color} />
+                 </TouchableOpacity>
+             </View>
+          </BlurView>
+        </LinearGradient>
       </SafeAreaView>
+      </Animated.View>
 
-      {/* 🔥 THE FIX: WhatsApp Style Keyboard Behavior 🔥 */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         style={{ flex: 1 }}
       >
         <FlatList
+          ref={listRef}
           data={messages}
           keyExtractor={(item) => item.id}
           inverted
           contentContainerStyle={styles.chatList}
           showsVerticalScrollIndicator={false}
-          renderItem={({ item }) => {
-            const isMine = item.senderId === user?.uid;
-            return (
-              <View style={[styles.msgWrapper, isMine ? { alignItems: 'flex-end' } : { alignItems: 'flex-start' }]}>
-                {/* 🔥 UNIVERSAL DELETE: TouchableOpacity wraps BOTH bubbles now! 🔥 */}
-                <TouchableOpacity 
-                    activeOpacity={0.8} 
-                    onLongPress={() => handleDeleteMessage(item.id)}
-                >
-                    {isMine ? (
-                        <LinearGradient 
-                          colors={[userTier.color, userTier.secondaryColor]} 
-                          start={{x:0, y:0}} end={{x:1, y:1}} 
-                          style={[styles.myBubble, { shadowColor: userTier.color }]}
-                        >
-                            <Text style={styles.msgText}>{item.text}</Text>
-                        </LinearGradient>
-                    ) : (
-                        <BlurView intensity={25} tint="dark" style={[styles.theirBubble, { borderColor: userTier.secondaryColor + '60' }]}>
-                            <Text style={styles.msgText}>{item.text}</Text>
-                        </BlurView>
-                    )}
-                </TouchableOpacity>
-                <Text style={styles.timeText}>
-                    {item.createdAt ? new Date(item.createdAt.seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ""}
-                </Text>
+          scrollEventThrottle={16}
+          onScroll={(e) => {
+            const s = e.nativeEvent.contentOffset.y > 400;
+            setShowJump((p) => (p === s ? p : s));
+          }}
+          ListEmptyComponent={
+            msgsLoaded && !isChatBlocked ? (
+              // 🔥 MIRROR FIX: scaleY -1 applied so empty state text and chips render completely upright! 🔥
+              <View style={[styles.emptyWrap, { transform: [{ scaleY: -1 }] }]}>
+                <Animated.View style={[styles.emptyIconCircle, { borderColor: alpha(userTier.color, '55'), shadowColor: userTier.color, transform: [{ perspective: 800 }, { translateY: floatY }, { rotateY: floatRotY }] }]}>
+                  <LinearGradient colors={[alpha(userTier.color, '40'), 'transparent']} style={StyleSheet.absoluteFill} />
+                  <MaterialCommunityIcons name="message-text-lock-outline" size={50} color={userTier.color} />
+                </Animated.View>
+                <Text style={styles.emptyTitle}>Start the conversation</Text>
+                <Text style={styles.emptySub}>Say hi to {actualReceiverName || "Host Node"}</Text>
+                <View style={styles.starterRow}>
+                  {STARTERS.map((s) => (
+                    <TouchableOpacity key={s} activeOpacity={0.8} onPress={() => setMessage(s)} style={[styles.starterChip, { borderColor: alpha(userTier.color, '55') }]}>
+                      <Text style={styles.starterText}>{s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
               </View>
+            ) : null
+          }
+          renderItem={({ item, index }) => {
+            const isMine = item.senderId === user?.uid;
+            const older = messages[index + 1];
+            const newer = messages[index - 1];
+            const showDate = !older || dayKey(older) !== dayKey(item);
+            const showAvatar = !isMine && (!newer || newer.senderId !== item.senderId);
+            const tight = !!newer && newer.senderId === item.senderId && dayKey(newer) === dayKey(item);
+            return (
+              <MessageBubble
+                item={item}
+                isMine={isMine}
+                tier={userTier}
+                onLongPress={handleDeleteMessage}
+                showAvatar={showAvatar}
+                avatarUri={avatarUri}
+                showDate={showDate}
+                dateLabel={showDate ? dayLabel(item) : ''}
+                tight={tight}
+              />
             );
           }}
         />
 
-        {/* --- FUTURISTIC INPUT / BLOCKED MSG --- */}
-        <View style={styles.inputArea}>
-            <BlurView intensity={80} tint="dark" style={[styles.inputBlur, borderType1, isChatBlocked && { justifyContent: 'center' }]}>
-                {/* 🔥 SATTI FIX: Replace Input with Block Message if chat is restricted 🔥 */}
-                {isChatBlocked ? (
-                    <View style={styles.blockedMsgContainer}>
-                        <MaterialCommunityIcons name="shield-off" size={16} color="#EF4444" />
-                        <Text style={styles.blockedMsgText}>You cannot reply to this conversation.</Text>
-                    </View>
-                ) : (
-                    <>
-                        <TouchableOpacity style={styles.attachBtn}>
-                           <Ionicons name="add" size={24} color={userTier.color} />
-                        </TouchableOpacity>
-                        
-                        <TextInput
-                          style={styles.input}
-                          value={message}
-                          onChangeText={setMessage}
-                          placeholder="Type transmission..."
-                          placeholderTextColor="#475569"
-                          multiline
-                        />
+        <Animated.View
+          pointerEvents={showJump ? 'auto' : 'none'}
+          style={[styles.jumpWrap, { opacity: jumpAnim, transform: [{ scale: jumpScale }] }]}
+        >
+          <TouchableOpacity activeOpacity={0.85} onPress={() => listRef.current?.scrollToOffset({ offset: 0, animated: true })}>
+            <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={[styles.jumpBtn, { shadowColor: userTier.color }]}>
+              <Ionicons name="chevron-down" size={22} color="#FFF" />
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
 
-                        <TouchableOpacity 
-                          onPress={sendMessage} 
-                          disabled={!message.trim()}
-                          style={[styles.sendBtn, !message.trim() && { opacity: 0.5 }]}
-                        >
-                          <LinearGradient 
-                            colors={[userTier.color, userTier.secondaryColor]} 
-                            start={{x:0, y:0}} end={{x:1, y:1}} 
-                            style={styles.sendGrad}
-                          >
-                            <Ionicons name="send" size={18} color="#FFF" />
-                          </LinearGradient>
-                        </TouchableOpacity>
-                    </>
+        <Animated.View style={[styles.inputArea, { opacity: inputEnter, transform: [{ translateY: inputY }] }]}>
+            <View style={styles.dockRow}>
+                {!isChatBlocked && (
+                    <TouchableOpacity activeOpacity={0.8} style={[styles.attachBtn, { borderColor: alpha(userTier.color, '55'), shadowColor: userTier.color }]}>
+                       <LinearGradient colors={[alpha(userTier.color, '30'), 'rgba(255,255,255,0.04)']} style={StyleSheet.absoluteFill} />
+                       <Ionicons name="add" size={26} color={userTier.color} />
+                    </TouchableOpacity>
                 )}
-            </BlurView>
-        </View>
+
+                <View style={{ flex: 1 }}>
+                    {!isChatBlocked && (
+                        <Animated.View
+                            pointerEvents="none"
+                            style={[styles.inputGlow, { backgroundColor: alpha(userTier.color, '66'), opacity: focusAnim }]}
+                        />
+                    )}
+                    <BlurView intensity={80} tint="dark" style={[styles.inputBlur, borderType1, isChatBlocked && { justifyContent: 'center' }]}>
+                        {isChatBlocked ? (
+                            <View style={styles.blockedMsgContainer}>
+                                <MaterialCommunityIcons name="shield-off" size={16} color="#EF4444" />
+                                <Text style={styles.blockedMsgText}>You cannot reply to this conversation.</Text>
+                            </View>
+                        ) : (
+                            <TextInput
+                              style={styles.input}
+                              value={message}
+                              onChangeText={setMessage}
+                              placeholder="Type transmission..."
+                              placeholderTextColor="#475569"
+                              multiline
+                              onFocus={() => Animated.timing(focusAnim, { toValue: 1, duration: 250, useNativeDriver: true }).start()}
+                              onBlur={() => Animated.timing(focusAnim, { toValue: 0, duration: 250, useNativeDriver: true }).start()}
+                            />
+                        )}
+                    </BlurView>
+                </View>
+
+                {!isChatBlocked && (
+                    <View style={styles.sendOuter}>
+                        <Animated.View pointerEvents="none" style={[styles.sendRing, { backgroundColor: userTier.color, opacity: sendRingOpacity, transform: [{ scale: haloScale }] }]} />
+                        <Animated.View style={{ transform: [{ perspective: 600 }, { scale: sendScale }, { rotate: sendRotate }] }}>
+                            <TouchableOpacity 
+                              onPress={sendMessage} 
+                              disabled={!message.trim()}
+                              style={[styles.sendBtn, !message.trim() && { opacity: 0.5 }]}
+                            >
+                              <LinearGradient 
+                                colors={[userTier.color, userTier.secondaryColor]} 
+                                start={{x:0, y:0}} end={{x:1, y:1}} 
+                                style={[styles.sendGrad, { shadowColor: userTier.color }]}
+                              >
+                                <LinearGradient colors={['rgba(255,255,255,0.35)', 'transparent']} start={{x:0,y:0}} end={{x:0.8,y:0.8}} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                <Ionicons name="send" size={20} color="#FFF" />
+                              </LinearGradient>
+                            </TouchableOpacity>
+                        </Animated.View>
+                    </View>
+                )}
+            </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </View>
   );
@@ -378,41 +669,74 @@ export default function ChatScreen() {
 
 const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: '#020617' },
-  shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+  shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.22 },
+  shimmerOrbSmall: { position: 'absolute', width: 190, height: 190, borderRadius: 95, opacity: 0.14 },
 
-  headerSafe: { borderBottomWidth: 1, backgroundColor: 'rgba(15, 23, 42, 0.4)' },
-  headerHud: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 12, justifyContent: 'space-between' },
-  backBtn: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 8, borderRadius: 15, borderWidth: 1 },
-  headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 15 },
-  headerAvatarRing: { padding: 2, borderRadius: 18 },
-  headerAvatar: { width: 44, height: 44, borderRadius: 16, backgroundColor: '#0F172A' },
-  headerName: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
-  statusRow: { flexDirection: 'row', alignItems: 'center', marginTop: 3 },
-  pulseDot: { width: 6, height: 6, borderRadius: 3, marginRight: 6, elevation: 5, shadowOpacity: 0.5, shadowRadius: 5 },
+  headerSafe: { paddingHorizontal: 12, paddingBottom: 6 },
+  headerBorder: { borderRadius: 32, padding: 1.5, marginTop: 6, shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
+  headerHud: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 30.5, overflow: 'hidden', backgroundColor: 'rgba(8,12,28,0.78)' },
+  backBtn: { backgroundColor: 'rgba(255,255,255,0.06)', width: 42, height: 42, borderRadius: 21, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  headerInfo: { flex: 1, flexDirection: 'row', alignItems: 'center', marginLeft: 10 },
+  avatarBox: { width: 66, height: 66, alignItems: 'center', justifyContent: 'center' },
+  avatarHalo: { position: 'absolute', width: 56, height: 56, borderRadius: 28 },
+  headerAvatarRingOuter: { width: 66, height: 66, borderRadius: 33, opacity: 0.7 },
+  headerAvatarRing: { width: 58, height: 58, borderRadius: 22 },
+  headerAvatar: { width: 50, height: 50, borderRadius: 18, backgroundColor: '#0F172A', borderWidth: 2, borderColor: '#020617' },
+  headerName: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.4 },
+  statusPill: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, marginTop: 5 },
+  pulseWrap: { width: 14, height: 14, alignItems: 'center', justifyContent: 'center', marginRight: 3 },
+  pulseRing: { position: 'absolute', width: 6, height: 6, borderRadius: 3 },
+  pulseDot: { width: 6, height: 6, borderRadius: 3, elevation: 5, shadowOpacity: 0.5, shadowRadius: 5 },
   statusText: { fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
-  headerAction: { padding: 8 },
+  headerAction: { width: 38, height: 38, borderRadius: 19, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center' },
 
-  chatList: { padding: 20, paddingBottom: 30 },
-  msgWrapper: { marginBottom: 20, width: '100%' },
+  chatList: { padding: 20, paddingBottom: 30, flexGrow: 1 },
+  msgWrapper: { width: '100%' },
+  rowLine: { flexDirection: 'row', alignItems: 'flex-end' },
+  bubbleAvatarRing: { width: 34, height: 34, borderRadius: 13, padding: 1.5, marginRight: 8, marginBottom: 18, alignItems: 'center', justifyContent: 'center' },
+  bubbleAvatar: { width: '100%', height: '100%', borderRadius: 11.5, backgroundColor: '#0F172A' },
+  avatarSpacer: { width: 42 },
+  dateRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 18, marginTop: 6 },
+  dateLine: { flex: 1, height: 1 },
+  dateChip: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginHorizontal: 10 },
+  dateText: { fontSize: 9, fontWeight: '900', letterSpacing: 1.8 },
+  depthMine: { position: 'absolute', top: 6, left: 5, right: -5, bottom: -6, borderRadius: 24, borderBottomRightRadius: 6 },
+  depthTheirs: { position: 'absolute', top: 6, left: -4, right: 4, bottom: -6, borderRadius: 24, borderBottomLeftRadius: 6 },
   myBubble: { 
     padding: 16, borderRadius: 24, borderBottomRightRadius: 6, 
-    maxWidth: '85%', elevation: 15, shadowOpacity: 0.4, shadowRadius: 15
+    elevation: 15, shadowOpacity: 0.55, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }
   },
+  bubbleSheenMine: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 24, borderBottomRightRadius: 6 },
+  theirBorder: { borderRadius: 24, borderBottomLeftRadius: 6, padding: 1.2, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 8 },
   theirBubble: { 
-    padding: 16, borderRadius: 24, borderBottomLeftRadius: 6, 
-    maxWidth: '85%', backgroundColor: 'rgba(5, 5, 5, 0.65)', borderWidth: 1
+    padding: 15, borderRadius: 22.8, borderBottomLeftRadius: 5, 
+    backgroundColor: 'rgba(5, 8, 20, 0.80)', overflow: 'hidden'
   },
   msgText: { color: '#FFF', fontSize: 15, fontWeight: '600', lineHeight: 22 },
-  timeText: { color: '#64748b', fontSize: 10, fontWeight: '800', marginTop: 6, letterSpacing: 0.5 },
+  timeText: { color: '#64748b', fontSize: 10, fontWeight: '800', marginTop: 8, letterSpacing: 0.5 },
 
-  inputArea: { paddingHorizontal: 20, paddingBottom: Platform.OS === 'ios' ? 20 : 30, paddingTop: 10 },
-  inputBlur: { flexDirection: 'row', alignItems: 'center', borderRadius: 35, padding: 8, overflow: 'hidden', minHeight: 65 },
-  attachBtn: { padding: 10, marginLeft: 5 },
+  emptyWrap: { alignItems: 'center', justifyContent: 'center', paddingVertical: 70 },
+  emptyIconCircle: { width: 120, height: 120, borderRadius: 60, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: 'rgba(255,255,255,0.03)', shadowOpacity: 0.6, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 12, marginBottom: 24 },
+  emptyTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 0.3 },
+  emptySub: { color: '#64748B', fontSize: 12, fontWeight: '700', marginTop: 6, letterSpacing: 0.5 },
+  starterRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 10, marginTop: 22 },
+  starterChip: { paddingHorizontal: 14, paddingVertical: 9, borderRadius: 16, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)' },
+  starterText: { color: '#E2E8F0', fontSize: 12, fontWeight: '800' },
+
+  jumpWrap: { position: 'absolute', right: 20, bottom: 112 },
+  jumpBtn: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 5 }, elevation: 10 },
+
+  inputArea: { paddingHorizontal: 14, paddingBottom: Platform.OS === 'ios' ? 20 : 30, paddingTop: 10 },
+  dockRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  inputGlow: { position: 'absolute', top: -3, left: -3, right: -3, bottom: -3, borderRadius: 34 },
+  inputBlur: { flexDirection: 'row', alignItems: 'center', borderRadius: 30, paddingHorizontal: 10, paddingVertical: 6, overflow: 'hidden', minHeight: 56 },
+  attachBtn: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', backgroundColor: 'rgba(15,23,42,0.85)', shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
   input: { flex: 1, color: '#FFF', fontSize: 15, fontWeight: '600', maxHeight: 100, paddingHorizontal: 12, paddingTop: Platform.OS === 'ios' ? 10 : 0 },
-  sendBtn: { marginLeft: 10 },
-  sendGrad: { width: 48, height: 48, borderRadius: 24, justifyContent: 'center', alignItems: 'center', elevation: 8 },
+  sendOuter: { width: 56, height: 56, alignItems: 'center', justifyContent: 'center' },
+  sendRing: { position: 'absolute', width: 54, height: 54, borderRadius: 27 },
+  sendBtn: { },
+  sendGrad: { width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', overflow: 'hidden', elevation: 10, shadowOpacity: 0.7, shadowRadius: 12, shadowOffset: { width: 0, height: 5 } },
 
-  // 🔥 SATTI FIX: BLOCKED MSG STYLES 🔥
   blockedMsgContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 8, width: '100%' },
   blockedMsgText: { color: '#94A3B8', fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
 });

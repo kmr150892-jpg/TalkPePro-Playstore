@@ -17,6 +17,7 @@ import {
     Easing,
     FlatList,
     Image,
+    Pressable,
     ScrollView,
     StatusBar,
     StyleSheet,
@@ -44,6 +45,9 @@ const getLevelConfig = (beans: number) => {
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent' };
 };
 
+// 🆕 Level floor values (progress bar-ku) - getLevelConfig thresholds-oda same
+const LEVEL_STEPS = [0, 30000, 100000, 300000, 1000000, 3000000, 5000000, 10000000, 30000000, 50000000, 100000000];
+
 const calculateLevel = (d: number) => {
     if (d <= 200000) return "Silver";
     if (d <= 1000000) return "Gold";
@@ -63,6 +67,97 @@ const TABS = [
     { id: 'daily_bonus', label: 'Daily Bonus', icon: 'star-shooting', iconType: 'MaterialCommunityIcons' } 
 ];
 
+// 🆕 Image load aagalana icon fallback (offline-lum azhaga irukkum)
+const SafeImage = ({ uri, fallbackIcon, style, color }: any) => {
+    const [failed, setFailed] = useState(false);
+    if (!uri || failed) {
+        return (
+            <View style={[style, { alignItems: 'center', justifyContent: 'center' }]}>
+                <MaterialCommunityIcons name={fallbackIcon} size={34} color={color} />
+            </View>
+        );
+    }
+    return <Image source={{ uri }} style={style} resizeMode="contain" onError={() => setFailed(true)} />;
+};
+
+// 🆕 Number count-up animation
+const useCountUp = (target: number) => {
+    const anim = useRef(new Animated.Value(0)).current;
+    const [val, setVal] = useState(0);
+    useEffect(() => {
+        const id = anim.addListener(({ value }) => setVal(Math.floor(value)));
+        Animated.timing(anim, { toValue: target, duration: 1300, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+        return () => anim.removeListener(id);
+    }, [target]);
+    return val;
+};
+
+// 🆕 3D TILT CARD - entrance flip-in + gentle 3D sway + press tilt + glow border
+const TiltCard = ({ index, sway, glow, colors, children }: any) => {
+    const enter = useRef(new Animated.Value(0)).current;
+    const press = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.spring(enter, {
+            toValue: 1,
+            delay: Math.min(index, 8) * 70,
+            friction: 7,
+            tension: 50,
+            useNativeDriver: true
+        }).start();
+    }, []);
+
+    const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [60, 0] });
+    const rotateXEnter = enter.interpolate({ inputRange: [0, 1], outputRange: ['35deg', '0deg'] });
+    const rotateXPress = press.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '8deg'] });
+    const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.965] });
+    const even = index % 2 === 0;
+    const swayY = sway.interpolate({ inputRange: [0, 1], outputRange: [even ? '-2.5deg' : '2.5deg', even ? '2.5deg' : '-2.5deg'] });
+
+    const pIn = () => Animated.spring(press, { toValue: 1, friction: 6, useNativeDriver: true }).start();
+    const pOut = () => Animated.spring(press, { toValue: 0, friction: 5, useNativeDriver: true }).start();
+
+    return (
+        <Animated.View
+            style={[
+                styles.cardShadow,
+                {
+                    shadowColor: glow,
+                    opacity: enter,
+                    transform: [
+                        { perspective: 900 },
+                        { translateY },
+                        { rotateX: rotateXEnter },
+                        { rotateX: rotateXPress },
+                        { rotateY: swayY },
+                        { scale }
+                    ]
+                }
+            ]}
+        >
+            <Pressable onPressIn={pIn} onPressOut={pOut}>
+                <LinearGradient
+                    colors={[colors[0] + 'CC', colors[1] + '55', colors[0] + 'CC']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.cardBorder}
+                >
+                    <View style={styles.cardInner}>
+                        <LinearGradient
+                            colors={['rgba(255,255,255,0.09)', 'transparent']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 0.8, y: 0.6 }}
+                            style={StyleSheet.absoluteFill}
+                            pointerEvents="none"
+                        />
+                        {children}
+                    </View>
+                </LinearGradient>
+            </Pressable>
+        </Animated.View>
+    );
+};
+
 export default function ExpertHistory() {
   const router = useRouter();
   const user = auth.currentUser;
@@ -76,6 +171,12 @@ export default function ExpertHistory() {
 
   const shimmerAnim = useRef(new Animated.Value(0)).current;
   const floatAnim = useRef(new Animated.Value(0)).current;
+  // 🆕 new animation drivers
+  const swayAnim = useRef(new Animated.Value(0)).current;
+  const spinAnim = useRef(new Animated.Value(0)).current;
+  const refreshSpin = useRef(new Animated.Value(0)).current;
+  const progAnim = useRef(new Animated.Value(0)).current;
+  const heroEnter = useRef(new Animated.Value(0)).current;
 
   const config = getLevelConfig(expertProfile?.totalBeansEarned || 0);
   const theme = {
@@ -88,6 +189,13 @@ export default function ExpertHistory() {
           '#020617'
       ] as const 
   };
+
+  // 🆕 Hero stats
+  const lifetimeBeans = Number(expertProfile?.totalBeansEarned) || 0;
+  const countedLifetime = useCountUp(lifetimeBeans);
+  const curFloor = LEVEL_STEPS[config.lvl] || 0;
+  const nextFloor = config.lvl >= 10 ? curFloor : LEVEL_STEPS[config.lvl + 1];
+  const levelProgress = config.lvl >= 10 ? 1 : Math.max(0, Math.min(1, (lifetimeBeans - curFloor) / ((nextFloor - curFloor) || 1)));
 
   const fetchAllArchives = async () => {
     if (!user) return;
@@ -309,13 +417,12 @@ export default function ExpertHistory() {
   };
 
   useEffect(() => {
+    // 🔧 smooth ping-pong (munnadi 0->1 reset aagi orb jump aagum, ippo smooth)
     Animated.loop(
-      Animated.timing(shimmerAnim, {
-        toValue: 1,
-        duration: 4000,
-        easing: Easing.inOut(Easing.sin),
-        useNativeDriver: true
-      })
+      Animated.sequence([
+        Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(shimmerAnim, { toValue: 0, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+      ])
     ).start();
 
     Animated.loop(
@@ -324,6 +431,22 @@ export default function ExpertHistory() {
         Animated.timing(floatAnim, { toValue: 0, duration: 2500, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
       ])
     ).start();
+
+    // 🆕 3D sway for cards
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(swayAnim, { toValue: 1, duration: 3600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(swayAnim, { toValue: 0, duration: 3600, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+      ])
+    ).start();
+
+    // 🆕 rotating ring around hero trophy
+    Animated.loop(
+      Animated.timing(spinAnim, { toValue: 1, duration: 9000, easing: Easing.linear, useNativeDriver: true })
+    ).start();
+
+    // 🆕 hero entrance
+    Animated.spring(heroEnter, { toValue: 1, friction: 7, tension: 45, useNativeDriver: true }).start();
 
     if (!user) return;
     
@@ -339,34 +462,34 @@ export default function ExpertHistory() {
     };
   }, [user]);
 
+  // 🆕 refresh icon spins while syncing
+  useEffect(() => {
+    if (!loading) { refreshSpin.setValue(0); return; }
+    const loop = Animated.loop(
+      Animated.timing(refreshSpin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [loading]);
+
+  // 🆕 level progress bar animation
+  useEffect(() => {
+    Animated.timing(progAnim, { toValue: levelProgress, duration: 1200, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+  }, [levelProgress]);
+
   const orbTranslateY = shimmerAnim.interpolate({
       inputRange: [0, 1],
       outputRange: [0, -30]
   });
+  const ringRotate = spinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const refreshRotate = refreshSpin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+  const sweepX = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [-160, width] });
+  const heroScale = heroEnter.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] });
+  const heroRotX = heroEnter.interpolate({ inputRange: [0, 1], outputRange: ['25deg', '0deg'] });
+  const progWidth = progAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] });
 
-  const borderType1 = {
-      borderLeftWidth: 2,
-      borderRightWidth: 2,
-      borderTopWidth: 0.5,
-      borderBottomWidth: 0.5,
-      borderLeftColor: theme.primary,
-      borderRightColor: theme.primary,
-      borderTopColor: theme.secondary + '80',
-      borderBottomColor: theme.secondary + '80',
-      backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  };
-
-  const borderType2 = {
-      borderLeftWidth: 2,
-      borderRightWidth: 2,
-      borderTopWidth: 0.5,
-      borderBottomWidth: 0.5,
-      borderLeftColor: theme.secondary,
-      borderRightColor: theme.secondary,
-      borderTopColor: theme.primary + '80',
-      borderBottomColor: theme.primary + '80',
-      backgroundColor: 'rgba(15, 23, 42, 0.45)',
-  };
+  const cardColorsA = [theme.primary, theme.secondary];
+  const cardColorsB = [theme.secondary, theme.primary];
 
   const renderCallItem = ({ item, index }: { item: any, index: number }) => {
     const duration = Number(item.finalDuration) || 0;
@@ -378,7 +501,7 @@ export default function ExpertHistory() {
     const titleText = item.callerName ? `Call with ${item.callerName}` : "Call Reward";
 
     return (
-      <Animated.View style={[styles.eliteCard, index % 2 === 0 ? borderType1 : borderType2, { transform: [{ translateY: floatAnim }] }]}>
+      <TiltCard index={index} sway={swayAnim} glow={theme.accent} colors={index % 2 === 0 ? cardColorsA : cardColorsB}>
         <LinearGradient colors={[theme.primary, 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.statusGlowLine} />
         <View style={styles.cardMain}>
           <View style={styles.userSection}>
@@ -387,7 +510,9 @@ export default function ExpertHistory() {
                 onPress={() => item.callerId ? router.push({ pathname: '/user-detail', params: { id: item.callerId } } as any) : null}
                 disabled={!item.callerId}
             >
-                <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${item.callerName}&background=3B82F6&color=fff` }} style={styles.eliteAvatar} />
+                <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.avatarRing}>
+                    <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${item.callerName}&background=3B82F6&color=fff` }} style={styles.eliteAvatar} />
+                </LinearGradient>
                 <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.levelBadgeMini}>
                   <Text style={styles.levelBadgeText}>{item.syncLevel.toUpperCase()}</Text>
                 </LinearGradient>
@@ -402,9 +527,9 @@ export default function ExpertHistory() {
           </View>
           <View style={styles.earningsBlock}>
             <Text style={styles.earnLabel}>Rewards</Text>
-            <View style={styles.beansRow}>
+            <LinearGradient colors={['rgba(251,191,36,0.25)', 'rgba(251,191,36,0.06)']} style={styles.rewardPill}>
               <Text style={styles.eliteBeansValue}>+🎖️{earnings}</Text> 
-            </View>
+            </LinearGradient>
           </View>
         </View>
         <BlurView intensity={20} tint="dark" style={styles.cardFooter}>
@@ -417,7 +542,7 @@ export default function ExpertHistory() {
                 <Text style={[styles.verifiedText, { color: theme.accent }]}>SECURE</Text>
             </View>
         </BlurView>
-      </Animated.View>
+      </TiltCard>
     );
   };
 
@@ -456,7 +581,7 @@ export default function ExpertHistory() {
     }
 
     return (
-      <Animated.View style={[styles.eliteCard, index % 2 === 0 ? borderType2 : borderType1, { transform: [{ translateY: floatAnim }] }]}>
+      <TiltCard index={index} sway={swayAnim} glow={iconColor} colors={index % 2 === 0 ? cardColorsB : cardColorsA}>
         <LinearGradient colors={[theme.secondary, 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.statusGlowLine} />
         <View style={styles.cardMain}>
           <View style={styles.userSection}>
@@ -465,7 +590,9 @@ export default function ExpertHistory() {
                 onPress={() => item.senderId ? router.push({ pathname: '/user-detail', params: { id: item.senderId } } as any) : null}
                 disabled={!item.senderId}
             >
-                <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${item.senderName || 'V'}&background=D946EF&color=fff` }} style={styles.eliteAvatar} />
+                <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.avatarRing}>
+                    <Image source={{ uri: item.syncPic || `https://ui-avatars.com/api/?name=${item.senderName || 'V'}&background=D946EF&color=fff` }} style={styles.eliteAvatar} />
+                </LinearGradient>
                 <LinearGradient colors={[theme.primary, theme.secondary]} style={styles.levelBadgeMini}>
                   <Text style={styles.levelBadgeText}>{item.syncLevel.toUpperCase()}</Text>
                 </LinearGradient>
@@ -473,16 +600,18 @@ export default function ExpertHistory() {
             <View style={styles.userMeta}>
               <Text style={styles.eliteUserName} numberOfLines={2} adjustsFontSizeToFit>{displayTitle}</Text>
               <View style={styles.giftLabelRow}>
-                  <MaterialCommunityIcons name={iconType as any} size={16} color={iconColor} />
+                  <View style={[styles.giftIconChip, { backgroundColor: iconColor + '25', borderColor: iconColor + '60' }]}>
+                      <MaterialCommunityIcons name={iconType as any} size={14} color={iconColor} />
+                  </View>
                   <Text style={[styles.giftSubName, { color: iconColor }]} numberOfLines={2} adjustsFontSizeToFit>{displaySub}</Text>
               </View>
             </View>
           </View>
           <View style={styles.earningsBlock}>
             <Text style={styles.earnLabel}>REWARD</Text>
-            <View style={styles.beansRow}>
+            <LinearGradient colors={['rgba(251,191,36,0.25)', 'rgba(251,191,36,0.06)']} style={styles.rewardPill}>
               <Text style={styles.eliteBeansValue}>+🎖️{beansEarned}</Text>
-            </View>
+            </LinearGradient>
           </View>
         </View>
         <View style={styles.cardFooterSimple}>
@@ -492,11 +621,12 @@ export default function ExpertHistory() {
                 <Text style={[styles.receivedText, { color: theme.accent }]}>VERIFIED</Text>
             </View>
         </View>
-      </Animated.View>
+      </TiltCard>
     );
   };
 
   const filteredData = allTransactions.filter(t => t.type === activeTab);
+  const tabCount = (id: string) => allTransactions.filter(t => t.type === id).length;
 
   return (
     <View style={styles.mainContainer}>
@@ -505,6 +635,7 @@ export default function ExpertHistory() {
       
       <Animated.View style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
       <Animated.View style={[styles.shimmerOrb, { top: 500, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+      <Animated.View style={[styles.shimmerOrbSmall, { top: height * 0.32, left: width * 0.4, backgroundColor: theme.accent, transform: [{ translateY: Animated.multiply(orbTranslateY, 0.6) }] }]} />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <View style={styles.eliteHeader}>
@@ -515,10 +646,67 @@ export default function ExpertHistory() {
             <Text style={[styles.headerLabel, { color: theme.primary }]}>SECURE TERMINAL</Text>
             <Text style={styles.headerMainTitle}>Reward Hub</Text>
           </View>
-          <TouchableOpacity style={styles.headerActionBtn} onPress={fetchAllArchives}>
-            <MaterialCommunityIcons name="shield-refresh-outline" size={26} color={theme.accent} />
+          <TouchableOpacity style={[styles.headerActionBtn, { borderColor: theme.accent + '40' }]} onPress={fetchAllArchives}>
+            <Animated.View style={{ transform: [{ rotate: refreshRotate }] }}>
+                <MaterialCommunityIcons name="shield-refresh-outline" size={24} color={theme.accent} />
+            </Animated.View>
           </TouchableOpacity>
         </View>
+
+        {/* 🆕 3D HERO REWARD CARD */}
+        <Animated.View style={[styles.heroWrap, { opacity: heroEnter, transform: [{ perspective: 1000 }, { rotateX: heroRotX }, { scale: heroScale }] }]}>
+            <LinearGradient
+                colors={[theme.primary + 'AA', theme.secondary + '55', theme.accent + 'AA']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.heroBorder}
+            >
+                <View style={styles.heroInner}>
+                    <LinearGradient colors={['rgba(255,255,255,0.10)', 'transparent']} start={{x:0,y:0}} end={{x:1,y:1}} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    {/* light sweep */}
+                    <Animated.View pointerEvents="none" style={[styles.sweep, { transform: [{ translateX: sweepX }, { rotate: '18deg' }] }]}>
+                        <LinearGradient colors={['transparent', 'rgba(255,255,255,0.14)', 'transparent']} start={{x:0,y:0}} end={{x:1,y:0}} style={{ flex: 1 }} />
+                    </Animated.View>
+
+                    <View style={styles.heroTop}>
+                        <View style={styles.trophyBox}>
+                            <Animated.View style={{ position: 'absolute', transform: [{ rotate: ringRotate }] }}>
+                                <LinearGradient colors={[theme.primary, 'transparent', theme.secondary, 'transparent']} style={styles.trophyRing} />
+                            </Animated.View>
+                            <View style={styles.trophyCore}>
+                                <SafeImage
+                                    uri="https://img.icons8.com/3d-fluency/512/trophy.png"
+                                    fallbackIcon="trophy"
+                                    color="#FBBF24"
+                                    style={styles.trophyImg}
+                                />
+                            </View>
+                        </View>
+
+                        <View style={{ flex: 1, marginLeft: 16 }}>
+                            <Text style={styles.heroLabel}>LIFETIME REWARDS</Text>
+                            <Text style={styles.heroValue} numberOfLines={1} adjustsFontSizeToFit>🎖️ {countedLifetime.toLocaleString()}</Text>
+                            <View style={styles.levelRow}>
+                                <LinearGradient colors={[theme.primary, theme.secondary]} start={{x:0,y:0}} end={{x:1,y:0}} style={styles.levelChip}>
+                                    <MaterialCommunityIcons name="crown" size={11} color="#FFF" />
+                                    <Text style={styles.levelChipText}>{config.label}</Text>
+                                </LinearGradient>
+                            </View>
+                        </View>
+                    </View>
+
+                    <View style={styles.progressTrack}>
+                        <Animated.View style={[styles.progressFill, { width: progWidth }]}>
+                            <LinearGradient colors={[theme.primary, theme.accent]} start={{x:0,y:0}} end={{x:1,y:0}} style={{ flex: 1 }} />
+                        </Animated.View>
+                    </View>
+                    <Text style={styles.progressText}>
+                        {config.lvl >= 10 ? 'MAX LEVEL REACHED' : `${Math.round(levelProgress * 100)}% TO LEVEL ${config.lvl + 1}`}
+                    </Text>
+
+                </View>
+            </LinearGradient>
+        </Animated.View>
 
         <View>
             <ScrollView 
@@ -529,6 +717,7 @@ export default function ExpertHistory() {
                 <BlurView intensity={40} tint="dark" style={[styles.tabCapsule, { borderColor: theme.primary + '30' }]}>
                     {TABS.map((tab) => {
                         const isActive = activeTab === tab.id;
+                        const cnt = tabCount(tab.id);
                         return (
                             <TouchableOpacity 
                                 key={tab.id}
@@ -542,6 +731,11 @@ export default function ExpertHistory() {
                                     <MaterialCommunityIcons name={tab.icon as any} size={16} color={isActive ? '#FFF' : '#475569'} />
                                 )}
                                 <Text style={[styles.eliteTabText, isActive && styles.eliteTabTextActive]}>{tab.label}</Text>
+                                {cnt > 0 && (
+                                    <View style={[styles.tabCount, isActive && { backgroundColor: theme.primary }]}>
+                                        <Text style={styles.tabCountText}>{cnt > 99 ? '99+' : cnt}</Text>
+                                    </View>
+                                )}
                             </TouchableOpacity>
                         )
                     })}
@@ -556,9 +750,9 @@ export default function ExpertHistory() {
           </View>
         ) : filteredData.length === 0 ? (
           <View style={styles.emptyCenter}>
-            <View style={[styles.emptyIconCircle, { borderColor: theme.primary + '20' }]}>
-                <MaterialCommunityIcons name="database-off" size={60} color={theme.primary + '30'} />
-            </View>
+            <Animated.View style={[styles.emptyIconCircle, { borderColor: theme.primary + '30', transform: [{ translateY: floatAnim }] }]}>
+                <MaterialCommunityIcons name="database-off" size={60} color={theme.primary + '55'} />
+            </Animated.View>
             <Text style={styles.emptyTitleText}>No Activity Found</Text>
             <Text style={{color: '#475569', fontSize: 13, marginTop: 10, textAlign: 'center'}}>Your earning records will appear here after synchronization.</Text>
           </View>
@@ -579,36 +773,67 @@ export default function ExpertHistory() {
 const styles = StyleSheet.create({
   mainContainer: { flex: 1, backgroundColor: '#020617' },
   shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15 },
-  eliteHeader: { flexDirection: 'row', alignItems: 'center', padding: 20, justifyContent: 'space-between' },
+  shimmerOrbSmall: { position: 'absolute', width: 160, height: 160, borderRadius: 80, opacity: 0.12 },
+  eliteHeader: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 14, justifyContent: 'space-between' },
   glassBackBtn: { width: 48, height: 48, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
   headerTitleContainer: { flex: 1, marginLeft: 18 },
   headerLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 4 },
   headerMainTitle: { color: '#FFF', fontSize: 28, fontWeight: '900', letterSpacing: -1 },
-  headerActionBtn: { padding: 5 },
-  tabCapsuleContainer: { paddingHorizontal: 20, paddingBottom: 20 },
+  headerActionBtn: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+
+  // HERO
+  heroWrap: { paddingHorizontal: 20, marginBottom: 16, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 18, shadowOffset: { width: 0, height: 10 }, elevation: 14 },
+  heroBorder: { borderRadius: 30, padding: 1.5 },
+  heroInner: { borderRadius: 28.5, backgroundColor: '#070B1A', padding: 18, overflow: 'hidden' },
+  sweep: { position: 'absolute', top: -40, bottom: -40, width: 120 },
+  heroTop: { flexDirection: 'row', alignItems: 'center' },
+  trophyBox: { width: 84, height: 84, alignItems: 'center', justifyContent: 'center' },
+  trophyRing: { width: 84, height: 84, borderRadius: 42, opacity: 0.9 },
+  trophyCore: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#0B1022', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  trophyImg: { width: 52, height: 52 },
+  heroLabel: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 2.5 },
+  heroValue: { color: '#FBBF24', fontSize: 30, fontWeight: '900', marginTop: 2, letterSpacing: -0.5 },
+  levelRow: { flexDirection: 'row', marginTop: 8 },
+  levelChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
+  levelChipText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  progressTrack: { height: 7, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.08)', marginTop: 16, overflow: 'hidden' },
+  progressFill: { height: '100%', borderRadius: 6, overflow: 'hidden' },
+  progressText: { color: '#64748B', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.5, marginTop: 6 },
+
+  // TABS
+  tabCapsuleContainer: { paddingHorizontal: 20, paddingBottom: 16 },
   tabCapsule: { flexDirection: 'row', backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 25, padding: 6, borderWidth: 1, overflow: 'hidden' },
   eliteTab: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, paddingHorizontal: 16, position: 'relative' },
   eliteTabActive: { borderRadius: 20 },
-  activeGlow: { position: 'absolute', bottom: 0, width: '60%', height: 3, borderRadius: 10 },
+  activeGlow: { position: 'absolute', bottom: 0, width: '60%', height: 3, borderRadius: 10, shadowOpacity: 1, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
   eliteTabText: { color: '#475569', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
   eliteTabTextActive: { color: '#FFF' },
+  tabCount: { minWidth: 18, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: '#1E293B', alignItems: 'center', justifyContent: 'center' },
+  tabCountText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
+
+  // CARDS
   listContainer: { paddingHorizontal: 20, paddingBottom: 120 },
-  eliteCard: { borderRadius: 32, marginBottom: 18, overflow: 'hidden', elevation: 20 },
+  cardShadow: { marginBottom: 18, shadowOpacity: 0.45, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
+  cardBorder: { borderRadius: 30, padding: 1.5 },
+  cardInner: { borderRadius: 28.5, backgroundColor: 'rgba(8, 12, 28, 0.97)', overflow: 'hidden' },
   statusGlowLine: { height: 3, width: '100%' },
   cardMain: { flexDirection: 'row', padding: 18, justifyContent: 'space-between', alignItems: 'center' },
   userSection: { flexDirection: 'row', alignItems: 'center', flex: 1 },
   avatarWrapper: { position: 'relative' },
-  eliteAvatar: { width: 55, height: 55, borderRadius: 22, backgroundColor: '#0F172A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+  avatarRing: { width: 61, height: 61, borderRadius: 24, alignItems: 'center', justifyContent: 'center' },
+  eliteAvatar: { width: 55, height: 55, borderRadius: 21, backgroundColor: '#0F172A', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   levelBadgeMini: { position: 'absolute', bottom: -6, right: -6, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 8, borderWidth: 2, borderColor: '#020617' },
   levelBadgeText: { color: '#FFF', fontSize: 7, fontWeight: '900' },
   userMeta: { marginLeft: 15, flex: 1, paddingRight: 10, flexShrink: 1 },
   eliteUserName: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
   dateTimeRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
-  giftLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 },
+  giftLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
+  giftIconChip: { width: 24, height: 24, borderRadius: 8, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
   eliteDateText: { color: '#94A3B8', fontSize: 10, fontWeight: '800' },
   giftSubName: { color: '#FBBF24', fontSize: 11, fontWeight: '900', flexShrink: 1 },
   earningsBlock: { alignItems: 'flex-end', minWidth: 60 },
   earnLabel: { color: '#475569', fontSize: 7, fontWeight: '900', letterSpacing: 1.5 },
+  rewardPill: { marginTop: 4, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(251,191,36,0.35)' },
   beansRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 2 },
   eliteBeansValue: { color: '#FBBF24', fontSize: 18, fontWeight: '900' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 10, backgroundColor: 'rgba(0,0,0,0.25)' },

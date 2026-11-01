@@ -3,6 +3,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
+import * as ScreenCapture from 'expo-screen-capture';
 import { useVideoPlayer, VideoView } from 'expo-video';
 import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -10,6 +11,7 @@ import {
     Alert,
     Animated,
     Dimensions,
+    Easing,
     FlatList,
     Image,
     Modal,
@@ -25,6 +27,15 @@ import { auth, db } from '../../firebaseConfig';
 import { checkAndRequestCallPermissions } from '../../utils/permissions';
 
 const { width, height } = Dimensions.get('window');
+
+// 🆕 Vertical left-bottom rail position (distance from screen bottom). Change this one number to move it up/down.
+const RAIL_BOTTOM = 325;
+
+// 🛡️ SAFE ALPHA HELPER: always normalizes to 6-digit hex before adding alpha (prevents invalid colors / gradient crashes)
+const withAlpha = (hex: string, alpha: string = 'FF') => {
+    const base = (hex || '#000000').length >= 7 ? hex.slice(0, 7) : hex;
+    return base + alpha;
+};
 
 // 🔒 Safe Level Data Fetcher (🔥 SMART FETCH WITH 3 COLORS 🔥)
 const getSmartLevelConfig = (userData: any) => {
@@ -75,8 +86,39 @@ const getSmartLevelConfig = (userData: any) => {
     return getObj(0);
 };
 
+// 🆕 EXPANDING RIPPLE WAVES (used in call modals)
+const RippleRings = ({ color, size }: { color: string, size: number }) => {
+    const vals = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+    useEffect(() => {
+        vals.forEach((v, i) => {
+            Animated.sequence([
+                Animated.delay(i * 800),
+                Animated.loop(Animated.sequence([
+                    Animated.timing(v, { toValue: 1, duration: 2400, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+                    Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+                ])),
+            ]).start();
+        });
+    }, []);
+    return (
+        <>
+            {vals.map((v, i) => (
+                <Animated.View
+                    key={i}
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute', width: size, height: size, borderRadius: size / 2, borderWidth: 2, borderColor: color,
+                        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 2.1] }) }],
+                    }}
+                />
+            ))}
+        </>
+    );
+};
+
 // 🎬 INDIVIDUAL VIDEO ITEM COMPONENT
-const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { expert: any, isActive: boolean, isScreenFocused: boolean, onConnect: () => void }) => {
+const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect, onProfile, index, total, loop, glow, shine }: { expert: any, isActive: boolean, isScreenFocused: boolean, onConnect: () => void, onProfile: () => void, index: number, total: number, loop: Animated.Value, glow: Animated.Value, shine: Animated.Value }) => {
     
     const player = useVideoPlayer(expert.teaserVideo || null, (player) => {
         player.loop = true;
@@ -90,6 +132,17 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
         }
     }, [isActive, isScreenFocused, player]);
 
+    // 🆕 CONTENT ENTRANCE (slides up every time this card becomes the active one)
+    const enter = useRef(new Animated.Value(0)).current;
+    const press = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        if (isActive) {
+            Animated.spring(enter, { toValue: 1, friction: 7, tension: 50, useNativeDriver: true }).start();
+        } else {
+            enter.setValue(0);
+        }
+    }, [isActive]);
+
     // 🔥 3-COLOR THEME FETCH 🔥
     const tierData = getSmartLevelConfig(expert);
     const c1 = tierData.colors[0];
@@ -101,6 +154,23 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
     
     // 🔥 Dynamically calculate Diamond price based purely on Expert's Per Minute Rate (Beans * 2)
     const displayDiamondPrice = expert.pricePerMin ? expert.pricePerMin * 2 : 2000;
+
+    // 🆕 DERIVED ANIMATIONS
+    const orbitRotate = loop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const orbitRotateRev = loop.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+    const glowScale = glow.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
+    const glowOpacity = glow.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
+    const shineX = shine.interpolate({ inputRange: [0, 1], outputRange: [-140, width] });
+    const contentStyle = {
+        opacity: enter,
+        transform: [{ translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) }],
+    };
+    // 🆕 Rail now slides in from the LEFT
+    const railStyle = {
+        opacity: enter,
+        transform: [{ translateX: enter.interpolate({ inputRange: [0, 1], outputRange: [-60, 0] }) }],
+    };
+    const progress = `${Math.min(100, ((index + 1) / Math.max(total, 1)) * 100)}%`;
 
     return (
         <View style={styles.cardContainer}>
@@ -118,14 +188,48 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
                 />
             )}
 
+            {/* 🆕 TOP VIGNETTE (keeps header readable on bright videos) */}
+            <LinearGradient pointerEvents="none" colors={['rgba(2,6,23,0.8)', 'rgba(2,6,23,0)']} style={styles.topVignette} />
+
+            {/* 🆕 VERTICAL LEFT-BOTTOM RAIL: orbiting avatar + level chip, rating, progress (as in the first version) */}
+            <Animated.View style={[styles.sideRail, railStyle]}>
+                <TouchableOpacity activeOpacity={0.85} onPress={onProfile} style={styles.railAvatarWrap}>
+                    <Animated.View style={[styles.railRing, { borderColor: withAlpha(c1, 'DD'), transform: [{ rotate: orbitRotate }] }]} />
+                    <Animated.View style={[styles.railRingInner, { borderColor: withAlpha(c3, 'CC'), transform: [{ rotate: orbitRotateRev }] }]} />
+                    <View style={[styles.railAvatarCore, { borderColor: withAlpha(glowColor, 'FF'), shadowColor: glowColor }]}>
+                        <Image
+                            source={{ uri: expert.profilePic || expert.photoURL || `https://ui-avatars.com/api/?name=${expert.name}&background=0F172A&color=00F2FE&size=256` }}
+                            style={styles.railAvatarImg}
+                        />
+                    </View>
+                    <LinearGradient colors={[c1, c2, c3] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.railLevelChip}>
+                        <Text style={styles.railLevelText}>L{tierData.lvl}</Text>
+                    </LinearGradient>
+                </TouchableOpacity>
+
+                {expert.rating ? (
+                    <View style={styles.railStat}>
+                        <Ionicons name="star" size={14} color="#F59E0B" />
+                        <Text style={styles.railStatText}>{Number(expert.rating).toFixed(1)}</Text>
+                    </View>
+                ) : null}
+
+                <View style={styles.progressWrap}>
+                    <View style={styles.progressTrack}>
+                        <LinearGradient colors={[withAlpha(c1, 'FF'), withAlpha(c3, 'FF')]} style={[styles.progressFill, { height: progress as any }]} />
+                    </View>
+                    <Text style={styles.progressText}>{index + 1}/{total}</Text>
+                </View>
+            </Animated.View>
+
             <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(2, 6, 23, 0.95)']}
                 style={styles.bottomGradient}
             >
-                <View style={styles.contentWrapper}>
+                <Animated.View style={[styles.contentWrapper, contentStyle]}>
                     
                     <View style={styles.infoRow}>
-                        <View>
+                        <View style={{ flex: 1 }}>
                             {/* 🔥 EXPERT NAME (Uses Glow Color for Shadow) 🔥 */}
                             <Text style={[styles.expertName, { color: '#FFF', textShadowColor: glowColor, textShadowRadius: 15 }]}>
                                 {expert.name || expert.userName || 'TALKPE PRO Host'}
@@ -137,16 +241,16 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
                                 
                                 {/* 🔥 3-COLOR LINEAR GRADIENT TIER BADGE 🔥 */}
                                 <LinearGradient 
-                                    colors={[c1, c2, c3]} 
+                                    colors={[c1, c2, c3] as any} 
                                     start={{x:0, y:0}} end={{x:1, y:1}} 
-                                    style={styles.tierBadge}
+                                    style={[styles.tierBadge, { borderColor: 'rgba(255,255,255,0.35)' }]}
                                 >
                                     <Text style={[styles.tierText, { color: '#FFF' }]}>{tierData.label}</Text>
                                 </LinearGradient>
 
                                 {/* 🔥 SKILL BADGE (Uses c3 for Contrast) 🔥 */}
                                 {expert.hasMasterclass && expert.masterclassSkill && (
-                                    <View style={[styles.skillBadge, { backgroundColor: c3 + '20', borderColor: c3 }]}>
+                                    <View style={[styles.skillBadge, { backgroundColor: withAlpha(c3, '20'), borderColor: c3 }]}>
                                         <Text style={[styles.skillBadgeText, { color: c3 }]}>{expert.masterclassSkill}</Text>
                                     </View>
                                 )}
@@ -154,7 +258,10 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
                                 {/* Online Badge */}
                                 {expert.isOnline && (
                                     <View style={styles.liveBadge}>
-                                        <View style={styles.liveDot} />
+                                        <View style={styles.liveDotWrap}>
+                                            <Animated.View style={[styles.liveDotHalo, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+                                            <View style={styles.liveDot} />
+                                        </View>
                                         <Text style={styles.liveText}>ONLINE</Text>
                                     </View>
                                 )}
@@ -162,34 +269,38 @@ const ExpertVideoCard = ({ expert, isActive, isScreenFocused, onConnect }: { exp
                         </View>
                     </View>
 
-                    <Text style={styles.bioText} numberOfLines={2}>
-                        {expert.bio || "Hi there! I'm an official TALKPE PRO host. Let's have a productive session! ✨"}
-                    </Text>
-
-                    {/* 🔥 3-COLOR CONNECT BUTTON 🔥 */}
-                    <TouchableOpacity 
-                        style={[styles.connectBtn, { shadowColor: glowColor }]} 
-                        activeOpacity={0.8}
-                        onPress={onConnect}
-                    >
-                        <LinearGradient
-                            colors={[c1, c2, c3]}
-                            start={{x:0, y:0}} end={{x:1, y:1}}
-                            style={styles.btnGradient}
+                    {/* 🔥 3-COLOR CONNECT BUTTON 🔥 (now 3D press + shine + pulsing glow) */}
+                    <Animated.View style={{ transform: [{ perspective: 800 }, { scale: press }] }}>
+                        <TouchableOpacity 
+                            style={[styles.connectBtn, { shadowColor: glowColor }]} 
+                            activeOpacity={0.9}
+                            onPress={onConnect}
+                            onPressIn={() => Animated.spring(press, { toValue: 0.95, friction: 6, useNativeDriver: true }).start()}
+                            onPressOut={() => Animated.spring(press, { toValue: 1, friction: 4, useNativeDriver: true }).start()}
                         >
-                            <Ionicons name="videocam" size={24} color="#FFF" />
-                            <Text style={styles.btnText}>CONNECT NOW</Text>
-                            
-                            <Text style={styles.btnDivider}>|</Text>
-                            
-                            <View style={styles.pricePill}>
-                                <MaterialCommunityIcons name="diamond-stone" size={16} color="#FFF" />
-                                <Text style={styles.pricePillText}>{displayDiamondPrice}</Text>
-                            </View>
-                        </LinearGradient>
-                    </TouchableOpacity>
+                            <LinearGradient
+                                colors={[c1, c2, c3] as any}
+                                start={{x:0, y:0}} end={{x:1, y:1}}
+                                style={styles.btnGradient}
+                            >
+                                <View style={styles.btnIconWrap}>
+                                    <Animated.View style={[styles.btnIconHalo, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+                                    <Ionicons name="videocam" size={22} color="#FFF" />
+                                </View>
+                                <Text style={styles.btnText} numberOfLines={1} adjustsFontSizeToFit>CONNECT NOW</Text>
+                                
+                                <Text style={styles.btnDivider}>|</Text>
+                                
+                                <View style={styles.pricePill}>
+                                    <MaterialCommunityIcons name="diamond-stone" size={16} color="#FFF" />
+                                    <Text style={styles.pricePillText}>{displayDiamondPrice}</Text>
+                                </View>
+                            </LinearGradient>
+                            <Animated.View pointerEvents="none" style={[styles.shineBar, { transform: [{ translateX: shineX }, { rotate: '20deg' }] }]} />
+                        </TouchableOpacity>
+                    </Animated.View>
 
-                </View>
+                </Animated.View>
             </LinearGradient>
         </View>
     );
@@ -204,6 +315,19 @@ export default function CinematicExploreScreen() {
     
     const isScreenFocused = useIsFocused();
     const user = auth.currentUser;
+
+    // 🔒 NEW: SCREENSHOT & SCREEN RECORDING PROTECTION (active only while this screen is focused)
+    useEffect(() => {
+        const key = 'explore-feed-protect';
+        if (isScreenFocused) {
+            ScreenCapture.preventScreenCaptureAsync(key).catch(() => {});
+        } else {
+            ScreenCapture.allowScreenCaptureAsync(key).catch(() => {});
+        }
+        return () => {
+            ScreenCapture.allowScreenCaptureAsync(key).catch(() => {});
+        };
+    }, [isScreenFocused]);
 
     // 🔥 SATTI FIX: RINGING PROTOCOL STATES (FOR USER OUTGOING) 🔥
     const [ringModalVisible, setRingModalVisible] = useState(false);
@@ -220,6 +344,26 @@ export default function CinematicExploreScreen() {
     // 🔥 NEW STATES: REPORT MODAL 🔥
     const [reportModalVisible, setReportModalVisible] = useState(false);
     const [expertToReport, setExpertToReport] = useState<any>(null);
+
+    // 🆕 SHARED ANIMATION LOOPS (passed to every video card + modals)
+    const mainLoop = useRef(new Animated.Value(0)).current;   // rotation
+    const glowAnim = useRef(new Animated.Value(0)).current;   // pulse halo
+    const shineAnim = useRef(new Animated.Value(0)).current;  // button shine sweep
+
+    useEffect(() => {
+        Animated.loop(Animated.timing(mainLoop, { toValue: 1, duration: 4500, easing: Easing.linear, useNativeDriver: true })).start();
+
+        Animated.loop(Animated.sequence([
+            Animated.timing(glowAnim, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            Animated.timing(glowAnim, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])).start();
+
+        Animated.loop(Animated.sequence([
+            Animated.timing(shineAnim, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            Animated.delay(1800),
+            Animated.timing(shineAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])).start();
+    }, []);
 
     // 🔥 Check User Trial Status & Ghost Data on Load (SATTI FIX: Realtime onSnapshot)
     useEffect(() => {
@@ -565,6 +709,15 @@ export default function CinematicExploreScreen() {
         }
     };
 
+    // 🆕 DERIVED ANIMATION VALUES FOR MODALS / HEADER
+    const orbitRotate = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const orbitRotateRev = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+    const glowScale = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
+    const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
+    const ringProgress = `${Math.max(0, Math.min(100, (ringTimer / 12) * 100))}%`;
+    const incomingProgress = `${Math.max(0, Math.min(100, (incomingTimer / 12) * 100))}%`;
+    const reportIcons: any[] = ['eye-off', 'person-remove', 'alert-circle', 'document-text', 'flag'];
+
     return (
         <SafeAreaView style={styles.safeArea}>
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
@@ -578,6 +731,12 @@ export default function CinematicExploreScreen() {
                         isActive={index === activeIndex} 
                         isScreenFocused={isScreenFocused} 
                         onConnect={() => handleConnect(item)}
+                        onProfile={() => router.push({ pathname: '/expert-detail', params: { id: item.id } } as any)}
+                        index={index}
+                        total={safeExperts.length}
+                        loop={mainLoop}
+                        glow={glowAnim}
+                        shine={shineAnim}
                     />
                 )}
                 pagingEnabled 
@@ -589,17 +748,35 @@ export default function CinematicExploreScreen() {
                 windowSize={3} 
                 initialNumToRender={1}
                 maxToRenderPerBatch={2}
+                getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
             />
+
+            {/* 🆕 EMPTY FEED STATE */}
+            {safeExperts.length === 0 && (
+                <View pointerEvents="none" style={styles.emptyFeed}>
+                    <Animated.View style={[styles.emptyFeedRing, { transform: [{ rotate: orbitRotate }] }]} />
+                    <MaterialCommunityIcons name="video-off-outline" size={46} color="#38BDF8" />
+                    <Text style={styles.emptyFeedText}>NO HOSTS AVAILABLE</Text>
+                </View>
+            )}
 
             <View style={styles.topHeader}>
                 {/* 🔥 SATTI FIX: Header Text Overflow Fix (numberOfLines & adjustsFontSizeToFit) 🔥 */}
-                <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>FEATURED HOSTS</Text>
+                <View style={styles.titlePill}>
+                    <LinearGradient colors={['#38BDF8', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.titleIcon}>
+                        <MaterialCommunityIcons name="lightning-bolt" size={14} color="#FFF" />
+                    </LinearGradient>
+                    <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>FEATURED HOSTS</Text>
+                </View>
                 
                 {/* 🔥 NEW: Header Right Actions with Restrict & Search side-by-side 🔥 */}
                 <View style={styles.headerRightControls}>
                     {safeExperts.length > 0 && safeExperts[activeIndex] && (
                         <TouchableOpacity style={styles.reportBtnGlobal} onPress={() => openReportModal(safeExperts[activeIndex])} activeOpacity={0.8}>
-                            <Ionicons name="shield-checkmark" size={16} color="#EF4444" />
+                            <View style={styles.reportIconWrap}>
+                                <Animated.View style={[styles.reportHalo, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+                                <Ionicons name="shield-checkmark" size={16} color="#EF4444" />
+                            </View>
                             <Text style={styles.reportBtnText}>RESTRICT</Text>
                         </TouchableOpacity>
                     )}
@@ -613,8 +790,13 @@ export default function CinematicExploreScreen() {
             <Modal visible={reportModalVisible} transparent animationType="fade">
                 <BlurView intensity={90} tint="dark" style={styles.reportOverlay}>
                     <View style={styles.reportCard}>
+                        {/* 🆕 neon red top line */}
+                        <LinearGradient colors={['#EF4444', '#F59E0B', '#EF4444']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.reportTopLine} />
                         <View style={styles.reportHeader}>
-                            <Ionicons name="warning" size={28} color="#EF4444" />
+                            <View style={styles.reportWarnWrap}>
+                                <Animated.View style={[styles.reportWarnHalo, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+                                <Ionicons name="warning" size={28} color="#EF4444" />
+                            </View>
                             <Text style={styles.reportTitle}>RESTRICT & REPORT</Text>
                         </View>
                         <Text style={styles.reportSub}>Why are you reporting {expertToReport?.name || 'this host'}?</Text>
@@ -628,6 +810,9 @@ export default function CinematicExploreScreen() {
                             'Other Violation'
                         ].map((reason, idx) => (
                             <TouchableOpacity key={idx} style={styles.reasonBtn} onPress={() => submitReport(reason)} activeOpacity={0.7}>
+                                <View style={styles.reasonIconBubble}>
+                                    <Ionicons name={reportIcons[idx]} size={16} color="#EF4444" />
+                                </View>
                                 <Text style={styles.reasonBtnText}>{reason}</Text>
                                 <Ionicons name="chevron-forward" size={16} color="#64748B" />
                             </TouchableOpacity>
@@ -644,38 +829,59 @@ export default function CinematicExploreScreen() {
             {incomingCall && (
                 <Modal visible={!!incomingCall} transparent animationType="fade">
                     <View style={styles.callOverlayMass}>
+                        {/* 🆕 caller photo as blurred backdrop */}
+                        {incomingCall.callerImage ? (
+                            <Image source={{ uri: incomingCall.callerImage }} blurRadius={30} style={styles.callBackdrop} />
+                        ) : null}
+                        <LinearGradient pointerEvents="none" colors={['rgba(2,6,23,0.55)', 'rgba(2,6,23,0.92)']} style={StyleSheet.absoluteFill} />
+
                         <Animated.View style={[styles.callCardWrapper, { transform: [{ scale: incomingPulse }] }]}>
                             <BlurView intensity={90} tint="dark" style={styles.callCardMass}>
-                                <Text style={styles.callPulseText}>INCOMING CALL</Text>
+                                <View style={styles.incomingChip}>
+                                    <View style={styles.incomingChipDot} />
+                                    <Text style={styles.callPulseText}>INCOMING CALL</Text>
+                                </View>
                                 
-                                <View style={styles.callerAvatarRing}>
-                                    {incomingCall.callerImage ? (
-                                        <Image source={{ uri: incomingCall.callerImage }} style={styles.callerCallAvatar} />
-                                    ) : (
-                                        <View style={styles.callerCallInitials}>
-                                            <Text style={styles.callerCallInitialsText}>
-                                                {incomingCall.userName ? incomingCall.userName.charAt(0).toUpperCase() : "U"}
-                                            </Text>
-                                        </View>
-                                    )}
+                                <View style={styles.callerAvatarStage}>
+                                    <RippleRings color="#00F2FE" size={90} />
+                                    <Animated.View style={[styles.callerOrbit, { transform: [{ rotate: orbitRotate }] }]} />
+                                    <View style={styles.callerAvatarRing}>
+                                        {incomingCall.callerImage ? (
+                                            <Image source={{ uri: incomingCall.callerImage }} style={styles.callerCallAvatar} />
+                                        ) : (
+                                            <View style={styles.callerCallInitials}>
+                                                <Text style={styles.callerCallInitialsText}>
+                                                    {incomingCall.userName ? incomingCall.userName.charAt(0).toUpperCase() : "U"}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </View>
                                 </View>
 
                                 <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "USER"}</Text>
                                 
                                 <Text style={styles.ringTimerExpert}>00:{incomingTimer.toString().padStart(2, '0')}</Text>
 
+                                {/* 🆕 countdown bar */}
+                                <View style={styles.timerTrack}>
+                                    <LinearGradient colors={['#EF4444', '#F59E0B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.timerFill, { width: incomingProgress as any }]} />
+                                </View>
+
                                 <View style={styles.callActionsMass}>
                                     <TouchableOpacity onPress={() => handleIncomingCallAction('rejected')} activeOpacity={0.8} style={styles.actionBtnHitbox}>
-                                        <LinearGradient colors={['#F43F5E', '#9F1239']} style={styles.callBtnMass}>
+                                        <LinearGradient colors={['#F43F5E', '#9F1239']} style={[styles.callBtnMass, { shadowColor: '#F43F5E' }]}>
                                             <Ionicons name="close" size={28} color="#FFF" />
                                         </LinearGradient>
                                         <Text style={styles.callBtnLabel}>DECLINE</Text>
                                     </TouchableOpacity>
                                     
                                     <TouchableOpacity onPress={() => handleIncomingCallAction('accepted')} activeOpacity={0.8} style={styles.actionBtnHitbox}>
-                                        <LinearGradient colors={['#10B981', '#059669']} style={styles.callBtnMass}>
-                                            <Ionicons name="videocam" size={28} color="#FFF" />
-                                        </LinearGradient>
+                                        <View style={styles.acceptWrap}>
+                                            <Animated.View style={[styles.acceptHalo, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
+                                            <LinearGradient colors={['#10B981', '#059669']} style={[styles.callBtnMass, { shadowColor: '#10B981' }]}>
+                                                <Ionicons name="videocam" size={28} color="#FFF" />
+                                            </LinearGradient>
+                                        </View>
                                         <Text style={styles.callBtnLabel}>ACCEPT</Text>
                                     </TouchableOpacity>
                                 </View>
@@ -687,12 +893,27 @@ export default function CinematicExploreScreen() {
 
             {/* 🔥 SATTI FIX: USER RINGING UI OVERLAY 🔥 */}
             <Modal visible={ringModalVisible} transparent animationType="fade">
-                <BlurView intensity={90} tint="dark" style={styles.ringingOverlay}>
+                <View style={styles.ringingOverlay}>
+                    {/* 🆕 expert photo as blurred backdrop */}
+                    <Image 
+                        source={{ uri: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || 'Host')}&background=0F172A&color=fff` }} 
+                        blurRadius={30}
+                        style={styles.callBackdrop}
+                    />
+                    <LinearGradient pointerEvents="none" colors={['rgba(2,6,23,0.6)', 'rgba(2,6,23,0.95)']} style={StyleSheet.absoluteFill} />
+                    <BlurView intensity={60} tint="dark" style={StyleSheet.absoluteFill} />
+
                     <View style={styles.ringingContent}>
-                        <Text style={styles.ringConnectingText}>REQUESTING UPLINK...</Text>
+                        <View style={styles.uplinkChip}>
+                            <View style={styles.uplinkDot} />
+                            <Text style={styles.ringConnectingText}>REQUESTING UPLINK...</Text>
+                        </View>
                         
                         <View style={styles.ringAvatarWrapper}>
+                            <RippleRings color="#38BDF8" size={120} />
                             <Animated.View style={[styles.ringPulseGlow, { transform: [{ scale: pulseAnim }] }]} />
+                            <Animated.View style={[styles.ringOrbit, { transform: [{ rotate: orbitRotate }] }]} />
+                            <Animated.View style={[styles.ringOrbitInner, { transform: [{ rotate: orbitRotateRev }] }]} />
                             <Image 
                                 source={{ uri: currentExpert?.profilePic || currentExpert?.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(currentExpert?.name || 'Host')}&background=0F172A&color=fff` }} 
                                 style={styles.ringAvatar} 
@@ -702,11 +923,17 @@ export default function CinematicExploreScreen() {
                         <Text style={styles.ringExpertName}>{currentExpert?.name || "Host"}</Text>
                         <Text style={styles.ringTimer}>00:{ringTimer.toString().padStart(2, '0')}</Text>
 
+                        {/* 🆕 countdown bar */}
+                        <View style={styles.timerTrack}>
+                            <LinearGradient colors={['#38BDF8', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={[styles.timerFill, { width: ringProgress as any }]} />
+                        </View>
+
                         <TouchableOpacity style={styles.cancelCallBtn} onPress={cancelCall} activeOpacity={0.8}>
                             <MaterialCommunityIcons name="phone-hangup" size={32} color="#FFF" />
                         </TouchableOpacity>
+                        <Text style={styles.cancelLabel}>CANCEL</Text>
                     </View>
-                </BlurView>
+                </View>
             </Modal>
 
         </SafeAreaView>
@@ -728,6 +955,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 10,
     },
+    // 🆕 glass title pill
+    titlePill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        paddingLeft: 6,
+        paddingRight: 14,
+        paddingVertical: 6,
+        borderRadius: 22,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.12)',
+        flexShrink: 1,
+    },
+    titleIcon: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
     // 🔥 SATTI FIX: Reduced fontSize & letterSpacing to avoid overflow 🔥
     headerTitle: {
         color: '#FFF',
@@ -755,6 +997,8 @@ const styles = StyleSheet.create({
         elevation: 5,
         marginRight: 10, // Added margin right to keep space before search button
     },
+    reportIconWrap: { width: 20, height: 20, justifyContent: 'center', alignItems: 'center' },
+    reportHalo: { position: 'absolute', width: 18, height: 18, borderRadius: 9, backgroundColor: 'rgba(239,68,68,0.6)' },
     reportBtnText: {
         color: '#EF4444',
         fontWeight: 'bold',
@@ -781,6 +1025,24 @@ const styles = StyleSheet.create({
     video: {
         ...StyleSheet.absoluteFillObject,
     },
+    topVignette: { position: 'absolute', top: 0, left: 0, right: 0, height: 180 },
+
+    // 🆕 VERTICAL LEFT-BOTTOM RAIL
+    sideRail: { position: 'absolute', left: 14, bottom: RAIL_BOTTOM, alignItems: 'center', gap: 16, zIndex: 5 },
+    railAvatarWrap: { width: 78, height: 78, justifyContent: 'center', alignItems: 'center' },
+    railRing: { position: 'absolute', width: 78, height: 78, borderRadius: 39, borderWidth: 1.5, borderStyle: 'dashed' },
+    railRingInner: { position: 'absolute', width: 68, height: 68, borderRadius: 34, borderWidth: 1, borderStyle: 'dotted' },
+    railAvatarCore: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, padding: 2, backgroundColor: '#000', shadowOpacity: 0.9, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 10 },
+    railAvatarImg: { width: '100%', height: '100%', borderRadius: 26 },
+    railLevelChip: { position: 'absolute', bottom: 0, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.4)' },
+    railLevelText: { color: '#FFF', fontSize: 9, fontWeight: '900', textShadowColor: '#000', textShadowRadius: 3 },
+    railStat: { alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', gap: 2 },
+    railStatText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
+    progressWrap: { alignItems: 'center', gap: 6 },
+    progressTrack: { width: 4, height: 70, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.15)', overflow: 'hidden', justifyContent: 'flex-end' },
+    progressFill: { width: '100%', borderRadius: 2 },
+    progressText: { color: 'rgba(255,255,255,0.7)', fontSize: 9, fontWeight: '900' },
+
     // 🔥 SATTI FIX: Bottom UI Pushed Down (height lowered & padding reduced) 🔥
     bottomGradient: {
         position: 'absolute',
@@ -821,6 +1083,8 @@ const styles = StyleSheet.create({
         fontSize: 10,
         fontWeight: '900',
         letterSpacing: 1,
+        textShadowColor: 'rgba(0,0,0,0.6)',
+        textShadowRadius: 3,
     },
     skillBadge: {
         paddingHorizontal: 8,
@@ -844,20 +1108,28 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         borderColor: '#10B981',
     },
+    liveDotWrap: { width: 12, height: 12, justifyContent: 'center', alignItems: 'center', marginRight: 2 },
+    liveDotHalo: { position: 'absolute', width: 10, height: 10, borderRadius: 5, backgroundColor: '#10B981' },
     liveDot: {
         width: 6,
         height: 6,
         borderRadius: 3,
         backgroundColor: '#10B981',
-        marginRight: 4,
     },
     liveText: {
         color: '#10B981',
         fontSize: 10,
         fontWeight: 'bold',
     },
+    bioGlass: {
+        backgroundColor: 'rgba(255,255,255,0.07)',
+        borderRadius: 16,
+        borderLeftWidth: 3,
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+    },
     bioText: {
-        color: 'rgba(255,255,255,0.8)',
+        color: 'rgba(255,255,255,0.85)',
         fontSize: 14,
         fontWeight: '500',
         lineHeight: 20,
@@ -871,6 +1143,8 @@ const styles = StyleSheet.create({
         elevation: 10,
         shadowOpacity: 0.5,
         shadowRadius: 15,
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.3)',
     },
     btnGradient: {
         flex: 1,
@@ -878,12 +1152,19 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         alignItems: 'center',
         gap: 10,
+        paddingHorizontal: 12,
     },
+    btnIconWrap: { width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(0,0,0,0.25)', justifyContent: 'center', alignItems: 'center' },
+    btnIconHalo: { position: 'absolute', width: 34, height: 34, borderRadius: 17, backgroundColor: 'rgba(255,255,255,0.5)' },
+    shineBar: { position: 'absolute', top: -30, bottom: -30, width: 50, backgroundColor: 'rgba(255,255,255,0.25)' },
     btnText: {
         color: '#FFF',
         fontSize: 18,
         fontWeight: '900',
         letterSpacing: 1,
+        flexShrink: 1,
+        textShadowColor: 'rgba(0,0,0,0.4)',
+        textShadowRadius: 4,
     },
     btnDivider: {
         color: '#FFF',
@@ -906,41 +1187,64 @@ const styles = StyleSheet.create({
         fontWeight: '900',
     },
 
+    // 🆕 EMPTY FEED
+    emptyFeed: { ...StyleSheet.absoluteFillObject, justifyContent: 'center', alignItems: 'center' },
+    emptyFeedRing: { position: 'absolute', width: 130, height: 130, borderRadius: 65, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(56,189,248,0.6)', top: '50%', marginTop: -85 },
+    emptyFeedText: { color: '#94A3B8', fontSize: 12, fontWeight: '900', letterSpacing: 3, marginTop: 14 },
+
     // 🔥 NEW STYLES: REPORT MODAL 🔥
     reportOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
-    reportCard: { width: '85%', backgroundColor: '#0F172A', borderRadius: 25, padding: 25, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 15 },
+    reportCard: { width: '85%', backgroundColor: '#0F172A', borderRadius: 25, padding: 25, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.4)', elevation: 15, overflow: 'hidden', shadowColor: '#EF4444', shadowOpacity: 0.5, shadowRadius: 20 },
+    reportTopLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
     reportHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 10 },
+    reportWarnWrap: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+    reportWarnHalo: { position: 'absolute', width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(239,68,68,0.45)' },
     reportTitle: { color: '#EF4444', fontSize: 18, fontWeight: '900', letterSpacing: 1 },
     reportSub: { color: '#94A3B8', fontSize: 12, marginBottom: 20 },
-    reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 12, marginBottom: 10 },
-    reasonBtnText: { color: '#E2E8F0', fontSize: 14, fontWeight: '600' },
+    reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.05)', padding: 15, borderRadius: 12, marginBottom: 10, gap: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
+    reasonIconBubble: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(239,68,68,0.12)', justifyContent: 'center', alignItems: 'center' },
+    reasonBtnText: { color: '#E2E8F0', fontSize: 14, fontWeight: '600', flex: 1 },
     cancelReportBtn: { marginTop: 10, padding: 15, alignItems: 'center' },
     cancelReportText: { color: '#64748B', fontSize: 14, fontWeight: 'bold', letterSpacing: 1 },
 
     // 🔥 SATTI FIX: RINGING UI STYLES (USER OUTGOING) 🔥
-    ringingOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    ringingContent: { alignItems: 'center', justifyContent: 'center' },
-    ringConnectingText: { color: '#38BDF8', fontSize: 14, fontWeight: '900', letterSpacing: 4, marginBottom: 50 },
-    ringAvatarWrapper: { justifyContent: 'center', alignItems: 'center', marginBottom: 25 },
+    ringingOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
+    callBackdrop: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+    ringingContent: { alignItems: 'center', justifyContent: 'center', width: '100%' },
+    uplinkChip: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: 'rgba(56,189,248,0.12)', borderWidth: 1, borderColor: 'rgba(56,189,248,0.4)', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, marginBottom: 50 },
+    uplinkDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#38BDF8' },
+    ringConnectingText: { color: '#38BDF8', fontSize: 13, fontWeight: '900', letterSpacing: 3 },
+    ringAvatarWrapper: { width: 240, height: 240, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
     ringPulseGlow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, borderWidth: 2, borderColor: '#38BDF8', opacity: 0.4 },
+    ringOrbit: { position: 'absolute', width: 160, height: 160, borderRadius: 80, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(56,189,248,0.8)' },
+    ringOrbitInner: { position: 'absolute', width: 140, height: 140, borderRadius: 70, borderWidth: 1, borderStyle: 'dotted', borderColor: 'rgba(99,102,241,0.9)' },
     ringAvatar: { width: 120, height: 120, borderRadius: 60, borderWidth: 3, borderColor: '#38BDF8', zIndex: 10 },
     ringExpertName: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
-    ringTimer: { color: '#94A3B8', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 60 },
-    cancelCallBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', elevation: 15, shadowColor: '#EF4444', shadowOpacity: 0.6, shadowRadius: 15 },
+    ringTimer: { color: '#94A3B8', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 14 },
+    timerTrack: { width: 180, height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.12)', overflow: 'hidden', marginBottom: 40 },
+    timerFill: { height: '100%', borderRadius: 3 },
+    cancelCallBtn: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', elevation: 15, shadowColor: '#EF4444', shadowOpacity: 0.6, shadowRadius: 15, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' },
+    cancelLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginTop: 10 },
 
     // 🔥 SATTI FIX: EXPERT INCOMING CALL STYLES 🔥
     callOverlayMass: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', zIndex: 99999, backgroundColor: 'rgba(2, 6, 23, 0.8)' },
     callCardWrapper: { width: '80%', borderRadius: 30, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.4)' },
     callCardMass: { paddingVertical: 35, paddingHorizontal: 20, alignItems: 'center' },
-    callPulseText: { color: '#00F2FE', fontSize: 11, fontWeight: '900', letterSpacing: 5, marginBottom: 15 },
-    callerAvatarRing: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 20, backgroundColor: '#0F172A', elevation: 20, shadowColor: '#00F2FE', shadowRadius: 20, shadowOpacity: 0.6 },
+    incomingChip: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 18 },
+    incomingChipDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: '#00F2FE' },
+    callPulseText: { color: '#00F2FE', fontSize: 11, fontWeight: '900', letterSpacing: 5 },
+    callerAvatarStage: { width: 150, height: 150, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+    callerOrbit: { position: 'absolute', width: 110, height: 110, borderRadius: 55, borderWidth: 1.5, borderStyle: 'dashed', borderColor: 'rgba(0,242,254,0.8)' },
+    callerAvatarRing: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', backgroundColor: '#0F172A', elevation: 20, shadowColor: '#00F2FE', shadowRadius: 20, shadowOpacity: 0.6 },
     callerCallAvatar: { width: 82, height: 82, borderRadius: 41 },
     callerCallInitials: { width: 82, height: 82, borderRadius: 41, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' },
     callerCallInitialsText: { color: '#00F2FE', fontSize: 32, fontWeight: '900' },
     callInfoTextMass: { color: '#FFF', fontSize: 22, fontWeight: '900', marginBottom: 10 },
-    ringTimerExpert: { color: '#EF4444', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 20 },
+    ringTimerExpert: { color: '#EF4444', fontSize: 18, fontWeight: '900', letterSpacing: 2, marginBottom: 12 },
     callActionsMass: { flexDirection: 'row', gap: 40, justifyContent: 'center' },
     actionBtnHitbox: { alignItems: 'center' },
-    callBtnMass: { width: 65, height: 65, borderRadius: 32.5, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' },
+    acceptWrap: { width: 65, height: 65, justifyContent: 'center', alignItems: 'center' },
+    acceptHalo: { position: 'absolute', width: 65, height: 65, borderRadius: 33, backgroundColor: 'rgba(16,185,129,0.6)' },
+    callBtnMass: { width: 65, height: 65, borderRadius: 32.5, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)', shadowOpacity: 0.7, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 10 },
     callBtnLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', marginTop: 10 }
 });

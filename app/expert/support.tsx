@@ -1001,7 +1001,7 @@ export default function SupportHubScreen() {
                     <View style={[styles.ruleTile, borderType1]}>
                         <Ionicons name="time-outline" size={18} color={primaryColor} />
                         <Text style={styles.ruleValue}>5-7 DAYS</Text>
-                        <Text style={styles.ruleLabel}>PAYOUT REVIEW</Text>
+                        <Text style={styles.ruleLabel}>REDEMPTION REVIEW</Text>
                     </View>
                     <View style={[styles.ruleTile, borderType2]}>
                         <Ionicons name="shield-checkmark-outline" size={18} color={primaryColor} />
