@@ -45,6 +45,331 @@ const getLevelTheme = (beans: number = 0) => {
     return { lvl: 0, label: 'BEGINNER L0', color: '#f807cf', grad: ['#f807cf', '#2a06f5'] as const, shadow: '#764a7560' };
 };
 
+// 🆕 COLOR HELPERS (double colour borders + text-safe shades)
+const hexToRgb = (hex: string) => {
+    const h = (hex || '').replace('#', '');
+    if (h.length !== 6) return null;
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+};
+const blend = (c1: string, c2: string, t: number) => {
+    const a = hexToRgb(c1);
+    const b = hexToRgb(c2);
+    if (!a || !b) return c1;
+    const mix = (x: number, y: number) => Math.round(x * (1 - t) + y * t).toString(16).padStart(2, '0');
+    return `#${mix(a.r, b.r)}${mix(a.g, b.g)}${mix(a.b, b.b)}`;
+};
+const lighten = (hex: string, t: number) => blend(hex, '#FFFFFF', t);
+const darken = (hex: string, t: number) => blend(hex, '#000000', t);
+const luma = (hex: string) => {
+    const c = hexToRgb(hex);
+    if (!c) return 0.5;
+    return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+};
+const vivid = (hex: string, min = 0.3) => {
+    let h = hex;
+    let i = 0;
+    while (luma(h) < min && i < 8) {
+        h = lighten(h, 0.14);
+        i++;
+    }
+    return h;
+};
+
+// 🆕 3D IMAGES (icons8 3D Fluency) - load aagalana automatic-a icon fallback varum
+const IMG = {
+    crown: 'https://img.icons8.com/3d-fluency/512/crown.png',
+    trophy: 'https://img.icons8.com/3d-fluency/512/trophy.png',
+    diamond: 'https://img.icons8.com/3d-fluency/512/diamond.png',
+    star: 'https://img.icons8.com/3d-fluency/512/star.png',
+    hourglass: 'https://img.icons8.com/3d-fluency/512/hourglass.png',
+    shield: 'https://img.icons8.com/3d-fluency/512/shield.png',
+    chat: 'https://img.icons8.com/3d-fluency/512/speech-bubble.png',
+    coin: 'https://img.icons8.com/3d-fluency/512/coin.png',
+    gift: 'https://img.icons8.com/3d-fluency/512/gift.png',
+};
+
+// 🆕 3D image with auto icon fallback
+const Img3D = ({ uri, size, fallback, color = '#FFF', style }: any) => {
+    const [err, setErr] = useState(false);
+    if (err) return <MaterialCommunityIcons name={fallback} size={size * 0.7} color={color} />;
+    return <Image source={{ uri }} style={[{ width: size, height: size }, style]} resizeMode="contain" onError={() => setErr(true)} />;
+};
+
+// 🆕 Floating wrapper (bob + sway + perspective Y-turn = true 3D feel)
+const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                style,
+                {
+                    transform: [
+                        { perspective: 700 },
+                        { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -amp] }) },
+                        { rotateY: v.interpolate({ inputRange: [0, 1], outputRange: ['-14deg', '14deg'] }) },
+                        { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] }) }
+                    ]
+                }
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// 🆕 ORBIT RING (rotating dashed ring + glowing satellite dot)
+const OrbitRing = ({ size, color, dur = 6000, reverse = false, dotSize = 6, style }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.linear, useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const spin = v.interpolate({ inputRange: [0, 1], outputRange: reverse ? ['360deg', '0deg'] : ['0deg', '360deg'] });
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={[
+                {
+                    position: 'absolute',
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    borderWidth: 1,
+                    borderStyle: 'dashed',
+                    borderColor: color + '66',
+                    transform: [{ rotate: spin }]
+                },
+                style
+            ]}
+        >
+            <View
+                style={{
+                    position: 'absolute',
+                    top: -dotSize / 2 - 1,
+                    left: size / 2 - dotSize / 2 - 1,
+                    width: dotSize,
+                    height: dotSize,
+                    borderRadius: dotSize / 2,
+                    backgroundColor: color,
+                    shadowColor: color,
+                    shadowOpacity: 1,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 0 },
+                    elevation: 6
+                }}
+            />
+        </Animated.View>
+    );
+};
+
+// 🆕 ✨ Twinkling sparkle
+const Sparkle = ({ x, y, size = 12, color = '#F5C84C', delay = 0, dur = 1800 }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                left: x,
+                top: y,
+                opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.1, 1] }),
+                transform: [
+                    { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.15] }) },
+                    { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] }) }
+                ]
+            }}
+        >
+            <MaterialCommunityIcons name="star-four-points" size={size} color={color} />
+        </Animated.View>
+    );
+};
+
+// 🆕 Pulse dot (online indicator)
+const PulseDot = ({ color, size = 8 }: { color: string; size?: number }) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(v, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: 1200, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <View style={{ width: size + 8, height: size + 8, justifyContent: 'center', alignItems: 'center' }}>
+            <Animated.View
+                style={{
+                    position: 'absolute',
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    backgroundColor: color,
+                    opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0.15] }),
+                    transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [1, 2] }) }]
+                }}
+            />
+            <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
+        </View>
+    );
+};
+
+// 🆕 Glass shine sweep (light kadandhu pogum)
+const ShineSweep = ({ w, delay = 0, color = 'rgba(255,255,255,0.16)' }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+                Animated.delay(3600)
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    if (!w) return null;
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                top: -30,
+                bottom: -30,
+                width: 56,
+                transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [-90, w + 40] }) }, { rotate: '18deg' }]
+            }}
+        >
+            <LinearGradient colors={['transparent', color, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+    );
+};
+
+// 🆕 3D reveal (section vandhu flip-up aagi varum)
+const Reveal = ({ children, delay = 0, style }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.timing(a, { toValue: 1, duration: 750, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                style,
+                {
+                    opacity: a,
+                    transform: [
+                        { perspective: 900 },
+                        { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) },
+                        { rotateX: a.interpolate({ inputRange: [0, 1], outputRange: ['24deg', '0deg'] }) },
+                        { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }
+                    ]
+                }
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// 🆕 DOUBLE COLOUR FRAME (gradient border: colour A + colour B, solid dark inside - NO line look)
+const DoubleFrame = ({ a, b, radius = 24, pad = 1.6, children, style, inner, shine = false, shineDelay = 0 }: any) => {
+    const [cw, setCw] = useState(0);
+    return (
+        <LinearGradient colors={[a, b, a]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[{ borderRadius: radius, padding: pad }, style]}>
+            <View
+                style={[{ borderRadius: radius - pad, overflow: 'hidden', backgroundColor: 'rgba(5, 7, 20, 0.88)' }, inner]}
+                onLayout={shine ? (e) => setCw(e.nativeEvent.layout.width) : undefined}
+            >
+                {children}
+                {shine && <ShineSweep w={cw} delay={shineDelay} />}
+            </View>
+        </LinearGradient>
+    );
+};
+
+// 🆕 Section heading (gradient bar icon + title + fading line + diamond)
+const SectionHead = ({ title, color, a, b, right }: any) => (
+    <View style={styles.sectionHeadRow}>
+        <LinearGradient colors={[a, b]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.sectionBar} />
+        <Text style={[styles.sectionTitle, { color }]}>{title}</Text>
+        <LinearGradient colors={[a + '99', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.sectionLine} />
+        {right ? right : <View style={[styles.sectionDiamond, { backgroundColor: b, shadowColor: b }]} />}
+    </View>
+);
+
+// 🆕 Calling ripple (expanding rings behind the avatar)
+const Ripple = ({ color, size = 200, delay = 0 }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: 2400, easing: Easing.out(Easing.ease), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                borderWidth: 2,
+                borderColor: color,
+                opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.75, 1.9] }) }]
+            }}
+        />
+    );
+};
+
+// 🆕 Stat tile (3D icon image + value + label, double colour frame)
+const StatTile = ({ a, b, img, fallback, color, delay, children, label }: any) => (
+    <Reveal delay={delay} style={{ flex: 1 }}>
+        <DoubleFrame a={a} b={b} radius={26} shine shineDelay={800 + delay * 4}>
+            <View style={styles.statTile}>
+                <LinearGradient colors={[color + '26', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                <View style={styles.statImgBox}>
+                    <View style={[styles.statImgGlow, { backgroundColor: color }]} />
+                    <FloatBox amp={4} dur={1700 + delay * 3}>
+                        <Img3D uri={img} size={38} fallback={fallback} color={color} />
+                    </FloatBox>
+                </View>
+                {children}
+                <Text style={styles.statLabel}>{label}</Text>
+            </View>
+        </DoubleFrame>
+    </Reveal>
+);
+
 export default function ExpertDetail() {
     const params = useLocalSearchParams();
     const expertId = (params.id || params.userId) as string; 
@@ -85,6 +410,24 @@ export default function ExpertDetail() {
     const radius = 75;
     const stroke = 6;
     const circumference = radius * 2 * Math.PI;
+
+    // 🆕 PREMIUM ANIMATION VALUES
+    const scrollY = useRef(new Animated.Value(0)).current;   // hero parallax
+    const galleryX = useRef(new Animated.Value(0)).current;  // gallery 3D tilt
+    const rotAnim = useRef(new Animated.Value(0)).current;   // avatar spinning ring
+    const pulseAnim = useRef(new Animated.Value(0)).current; // glow pulse
+    const heroIn = useRef(new Animated.Value(0)).current;    // hero entrance
+    const [barW, setBarW] = useState(0);                     // call button shine width
+    const particles = useRef(
+        Array.from({ length: 12 }, (_, i) => ({
+            v: new Animated.Value(0),
+            x: ((i * 41) % 100) / 100 * width,
+            y: 160 + ((i * 59) % 520),
+            size: 2 + (i % 3),
+            dur: 6500 + (i % 5) * 1200,
+            delay: i * 500,
+        }))
+    ).current;
 
     const getJoinedDuration = (createdAt: any) => {
         if (!createdAt) return '1 Day';
@@ -177,6 +520,37 @@ export default function ExpertDetail() {
             if (unsubCallRef.current) unsubCallRef.current();
         };
     }, [expertId, user]);
+
+    // 🆕 PREMIUM AMBIENT LOOPS (avatar ring spin, glow pulse, hero entrance, floating particles)
+    useEffect(() => {
+        const rotLoop = Animated.loop(Animated.timing(rotAnim, { toValue: 1, duration: 12000, easing: Easing.linear, useNativeDriver: true }));
+        rotLoop.start();
+        const pulseLoop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(pulseAnim, { toValue: 1, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(pulseAnim, { toValue: 0, duration: 1400, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+            ])
+        );
+        pulseLoop.start();
+        Animated.spring(heroIn, { toValue: 1, friction: 6, tension: 45, useNativeDriver: true }).start();
+
+        const pLoops = particles.map((p) =>
+            Animated.loop(
+                Animated.sequence([
+                    Animated.delay(p.delay),
+                    Animated.timing(p.v, { toValue: 1, duration: p.dur, easing: Easing.linear, useNativeDriver: true }),
+                    Animated.timing(p.v, { toValue: 0, duration: 0, useNativeDriver: true })
+                ])
+            )
+        );
+        pLoops.forEach(l => l.start());
+
+        return () => {
+            rotLoop.stop();
+            pulseLoop.stop();
+            pLoops.forEach(l => l.stop());
+        };
+    }, []);
 
     // 🔥 SATTI UPDATE: Block & Admin Report Core Engine 🔥
     const handleReasonSelect = (reason: string) => {
@@ -524,6 +898,20 @@ export default function ExpertDetail() {
     const isExpertLive = expert?.status === 'live' || expert?.isLive === true || expert?.isLive === "true"; 
     const followThemeColor = connectionStatus === 'friend' ? '#1E293B' : (connectionStatus === 'pending' ? '#F59E0B' : theme.color);
 
+    // 🆕 DOUBLE COLOUR PAIR (darker shade): grad[0] + grad[1] (L0 = pink + blue)
+    const bA = darken(vivid(theme.grad[0], 0.3), 0.15);
+    const bB = darken(vivid(theme.grad[1], 0.3), 0.15);
+    const textColor = lighten(theme.color, 0.35); // 🆕 text-safe colour
+    const textColor2 = lighten(theme.grad[1], 0.55);
+
+    // 🆕 per-side double colour border (top/left = A, bottom/right = B)
+    const sideMix: any = {
+        borderTopColor: bA,
+        borderLeftColor: bA,
+        borderBottomColor: bB,
+        borderRightColor: bB,
+    };
+
     const orbTranslateY = shimmerAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [0, -30]
@@ -556,18 +944,78 @@ export default function ExpertDetail() {
     const validFreeMinsUI = Number(userData?.freeMinsRemaining || 0);
     const hasFreeCallUI = (userData?.isWelcomeCallAvailable === true) || (validFreeMinsUI > 0.05);
 
+    // 🆕 Interpolations
+    const spin = rotAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const glowOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.7] });
+    const crestScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] });
+    const heroTY = scrollY.interpolate({ inputRange: [-250, 0, 300], outputRange: [-125, 0, 120], extrapolate: 'clamp' });
+    const heroScale = scrollY.interpolate({ inputRange: [-250, 0, 300], outputRange: [1.6, 1, 1], extrapolate: 'clamp' });
+    const heroFade = scrollY.interpolate({ inputRange: [0, 260], outputRange: [1, 0.35], extrapolate: 'clamp' });
+    const bgShift = scrollY.interpolate({ inputRange: [0, 1500], outputRange: [0, -260], extrapolate: 'clamp' });
+
+    const GALLERY_STEP = 153; // item width 138 + margin 15
+
+    const callGradColors =
+        !expert?.isOnline ? (['#1E293B', '#0F172A'] as const) :
+        (expert?.isBusy === true || expert?.isBusy === "true") ? (['#F59E0B', '#B45309'] as const) :
+        theme.grad;
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
             
-            <LinearGradient colors={['#020617', theme.grad[1] + '30', '#020617']} style={StyleSheet.absoluteFill} />
-            <Animated.View style={[styles.shimmerOrb, { top: 250, right: -60, backgroundColor: theme.color, transform: [{ translateY: orbTranslateY }] }]} />
-            <Animated.View style={[styles.shimmerOrb, { top: 600, left: -90, backgroundColor: theme.grad[1], transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+            {/* 🆕 DARKER BACKGROUND (level tint 30 -> 22) */}
+            <LinearGradient colors={['#020617', theme.grad[1] + '22', '#020617']} style={StyleSheet.absoluteFill} />
+            <Animated.View style={[styles.shimmerOrb, { top: 250, right: -60, backgroundColor: theme.color, transform: [{ translateY: Animated.add(orbTranslateY, bgShift) }] }]} />
+            <Animated.View style={[styles.shimmerOrb, { top: 600, left: -90, backgroundColor: theme.grad[1], transform: [{ translateY: Animated.add(Animated.multiply(orbTranslateY, -1), bgShift) }] }]} />
+            <Animated.View style={[styles.shimmerOrb, { top: 950, right: -80, backgroundColor: theme.color, transform: [{ translateY: Animated.add(orbTranslateY, bgShift) }] }]} />
+
+            {/* 🆕 Floating 3D background objects with scroll parallax */}
+            <Animated.View pointerEvents="none" style={[styles.bgFloat, { top: 520, right: 12, opacity: 0.16, transform: [{ translateY: bgShift }] }]}>
+                <FloatBox amp={14} dur={2600}>
+                    <Img3D uri={IMG.diamond} size={62} fallback="diamond-stone" color={theme.color} />
+                </FloatBox>
+            </Animated.View>
+            <Animated.View pointerEvents="none" style={[styles.bgFloat, { top: 820, left: 8, opacity: 0.14, transform: [{ translateY: bgShift }] }]}>
+                <FloatBox amp={10} dur={2200}>
+                    <Img3D uri={IMG.coin} size={50} fallback="circle-multiple" color={theme.color} />
+                </FloatBox>
+            </Animated.View>
+
+            {/* 🆕 Floating particles (level theme embers) */}
+            {particles.map((p, i) => (
+                <Animated.View
+                    key={i}
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute',
+                        top: p.y,
+                        left: p.x,
+                        width: p.size,
+                        height: p.size,
+                        borderRadius: p.size / 2,
+                        backgroundColor: [theme.color, theme.grad[1], '#FFFFFF'][i % 3],
+                        opacity: p.v.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.7, 0.4, 0] }),
+                        transform: [{ translateY: p.v.interpolate({ inputRange: [0, 1], outputRange: [0, -300] }) }]
+                    }}
+                />
+            ))}
 
             {isCalling && (
                 <View style={styles.callingOverlay}>
-                    <LinearGradient colors={['rgba(2, 6, 23, 0.98)', '#0F172A']} style={StyleSheet.absoluteFill} />
+                    <LinearGradient colors={['rgba(2, 6, 23, 0.98)', '#0A0F24']} style={StyleSheet.absoluteFill} />
+                    {/* 🆕 soft level glow behind the call */}
+                    <View style={[styles.callGlow, { backgroundColor: theme.color + '14' }]} pointerEvents="none" />
+                    <Sparkle x={width * 0.16} y={height * 0.2} size={14} color={textColor} delay={0} />
+                    <Sparkle x={width * 0.8} y={height * 0.26} size={11} color={textColor2} delay={600} />
+                    <Sparkle x={width * 0.22} y={height * 0.7} size={12} color={textColor2} delay={1100} />
                     <View style={styles.timerWrapper}>
+                        {/* 🆕 ripple rings + orbit rings */}
+                        <Ripple color={bA} size={200} delay={0} />
+                        <Ripple color={bB} size={200} delay={800} />
+                        <Ripple color={bA} size={200} delay={1600} />
+                        <OrbitRing size={190} color={textColor} dur={6000} dotSize={6} />
+                        <OrbitRing size={174} color={textColor2} dur={9000} reverse dotSize={4} style={{ opacity: 0.7 }} />
                         <Svg width={(radius + stroke) * 2} height={(radius + stroke) * 2} style={styles.timerSvg}>
                             <Circle cx={radius + stroke} cy={radius + stroke} r={radius} stroke="rgba(255,255,255,0.05)" strokeWidth={stroke} fill="transparent" />
                             <AnimatedCircle
@@ -580,7 +1028,7 @@ export default function ExpertDetail() {
                         <View style={styles.callingAvatarContainer}><Image source={{ uri: expert?.profilePic || expert?.profileImage || 'https://via.placeholder.com/400' }} style={styles.callingAvatar} /></View>
                     </View>
                     <Text style={styles.callingText}>Connecting to {expert?.name}...</Text>
-                    <Text style={styles.callingSubtext}>Establishing Secure Link... 💎</Text>
+                    <Text style={[styles.callingSubtext, { color: textColor2 }]}>Establishing Secure Link... 💎</Text>
                     <TouchableOpacity style={styles.cancelCallBtn} onPress={handleCancelCall}>
                         <View style={styles.cancelCircle}><Ionicons name="close" size={32} color="#FFF" /></View>
                         <Text style={styles.cancelLabel}>CANCEL</Text>
@@ -588,32 +1036,56 @@ export default function ExpertDetail() {
                 </View>
             )}
 
-            <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 150 }}>
+            <Animated.ScrollView
+                showsVerticalScrollIndicator={false}
+                contentContainerStyle={{ paddingBottom: 150 }}
+                scrollEventThrottle={16}
+                onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+            >
                 <View style={styles.imageWrapper}>
-                    <Image source={{ uri: expert?.coverPhoto || expert?.profilePic || 'https://via.placeholder.com/600x800' }} style={styles.profileImg} />
-                    <LinearGradient colors={['rgba(2, 6, 23, 0.4)', 'transparent', '#020617']} style={StyleSheet.absoluteFill} />
-                    
-                    <View style={styles.coverAvatarNode}>
-                         <LinearGradient colors={theme.grad} style={styles.avatarRing}>
-                             <Image 
-                                 source={{ uri: expert?.profilePic || expert?.profileImage || 'https://via.placeholder.com/150' }} 
-                                 style={styles.expertMainAvatar} 
-                             />
-                         </LinearGradient>
-                         <LinearGradient colors={theme.grad} style={styles.avatarLevelBadge}>
-                             <Text style={styles.avatarLevelText}>{theme.label}</Text>
-                         </LinearGradient>
+                    {/* 🆕 PARALLAX COVER (stretches on pull-down, slides slower on scroll) */}
+                    <View style={styles.heroClip}>
+                        <Animated.View style={[StyleSheet.absoluteFill, { opacity: heroFade, transform: [{ translateY: heroTY }, { scale: heroScale }] }]}>
+                            <Image source={{ uri: expert?.coverPhoto || expert?.profilePic || 'https://via.placeholder.com/600x800' }} style={styles.profileImg} />
+                        </Animated.View>
+                        <LinearGradient colors={['rgba(2, 6, 23, 0.55)', 'rgba(2, 6, 23, 0.05)', '#020617']} style={StyleSheet.absoluteFill} />
+                        <LinearGradient colors={['transparent', bA + '30']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                        <Sparkle x={width * 0.14} y={height * 0.12} size={12} color={textColor} delay={0} />
+                        <Sparkle x={width * 0.84} y={height * 0.2} size={10} color={textColor2} delay={700} />
                     </View>
+                    
+                    {/* 🆕 AVATAR CORE: spinning double colour ring + orbit rings + 3D crown */}
+                    <Animated.View style={[styles.coverAvatarNode, { opacity: heroIn, transform: [{ scale: crestScale }] }]}>
+                        <Animated.View style={[styles.avatarGlow, { backgroundColor: theme.color, opacity: glowOpacity }]} />
+                        <OrbitRing size={134} color={textColor} dur={5200} dotSize={6} />
+                        <OrbitRing size={120} color={textColor2} dur={8000} reverse dotSize={4} style={{ opacity: 0.7 }} />
+                        <View style={[styles.avatarMask, { shadowColor: theme.color }]}>
+                            <Animated.View style={[styles.avatarSpin, { transform: [{ rotate: spin }] }]}>
+                                <LinearGradient colors={[bA, bB, bA, bB, bA]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                            </Animated.View>
+                            <Image 
+                                source={{ uri: expert?.profilePic || expert?.profileImage || 'https://via.placeholder.com/150' }} 
+                                style={styles.expertMainAvatar} 
+                            />
+                        </View>
+                        <FloatBox amp={4} dur={1500} style={styles.avatarCrown}>
+                            <Img3D uri={IMG.crown} size={36} fallback="crown" color={textColor} />
+                        </FloatBox>
+                        <LinearGradient colors={[bA, bB]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.avatarLevelBadge}>
+                            <MaterialCommunityIcons name="star-circle" size={11} color="#FFF" style={{ marginRight: 4 }} />
+                            <Text style={styles.avatarLevelText}>{theme.label}</Text>
+                        </LinearGradient>
+                    </Animated.View>
 
                     <View style={styles.navRow}>
-                        <TouchableOpacity onPress={() => router.back()} style={styles.iconCircle}><Ionicons name="chevron-back" size={24} color="#FFF" /></TouchableOpacity>
+                        <TouchableOpacity onPress={() => router.back()} style={[styles.iconCircle, sideMix]}><Ionicons name="chevron-back" size={24} color="#FFF" /></TouchableOpacity>
                         
                         {/* 🔥 SATTI UPDATE: Changed to Block & Report Modal Trigger */}
                         <View style={{ flexDirection: 'row', gap: 12 }}>
-                            <TouchableOpacity onPress={() => setBlockModalVisible(true)} style={styles.iconCircle}>
+                            <TouchableOpacity onPress={() => setBlockModalVisible(true)} style={[styles.iconCircle, sideMix]}>
                                 <MaterialCommunityIcons name="shield-off" size={22} color="#EF4444" />
                             </TouchableOpacity>
-                            <TouchableOpacity onPress={onShare} style={styles.iconCircle}>
+                            <TouchableOpacity onPress={onShare} style={[styles.iconCircle, sideMix]}>
                                 <Ionicons name="share-social-outline" size={22} color="#FFF" />
                             </TouchableOpacity>
                         </View>
@@ -626,96 +1098,163 @@ export default function ExpertDetail() {
                         <View style={{ flex: 1 }}>
                             <Text style={styles.expertName}>{expert?.name}</Text>
                             <View style={styles.locationRow}>
-                                <Ionicons name="location-sharp" size={14} color={theme.color} />
+                                <Ionicons name="location-sharp" size={14} color={textColor} />
                                 <Text style={styles.locationText}>{expert?.location || 'India'} • {expert?.age || '24'}y • {expert?.gender}</Text>
                             </View>
                         </View>
                         <View style={{ alignItems: 'flex-end', gap: 10 }}>
                             <View style={[styles.statusBadge, { backgroundColor: expert?.isOnline ? '#10B98115' : '#33415520', borderColor: expert?.isOnline ? '#10B98130' : '#334155', borderWidth: 1 }]}>
-                                <View style={[styles.dot, { backgroundColor: expert?.isOnline ? '#10B981' : '#94A3B8' }]} />
+                                {expert?.isOnline ? <PulseDot color="#10B981" size={6} /> : <View style={[styles.dot, { backgroundColor: '#94A3B8' }]} />}
                                 <Text style={[styles.statusText, {color: expert?.isOnline ? '#10B981' : '#94A3B8'}]}>{expert?.isOnline ? 'ONLINE' : 'OFFLINE'}</Text>
                             </View>
                             <TouchableOpacity 
-                                style={[styles.followBtn, { backgroundColor: followThemeColor }]} 
+                                style={[styles.followBtn, { shadowColor: followThemeColor }]} 
                                 onPress={handleFollowAction} disabled={followLoading}>
-                                {followLoading ? <ActivityIndicator size="small" color="#FFF" /> : (
-                                    <>
-                                        <MaterialCommunityIcons name={connectionStatus === 'friend' ? "account-check" : connectionStatus === 'pending' ? "account-clock" : "account-plus"} size={18} color="#FFF" />
-                                        <Text style={styles.followBtnText}>{connectionStatus === 'friend' ? "Connected" : connectionStatus === 'pending' ? "Waiting" : "Connect"}</Text>
-                                    </>
-                                )}
+                                <LinearGradient
+                                    colors={connectionStatus === null ? [bA, bB] : [followThemeColor, darken(followThemeColor, 0.3)]}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.followBtnInner}
+                                >
+                                    <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']} style={styles.followGloss} pointerEvents="none" />
+                                    {followLoading ? <ActivityIndicator size="small" color="#FFF" /> : (
+                                        <>
+                                            <MaterialCommunityIcons name={connectionStatus === 'friend' ? "account-check" : connectionStatus === 'pending' ? "account-clock" : "account-plus"} size={18} color="#FFF" />
+                                            <Text style={styles.followBtnText}>{connectionStatus === 'friend' ? "Connected" : connectionStatus === 'pending' ? "Waiting" : "Connect"}</Text>
+                                        </>
+                                    )}
+                                </LinearGradient>
                             </TouchableOpacity>
                         </View>
                     </View>
 
-                    <View style={[styles.statsCard, borderType1]}>
-                        <View style={styles.statBox}>
-                            <Text style={[styles.statVal, { color: theme.color }]} numberOfLines={1} adjustsFontSizeToFit>{theme.label.split(' ')[0]}</Text>
-                            <Text style={styles.statLabel}>Host Tier</Text>
-                        </View>
-                        <View style={styles.vDivider} />
-                        <View style={styles.statBox}>
-                            <View style={styles.priceContainer}>
-                                <MaterialCommunityIcons name="diamond-stone" size={18} color={theme.color} />
-                                <Text style={[styles.statVal, { fontSize: 22 }]} numberOfLines={1} adjustsFontSizeToFit>{Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}</Text>
-                            </View>
-                            <Text style={styles.statLabel}>Per Minute Fee</Text>
-                        </View>
-                        <View style={styles.vDivider} />
-                        <View style={styles.statBox}>
+                    {/* 🆕 3 SEPARATE 3D STAT TILES (double colour frame + floating 3D image) */}
+                    <View style={styles.statsRow}>
+                        <StatTile a={bA} b={bB} img={IMG.trophy} fallback="trophy" color={textColor} delay={0} label="Host Tier">
+                            <Text style={[styles.statVal, { color: textColor }]} numberOfLines={1} adjustsFontSizeToFit>{theme.label.split(' ')[0]}</Text>
+                        </StatTile>
+                        <StatTile a={bB} b={bA} img={IMG.diamond} fallback="diamond-stone" color={textColor2} delay={90} label="Per Minute Fee">
+                            <Text style={[styles.statVal, { fontSize: 20 }]} numberOfLines={1} adjustsFontSizeToFit>{Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}</Text>
+                        </StatTile>
+                        <StatTile a={bA} b={bB} img={IMG.hourglass} fallback="timer-sand" color={textColor} delay={180} label="Platform Tenure">
                             <Text style={styles.statVal} numberOfLines={1} adjustsFontSizeToFit>{getJoinedDuration(expert?.createdAt)}</Text>
-                            <Text style={styles.statLabel}>Platform Tenure</Text>
-                        </View>
+                        </StatTile>
                     </View>
 
                     {expert?.expertiseTags && expert.expertiseTags.length > 0 && (
-                        <View style={styles.chipSection}>
-                            <Text style={[styles.sectionTitle, { color: theme.color }]}>Expertise In</Text>
+                        <Reveal delay={120} style={styles.chipSection}>
+                            <SectionHead title="Expertise In" color={textColor} a={bA} b={bB} />
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                                 {expert.expertiseTags.map((tag: string, index: number) => (
-                                    <View key={index} style={[styles.chipItem, { borderColor: `${theme.color}40` }]}>
-                                        <Text style={[styles.chipText, { color: theme.color }]}>{tag.toUpperCase()}</Text>
-                                    </View>
+                                    <DoubleFrame key={index} a={index % 2 === 0 ? bA : bB} b={index % 2 === 0 ? bB : bA} radius={25} pad={1.3} inner={{ backgroundColor: 'rgba(5, 7, 20, 0.9)' }}>
+                                        <View style={styles.chipItem}>
+                                            <LinearGradient colors={[theme.color + '22', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                            <MaterialCommunityIcons name="star-four-points" size={9} color={textColor} style={{ marginRight: 6 }} />
+                                            <Text style={[styles.chipText, { color: textColor }]}>{tag.toUpperCase()}</Text>
+                                        </View>
+                                    </DoubleFrame>
                                 ))}
                             </ScrollView>
-                        </View>
+                        </Reveal>
                     )}
 
-                    <Text style={[styles.sectionTitle, { marginTop: 15, color: theme.color }]}>Host Overview</Text>
-                    <View style={[styles.bioContainer, borderType2]}>
-                        <MaterialCommunityIcons name="format-quote-open" size={24} color={theme.color + '40'} style={styles.quoteIcon} />
-                        <Text style={styles.bioText}>{expert?.bio || "Professional host dedicated to providing high-quality guidance and support."}</Text>
-                    </View>
+                    <Reveal delay={160} style={{ marginTop: 15 }}>
+                        <SectionHead title="Host Overview" color={textColor} a={bA} b={bB} />
+                        <DoubleFrame a={bB} b={bA} radius={32} shine shineDelay={1500} style={{ marginTop: 15 }}>
+                            <View style={styles.bioContainer}>
+                                <LinearGradient colors={[theme.color + '1F', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                <MaterialCommunityIcons name="format-quote-open" size={24} color={theme.color + '66'} style={styles.quoteIcon} />
+                                <View style={styles.bioStar} pointerEvents="none">
+                                    <FloatBox amp={6} dur={2400}>
+                                        <Img3D uri={IMG.star} size={64} fallback="star" color={theme.color} style={{ opacity: 0.18 }} />
+                                    </FloatBox>
+                                </View>
+                                <Text style={styles.bioText}>{expert?.bio || "Professional host dedicated to providing high-quality guidance and support."}</Text>
+                            </View>
+                        </DoubleFrame>
+                    </Reveal>
 
                     {expert?.hobbies && expert.hobbies.length > 0 && (
-                        <View style={[styles.chipSection, { marginTop: 25 }]}>
-                            <Text style={[styles.sectionTitle, { color: theme.color }]}>Personal Interests</Text>
+                        <Reveal delay={200} style={[styles.chipSection, { marginTop: 25 }]}>
+                            <SectionHead title="Personal Interests" color={textColor} a={bB} b={bA} />
                             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                                 {expert.hobbies.map((tag: string, index: number) => (
-                                    <View key={index} style={styles.hobbyChip}><Text style={styles.hobbyText}>{tag}</Text></View>
+                                    <DoubleFrame key={index} a={index % 2 === 0 ? bB : bA} b={index % 2 === 0 ? bA : bB} radius={20} pad={1.2}>
+                                        <View style={styles.hobbyChip}><Text style={styles.hobbyText}>{tag}</Text></View>
+                                    </DoubleFrame>
                                 ))}
                             </ScrollView>
-                        </View>
+                        </Reveal>
                     )}
 
-                    <View style={[styles.sectionHeaderRow, { marginTop: 25 }]}>
-                        <Text style={[styles.sectionTitle, { color: theme.color }]}>Portfolio Visuals</Text>
-                        <Text style={styles.galleryCount}>{expert?.gallery?.length || 0}/5 SECURE</Text>
-                    </View>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.galleryScroll}>
-                        {expert?.gallery?.length > 0 ? expert.gallery.map((img: string, index: number) => (
-                            <View key={index} style={[styles.galleryItem, borderType1, { padding: 4, borderRadius: 25 }]}><Image source={{ uri: img }} style={styles.galleryImg} /></View>
-                        )) : <View style={styles.emptyGallery}><Text style={styles.emptyText}>No visual data found</Text></View>}
-                    </ScrollView>
+                    <Reveal delay={240} style={{ marginTop: 25 }}>
+                        <SectionHead
+                            title="Portfolio Visuals"
+                            color={textColor}
+                            a={bA}
+                            b={bB}
+                            right={<Text style={styles.galleryCount}>{expert?.gallery?.length || 0}/5 SECURE</Text>}
+                        />
+                    </Reveal>
+                    {/* 🆕 3D TILT GALLERY (cards turn in perspective as you swipe) */}
+                    <Animated.ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        style={styles.galleryScroll}
+                        contentContainerStyle={{ paddingVertical: 12, paddingRight: 20 }}
+                        scrollEventThrottle={16}
+                        onScroll={Animated.event([{ nativeEvent: { contentOffset: { x: galleryX } } }], { useNativeDriver: true })}
+                    >
+                        {expert?.gallery?.length > 0 ? expert.gallery.map((img: string, index: number) => {
+                            const rng = [(index - 1) * GALLERY_STEP, index * GALLERY_STEP, (index + 1) * GALLERY_STEP];
+                            return (
+                                <Animated.View
+                                    key={index}
+                                    style={{
+                                        marginRight: 15,
+                                        transform: [
+                                            { perspective: 800 },
+                                            { rotateY: galleryX.interpolate({ inputRange: rng, outputRange: ['32deg', '0deg', '-32deg'], extrapolate: 'clamp' }) },
+                                            { scale: galleryX.interpolate({ inputRange: rng, outputRange: [0.9, 1, 0.9], extrapolate: 'clamp' }) }
+                                        ]
+                                    }}
+                                >
+                                    <DoubleFrame a={index % 2 === 0 ? bA : bB} b={index % 2 === 0 ? bB : bA} radius={25} pad={2} style={styles.galleryItem} inner={{ padding: 4 }}>
+                                        <Image source={{ uri: img }} style={styles.galleryImg} />
+                                    </DoubleFrame>
+                                </Animated.View>
+                            );
+                        }) : (
+                            <View style={styles.emptyGallery}>
+                                <FloatBox amp={5} dur={2000}>
+                                    <Img3D uri={IMG.star} size={44} fallback="image-off-outline" color={theme.color} style={{ opacity: 0.5 }} />
+                                </FloatBox>
+                                <Text style={styles.emptyText}>No visual data found</Text>
+                            </View>
+                        )}
+                    </Animated.ScrollView>
 
-                    <View style={[styles.trustBanner, borderType1]}>
-                        <MaterialCommunityIcons name="shield-lock" size={20} color={theme.color} />
-                        <Text style={[styles.trustText, { color: theme.color }]}>Quantum Secure End-to-End Encryption</Text>
-                    </View>
+                    <Reveal delay={280}>
+                        <DoubleFrame a={bA} b={bB} radius={30} shine shineDelay={2200} style={{ marginTop: 35 }}>
+                            <View style={styles.trustBanner}>
+                                <LinearGradient colors={[theme.color + '1F', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                                <View style={styles.trustImgBox}>
+                                    <View style={[styles.statImgGlow, { backgroundColor: theme.color }]} />
+                                    <FloatBox amp={4} dur={1800}>
+                                        <Img3D uri={IMG.shield} size={42} fallback="shield-lock" color={theme.color} />
+                                    </FloatBox>
+                                </View>
+                                <Text style={[styles.trustText, { color: textColor }]}>Safe & Respectful Community</Text>
+                                <MaterialCommunityIcons name="shield-lock" size={20} color={theme.color} />
+                            </View>
+                        </DoubleFrame>
+                    </Reveal>
                 </View>
-            </ScrollView>
+            </Animated.ScrollView>
 
+            {/* 🆕 PREMIUM FLOATING BOTTOM BAR (darker glass, no thin top line, glowing call button) */}
             <View style={styles.bottomBar}>
+                <LinearGradient colors={[bA + '22', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
                 {isExpertLive ? (
                     <TouchableOpacity style={styles.liveActionBtn} onPress={handleJoinLive}>
                         <LinearGradient colors={['#EF4444', '#991B1B']} style={styles.btnGradient}>
@@ -731,7 +1270,9 @@ export default function ExpertDetail() {
                         <View style={styles.priceInfo}>
                             <Text style={styles.totalLabel}>CALL FEE</Text>
                             <View style={styles.priceRow}>
-                                <Ionicons name="diamond" size={18} color={accentColor} />
+                                <FloatBox amp={2} dur={1600}>
+                                    <Img3D uri={IMG.diamond} size={22} fallback="diamond" color={accentColor} />
+                                </FloatBox>
                                 <Text style={[styles.totalVal, { color: accentColor }]} numberOfLines={1} adjustsFontSizeToFit>
                                     {hasFreeCallUI ? "COMPLIMENTARY" : Number(expert?.userPrice || (expert?.beansPerMin * 2) || 0).toLocaleString()}
                                     {!hasFreeCallUI && <Text style={{fontSize: 12, color: '#475569'}}>/min</Text>}
@@ -740,23 +1281,30 @@ export default function ExpertDetail() {
                         </View>
                         
                         <TouchableOpacity 
-                            style={styles.callBtn} 
+                            style={styles.callBtnWrap} 
                             onPress={handleStartCall} 
                             disabled={!expert?.isOnline || expert?.isBusy === true || expert?.isBusy === "true"}
+                            activeOpacity={0.85}
                         >
-                            <LinearGradient 
-                                colors={
-                                    !expert?.isOnline ? (['#1E293B', '#0F172A'] as const) : 
-                                    (expert?.isBusy === true || expert?.isBusy === "true") ? (['#F59E0B', '#B45309'] as const) : 
-                                    theme.grad
-                                } 
-                                style={styles.btnGradient}
-                            >
-                                <Ionicons name={!expert?.isOnline ? "videocam-off" : (expert?.isBusy === true || expert?.isBusy === "true") ? "time" : "videocam"} size={22} color={expert?.isOnline ? "#FFF" : "#475569"} />
-                                <Text style={[styles.callBtnText, !expert?.isOnline && { color: '#475569' }]}>
-                                    {!expert?.isOnline ? "Offline" : (expert?.isBusy === true || expert?.isBusy === "true") ? "Engaged" : "CONNECT NOW"}
-                                </Text>
-                            </LinearGradient>
+                            {/* 🆕 pulsing glow behind the call button */}
+                            {expert?.isOnline && !(expert?.isBusy === true || expert?.isBusy === "true") && (
+                                <Animated.View style={[styles.callBtnGlow, { backgroundColor: theme.color, opacity: glowOpacity }]} pointerEvents="none" />
+                            )}
+                            <View style={styles.callBtn} onLayout={(e) => setBarW(e.nativeEvent.layout.width)}>
+                                <LinearGradient 
+                                    colors={callGradColors} 
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 1 }}
+                                    style={styles.btnGradient}
+                                >
+                                    <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']} style={styles.callGloss} pointerEvents="none" />
+                                    <Ionicons name={!expert?.isOnline ? "videocam-off" : (expert?.isBusy === true || expert?.isBusy === "true") ? "time" : "videocam"} size={22} color={expert?.isOnline ? "#FFF" : "#475569"} />
+                                    <Text style={[styles.callBtnText, !expert?.isOnline && { color: '#475569' }]}>
+                                        {!expert?.isOnline ? "Offline" : (expert?.isBusy === true || expert?.isBusy === "true") ? "Engaged" : "CONNECT NOW"}
+                                    </Text>
+                                    {expert?.isOnline && !(expert?.isBusy === true || expert?.isBusy === "true") && <ShineSweep w={barW} delay={1200} />}
+                                </LinearGradient>
+                            </View>
                         </TouchableOpacity>
                     </>
                 )}
@@ -770,7 +1318,7 @@ export default function ExpertDetail() {
                 onRequestClose={() => setBlockModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContainer, { borderColor: theme.color }]}>
+                    <View style={[styles.modalContainer, { borderColor: theme.color }, sideMix]}>
                         <View style={{ alignItems: 'center', marginBottom: 15 }}>
                             <View style={[styles.modalIconRing, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
                                 <MaterialCommunityIcons name="shield-off-outline" size={32} color="#EF4444" />
@@ -785,7 +1333,7 @@ export default function ExpertDetail() {
                         {blockReasons.map((reason, idx) => (
                             <TouchableOpacity 
                                 key={idx} 
-                                style={[styles.reasonBtn, { borderColor: theme.color + '40' }]}
+                                style={[styles.reasonBtn, { borderColor: theme.color + '40' }, sideMix]}
                                 onPress={() => handleReasonSelect(reason)}
                                 disabled={isBlocking}
                             >
@@ -816,52 +1364,80 @@ export default function ExpertDetail() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#020617' },
     loader: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
-    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
-    imageWrapper: { width: '100%', height: height * 0.40, position: 'relative', overflow: 'visible' },
+    // 🆕 darker orbs (0.15 -> 0.09)
+    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.09, filter: 'blur(80px)' },
+    bgFloat: { position: 'absolute' },
+
+    // 🆕 hero
+    imageWrapper: { width: '100%', height: height * 0.44, position: 'relative', overflow: 'visible' },
+    heroClip: { ...StyleSheet.absoluteFillObject, overflow: 'hidden' },
     profileImg: { width: '100%', height: '100%', resizeMode: 'cover' },
-    coverAvatarNode: { position: 'absolute', bottom: -45, left: '50%', marginLeft: -50, zIndex: 11, alignItems: 'center', justifyContent: 'center' },
-    avatarRing: { padding: 4, borderRadius: 60, elevation: 10 },
-    expertMainAvatar: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: '#020617' },
-    avatarLevelBadge: { position: 'absolute', bottom: -8, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12, borderWidth: 2, borderColor: '#020617' },
+    coverAvatarNode: { position: 'absolute', bottom: -65, left: '50%', marginLeft: -65, width: 130, height: 130, zIndex: 11, alignItems: 'center', justifyContent: 'center' },
+    avatarGlow: { position: 'absolute', width: 110, height: 110, borderRadius: 55 },
+    avatarMask: { width: 112, height: 112, borderRadius: 56, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', elevation: 14, shadowOpacity: 0.8, shadowRadius: 16, shadowOffset: { width: 0, height: 0 } },
+    avatarSpin: { position: 'absolute', width: 240, height: 240, left: -64, top: -64 },
+    expertMainAvatar: { width: 102, height: 102, borderRadius: 51, borderWidth: 3, borderColor: '#020617' },
+    avatarCrown: { position: 'absolute', top: -18, alignSelf: 'center' },
+    avatarLevelBadge: { position: 'absolute', bottom: -4, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 13, borderWidth: 2, borderColor: '#020617' },
     avatarLevelText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
     navRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 5, paddingTop: 30, position: 'absolute', top: 0, left: 0, right: 0, zIndex: 10 },
-    iconCircle: { backgroundColor: 'rgba(2, 6, 23, 0.4)', padding: 12, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-    infoContent: { padding: 25, paddingTop: 65, minHeight: height },
+    iconCircle: { backgroundColor: 'rgba(2, 6, 23, 0.62)', padding: 12, borderRadius: 18, borderWidth: 1.3, borderColor: 'rgba(255,255,255,0.1)' },
+    infoContent: { padding: 25, paddingTop: 80, minHeight: height },
     nameRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-    expertName: { color: '#FFF', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+    expertName: { color: '#FFF', fontSize: 32, fontWeight: '900', letterSpacing: -0.5, textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
     locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6 },
     locationText: { color: '#94A3B8', fontSize: 14, fontWeight: '700' },
     statusBadge: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18, gap: 8 },
-    followBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, gap: 8, elevation: 5 },
+    followBtn: { borderRadius: 20, elevation: 8, shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+    followBtnInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 10, borderRadius: 20, gap: 8, overflow: 'hidden', minWidth: 110, justifyContent: 'center' },
+    followGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 16 },
     followBtnText: { color: '#FFF', fontSize: 12, fontWeight: '900' },
     dot: { width: 8, height: 8, borderRadius: 4 },
     statusText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-    statsCard: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginVertical: 30, paddingVertical: 25, borderRadius: 35, width: width - 40, alignSelf: 'center' },
+
+    // 🆕 stat tiles (separate 3D tiles, no dividers)
+    statsRow: { flexDirection: 'row', gap: 10, marginVertical: 30 },
+    statTile: { alignItems: 'center', paddingVertical: 14, paddingHorizontal: 6, minHeight: 128, justifyContent: 'center' },
+    statImgBox: { width: 46, height: 46, justifyContent: 'center', alignItems: 'center', marginBottom: 6 },
+    statImgGlow: { position: 'absolute', width: 32, height: 32, borderRadius: 16, opacity: 0.3 },
     statBox: { flex: 1, alignItems: 'center', paddingHorizontal: 5 },
+    statsCard: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center', marginVertical: 30, paddingVertical: 25, borderRadius: 35, width: width - 40, alignSelf: 'center' },
     priceContainer: { flexDirection: 'row', alignItems: 'center', gap: 6, justifyContent: 'center' },
     vDivider: { width: 1, height: '60%', backgroundColor: 'rgba(255,255,255,0.1)', alignSelf: 'center' },
-    statVal: { color: '#FFF', fontSize: 19, fontWeight: '900', textAlign: 'center' },
-    statLabel: { color: '#64748B', fontSize: 10, marginTop: 8, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
+    statVal: { color: '#FFF', fontSize: 17, fontWeight: '900', textAlign: 'center', maxWidth: '100%' },
+    statLabel: { color: '#94A3B8', fontSize: 9, marginTop: 6, fontWeight: '800', textTransform: 'uppercase', letterSpacing: 1, textAlign: 'center' },
+
     chipSection: { marginBottom: 15 },
     chipScroll: { paddingRight: 20, gap: 10, paddingVertical: 12 },
-    chipItem: { backgroundColor: 'rgba(255, 255, 255, 0.03)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 25, borderWidth: 1 },
+    chipItem: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, overflow: 'hidden' },
     chipText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
-    hobbyChip: { backgroundColor: 'rgba(15, 23, 42, 0.6)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20, borderWidth: 1, borderColor: '#1E293B' },
-    hobbyText: { color: '#94A3B8', fontSize: 12, fontWeight: '700' },
+    hobbyChip: { paddingHorizontal: 16, paddingVertical: 10 },
+    hobbyText: { color: '#CBD5E1', fontSize: 12, fontWeight: '700' },
+
+    // 🆕 section heading
+    sectionHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    sectionBar: { width: 4, height: 20, borderRadius: 2 },
+    sectionLine: { flex: 1, height: 1.5, borderRadius: 1 },
+    sectionDiamond: { width: 7, height: 7, transform: [{ rotate: '45deg' }], shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
     sectionTitle: { fontSize: 18, fontWeight: '900', letterSpacing: 0.2 },
-    galleryCount: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
+    galleryCount: { color: '#94A3B8', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
     galleryScroll: { flexDirection: 'row', marginBottom: 10 },
-    galleryItem: { marginRight: 15, borderRadius: 25, overflow: 'hidden', elevation: 10 },
+    galleryItem: { borderRadius: 25, overflow: 'hidden', elevation: 10, width: 138 },
     galleryImg: { width: 130, height: 180, resizeMode: 'cover', borderRadius: 20 },
-    emptyGallery: { width: width - 50, height: 120, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 30, justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#1E293B' },
-    emptyText: { color: '#475569', fontSize: 12, fontWeight: '700' },
-    bioContainer: { padding: 25, borderRadius: 35, marginTop: 15, position: 'relative' },
+    emptyGallery: { width: width - 50, height: 120, backgroundColor: 'rgba(255,255,255,0.02)', borderRadius: 30, justifyContent: 'center', alignItems: 'center', borderStyle: 'dashed', borderWidth: 1, borderColor: '#1E293B', gap: 6 },
+    emptyText: { color: '#64748B', fontSize: 12, fontWeight: '700' },
+    bioContainer: { padding: 25, position: 'relative', overflow: 'hidden' },
     quoteIcon: { position: 'absolute', top: 15, left: 18 },
-    bioText: { color: '#94A3B8', lineHeight: 26, fontSize: 15, fontWeight: '600', paddingLeft: 8 },
-    trustBanner: { flexDirection: 'row', alignItems: 'center', padding: 22, borderRadius: 30, marginTop: 35, gap: 12 },
-    trustText: { fontSize: 12, fontWeight: '800' },
+    bioStar: { position: 'absolute', right: -6, bottom: -8 },
+    bioText: { color: '#B6C2D4', lineHeight: 26, fontSize: 15, fontWeight: '600', paddingLeft: 8 },
+    trustBanner: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
+    trustImgBox: { width: 50, height: 50, justifyContent: 'center', alignItems: 'center' },
+    trustText: { fontSize: 12, fontWeight: '800', flex: 1 },
+
+    // 🆕 calling overlay
     callingOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 9999, justifyContent: 'center', alignItems: 'center' },
+    callGlow: { position: 'absolute', width: 420, height: 420, borderRadius: 210 },
     timerWrapper: { width: 200, height: 200, justifyContent: 'center', alignItems: 'center', marginBottom: 30 },
     timerSvg: { position: 'absolute', transform: [{ rotate: '-90deg' }] },
     callingAvatarContainer: { width: 150, height: 150, borderRadius: 75, overflow: 'hidden', borderWidth: 4, borderColor: '#020617', elevation: 25 },
@@ -871,24 +1447,29 @@ const styles = StyleSheet.create({
     cancelCallBtn: { marginTop: 80, alignItems: 'center' },
     cancelCircle: { width: 80, height: 80, borderRadius: 40, backgroundColor: '#EF4444', justifyContent: 'center', alignItems: 'center', elevation: 20, shadowColor: '#EF4444', shadowOpacity: 0.5, shadowRadius: 15 },
     cancelLabel: { color: '#EF4444', marginTop: 15, fontWeight: '900', fontSize: 13, letterSpacing: 3 },
-    bottomBar: { position: 'absolute', bottom: 28, left: 0, right: 0, padding: 22, paddingBottom: Platform.OS === 'ios' ? 30 : 20, backgroundColor: 'rgba(15, 23, 42, 0.95)', borderTopLeftRadius: 40, borderTopRightRadius: 40, flexDirection: 'row', alignItems: 'center', borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.05)', elevation: 30 },
+
+    // 🆕 bottom bar (darker glass, top line removed)
+    bottomBar: { position: 'absolute', bottom: 28, left: 0, right: 0, padding: 22, paddingBottom: Platform.OS === 'ios' ? 30 : 20, backgroundColor: 'rgba(4, 6, 18, 0.97)', borderTopLeftRadius: 40, borderTopRightRadius: 40, flexDirection: 'row', alignItems: 'center', elevation: 30, overflow: 'hidden' },
     priceInfo: { flex: 1 },
-    totalLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
+    totalLabel: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 2 },
     priceRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 5, flexWrap: 'nowrap' },
     totalVal: { color: '#FFF', fontSize: 20, fontWeight: '900', flexShrink: 1 },
-    callBtn: { width: '58%', height: 45, borderRadius: 32, overflow: 'hidden', elevation: 15 },
-    btnGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12 },
+    callBtnWrap: { width: '58%', height: 45, justifyContent: 'center' },
+    callBtnGlow: { position: 'absolute', left: 8, right: 8, top: 6, bottom: -4, borderRadius: 32 },
+    callBtn: { width: '100%', height: 45, borderRadius: 32, overflow: 'hidden', elevation: 15 },
+    callGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 18 },
+    btnGradient: { flex: 1, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 12, overflow: 'hidden' },
     callBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 0.5 },
     liveActionBtn: { flex: 1, height: 68, borderRadius: 35, overflow: 'hidden', elevation: 15 },
 
     // 🔥 SATTI UPDATE: MODAL STYLES 🔥
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
-    modalContainer: { backgroundColor: '#0F172A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0 },
+    modalContainer: { backgroundColor: '#0A0F22', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1.3, borderBottomWidth: 0 },
     modalIconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
     modalTitle: { color: '#EF4444', fontSize: 20, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
     modalSubText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
     modalLabel: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
-    reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1 },
+    reasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1.2 },
     reasonText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
     cancelActionBtn: { marginTop: 15, padding: 16, alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
     cancelBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '900', letterSpacing: 1 }
