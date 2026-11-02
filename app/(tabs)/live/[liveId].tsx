@@ -11,7 +11,7 @@ import React, { useEffect, useRef, useState } from 'react';
 // 🔥 FIXED: Added AppState to detect Force Close and update Firestore 🔥
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, { ChannelProfileType, ClientRoleType, IRtcEngine, LighteningContrastLevel, RtcSurfaceView } from 'react-native-agora';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import GiftOverlay from '../../../components/GiftOverlay';
 import LiveGameSheet from '../../../components/LiveGameSheet'; // ✅ REFLEX BLITZ ARENA IMPORTED
 import MemoryMatch from '../../../components/MemoryMatch'; // ✅ GLASS PATH IMPORTED
@@ -22,6 +22,72 @@ import { checkAndRequestCallPermissions } from '../../../utils/permissions';
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80';
+
+// 🎨 PREMIUM HELPER: safe hex + alpha (works with 6 digit and 8 digit hex colors)
+const withAlpha = (hex: string, a: number) => {
+    const base = (hex || '#ffffff').slice(0, 7);
+    const v = Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+    return base + v;
+};
+
+// 🎨 NEW HELPER: solid lighten (+) / darken (-) of a hex colour -> fully opaque result (for solid buttons)
+const shade = (hex: string, amt: number) => {
+    const h = (hex || '#ffffff').slice(1, 7);
+    const n = parseInt(h.length === 6 ? h : 'ffffff', 16);
+    const target = amt < 0 ? 0 : 255;
+    const p = Math.min(1, Math.abs(amt));
+    const mix = (c: number) => Math.round(c + (target - c) * p);
+    const r = mix((n >> 16) & 255);
+    const g = mix((n >> 8) & 255);
+    const b = mix(n & 255);
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+};
+
+// 🔮 MAGIC ORB LAYOUT CONSTANTS
+const ORB = 64;          // main orb size
+const ITEM = 44;         // each bloom button size
+const EDGE_PAD = 16;     // gap between the phone edge and the side buttons
+const INFO_CARD_H = 70;  // approx height of the host name board (sits at the very top of the phone)
+
+// 🔮 SIDE COLUMNS: 4 buttons on the phone's LEFT edge + 4 on the RIGHT edge, top -> bottom, equally spaced
+const LEFT_KEYS = ['memory', 'beauty', 'mute', 'exit'];   // left column  (top -> bottom)
+const RIGHT_KEYS = ['reflex', 'chat', 'gift', 'call'];    // right column (top -> bottom)
+
+// 🔮 BLOOM ITEMS: ordered bottom -> top and interleaved left/right so both columns unfurl upward together
+const BURST_ITEMS: { key: string, side: 'left' | 'right', row: number }[] = [];
+for (let row = 3; row >= 0; row--) {
+    BURST_ITEMS.push({ key: LEFT_KEYS[row], side: 'left', row });
+    BURST_ITEMS.push({ key: RIGHT_KEYS[row], side: 'right', row });
+}
+
+// 🎁 PREMIUM GIFT CATALOG (same gifts, same prices as before)
+const GIFT_CATALOG = [
+    { name: 'Chocolate', price: 100, label: '100', img: require('../../../assets/images/chocolate.png') },
+    { name: 'Cake', price: 500, label: '500', img: require('../../../assets/images/cake.png') },
+    { name: 'Diamond', price: 1000, label: '1k', img: require('../../../assets/images/diamond.png') },
+    { name: 'Crown', price: 5000, label: '5k', img: require('../../../assets/images/crown.png') },
+    { name: 'Car', price: 10000, label: '10k', img: require('../../../assets/images/car.png') },
+    { name: 'Private Jet', price: 25000, label: '25k', img: require('../../../assets/images/private jet.png') },
+    { name: 'Palace', price: 50000, label: '50k', img: require('../../../assets/images/palace.png') },
+    { name: 'Golden Shoe', price: 100000, label: '100k', img: require('../../../assets/images/Golden Shoe.png') },
+    { name: 'Melody Queen', price: 150000, label: '150k', img: require('../../../assets/images/Melody Queen.png') },
+    { name: 'Rockstar Guitar', price: 200000, label: '200k', img: require('../../../assets/images/Rockstar.png') },
+    { name: 'Star Performer', price: 300000, label: '300k', img: require('../../../assets/images/Rising Star.png') },
+    { name: 'Superstar Mic', price: 500000, label: '500k', img: require('../../../assets/images/Superstar Mic.png') },
+    { name: 'Talent Crown', price: 1000000, label: '1M', img: require('../../../assets/images/Talent Crown.png') },
+];
+
+// 🎁 Gifts split into rows of 3 (guaranteed 3 per row)
+const GIFT_ROWS: (typeof GIFT_CATALOG)[] = [];
+for (let i = 0; i < GIFT_CATALOG.length; i += 3) GIFT_ROWS.push(GIFT_CATALOG.slice(i, i + 3));
+
+// 💎 Rarity colours for gift cards
+const giftRarity = (price: number): [string, string] => {
+    if (price < 1000) return ['#22D3EE', '#3B82F6'];
+    if (price < 10000) return ['#A855F7', '#6366F1'];
+    if (price < 100000) return ['#FBBF24', '#F97316'];
+    return ['#F472B6', '#EF4444'];
+};
 
 const FloatingHeart = ({ x }: { x: number }) => {
     const animation = useRef(new Animated.Value(0)).current;
@@ -68,7 +134,7 @@ const FloatingHeart = ({ x }: { x: number }) => {
 };
 
 // 🔥 SATTI FIX: NEW ANIMATED PREMIUM GIFT COMPONENT 🔥
-const AnimatedGiftIcon = ({ source }: { source: any }) => {
+const AnimatedGiftIcon = ({ source, size = 80 }: { source: any, size?: number }) => {
     const anim = useRef(new Animated.Value(0)).current;
     
     useEffect(() => {
@@ -85,9 +151,268 @@ const AnimatedGiftIcon = ({ source }: { source: any }) => {
     return (
         <Animated.Image 
             source={source} 
-            style={[styles.giftImage, { transform: [{ translateY }] }]} 
+            style={[styles.giftImage, { width: size, height: size, transform: [{ translateY }] }]} 
             resizeMode="contain" 
         />
+    );
+};
+
+// ✨ SPINNING GRADIENT RING (3D feel avatar frame)
+const SpinRing = ({ size, colors, children, speed = 6000 }: { size: number, colors: any, children?: React.ReactNode, speed?: number }) => {
+    const spin = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: speed, easing: Easing.linear, useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    return (
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, overflow: 'hidden', transform: [{ rotate }] }}>
+                <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+            </Animated.View>
+            <View style={{ width: size - 6, height: size - 6, borderRadius: (size - 6) / 2, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {children}
+            </View>
+        </View>
+    );
+};
+
+// ✨ PULSING LIVE DOT
+const PulseDot = ({ color = '#EF4444', size = 8 }: { color?: string, size?: number }) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const scale = a.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] });
+    const opacity = a.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] });
+    return (
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity, transform: [{ scale }] }} />
+            <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
+        </View>
+    );
+};
+
+// ✨ SONAR PULSE RINGS (connecting screen + idle orb)
+const PulseRings = ({ color, size }: { color: string, size: number }) => {
+    const rings = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+    useEffect(() => {
+        const loops = rings.map((v, i) => {
+            const l = Animated.loop(
+                Animated.sequence([
+                    Animated.delay(i * 600),
+                    Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+                    Animated.delay((2 - i) * 600),
+                ])
+            );
+            l.start();
+            return l;
+        });
+        return () => loops.forEach(l => l.stop());
+    }, []);
+    return (
+        <>
+            {rings.map((v, i) => (
+                <Animated.View
+                    key={i}
+                    style={{
+                        position: 'absolute',
+                        width: size,
+                        height: size,
+                        borderRadius: size / 2,
+                        borderWidth: 2,
+                        borderColor: color,
+                        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 2] }) }],
+                    }}
+                />
+            ))}
+        </>
+    );
+};
+
+// ✨ SOLID 3D ORB BUTTON (opaque gradient + glossy top highlight, smooth press-scale, optional breathing glow)
+const GlowOrbButton = ({ onPress, disabled, color, active, children, size = 46, glow = true }: { onPress?: () => void, disabled?: boolean, color: string, active?: boolean, children?: React.ReactNode, size?: number, glow?: boolean }) => {
+    const press = useRef(new Animated.Value(0)).current;
+    const pulse = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        if (!glow) return;
+        const loop = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, [glow]);
+    const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
+    const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] });
+    const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0] });
+    return (
+        <TouchableOpacity
+            activeOpacity={0.9}
+            disabled={disabled}
+            onPress={onPress}
+            onPressIn={() => Animated.spring(press, { toValue: 1, speed: 40, bounciness: 4, useNativeDriver: true }).start()}
+            onPressOut={() => Animated.spring(press, { toValue: 0, speed: 20, bounciness: 10, useNativeDriver: true }).start()}
+        >
+            <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.55 : 1 }}>
+                {glow && (
+                    <Animated.View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: glowOpacity, transform: [{ scale: glowScale }] }} />
+                )}
+                <Animated.View style={{ transform: [{ scale }] }}>
+                    <LinearGradient
+                        colors={[shade(color, active ? 0.05 : 0.2), shade(color, -0.3)]}
+                        start={{ x: 0.2, y: 0 }}
+                        end={{ x: 0.8, y: 1 }}
+                        style={[styles.orbBtn, { width: size, height: size, borderRadius: size / 2, borderColor: active ? '#FFFFFF' : withAlpha('#FFFFFF', 0.45) }]}
+                    >
+                        {/* glossy highlight for the solid 3D look */}
+                        <View pointerEvents="none" style={{ position: 'absolute', top: 2, left: size * 0.18, right: size * 0.18, height: size * 0.3, borderRadius: size, backgroundColor: 'rgba(255,255,255,0.22)' }} />
+                        {children}
+                    </LinearGradient>
+                </Animated.View>
+            </View>
+        </TouchableOpacity>
+    );
+};
+
+// 🔮 BLOOM ITEM: flies out of the orb on a spring, flips in 3D, label pill under it (never overlaps)
+const BurstItem = ({ anim, tx, ty, centerX, centerY, color, label, active, onPress, disabled, badge, children }: { anim: Animated.Value, tx: number, ty: number, centerX: number, centerY: number, color: string, label: string, active?: boolean, onPress?: () => void, disabled?: boolean, badge?: boolean, children?: React.ReactNode }) => (
+    <Animated.View
+        style={{
+            position: 'absolute',
+            left: centerX - ITEM / 2,
+            top: centerY - ITEM / 2,
+            width: ITEM,
+            height: ITEM,
+            opacity: anim,
+            transform: [
+                { perspective: 700 },
+                { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [0, tx] }) },
+                { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [0, ty] }) },
+                { rotateY: anim.interpolate({ inputRange: [0, 1], outputRange: ['90deg', '0deg'] }) },
+                { scale: anim },
+            ],
+        }}
+    >
+        <GlowOrbButton color={color} active={active} onPress={onPress} disabled={disabled} size={ITEM} glow={false}>
+            {children}
+        </GlowOrbButton>
+        {badge && <View style={styles.burstBadge} />}
+        <View pointerEvents="none" style={styles.burstLabelWrap}>
+            <View style={styles.burstLabelPill}>
+                <Text style={styles.burstLabelText} numberOfLines={1}>{label}</Text>
+            </View>
+        </View>
+    </Animated.View>
+);
+
+// ✨ MAGIC PANEL: grows out of the orb area & shrinks back (kept in-place, NOT a Modal -> no conflicts)
+const MagicPanel = ({ visible, children, style }: { visible: boolean, children?: React.ReactNode, style?: any }) => {
+    const a = useRef(new Animated.Value(0)).current;
+    const [mounted, setMounted] = useState(visible);
+    useEffect(() => {
+        if (visible) {
+            setMounted(true);
+            Animated.spring(a, { toValue: 1, friction: 8, tension: 70, useNativeDriver: true }).start();
+        } else {
+            Animated.timing(a, { toValue: 0, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => {
+                if (finished) setMounted(false);
+            });
+        }
+    }, [visible]);
+    if (!mounted) return null;
+    return (
+        <Animated.View
+            pointerEvents={visible ? 'auto' : 'none'}
+            style={[
+                style,
+                {
+                    opacity: a,
+                    transform: [
+                        { perspective: 900 },
+                        { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [90, 0] }) },
+                        { rotateX: a.interpolate({ inputRange: [0, 1], outputRange: ['40deg', '0deg'] }) },
+                        { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
+                    ],
+                },
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// ✨ CHAT MESSAGE 3D POP-IN
+const ChatPop = ({ children, style }: { children?: React.ReactNode, style?: any }) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.spring(a, { toValue: 1, friction: 7, tension: 80, useNativeDriver: true }).start();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                {
+                    opacity: a,
+                    transform: [
+                        { perspective: 600 },
+                        { rotateX: a.interpolate({ inputRange: [0, 1], outputRange: ['40deg', '0deg'] }) },
+                        { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) },
+                        { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+                    ],
+                },
+                style,
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// ✨ PREMIUM 3D GIFT CARD (rarity border, floating item, tilt sway)
+const PremiumGiftCard = ({ item, index, onPress }: { item: any, index: number, onPress: () => void }) => {
+    const enter = useRef(new Animated.Value(0)).current;
+    const sway = useRef(new Animated.Value(0)).current;
+    const [c1, c2] = giftRarity(item.price);
+
+    useEffect(() => {
+        Animated.sequence([
+            Animated.delay(index * 60),
+            Animated.spring(enter, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true }),
+        ]).start();
+        const loop = Animated.sequence([
+            Animated.delay(index * 150),
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(sway, { toValue: 1, duration: 2400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                    Animated.timing(sway, { toValue: 0, duration: 2400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                ])
+            ),
+        ]);
+        loop.start();
+        return () => loop.stop();
+    }, []);
+
+    const rotateY = sway.interpolate({ inputRange: [0, 1], outputRange: ['-10deg', '10deg'] });
+    const rotateX = sway.interpolate({ inputRange: [0, 1], outputRange: ['4deg', '-4deg'] });
+    const translateY = enter.interpolate({ inputRange: [0, 1], outputRange: [40, 0] });
+
+    return (
+        <Animated.View style={{ opacity: enter, transform: [{ perspective: 700 }, { translateY }, { rotateY }, { rotateX }, { scale: enter }] }}>
+            <TouchableOpacity activeOpacity={0.85} onPress={onPress}>
+                <LinearGradient colors={[c1, c2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.giftCardBorder}>
+                    <View style={styles.giftCardInner}>
+                        <View style={[styles.giftCardGlow, { backgroundColor: c1 }]} />
+                        <AnimatedGiftIcon source={item.img} size={62} />
+                        <Text style={styles.giftNameText} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{item.name}</Text>
+                        <LinearGradient colors={[withAlpha(c1, 0.35), withAlpha(c2, 0.35)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.giftPricePill}>
+                            <Text style={styles.giftPriceEmoji}>💎</Text>
+                            <Text style={[styles.giftPrice, { color: '#FFF' }]}>{item.label}</Text>
+                        </LinearGradient>
+                    </View>
+                </LinearGradient>
+            </TouchableOpacity>
+        </Animated.View>
     );
 };
 
@@ -126,6 +451,7 @@ export default function UserLiveViewScreen() {
     const router = useRouter();
     const navigation = useNavigation();
     const params = useLocalSearchParams();
+    const insets = useSafeAreaInsets();
     const engine = useRef<IRtcEngine | null>(null);
     const liveId = params.liveId as string;
     const isMounted = useRef(true);
@@ -168,13 +494,56 @@ export default function UserLiveViewScreen() {
 
     // 🔥 NEW: MUTE AND BEAUTY FILTER STATES 🔥
     const [isMuted, setIsMuted] = useState(false);
-    const [showProSettings, setShowProSettings] = useState(false);
+    const [showProSettings, setShowProSettings] = useState(false); // beauty panel visible
     const [ProLevel, setProLevel] = useState({ light: 0.7, smooth: 0.8 });
     const [isProEnabled, setIsProEnabled] = useState(false);
+
+    // ✨ CHAT PANEL (in-place, opens only when tapped) + unread dot
+    const [chatVisible, setChatVisible] = useState(false);
+    const [chatUnread, setChatUnread] = useState(false);
+    const prevMsgLenRef = useRef(0);
+
+    // 🔮 MAGIC ORB MENU STATE
+    const [menuOpen, setMenuOpen] = useState(false);
+    const [menuMounted, setMenuMounted] = useState(false);
+    const itemAnims = useRef(BURST_ITEMS.map(() => new Animated.Value(0))).current;
+    const infoAnim = useRef(new Animated.Value(0)).current;
+    const orbPress = useRef(new Animated.Value(0)).current;
+    const [layerSize, setLayerSize] = useState({ w: width, h: height }); // real size of the full-screen bloom layer
+
+    // 🔮 Floating "latest message" toast (only shows when everything is closed)
+    const [toastText, setToastText] = useState("");
+    const toastAnim = useRef(new Animated.Value(0)).current;
+    const lastToastIdRef = useRef<string | null>(null);
 
     useEffect(() => {
         isCallingRef.current = isCalling;
     }, [isCalling]);
+
+    // ✨ Unread dot on chat when a new user message arrives while chat is closed
+    useEffect(() => {
+        if (messages.length > prevMsgLenRef.current && prevMsgLenRef.current !== 0 && !chatVisible) {
+            const latest = messages[0];
+            if (latest && !latest.isSystem) setChatUnread(true);
+        }
+        prevMsgLenRef.current = messages.length;
+    }, [messages]);
+
+    // 🔮 Toast for newest message
+    useEffect(() => {
+        const m = messages[0];
+        if (!m) return;
+        if (lastToastIdRef.current === null) { lastToastIdRef.current = m.id; return; }
+        if (m.id === lastToastIdRef.current) return;
+        lastToastIdRef.current = m.id;
+        if (m.isSystem) return;
+        setToastText(m.isGift ? m.text : `${m.senderName}: ${m.text}`);
+        Animated.sequence([
+            Animated.timing(toastAnim, { toValue: 1, duration: 250, useNativeDriver: true }),
+            Animated.delay(3200),
+            Animated.timing(toastAnim, { toValue: 0, duration: 300, useNativeDriver: true }),
+        ]).start();
+    }, [messages]);
 
     // 🔥 GAME FEATURE STATE
     const [gameVisible, setGameVisible] = useState(false);
@@ -216,6 +585,9 @@ export default function UserLiveViewScreen() {
         setGlassPathVisible(false); // 🔥 Close Glass Path modal
         setShowGiftModal(false);
         setDisclaimerVisible(false); // Close disclaimer if open
+        setChatVisible(false); // ✨ Close chat panel
+        setShowProSettings(false); // ✨ Close beauty panel
+        closeMenu(); // 🔮 Collapse the orb menu
         setActiveGrandGift(null);
         setShowBusyStatus(false);
         
@@ -257,6 +629,9 @@ export default function UserLiveViewScreen() {
     const blinkAnim = useRef(new Animated.Value(0.4)).current;
     const shakeAnim = useRef(new Animated.Value(0)).current;
     const shimmerAnim = useRef(new Animated.Value(0)).current; 
+    // ✨ PREMIUM ANIMATION REFS
+    const introAnim = useRef(new Animated.Value(0)).current;
+    const driftAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         Animated.loop(
@@ -280,6 +655,17 @@ export default function UserLiveViewScreen() {
             Animated.sequence([
                 Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
                 Animated.timing(shimmerAnim, { toValue: 0, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ).start();
+
+        // ✨ Intro entrance (orb pops in)
+        Animated.spring(introAnim, { toValue: 1, friction: 6, tension: 50, useNativeDriver: true }).start();
+
+        // ✨ Slow aurora drift for background orbs
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(driftAnim, { toValue: 1, duration: 7000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(driftAnim, { toValue: 0, duration: 7000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
             ])
         ).start();
     }, []);
@@ -875,10 +1261,83 @@ export default function UserLiveViewScreen() {
         else router.replace('/');
     };
 
+    // 🔮 ORB MENU: OPEN (bloom out) / CLOSE (suck back into the orb)
+    const openMenu = () => {
+        setMenuOpen(true);
+        setMenuMounted(true);
+        Animated.parallel([
+            Animated.spring(infoAnim, { toValue: 1, friction: 7, tension: 80, useNativeDriver: true }),
+            Animated.stagger(
+                35,
+                itemAnims.map(v => Animated.spring(v, { toValue: 1, friction: 7, tension: 85, useNativeDriver: true }))
+            ),
+        ]).start();
+    };
+
+    const closeMenu = () => {
+        setMenuOpen(false);
+        Animated.parallel([
+            Animated.timing(infoAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+            Animated.stagger(
+                18,
+                itemAnims.map(v => Animated.timing(v, { toValue: 0, duration: 190, easing: Easing.in(Easing.quad), useNativeDriver: true }))
+            ),
+        ]).start(({ finished }) => {
+            if (finished) setMenuMounted(false);
+        });
+    };
+
+    // 🔮 Open one in-place panel at a time (menu collapses first so nothing overlaps)
+    const openPanel = (panel: 'chat' | 'beauty') => {
+        closeMenu();
+        setChatVisible(panel === 'chat');
+        setShowProSettings(panel === 'beauty');
+        if (panel === 'chat') setChatUnread(false);
+    };
+
+    const onOrbPress = () => {
+        if (chatVisible || showProSettings) {
+            setChatVisible(false);
+            setShowProSettings(false);
+            return;
+        }
+        if (menuOpen) closeMenu();
+        else openMenu();
+    };
+
     // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display!
     const userDiamonds = userData?.totalSpentDiamonds || 0;
     const userTier = calculateUserLevel(userDiamonds);
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
+
+    // ✨ Orb transforms
+    const orbFloat = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
+    const orbOpenScale = infoAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] });
+    const orbPressScale = orbPress.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
+    const driftX = driftAnim.interpolate({ inputRange: [0, 1], outputRange: [-30, 50] });
+    const giftPopRotateX = giftAnim.interpolate({ inputRange: [0, 1], outputRange: ['-70deg', '0deg'] });
+
+    // 🔮 Orb geometry (respects the phone's bottom safe area)
+    const orbBottom = Math.max(insets.bottom, 10) + 10;
+    const layerH = layerSize.h;
+    const layerW = layerSize.w;
+    const CX = layerW / 2;
+    const CY = layerH - orbBottom - ORB / 2;
+    const panelBottom = orbBottom + ORB + 14;
+    const chatPanelH = Math.min(height * 0.42, 340);
+    const panelOpen = chatVisible || showProSettings;
+    const orbIdle = !menuOpen && !panelOpen;
+
+    // 🔮 Host name board sits at the very TOP of the phone; the two button columns run top -> bottom below it
+    const infoCardW = Math.min(layerW - 32, 300);
+    const infoTop = insets.top + 10;
+    const colTop = infoTop + INFO_CARD_H + 18 + ITEM / 2;        // centre of the first (top) button
+    const colBottom = Math.max(CY, colTop + 3 * 70);              // centre of the last (bottom) button, level with the orb
+    const colStep = (colBottom - colTop) / 3;                     // equal spacing
+    const burstPos = (it: { side: 'left' | 'right', row: number }) => ({
+        tx: (it.side === 'left' ? EDGE_PAD + ITEM / 2 : layerW - EDGE_PAD - ITEM / 2) - CX,
+        ty: colTop + it.row * colStep - CY,
+    });
 
     // 🔥 ALTERNATING BORDER STYLES (FLUID, 2px)
     const borderType1 = {
@@ -888,8 +1347,8 @@ export default function UserLiveViewScreen() {
         borderBottomWidth: 0.5,
         borderLeftColor: userTier.color,
         borderRightColor: userTier.color,
-        borderTopColor: userTier.secondaryColor + '80',
-        borderBottomColor: userTier.secondaryColor + '80',
+        borderTopColor: withAlpha(userTier.secondaryColor, 0.5),
+        borderBottomColor: withAlpha(userTier.secondaryColor, 0.5),
     };
 
     const borderType2 = {
@@ -899,8 +1358,112 @@ export default function UserLiveViewScreen() {
         borderBottomWidth: 0.5,
         borderLeftColor: userTier.secondaryColor,
         borderRightColor: userTier.secondaryColor,
-        borderTopColor: userTier.color + '80',
-        borderBottomColor: userTier.color + '80',
+        borderTopColor: withAlpha(userTier.color, 0.5),
+        borderBottomColor: withAlpha(userTier.color, 0.5),
+    };
+
+    // ✨ CHAT ROW RENDERER (used inside the chat panel)
+    const renderChatItem = ({ item, index }: { item: any, index: number }) => {
+        // 🔥 SATTI FIX: ROYAL GIFT MESSAGE RENDER IN CHAT 🔥
+        if (item.isGift) {
+            return (
+                <ChatPop style={styles.chatPopWrap}>
+                    <LinearGradient 
+                        colors={['rgba(245, 158, 11, 0.3)', 'rgba(236, 72, 153, 0.3)']} 
+                        start={{x:0, y:0}} end={{x:1, y:1}} 
+                        style={styles.giftChatBubble}
+                    >
+                        <Text style={styles.giftChatText}>{item.text}</Text>
+                    </LinearGradient>
+                </ChatPop>
+            );
+        }
+
+        // Normal System Message (Join/Leave)
+        if (item.isSystem) {
+            return (
+                <ChatPop style={styles.chatPopWrap}>
+                    <View style={[styles.chatBubble, { backgroundColor: 'rgba(16, 185, 129, 0.16)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6 }]}>
+                        <Text style={[styles.chatText, { color: '#93C5FD', fontWeight: 'bold', flexShrink: 1 }]}>{item.text}</Text>
+                    </View>
+                </ChatPop>
+            );
+        }
+
+        // Normal User Message (🔥 CLICKABLE TO OPEN PROFILE 🔥)
+        const msgBorder = index % 2 === 0 ? borderType1 : borderType2;
+        return (
+            <ChatPop style={styles.chatPopWrap}>
+                <TouchableOpacity activeOpacity={0.8} onPress={() => handleUserClick(item, true)} style={[styles.chatBubble, styles.chatBubbleRow, msgBorder]}>
+                    <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.chatInitial}>
+                        <Text style={styles.chatInitialText}>{(item.senderName || "U").charAt(0).toUpperCase()}</Text>
+                    </LinearGradient>
+                    <Text style={[styles.chatName, { flexShrink: 1 }]}>{item.senderName}: <Text style={styles.chatMessage}>{item.text}</Text></Text>
+                </TouchableOpacity>
+            </ChatPop>
+        );
+    };
+
+    // 🔮 Bloom item config: icon, color, label, action
+    const burstConfig: Record<string, { color: string, label: string, active?: boolean, disabled?: boolean, badge?: boolean, onPress: () => void, icon: React.ReactNode }> = {
+        exit: {
+            color: '#EF4444', label: 'Exit',
+            onPress: handleBackNavigation,
+            icon: <Ionicons name="power" size={20} color="#FFF" />,
+        },
+        mute: {
+            color: '#38BDF8', label: isMuted ? 'Muted' : 'Mute', active: isMuted, disabled: isLiveEndedWaiting,
+            onPress: toggleMute,
+            icon: <Ionicons name={isMuted ? "volume-mute" : "volume-medium"} size={21} color="#FFF" />,
+        },
+        beauty: {
+            color: '#EC4899', label: 'Beauty', disabled: isLiveEndedWaiting,
+            onPress: () => openPanel('beauty'),
+            icon: <MaterialCommunityIcons name="face-man-shimmer" size={22} color="#FFF" />,
+        },
+        memory: {
+            color: '#A855F7', label: 'Memory',
+            onPress: () => { closeMenu(); setPendingGameType('memory'); setDisclaimerVisible(true); },
+            icon: (
+                <View style={{ width: 24, height: 24, flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', alignItems: 'center' }}>
+                    <Text style={{ fontSize: 9 }}>🍎</Text>
+                    <Text style={{ fontSize: 9 }}>🍌</Text>
+                    <Text style={{ fontSize: 9 }}>🍇</Text>
+                    <Text style={{ fontSize: 9 }}>🍓</Text>
+                </View>
+            ),
+        },
+        reflex: {
+            color: '#00EAFF', label: 'Reflex',
+            onPress: () => { closeMenu(); setPendingGameType('reflex'); setDisclaimerVisible(true); },
+            icon: (
+                <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                        <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
+                        <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
+                        <View style={{ width: 7, height: 4, backgroundColor: '#FFD700', borderRadius: 4 }} />
+                    </View>
+                </View>
+            ),
+        },
+        chat: {
+            color: userTier.color, label: 'Chat', badge: chatUnread,
+            onPress: () => openPanel('chat'),
+            icon: <Ionicons name="chatbubbles" size={21} color="#FFF" />,
+        },
+        gift: {
+            color: '#F59E0B', label: 'Gift',
+            onPress: () => { closeMenu(); setShowGiftModal(true); },
+            icon: <FontAwesome5 name="gift" size={18} color="#FFF" />,
+        },
+        call: {
+            color: '#10B981', label: isCalling ? 'Calling' : `Call ${callRate}💎`, active: isCalling,
+            onPress: () => { closeMenu(); handleCallButtonPress(); },
+            icon: isCalling ? <ActivityIndicator size="small" color="#FFF" /> : <Ionicons name="videocam" size={22} color="#FFF" />,
+        },
     };
 
     return (
@@ -910,10 +1473,11 @@ export default function UserLiveViewScreen() {
                 
                 {/* BACKGROUND ELEMENTS */}
                 <LinearGradient colors={userTier.themeBg as any} style={StyleSheet.absoluteFill} />
-                <Animated.View style={[styles.shimmerOrb, { top: 100, left: -60, backgroundColor: userTier.color, transform: [{ translateY: orbTranslateY }] }]} />
-                <Animated.View style={[styles.shimmerOrb, { bottom: 200, right: -60, backgroundColor: userTier.secondaryColor, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+                <Animated.View style={[styles.shimmerOrb, { top: 100, left: -60, backgroundColor: userTier.color, transform: [{ translateY: orbTranslateY }, { translateX: driftX }] }]} />
+                <Animated.View style={[styles.shimmerOrb, { bottom: 200, right: -60, backgroundColor: userTier.secondaryColor, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }, { translateX: Animated.multiply(driftX, -1) }] }]} />
+                <Animated.View style={[styles.shimmerOrb, { top: height * 0.35, left: width * 0.2, width: 260, height: 260, borderRadius: 130, opacity: 0.1, backgroundColor: '#A855F7', transform: [{ translateY: orbTranslateY }] }]} />
 
-                {/* VIDEO CONTAINER */}
+                {/* VIDEO CONTAINER (100% CLEAN FULL SCREEN, no dark overlays) */}
                 <View style={styles.videoContainer}>
                     {isFocused && joined && hostUid !== 0 ? (
                         <RtcSurfaceView 
@@ -924,8 +1488,18 @@ export default function UserLiveViewScreen() {
                         />
                     ) : (
                         <LinearGradient colors={['rgba(15,23,42,0.5)', 'rgba(30,41,59,0.5)']} style={styles.loadingContainer}>
-                            <ActivityIndicator size="large" color={userTier.color} style={{ marginBottom: 20 }} />
+                            <View style={styles.pulseWrap}>
+                                <PulseRings color={userTier.color} size={110} />
+                                <SpinRing size={96} colors={[userTier.color, userTier.secondaryColor, '#FFFFFF', userTier.color]} speed={3500}>
+                                    {hostImage ? (
+                                        <Image source={{ uri: hostImage }} style={{ width: 90, height: 90, borderRadius: 45 }} />
+                                    ) : (
+                                        <ActivityIndicator size="large" color={userTier.color} />
+                                    )}
+                                </SpinRing>
+                            </View>
                             <Text style={[styles.loadingText, { color: userTier.color }]}>Connecting to {hostName}...</Text>
+                            <ActivityIndicator size="small" color={userTier.color} style={{ marginTop: 14 }} />
                         </LinearGradient>
                     )}
                 </View>
@@ -943,115 +1517,13 @@ export default function UserLiveViewScreen() {
                     </View>
                 )}
 
-                <SafeAreaView style={{ flex: 1 }} pointerEvents="box-none">
-                    
-                    {/* 🔥 SATTI FIX: FULLY COVERED HEADER BLOCK 🔥 */}
-                    <View style={styles.header}>
-                        <BlurView intensity={90} tint="dark" style={[styles.fullWidthCard, borderType1]}>
-                            <View style={styles.topRow}>
-                                <View style={styles.profileInfoSide}>
-                                    <View style={styles.avatarWrapper}>
-                                        {hostImage ? (
-                                            <Image source={{ uri: hostImage }} style={[styles.hostAvatar, { borderColor: userTier.color }]} />
-                                        ) : (
-                                            <View style={[styles.avatarPlaceholder, { backgroundColor: userTier.color }]}>
-                                                <Text style={styles.placeholderText}>{hostName.charAt(0).toUpperCase()}</Text>
-                                            </View>
-                                        )}
-                                        <View style={styles.liveIndicator}>
-                                            <View style={styles.liveDot} />
-                                            <Text style={styles.countText}>{viewerCount}</Text>
-                                        </View>
-                                    </View>
-                                    <View style={styles.nameContainer}>
-                                        {/* 🔥 SATTI FIX: Level Badge moved below the name 🔥 */}
-                                        <View style={{flexDirection: 'column', alignItems: 'flex-start', gap: 2}}>
-                                            <Text style={styles.hostNameText} numberOfLines={1}>{hostName}</Text>
-                                            <Text style={[styles.onlineStatus, { color: userTier.color }]}>Active Now</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                                
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                    {/* 🔥 UNIQUE MEMORY MATCH GAME ICON (Perfect Round Fit) 🔥 */}
-                                    <TouchableOpacity 
-                                        onPress={() => { setPendingGameType('memory'); setDisclaimerVisible(true); }} 
-                                        style={[styles.closeIcon, { 
-                                            borderColor: '#A855F7', 
-                                            borderWidth: 1.5, 
-                                            backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                                            justifyContent: 'center', 
-                                            alignItems: 'center' 
-                                        }]}
-                                    >
-                                        <View style={{ 
-                                            width: 24, 
-                                            height: 24, 
-                                            flexDirection: 'row', 
-                                            flexWrap: 'wrap', 
-                                            justifyContent: 'center', 
-                                            alignItems: 'center' 
-                                        }}>
-                                            <Text style={{ fontSize: 9 }}>🍎</Text>
-                                            <Text style={{ fontSize: 9 }}>🍌</Text>
-                                            <Text style={{ fontSize: 9 }}>🍇</Text>
-                                            <Text style={{ fontSize: 9 }}>🍓</Text>
-                                        </View>
-                                    </TouchableOpacity>
-
-                                    {/* 🔥 SATTI FIX: CUSTOM SKILL ARENA ICON (Play Store Safe) 🔥 */}
-                                    <TouchableOpacity onPress={() => { setPendingGameType('reflex'); setDisclaimerVisible(true); }} style={[styles.closeIcon, { borderColor: 'rgb(0, 234, 255)', borderWidth: 1, backgroundColor: 'rgba(255, 255, 255, 0.05)' }]}>
-                                        <View style={{ width: 16, height: 16, justifyContent: 'space-between' }}>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                                <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
-                                                <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
-                                            </View>
-                                            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
-                                                <View style={{ width: 7, height: 4, backgroundColor: '#FFD700', borderRadius: 4 }} />
-                                            </View>
-                                        </View>
-                                    </TouchableOpacity>
-
-                                    <TouchableOpacity onPress={handleBackNavigation} style={[styles.closeIcon, { borderColor: userTier.secondaryColor + '40', borderWidth: 1 }]}>
-                                        <Ionicons name="close" size={22} color="#FFF" />
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-
-                            <View style={styles.actionRow}>
-                                <TouchableOpacity onPress={handleCallButtonPress} style={{flex: 1.5}} disabled={isCalling}>
-                                    <Animated.View style={[
-                                        styles.callBtnMass, 
-                                        { opacity: isCalling ? 1 : blinkAnim, transform: [{ rotate: rotation }], backgroundColor: userTier.color, shadowColor: userTier.color },
-                                        isCalling && { backgroundColor: userTier.secondaryColor }
-                                    ]}>
-                                        {isCalling ? (
-                                            <ActivityIndicator size="small" color="#FFF" />
-                                        ) : (
-                                            <Ionicons name="call" size={14} color="#FFF" />
-                                        )}
-                                        <Text style={styles.callTextMass}>
-                                            {isCalling ? "Calling..." : `${callRate}💎/m`}
-                                        </Text>
-                                    </Animated.View>
-                                </TouchableOpacity>
-                                <TouchableOpacity onPress={() => setShowGiftModal(true)} style={[styles.giftBtnMass, { borderColor: userTier.secondaryColor + '60' }]}>
-                                    <FontAwesome5 name="gift" size={20} color={userTier.color} />
-                                    <Text style={styles.giftTextMass}></Text>
-                                </TouchableOpacity>
-                                <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.levelTag}>
-                                    <FontAwesome5 name="crown" size={8} color="#FFF" />
-                                    <Text style={styles.levelTextTag}>{hostLevel}</Text>
-                                </LinearGradient>
-                            </View>
-                        </BlurView>
-                    </View>
+                <SafeAreaView style={StyleSheet.absoluteFill} edges={[]} pointerEvents="box-none">
 
                     {showBusyStatus && (
                         <View style={styles.busyOverlay}>
                             <BlurView intensity={90} tint="dark" style={[styles.busyCard, borderType1]}>
-                                <View style={[styles.busyIconCircle, { backgroundColor: userTier.secondaryColor + '30' }]}>
+                                <View style={[styles.busyIconCircle, { backgroundColor: withAlpha(userTier.secondaryColor, 0.19) }]}>
+                                    <PulseRings color={userTier.color} size={80} />
                                     <Ionicons name="time" size={32} color={userTier.color} />
                                 </View>
                                 <Text style={styles.busyTitle}>Host is Engaged</Text>
@@ -1060,10 +1532,10 @@ export default function UserLiveViewScreen() {
                         </View>
                     )}
 
-                    <Animated.View style={[styles.giftNotify, { opacity: giftAnim, transform: [{ scale: giftAnim }] }]}>
+                    <Animated.View style={[styles.giftNotify, { top: insets.top + 12, opacity: giftAnim, transform: [{ perspective: 800 }, { rotateX: giftPopRotateX }, { scale: giftAnim }] }]}>
                         <LinearGradient colors={[userTier.color, userTier.secondaryColor]} style={styles.giftPop}>
                             <FontAwesome5 name="gem" size={20} color="#FFF" />
-                            <Text style={styles.giftPopText}>{giftAlert}</Text>
+                            <Text style={styles.giftPopText} numberOfLines={1}>{giftAlert}</Text>
                         </LinearGradient>
                     </Animated.View>
 
@@ -1071,105 +1543,237 @@ export default function UserLiveViewScreen() {
                         <FloatingHeart key={r.id} x={r.x} />
                     ))}
 
-                    {/* SPACER TO PUSH CHAT TO BOTTOM */}
-                    <View style={{ flex: 1 }} pointerEvents="none" />
-
-                    {/* 🔥 SATTI FIX: FLEX INTERACTION AREA FOR KEYBOARD FIX 🔥 */}
-                    <View style={styles.interactionArea} pointerEvents="box-none">
-                        
-                        {/* 🔥 NEW: BEAUTY SETTINGS UI ADDED ABOVE CHAT 🔥 */}
-                        {showProSettings && (
-                            <View style={styles.ProSettingsBar}>
-                                <View style={styles.settingGroup}>
-                                    <Text style={styles.settingLabel}>BRIGHTNESS</Text>
-                                    <View style={styles.chipRow}>
-                                        <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
-                                            <Text style={styles.chipText}>High</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
-                                            <Text style={styles.chipText}>Low</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
-                                <View style={styles.settingDivider} />
-                                <View style={styles.settingGroup}>
-                                    <Text style={styles.settingLabel}>SMOOTHNESS</Text>
-                                    <View style={styles.chipRow}>
-                                        <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
-                                            <Text style={styles.chipText}>Max</Text>
-                                        </TouchableOpacity>
-                                        <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
-                                            <Text style={styles.chipText}>Natural</Text>
-                                        </TouchableOpacity>
-                                    </View>
-                                </View>
+                    {/* 🔮 NEW LATEST-MESSAGE TOAST (only when everything is closed) */}
+                    {orbIdle && (
+                        <Animated.View pointerEvents="none" style={[styles.toastWrap, { bottom: panelBottom - 4, opacity: toastAnim, transform: [{ translateY: toastAnim.interpolate({ inputRange: [0, 1], outputRange: [14, 0] }) }] }]}>
+                            <View style={[styles.toastPill, { borderColor: withAlpha(userTier.color, 0.7) }]}>
+                                <Ionicons name="chatbubble-ellipses" size={13} color={userTier.color} />
+                                <Text style={styles.toastText} numberOfLines={1}>{toastText}</Text>
                             </View>
+                        </Animated.View>
+                    )}
+
+                    {/* 🔮 IN-PLACE CHAT PANEL (grows out of the orb, never a Modal) */}
+                    <MagicPanel visible={chatVisible} style={[styles.panelWrap, { bottom: panelBottom }]}>
+                        <LinearGradient colors={[userTier.color, userTier.secondaryColor, userTier.color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.panelBorder, { height: chatPanelH }]}>
+                            <BlurView intensity={55} tint="dark" style={[styles.panelInner, { flex: 1 }]}>
+                                <View style={styles.panelHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                        <Ionicons name="chatbubbles" size={18} color={userTier.color} />
+                                        <Text style={styles.panelTitle} numberOfLines={1}>Live Chat</Text>
+                                        <View style={styles.chatViewerPill}>
+                                            <Ionicons name="eye" size={11} color="#E2E8F0" />
+                                            <Text style={styles.chatViewerText}>{viewerCount}</Text>
+                                        </View>
+                                    </View>
+                                    <TouchableOpacity onPress={() => setChatVisible(false)} style={styles.panelCloseBtn}>
+                                        <Ionicons name="chevron-down" size={20} color="#FFF" />
+                                    </TouchableOpacity>
+                                </View>
+
+                                <FlatList
+                                    data={messages}
+                                    keyExtractor={(item) => item.id}
+                                    inverted={true} 
+                                    renderItem={renderChatItem}
+                                    style={styles.chatList}
+                                    contentContainerStyle={{ paddingTop: 8 }}
+                                    showsVerticalScrollIndicator={false}
+                                />
+
+                                <View style={styles.inputBar}>
+                                    <TextInput 
+                                        style={[styles.textInput, { borderColor: withAlpha(userTier.color, 0.55) }]} 
+                                        placeholder="Chat..." 
+                                        placeholderTextColor="#CBD5E1"
+                                        value={inputText}
+                                        onChangeText={setInputText}
+                                        editable={!isLiveEndedWaiting}
+                                    />
+                                    <GlowOrbButton color={userTier.color} active disabled={isLiveEndedWaiting} onPress={sendMessage} size={46}>
+                                        <Ionicons name="paper-plane" size={19} color="#FFF" />
+                                    </GlowOrbButton>
+                                </View>
+                            </BlurView>
+                        </LinearGradient>
+                    </MagicPanel>
+
+                    {/* 🔮 IN-PLACE BEAUTY PANEL */}
+                    <MagicPanel visible={showProSettings} style={[styles.panelWrap, { bottom: panelBottom }]}>
+                        <LinearGradient colors={['#EC4899', userTier.color, '#EC4899']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.panelBorder}>
+                            <BlurView intensity={55} tint="dark" style={styles.panelInner}>
+                                <View style={styles.panelHeader}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+                                        <MaterialCommunityIcons name="face-man-shimmer" size={20} color="#EC4899" />
+                                        <Text style={styles.panelTitle} numberOfLines={1}>Beauty Filter</Text>
+                                    </View>
+                                    <TouchableOpacity onPress={() => setShowProSettings(false)} style={styles.panelCloseBtn}>
+                                        <Ionicons name="chevron-down" size={20} color="#FFF" />
+                                    </TouchableOpacity>
+                                </View>
+                                <View style={styles.ProSettingsBar}>
+                                    <View style={styles.settingGroup}>
+                                        <Text style={styles.settingLabel}>BRIGHTNESS</Text>
+                                        <View style={styles.chipRow}>
+                                            <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
+                                                <Text style={styles.chipText}>High</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
+                                                <Text style={styles.chipText}>Low</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                    <View style={styles.settingDivider} />
+                                    <View style={styles.settingGroup}>
+                                        <Text style={styles.settingLabel}>SMOOTHNESS</Text>
+                                        <View style={styles.chipRow}>
+                                            <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
+                                                <Text style={styles.chipText}>Max</Text>
+                                            </TouchableOpacity>
+                                            <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
+                                                <Text style={styles.chipText}>Natural</Text>
+                                            </TouchableOpacity>
+                                        </View>
+                                    </View>
+                                </View>
+                            </BlurView>
+                        </LinearGradient>
+                    </MagicPanel>
+
+                    {/* 🔮✨ THE MAGIC ORB + BLOOM LAYER ✨🔮 */}
+                    <View style={styles.bloomLayer} pointerEvents="box-none" onLayout={(e) => { const { width: w, height: h } = e.nativeEvent.layout; if (Math.abs(w - layerSize.w) > 0.5 || Math.abs(h - layerSize.h) > 0.5) setLayerSize({ w, h }); }}>
+
+                        {/* 🔮 HOST NAME BOARD: name + LIVE + viewers + level, pinned at the TOP of the phone */}
+                        {menuMounted && (
+                            <Animated.View
+                                pointerEvents="none"
+                                style={[
+                                    styles.infoCard,
+                                    {
+                                        width: infoCardW,
+                                        left: CX - infoCardW / 2,
+                                        top: infoTop,
+                                        opacity: infoAnim,
+                                        transform: [
+                                            { perspective: 700 },
+                                            { translateY: infoAnim.interpolate({ inputRange: [0, 1], outputRange: [-60, 0] }) },
+                                            { rotateX: infoAnim.interpolate({ inputRange: [0, 1], outputRange: ['60deg', '0deg'] }) },
+                                            { scale: infoAnim },
+                                        ],
+                                    },
+                                ]}
+                            >
+                                <LinearGradient colors={[userTier.color, userTier.secondaryColor, userTier.color]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.infoBorder}>
+                                    <BlurView intensity={60} tint="dark" style={styles.infoInner}>
+                                        <SpinRing size={46} colors={[userTier.color, userTier.secondaryColor, '#FFFFFF', userTier.color]} speed={5000}>
+                                            {hostImage ? (
+                                                <Image source={{ uri: hostImage }} style={{ width: 40, height: 40, borderRadius: 20 }} />
+                                            ) : (
+                                                <View style={[styles.infoAvatarFallback, { backgroundColor: userTier.color }]}>
+                                                    <Text style={styles.placeholderText}>{hostName.charAt(0).toUpperCase()}</Text>
+                                                </View>
+                                            )}
+                                        </SpinRing>
+                                        <View style={styles.infoTextCol}>
+                                            <Text style={styles.infoName} numberOfLines={1}>{hostName}</Text>
+                                            <View style={styles.statusRow}>
+                                                <LinearGradient colors={['#EF4444', '#F97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.livePill}>
+                                                    <PulseDot color="#FFF" size={5} />
+                                                    <Text style={styles.livePillText}>LIVE</Text>
+                                                </LinearGradient>
+                                                <View style={styles.viewerChip}>
+                                                    <Ionicons name="eye" size={12} color="#FFF" />
+                                                    <Text style={styles.viewerText} numberOfLines={1}>{viewerCount}</Text>
+                                                </View>
+                                                <View style={styles.levelTag}>
+                                                    <FontAwesome5 name="crown" size={8} color="#FFF" />
+                                                    <Text style={styles.levelTextTag} numberOfLines={1}>{hostLevel}</Text>
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </BlurView>
+                                </LinearGradient>
+                            </Animated.View>
                         )}
 
-                        <FlatList
-                            data={messages}
-                            keyExtractor={(item) => item.id}
-                            inverted={true} 
-                            renderItem={({ item, index }) => {
-                                // 🔥 SATTI FIX: ROYAL GIFT MESSAGE RENDER IN CHAT 🔥
-                                if (item.isGift) {
-                                    return (
-                                        <LinearGradient 
-                                            colors={['rgba(245, 158, 11, 0.2)', 'rgba(236, 72, 153, 0.2)']} 
-                                            start={{x:0, y:0}} end={{x:1, y:1}} 
-                                            style={styles.giftChatBubble}
-                                        >
-                                            <Text style={styles.giftChatText}>{item.text}</Text>
-                                        </LinearGradient>
-                                    );
-                                }
+                        {/* Bloom buttons fly out of the orb to the phone edges: 4 on the left, 4 on the right */}
+                        {menuMounted && BURST_ITEMS.map((it, i) => {
+                            const cfg = burstConfig[it.key];
+                            const pos = burstPos(it);
+                            return (
+                                <BurstItem
+                                    key={it.key}
+                                    anim={itemAnims[i]}
+                                    tx={pos.tx}
+                                    ty={pos.ty}
+                                    centerX={CX}
+                                    centerY={CY}
+                                    color={cfg.color}
+                                    label={cfg.label}
+                                    active={cfg.active}
+                                    disabled={cfg.disabled}
+                                    badge={cfg.badge}
+                                    onPress={cfg.onPress}
+                                >
+                                    {cfg.icon}
+                                </BurstItem>
+                            );
+                        })}
 
-                                // Normal System Message (Join/Leave)
-                                if (item.isSystem) {
-                                    return (
-                                        <View style={[styles.chatBubble, { backgroundColor: 'rgba(16, 185, 129, 0.1)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6 }]}>
-                                            <Text style={[styles.chatText, { color: '#032cf9', fontWeight: 'bold' }]}>{item.text}</Text>
-                                        </View>
-                                    );
-                                }
-
-                                // Normal User Message (🔥 NOW CLICKABLE TO OPEN PROFILE 🔥)
-                                const msgBorder = index % 2 === 0 ? borderType1 : borderType2;
-                                return (
-                                    <TouchableOpacity activeOpacity={0.8} onPress={() => handleUserClick(item, true)} style={[styles.chatBubble, msgBorder]}>
-                                        <Text style={styles.chatName}>{item.senderName}: <Text style={styles.chatMessage}>{item.text}</Text></Text>
-                                    </TouchableOpacity>
-                                );
+                        {/* THE ORB */}
+                        <Animated.View
+                            style={{
+                                position: 'absolute',
+                                left: CX - ORB / 2,
+                                top: CY - ORB / 2,
+                                width: ORB,
+                                height: ORB,
+                                opacity: introAnim,
+                                transform: [{ perspective: 800 }, { translateY: orbFloat }, { scale: introAnim }, { scale: orbOpenScale }],
                             }}
-                            style={styles.chatList}
-                            contentContainerStyle={{ paddingTop: 20 }}
-                            showsVerticalScrollIndicator={false}
-                        />
-
-                        <View style={styles.inputBar}>
-                            <TextInput 
-                                style={[styles.textInput, { borderColor: userTier.color + '50' }]} 
-                                placeholder="Chat..." 
-                                placeholderTextColor="#94A3B8"
-                                value={inputText}
-                                onChangeText={setInputText}
-                                editable={!isLiveEndedWaiting}
-                            />
-                            
-                            {/* 🔥 NEW: BEAUTY FILTER BUTTON (Moved down slightly with marginTop) 🔥 */}
-                            <TouchableOpacity onPress={() => setShowProSettings(!showProSettings)} disabled={isLiveEndedWaiting} style={[styles.iconAction, showProSettings && styles.activePro, { marginTop: 6 }]}>
-                                <MaterialCommunityIcons name="face-man-shimmer" size={20} color={showProSettings ? "#FFF" : userTier.color} />
+                        >
+                            {orbIdle && (
+                                <View pointerEvents="none" style={styles.orbRingsWrap}>
+                                    <PulseRings color={userTier.color} size={ORB} />
+                                </View>
+                            )}
+                            <TouchableOpacity
+                                activeOpacity={0.9}
+                                onPress={onOrbPress}
+                                onPressIn={() => Animated.spring(orbPress, { toValue: 1, speed: 40, bounciness: 6, useNativeDriver: true }).start()}
+                                onPressOut={() => Animated.spring(orbPress, { toValue: 0, speed: 20, bounciness: 14, useNativeDriver: true }).start()}
+                            >
+                                <Animated.View style={{ transform: [{ scale: orbPressScale }] }}>
+                                    <SpinRing size={ORB} colors={[userTier.color, userTier.secondaryColor, '#FFFFFF', userTier.color]}>
+                                        {hostImage ? (
+                                            <Image source={{ uri: hostImage }} style={[styles.hostAvatar, { borderColor: userTier.color }]} />
+                                        ) : (
+                                            <View style={[styles.avatarPlaceholder, { backgroundColor: userTier.color }]}>
+                                                <Text style={styles.placeholderText}>{hostName.charAt(0).toUpperCase()}</Text>
+                                            </View>
+                                        )}
+                                    </SpinRing>
+                                </Animated.View>
                             </TouchableOpacity>
 
-                            {/* 🔥 NEW: MUTE BUTTON (Moved down slightly with marginTop) 🔥 */}
-                            <TouchableOpacity onPress={toggleMute} disabled={isLiveEndedWaiting} style={[styles.iconAction, isMuted && styles.activeIcon, { marginTop: 6 }]}>
-                                <Ionicons name={isMuted ? "volume-mute" : "volume-medium"} size={20} color={isMuted ? "#FFF" : userTier.color} />
-                            </TouchableOpacity>
+                            {/* viewers chip under the orb */}
+                            <View pointerEvents="none" style={styles.liveIndicator}>
+                                <View style={styles.liveDot} />
+                                <Text style={styles.countText}>{viewerCount}</Text>
+                            </View>
 
-                            <TouchableOpacity onPress={sendMessage} disabled={isLiveEndedWaiting} style={[styles.sendBtn, { backgroundColor: userTier.color, shadowColor: userTier.color }]}>
-                                <Ionicons name="paper-plane" size={20} color="#FFF" />
-                            </TouchableOpacity>
-                        </View>
+                            {/* state badge: close / chevron / sparkle / calling */}
+                            <View pointerEvents="none" style={[styles.orbStateBadge, { backgroundColor: userTier.color }]}>
+                                {isCalling ? (
+                                    <ActivityIndicator size="small" color="#FFF" style={{ transform: [{ scale: 0.6 }] }} />
+                                ) : (
+                                    <Ionicons name={panelOpen ? "chevron-down" : menuOpen ? "close" : "sparkles"} size={12} color="#FFF" />
+                                )}
+                            </View>
+
+                            {/* unread chat dot */}
+                            {chatUnread && !chatVisible && <View pointerEvents="none" style={styles.orbUnreadDot} />}
+                        </Animated.View>
                     </View>
                 </SafeAreaView>
             </KeyboardAvoidingView>
@@ -1180,84 +1784,42 @@ export default function UserLiveViewScreen() {
                 role="user"
             />
 
-            {/* 🔥 SATTI FIX: ANIMATED PREMIUM GIFTS REPLACED EMOJIS 🔥 */}
-            <Modal visible={showGiftModal} transparent animationType="slide">
+            {/* 🔥 SATTI FIX: ANIMATED PREMIUM GIFTS (3D RARITY CARDS) — now lifted almost to the top of the screen 🔥 */}
+            <Modal visible={showGiftModal} transparent animationType="slide" statusBarTranslucent onRequestClose={() => setShowGiftModal(false)}>
                 <View style={styles.modalOverlay}>
-                    <BlurView intensity={100} tint="dark" style={[styles.modalContent, borderType2, { borderBottomWidth: 0 }]}>
+                    <TouchableOpacity activeOpacity={1} style={{ height: insets.top + 8 }} onPress={() => setShowGiftModal(false)} />
+                    <BlurView intensity={100} tint="dark" style={[styles.modalContent, borderType2, { borderBottomWidth: 0, flex: 1 }]}>
+                        <LinearGradient
+                            colors={['transparent', withAlpha(userTier.color, 0.95), 'transparent']}
+                            start={{ x: 0, y: 0 }}
+                            end={{ x: 1, y: 0 }}
+                            style={styles.topEdgeGlow}
+                            pointerEvents="none"
+                        />
                         <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>Send Appreciation 💎</Text>
+                            <View style={{ flexShrink: 1 }}>
+                                <Text style={styles.modalTitle} numberOfLines={1}>Send Appreciation 💎</Text>
+                                <View style={styles.balanceChip}>
+                                    <FontAwesome5 name="gem" size={10} color={userTier.color} />
+                                    <Text style={[styles.balanceText, { color: userTier.color }]}>{myWalletBalance}</Text>
+                                </View>
+                            </View>
                             <TouchableOpacity onPress={() => setShowGiftModal(false)}>
                                 <Ionicons name="close" size={28} color={userTier.color} />
                             </TouchableOpacity>
                         </View>
-                        {/* 🔥 12 GIFTS IN GRID VIEW 🔥 */}
-                        <View style={styles.giftGrid}>
-                            <TouchableOpacity onPress={() => sendGift('Chocolate', 100)} style={[styles.giftBtnMain, borderType1]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/chocolate.png')} />
-                                <Text style={styles.giftNameText}>Chocolate</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>100</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Cake', 500)} style={[styles.giftBtnMain, borderType2]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/cake.png')} />
-                                <Text style={styles.giftNameText}>Cake</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>500</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Diamond', 1000)} style={[styles.giftBtnMain, borderType1]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/diamond.png')} />
-                                <Text style={styles.giftNameText}>Diamond</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>1k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Crown', 5000)} style={[styles.giftBtnMain, borderType2]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/crown.png')} />
-                                <Text style={styles.giftNameText}>Crown</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>5k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Car', 10000)} style={[styles.giftBtnMain, borderType1]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/car.png')} />
-                                <Text style={styles.giftNameText}>Car</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>10k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Private Jet', 25000)} style={[styles.giftBtnMain, borderType2]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/private jet.png')} />
-                                <Text style={styles.giftNameText}>Private Jet</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>25k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Palace', 50000)} style={[styles.giftBtnMain, borderType1]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/palace.png')} />
-                                <Text style={styles.giftNameText}>Palace</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>50k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Golden Shoe', 100000)} style={[styles.giftBtnMain, borderType2]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/Golden Shoe.png')} />
-                                <Text style={styles.giftNameText}>Golden Shoe</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>100k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Melody Queen', 150000)} style={[styles.giftBtnMain, borderType1]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/Melody Queen.png')} />
-                                <Text style={styles.giftNameText}>Melody Queen</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>150k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Rockstar Guitar', 200000)} style={[styles.giftBtnMain, borderType2]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/Rockstar.png')} />
-                                <Text style={styles.giftNameText}>Rockstar Guitar</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>200k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Star Performer', 300000)} style={[styles.giftBtnMain, borderType1]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/Rising Star.png')} />
-                                <Text style={styles.giftNameText}>Star Performer</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>300k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Superstar Mic', 500000)} style={[styles.giftBtnMain, borderType2]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/Superstar Mic.png')} />
-                                <Text style={styles.giftNameText}>Superstar Mic</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.secondaryColor }]}>500k</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity onPress={() => sendGift('Talent Crown', 1000000)} style={[styles.giftBtnMain, borderType1, { width: '45%' }]}>
-                                <AnimatedGiftIcon source={require('../../../assets/images/Talent Crown.png')} />
-                                <Text style={styles.giftNameText}>Talent Crown</Text>
-                                <Text style={[styles.giftPrice, { color: userTier.color }]}>1M</Text>
-                            </TouchableOpacity>
-                        </View>
+                        {/* 🔥 13 GIFTS IN 3D GRID VIEW 🔥 */}
+                        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 10) + 20 }} showsVerticalScrollIndicator={false}>
+                            <View style={styles.giftGrid}>
+                                {GIFT_ROWS.map((row, r) => (
+                                    <View key={r} style={styles.giftRow}>
+                                        {row.map((g, k) => (
+                                            <PremiumGiftCard key={g.name} item={g} index={r * 3 + k} onPress={() => sendGift(g.name, g.price)} />
+                                        ))}
+                                    </View>
+                                ))}
+                            </View>
+                        </ScrollView>
                     </BlurView>
                 </View>
             </Modal>
@@ -1268,6 +1830,7 @@ export default function UserLiveViewScreen() {
                     <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setActionSheetVisible(false)} />
                     <View style={styles.actionSheetContainer}>
                         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <LinearGradient colors={['transparent', withAlpha(userTier.color, 0.95), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topEdgeGlow} pointerEvents="none" />
                         <View style={styles.actionSheetHandle} />
                         
                         <View style={styles.actionSheetProfileHeader}>
@@ -1280,7 +1843,7 @@ export default function UserLiveViewScreen() {
                                     </Text>
                                 </View>
                             )}
-                            <Text style={styles.actionSheetTitle}>{selectedUser?.name || "User"}</Text>
+                            <Text style={styles.actionSheetTitle} numberOfLines={1}>{selectedUser?.name || "User"}</Text>
                         </View>
 
                         <TouchableOpacity style={styles.actionSheetBtn} onPress={handleReportUser}>
@@ -1301,6 +1864,7 @@ export default function UserLiveViewScreen() {
                     <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setReportSheetVisible(false)} />
                     <View style={styles.actionSheetContainer}>
                         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <LinearGradient colors={['transparent', 'rgba(239,68,68,0.95)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topEdgeGlow} pointerEvents="none" />
                         <View style={styles.actionSheetHandle} />
                         <Text style={[styles.actionSheetTitle, { marginBottom: 15 }]}>Select Report Reason</Text>
 
@@ -1339,6 +1903,7 @@ export default function UserLiveViewScreen() {
                 <View style={styles.actionSheetOverlay}>
                     <View style={[styles.actionSheetContainer, { paddingBottom: Platform.OS === 'ios' ? 60 : 50 }]}>
                         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <LinearGradient colors={['transparent', 'rgba(245,158,11,0.95)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topEdgeGlow} pointerEvents="none" />
                         <View style={styles.actionSheetHandle} />
                         <Text style={[styles.actionSheetTitle, { marginBottom: 15, color: '#F59E0B' }]}>🛡️ Skill Gaming Policy</Text>
 
@@ -1415,71 +1980,100 @@ export default function UserLiveViewScreen() {
 const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#020617' },
     videoContainer: { ...StyleSheet.absoluteFillObject },
-    videoGrid: { flex: 1, flexDirection: 'column' },
     fullVideo: { flex: 1 },
-    halfVideo: { flex: 0.5, borderBottomWidth: 1, borderColor: '#1E293B' },
     loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' }, // <--- SATTI FIX ADDED
-    loadingText: { color: '#0400fe', alignSelf: 'center', marginTop: '50%', fontWeight: '900', letterSpacing: 2 },
+    loadingText: { color: '#0400fe', alignSelf: 'center', marginTop: 40, fontWeight: '900', letterSpacing: 2 },
     shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(100px)' },
-    
-    // 🔥 SATTI FIX: HEADER STYLING TO FULLY COVER ELEMENTS 🔥
-    header: { position: 'absolute', top: 50, left: 15, right: 15, zIndex: 10 },
-    fullWidthCard: { padding: 18, borderRadius: 30, backgroundColor: 'rgba(2, 6, 23, 0.85)', overflow: 'hidden' }, // Deep solid background
-    topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    profileInfoSide: { flexDirection: 'row', alignItems: 'center', flex: 1 },
-    avatarWrapper: { position: 'relative' },
-    hostAvatar: { width: 54, height: 54, borderRadius: 27, borderWidth: 2 },
-    avatarPlaceholder: { width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center' },
-    placeholderText: { color: '#FFF', fontSize: 20, fontWeight: 'bold' },
-    liveIndicator: { position: 'absolute', bottom: -5, alignSelf: 'center', backgroundColor: '#EF4444', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 6, borderRadius: 10, gap: 3 },
+    pulseWrap: { width: 220, height: 220, justifyContent: 'center', alignItems: 'center' },
+    topEdgeGlow: { position: 'absolute', top: 0, left: 20, right: 20, height: 1.5 },
+
+    // 🔮 ORB + BLOOM LAYER
+    bloomLayer: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
+    orbRingsWrap: { position: 'absolute', left: 0, top: 0, width: ORB, height: ORB, alignItems: 'center', justifyContent: 'center' },
+    hostAvatar: { width: ORB - 6, height: ORB - 6, borderRadius: (ORB - 6) / 2, borderWidth: 0 },
+    avatarPlaceholder: { width: ORB - 6, height: ORB - 6, borderRadius: (ORB - 6) / 2, justifyContent: 'center', alignItems: 'center' },
+    placeholderText: { color: '#FFF', fontSize: 22, fontWeight: 'bold' },
+    liveIndicator: { position: 'absolute', bottom: -8, alignSelf: 'center', backgroundColor: '#EF4444', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 1, borderRadius: 10, gap: 3, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)' },
     liveDot: { width: 5, height: 5, borderRadius: 2.5, backgroundColor: '#FFF' },
     countText: { color: '#FFF', fontSize: 9, fontWeight: 'bold' },
-    nameContainer: { marginLeft: 15 },
-    hostNameText: { color: '#FFF', fontWeight: 'bold', fontSize: 18 },
-    onlineStatus: { fontSize: 11, fontWeight: '600' },
-    closeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(231, 6, 6, 0.89)', justifyContent: 'center', alignItems: 'center' },
-    actionRow: { flexDirection: 'row', gap: 10, alignItems: 'center' },
-    callBtnMass: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 20, gap: 6, flex: 1.5, shadowOpacity: 0.3, shadowRadius: 5 },
-    callTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 12 },
-    giftBtnMass: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgb(255, 255, 255)', paddingVertical: 8, borderRadius: 20, gap: 1, borderWidth: 1 },
-    giftTextMass: { color: '#FFF', fontWeight: 'bold', fontSize: 13 },
-    levelTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 10, borderRadius: 20, gap: 5 },
-    levelTextTag: { color: '#FFF', fontSize: 12, fontWeight: '900' },
+    orbStateBadge: { position: 'absolute', top: -4, right: -4, width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.85)' },
+    orbUnreadDot: { position: 'absolute', top: -2, left: -2, width: 14, height: 14, borderRadius: 7, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#FFF' },
+    // 🔮 label now sits in a small solid dark pill so it never visually merges with a neighbour
+    burstLabelWrap: { position: 'absolute', top: ITEM + 4, left: -14, width: ITEM + 28, alignItems: 'center' },
+    burstLabelPill: { maxWidth: ITEM + 28, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9, backgroundColor: 'rgba(2,6,23,0.78)', borderWidth: 0.5, borderColor: 'rgba(255,255,255,0.25)' },
+    burstLabelText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.2, textAlign: 'center' },
+    burstBadge: { position: 'absolute', top: -2, right: -2, width: 12, height: 12, borderRadius: 6, backgroundColor: '#EF4444', borderWidth: 2, borderColor: '#FFF' },
+    orbBtn: { justifyContent: 'center', alignItems: 'center', borderWidth: 1.5 },
+
+    // 🔮 HOST CARD (above the bloom): gradient border + glass body, auto height, text can never spill out
+    infoCard: { position: 'absolute' },
+    infoBorder: { padding: 1.5, borderRadius: 24 },
+    infoInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 22.5, overflow: 'hidden', backgroundColor: 'rgba(6,10,24,0.55)' },
+    infoAvatarFallback: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center' },
+    infoTextCol: { flex: 1, minWidth: 0, gap: 5 },
+    infoName: { color: '#FFF', fontWeight: '900', fontSize: 15, textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 4 },
+    statusRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+    viewerChip: { flexDirection: 'row', alignItems: 'center', gap: 3 },
+    viewerText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
+    livePill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
+    livePillText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+    levelTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 9, gap: 4, backgroundColor: 'rgba(255,255,255,0.22)', maxWidth: 110 },
+    levelTextTag: { color: '#FFF', fontSize: 10, fontWeight: '900', flexShrink: 1 },
+
+    // 🔮 TOAST
+    toastWrap: { position: 'absolute', left: 0, right: 0, alignItems: 'center' },
+    toastPill: { flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: width * 0.8, paddingHorizontal: 12, paddingVertical: 7, borderRadius: 16, backgroundColor: 'rgba(8,12,28,0.6)', borderWidth: 1 },
+    toastText: { color: '#FFF', fontSize: 12, fontWeight: '700', flexShrink: 1 },
+
+    // 🔮 IN-PLACE PANELS
+    panelWrap: { position: 'absolute', left: 12, right: 12 },
+    panelBorder: { padding: 1.5, borderRadius: 28 },
+    panelInner: { borderRadius: 26.5, overflow: 'hidden', padding: 12, backgroundColor: 'rgba(6,10,24,0.5)' },
+    panelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
+    panelTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', flexShrink: 1 },
+    panelCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.16)', justifyContent: 'center', alignItems: 'center' },
+    chatViewerPill: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10 },
+    chatViewerText: { color: '#E2E8F0', fontSize: 11, fontWeight: '800' },
+
+    giftNotify: { position: 'absolute', alignSelf: 'center', zIndex: 100, maxWidth: width * 0.9 },
+    giftPop: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 25, paddingVertical: 12, borderRadius: 30, gap: 12 },
+    giftPopText: { color: '#FFF', fontWeight: '900', fontSize: 15, flexShrink: 1 },
     
-    giftNotify: { position: 'absolute', top: 200, alignSelf: 'center', zIndex: 100 },
-    giftPop: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 25, paddingVertical: 12, borderRadius: 30, gap: 12, shadowColor: '#000', shadowRadius: 10, elevation: 10 },
-    giftPopText: { color: '#FFF', fontWeight: '900', fontSize: 15 },
-    
-    // 🔥 SATTI FIX: INTERACTION AREA CHANGED TO FLEX FOR KEYBOARD FIX 🔥
-    interactionArea: { height: height * 0.45, paddingHorizontal: 20, paddingBottom: 15, justifyContent: 'flex-end' },
-    chatList: { flex: 1, marginBottom: 15 },
-    chatBubble: { backgroundColor: 'rgba(15, 23, 42, 0.6)', padding: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '85%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    chatName: { color: '#fe9d00', fontWeight: '900', fontSize: 11, letterSpacing: 0.5 },
-    chatMessage: { color: '#FFF', fontWeight: '600', fontSize: 12 },
-    chatText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600' },
+    // 🔥 CHAT STYLES (text always wraps inside the bubble) 🔥
+    chatList: { flex: 1, marginBottom: 6 },
+    chatPopWrap: { alignSelf: 'flex-start', maxWidth: width * 0.78 },
+    chatBubble: { backgroundColor: 'rgba(15, 23, 42, 0.55)', padding: 10, borderRadius: 18, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '100%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    chatBubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    chatInitial: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+    chatInitialText: { color: '#FFF', fontSize: 11, fontWeight: '900' },
+    chatName: { color: '#fe9d00', fontWeight: '900', fontSize: 12, letterSpacing: 0.5 },
+    chatMessage: { color: '#FFF', fontWeight: '600', fontSize: 13 },
+    chatText: { color: '#E2E8F0', fontSize: 12, fontWeight: '600' },
     
     // 🔥 SATTI FIX: ROYAL GIFT BUBBLE STYLES 🔥
-    giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(245, 159, 11, 0.99)' },
-    giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 11, textShadowColor: 'rgb(99, 71, 170)', textShadowRadius: 5 },
+    giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 18, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '100%', borderWidth: 1, borderColor: 'rgba(245, 159, 11, 0.99)' },
+    giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 12, flexShrink: 1, textShadowColor: 'rgb(99, 71, 170)', textShadowRadius: 5 },
 
-    inputBar: { flexDirection: 'row', alignItems: 'center', paddingVertical: 15, gap: 12 },
-    textInput: { flex: 1, height: 50, backgroundColor: 'rgba(15,23,42,0.85)', borderRadius: 25, paddingHorizontal: 20, color: '#FFF', borderWidth: 1 },
-    sendBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowRadius: 5, shadowOpacity: 0.4 },
+    inputBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    textInput: { flex: 1, height: 46, backgroundColor: 'rgba(15,23,42,0.7)', borderRadius: 23, paddingHorizontal: 18, color: '#FFF', borderWidth: 1.5 },
     floatingReaction: { position: 'absolute', bottom: 120, zIndex: 99 },
-    reactionBtn: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', shadowRadius: 5, shadowOpacity: 0.4 },
-    
+
+    // 🎁 GIFT MODAL (tall sheet: starts just under the status bar)
     modalOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.6)' },
     modalContent: { borderTopLeftRadius: 35, borderTopRightRadius: 35, padding: 25, overflow: 'hidden' },
-    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 30 },
+    modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 22 },
     modalTitle: { color: '#FFF', fontSize: 22, fontWeight: '800' },
-    giftGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 20, justifyContent: 'center', marginBottom: 30 },
-    
-    // 🔥 SATTI FIX: CHANGED BUTTON SIZE TO ACCOMMODATE TEXT 🔥
-    giftBtnMain: { width: 85, height: 110, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 25, justifyContent: 'center', alignItems: 'center' },
-    
-    // 🔥 SATTI FIX: NEW STYLES FOR ANIMATED IMAGES & TEXT 🔥
+    balanceChip: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, alignSelf: 'flex-start', backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    balanceText: { fontSize: 12, fontWeight: '900' },
+    giftGrid: { marginBottom: 30 },
+    giftRow: { flexDirection: 'row', justifyContent: 'center', gap: 12, marginBottom: 12 },
+    giftCardBorder: { width: Math.floor((width - 50 - 24 - 2) / 3), padding: 1.5, borderRadius: 24 },
+    giftCardInner: { height: 128, borderRadius: 22.5, backgroundColor: 'rgba(6, 10, 26, 0.94)', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingHorizontal: 4 },
+    giftCardGlow: { position: 'absolute', top: 6, width: 70, height: 70, borderRadius: 35, opacity: 0.22 },
+    giftPricePill: { flexDirection: 'row', alignItems: 'center', gap: 3, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 10, marginTop: 4 },
+    giftPriceEmoji: { fontSize: 9 },
     giftImage: { width: 80, height: 80 },
-    giftNameText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', marginTop: -10, textAlign: 'center' },
+    giftNameText: { color: '#FFF', fontSize: 11, fontWeight: 'bold', marginTop: -2, textAlign: 'center', maxWidth: '100%' },
     giftPrice: { fontSize: 14, fontWeight: '900', marginTop: 2 },
     
     busyOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', justifyContent: 'center', alignItems: 'center', zIndex: 1000 },
@@ -1488,25 +2082,21 @@ const styles = StyleSheet.create({
     busyTitle: { color: '#FFF', fontSize: 24, fontWeight: 'bold', marginBottom: 12 },
     busySub: { color: '#94A3B8', fontSize: 15, textAlign: 'center', lineHeight: 24 },
 
-    // 🔥 NEW: NEW STYLES FOR MUTE, BEAUTY SETTINGS & MODALS 🔥
-    iconAction: { width: 40, height: 40, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-    activeIcon: { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
-    activePro: { backgroundColor: 'rgba(0, 242, 254, 0.2)', borderColor: '#feb200' },
-    
-    ProSettingsBar: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderRadius: 25, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
+    // 🔥 BEAUTY SETTINGS 🔥
+    ProSettingsBar: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
     settingGroup: { flex: 1, alignItems: 'center' },
-    settingLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', marginBottom: 10, letterSpacing: 1.5 },
+    settingLabel: { color: '#CBD5E1', fontSize: 10, fontWeight: '900', marginBottom: 10, letterSpacing: 1.5 },
     chipRow: { flexDirection: 'row', gap: 10 },
-    chip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
-    activeChip: { backgroundColor: 'rgba(0, 242, 254, 0.1)', borderColor: '#00F2FE' },
+    chip: { backgroundColor: 'rgba(30,41,59,0.8)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
+    activeChip: { backgroundColor: 'rgba(0, 242, 254, 0.15)', borderColor: '#00F2FE' },
     chipText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
-    settingDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 15 },
+    settingDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 12 },
 
-    // 🔥 NEW: ACTION SHEET STYLES 🔥
+    // 🔥 ACTION SHEET STYLES 🔥
     actionSheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
     actionSheetDismiss: { flex: 1 },
     actionSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)', borderBottomWidth: 0 },
-    actionSheetHandle: { width: 40, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 20 },
+    actionSheetHandle: { width: 40, height: 5, backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 3, alignSelf: 'center', marginBottom: 14 },
     
     actionSheetProfileHeader: { alignItems: 'center', marginBottom: 25 },
     actionSheetAvatar: { width: 70, height: 70, borderRadius: 35, borderWidth: 2, borderColor: '#00F2FE', marginBottom: 10 },
@@ -1520,7 +2110,7 @@ const styles = StyleSheet.create({
     actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
     actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 
-    // 🔥 NEW: DISCLAIMER STYLES 🔥
+    // 🔥 DISCLAIMER STYLES 🔥
     disclaimerBodyText: { color: '#CBD5E1', fontSize: 13, lineHeight: 20, marginBottom: 15 },
     disclaimerBullet: { color: '#CBD5E1', fontSize: 13, lineHeight: 22, marginBottom: 10 },
     disclaimerBold: { fontWeight: 'bold', color: '#FFF' },

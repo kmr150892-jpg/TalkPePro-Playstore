@@ -1767,7 +1767,7 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                   <Text style={styles.rateLockText}>Rate can be updated once every 30 minutes.</Text>
                 </View>
 
-                <MSweepBtn colors={[MGOLD, theme.primary]} onPress={handleUpdateRate} disabled={saving} loading={saving} label="CONFIRM RATE" icon="check-decagram" shadow={MGOLD} />
+                <MSweepBtn colors={[MGOLD, theme.primary]} onPress={handleUpdateRate} disabled={saving} loading={saving} label="CONFIRM REWARD" icon="check-decagram" shadow={MGOLD} />
                 <TouchableOpacity onPress={() => setRateModalVisible(false)} style={{ marginTop: 16, alignItems: 'center' }}>
                   <Text style={{ color: '#F43F5E', fontWeight: '800', letterSpacing: 1 }}>Cancel</Text>
                 </TouchableOpacity>

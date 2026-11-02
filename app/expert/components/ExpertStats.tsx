@@ -4,7 +4,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { addDoc, arrayUnion, collection, doc, getDoc, getDocs, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -85,6 +85,22 @@ const blend = (c1: string, c2: string, t: number) => {
 const lighten = (hex: string, t: number) => blend(hex, '#FFFFFF', t);
 const darken = (hex: string, t: number) => blend(hex, '#000000', t);
 
+// 🆕 Perceived brightness (0-1) + "vivid" = too dark colour-a automatic-a brighten pannum (dark shade kammi)
+const luma = (hex: string) => {
+    const c = hexToRgb(hex);
+    if (!c) return 0.5;
+    return (0.299 * c.r + 0.587 * c.g + 0.114 * c.b) / 255;
+};
+const vivid = (hex: string, min = 0.38) => {
+    let h = hex;
+    let i = 0;
+    while (luma(h) < min && i < 8) {
+        h = lighten(h, 0.14);
+        i++;
+    }
+    return h;
+};
+
 // 🆕 3D IMAGES (icons8 3D Fluency) - load aagalana automatic-a icon fallback varum
 const IMG = {
     trophy: 'https://img.icons8.com/3d-fluency/512/trophy.png',
@@ -94,6 +110,11 @@ const IMG = {
     medal: 'https://img.icons8.com/3d-fluency/512/medal.png',
     money: 'https://img.icons8.com/3d-fluency/512/money-bag.png',
     star: 'https://img.icons8.com/3d-fluency/512/star.png',
+    // 🆕 new 3D images for performance tiles
+    clock: 'https://img.icons8.com/3d-fluency/512/alarm-clock.png',
+    phone: 'https://img.icons8.com/3d-fluency/512/phone.png',
+    hourglass: 'https://img.icons8.com/3d-fluency/512/hourglass.png',
+    wallet: 'https://img.icons8.com/3d-fluency/512/wallet.png',
 };
 
 const TAB_KEYS: ('STATS' | 'MONTHLY' | 'LEADERBOARD')[] = ['STATS', 'MONTHLY', 'LEADERBOARD'];
@@ -112,6 +133,12 @@ const DONUT_STROKE = 15;
 const DONUT_R = (DONUT_SIZE - DONUT_STROKE) / 2;
 const DONUT_C = 2 * Math.PI * DONUT_R;
 
+// 🆕 Level-based card body colour (GlowCard ellame ithu-la irundhu eduthukkum)
+const CardCtx = createContext<string>(ROYAL.card);
+
+// 🆕 LEVEL 0 BORDER MIX: Level 0-la pink + blue rendum border-la mix aagum (matha level-la null = old behaviour)
+const BorderCtx = createContext<string[] | null>(null);
+
 // 🆕 3D image with auto icon fallback
 const Img3D = ({ uri, size, fallback, color = '#FFF', style }: any) => {
     const [err, setErr] = useState(false);
@@ -119,7 +146,7 @@ const Img3D = ({ uri, size, fallback, color = '#FFF', style }: any) => {
     return <Image source={{ uri }} style={[{ width: size, height: size }, style]} resizeMode="contain" onError={() => setErr(true)} />;
 };
 
-// 🆕 Floating (bob + sway) wrapper
+// 🆕 Floating wrapper -> now TRUE 3D (bob + sway + perspective Y-turn)
 const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
     const v = useRef(new Animated.Value(0)).current;
     useEffect(() => {
@@ -138,7 +165,9 @@ const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
                 style,
                 {
                     transform: [
+                        { perspective: 700 },
                         { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -amp] }) },
+                        { rotateY: v.interpolate({ inputRange: [0, 1], outputRange: ['-16deg', '16deg'] }) },
                         { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] }) }
                     ]
                 }
@@ -148,6 +177,26 @@ const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
         </Animated.View>
     );
 };
+
+// 🆕 3D orbit ring (tilted rotating dashed halo around 3D images)
+const OrbitRing = ({ size = 100, color = '#FFF', spin, style }: any) => (
+    <Animated.View
+        pointerEvents="none"
+        style={[
+            {
+                position: 'absolute',
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                borderWidth: 1.5,
+                borderStyle: 'dashed',
+                borderColor: color + 'AA',
+                transform: [{ perspective: 600 }, { rotateX: '70deg' }, { rotate: spin }]
+            },
+            style
+        ]}
+    />
+);
 
 // 🆕 ✨ Royal twinkling sparkle (gold / multi-color star)
 const RoyalSparkle = ({ x, y, size = 12, color = ROYAL.gold, delay = 0, dur = 1800 }: any) => {
@@ -182,27 +231,73 @@ const RoyalSparkle = ({ x, y, size = 12, color = ROYAL.gold, delay = 0, dur = 18
     );
 };
 
-// 🆕 Gradient-border glow card
-const GlowCard = ({ colors, radius = 24, children, style, innerStyle, glow }: any) => (
-    <View
-        style={[
-            {
-                borderRadius: radius,
-                backgroundColor: ROYAL.bg1,
-                shadowColor: glow || colors[0],
-                shadowOpacity: 0.4,
-                shadowRadius: 16,
-                shadowOffset: { width: 0, height: 6 },
-                elevation: 9
-            },
-            style
-        ]}
-    >
-        <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: radius, padding: 1.5 }}>
-            <View style={[{ borderRadius: radius - 1.5, overflow: 'hidden', backgroundColor: ROYAL.card }, innerStyle]}>{children}</View>
-        </LinearGradient>
-    </View>
-);
+// 🆕 Glass shine sweep (card mela light kadandhu pogum)
+const ShineSweep = ({ w, delay = 0, color = 'rgba(255,255,255,0.18)' }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: 1500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
+                Animated.delay(3600)
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    if (!w) return null;
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                top: -30,
+                bottom: -30,
+                width: 56,
+                transform: [{ translateX: v.interpolate({ inputRange: [0, 1], outputRange: [-90, w + 40] }) }, { rotate: '18deg' }]
+            }}
+        >
+            <LinearGradient colors={['transparent', color, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+        </Animated.View>
+    );
+};
+
+// 🆕 Gradient-border glow card (now level-tinted body + optional glass shine)
+// 🆕 keepColors = true na Level 0 mix-a skip pannum (reward source / other users level colours maaraama irukka)
+const GlowCard = ({ colors, radius = 24, children, style, innerStyle, glow, shine = false, shineDelay = 0, keepColors = false }: any) => {
+    const cardBg = useContext(CardCtx);
+    const mix = useContext(BorderCtx);
+    const [cw, setCw] = useState(0);
+    // 🆕 LEVEL 0: pink + blue border mix
+    const borderColors = mix && !keepColors ? [mix[0], mix[1], mix[0]] : colors;
+    return (
+        <View
+            style={[
+                {
+                    borderRadius: radius,
+                    backgroundColor: ROYAL.bg1,
+                    shadowColor: glow || borderColors[0],
+                    shadowOpacity: 0.5,
+                    shadowRadius: 18,
+                    shadowOffset: { width: 0, height: 8 },
+                    elevation: 10
+                },
+                style
+            ]}
+        >
+            <LinearGradient colors={borderColors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: radius, padding: 1.5 }}>
+                <View
+                    style={[{ borderRadius: radius - 1.5, overflow: 'hidden', backgroundColor: cardBg }, innerStyle]}
+                    onLayout={shine ? (e) => setCw(e.nativeEvent.layout.width) : undefined}
+                >
+                    {children}
+                    {shine && <ShineSweep w={cw} delay={shineDelay} />}
+                </View>
+            </LinearGradient>
+        </View>
+    );
+};
 
 // 🆕 Section title (royal ornament: icon + text + fading line + diamond)
 const SectionTitle = ({ title, icon, color }: any) => (
@@ -215,6 +310,83 @@ const SectionTitle = ({ title, icon, color }: any) => (
         <View style={[styles.sectionDiamond, { backgroundColor: color, shadowColor: color }]} />
     </View>
 );
+
+// 🆕 3D reveal (section kulla vandhu flip-up aagi varum)
+const Reveal = ({ children, delay = 0, style }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.timing(a, { toValue: 1, duration: 750, delay, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                style,
+                {
+                    opacity: a,
+                    transform: [
+                        { perspective: 900 },
+                        { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [42, 0] }) },
+                        { rotateX: a.interpolate({ inputRange: [0, 1], outputRange: ['26deg', '0deg'] }) },
+                        { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }
+                    ]
+                }
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// 🆕 3D press (touch pannina card tilt + shrink aagum)
+const Press3D = ({ children, onPress, style }: any) => {
+    const s = useRef(new Animated.Value(0)).current;
+    return (
+        <TouchableOpacity
+            activeOpacity={1}
+            onPress={onPress}
+            onPressIn={() => Animated.spring(s, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }).start()}
+            onPressOut={() => Animated.spring(s, { toValue: 0, friction: 5, tension: 120, useNativeDriver: true }).start()}
+            style={style}
+        >
+            <Animated.View
+                style={{
+                    transform: [
+                        { perspective: 800 },
+                        { scale: s.interpolate({ inputRange: [0, 1], outputRange: [1, 0.97] }) },
+                        { rotateX: s.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '6deg'] }) }
+                    ]
+                }}
+            >
+                {children}
+            </Animated.View>
+        </TouchableOpacity>
+    );
+};
+
+// 🆕 Tab icon (active aana 3D flip + pop)
+const TabIcon = ({ name, active, color, activeColor }: any) => {
+    const s = useRef(new Animated.Value(active ? 1 : 0)).current;
+    useEffect(() => {
+        Animated.spring(s, { toValue: active ? 1 : 0, friction: 5, tension: 140, useNativeDriver: true }).start();
+    }, [active]);
+    return (
+        <Animated.View
+            style={[
+                styles.tabIconCircle,
+                active && { backgroundColor: activeColor + '44', borderColor: activeColor + 'AA' },
+                {
+                    transform: [
+                        { perspective: 500 },
+                        { scale: s.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) },
+                        { rotateY: s.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }
+                    ]
+                }
+            ]}
+        >
+            <MaterialCommunityIcons name={name} size={17} color={color} />
+        </Animated.View>
+    );
+};
 
 // 🆕 Loader pulse
 const LoaderPulse = ({ color }: { color: string }) => {
@@ -237,8 +409,8 @@ const LoaderPulse = ({ color }: { color: string }) => {
     );
 };
 
-// 🆕 Performance tile (self stagger entrance + royal color + icon pulse)
-const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionicons", delay = 0 }: any) => {
+// 🆕 Performance tile (stagger entrance + 3D floating image + glass shine)
+const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionicons", delay = 0, img, imgFallback }: any) => {
     const anim = useRef(new Animated.Value(0)).current;
     const glowAnim = useRef(new Animated.Value(0)).current;
     useEffect(() => {
@@ -258,12 +430,14 @@ const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionic
                 flex: 1,
                 opacity: anim,
                 transform: [
+                    { perspective: 900 },
                     { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) },
+                    { rotateX: anim.interpolate({ inputRange: [0, 1], outputRange: ['20deg', '0deg'] }) },
                     { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }
                 ]
             }}
         >
-            <GlowCard colors={[color, color + '22', color + '77']} radius={26}>
+            <GlowCard colors={[color, color + '22', color + '77']} radius={26} shine shineDelay={600 + delay * 6}>
                 <View style={styles.matrixCard}>
                     <LinearGradient colors={[color + '30', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
                     <View style={styles.matrixWatermark} pointerEvents="none">
@@ -273,6 +447,13 @@ const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionic
                             <MaterialCommunityIcons name={icon} size={86} color={color + '14'} />
                         )}
                     </View>
+                    {img && (
+                        <View style={styles.matrixImg} pointerEvents="none">
+                            <FloatBox amp={4} dur={1900 + delay * 4}>
+                                <Img3D uri={img} size={52} fallback={imgFallback || 'star'} color={color} />
+                            </FloatBox>
+                        </View>
+                    )}
                     <Animated.View style={{ transform: [{ scale: glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.08] }) }] }}>
                         <LinearGradient colors={[color, color + '88']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.matrixIconCircle}>
                             <LinearGradient colors={['rgba(255,255,255,0.5)', 'rgba(255,255,255,0)']} style={styles.matrixIconGloss} pointerEvents="none" />
@@ -292,7 +473,7 @@ const MatrixBox = ({ icon, label, value, color, borderStyle, iconFamily = "Ionic
     );
 };
 
-// 🆕 Podium column (top 3)
+// 🆕 Podium column (top 3) - now with 3D side depth
 const PodiumCol = ({ user, pos, isMe, theme, delay }: any) => {
     const anim = useRef(new Animated.Value(0)).current;
     useEffect(() => {
@@ -305,6 +486,7 @@ const PodiumCol = ({ user, pos, isMe, theme, delay }: any) => {
         { c0: '#FDBA74', c1: '#D97706', h: 86, av: 60 },
     ][pos];
     const uConfig = getLevelConfig(user.totalBeansEarned || 0);
+    const uColor = uConfig.colors[0];
 
     return (
         <Animated.View
@@ -313,7 +495,11 @@ const PodiumCol = ({ user, pos, isMe, theme, delay }: any) => {
                 alignItems: 'center',
                 justifyContent: 'flex-end',
                 opacity: anim,
-                transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) }]
+                transform: [
+                    { perspective: 900 },
+                    { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) },
+                    { rotateX: anim.interpolate({ inputRange: [0, 1], outputRange: ['35deg', '0deg'] }) }
+                ]
             }}
         >
             {pos === 0 ? (
@@ -344,11 +530,12 @@ const PodiumCol = ({ user, pos, isMe, theme, delay }: any) => {
             <Text style={styles.podiumName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>
                 {user.name || 'Host'}{isMe ? ' (You)' : ''}
             </Text>
-            <View style={[styles.podiumLvl, { backgroundColor: uConfig.colors[0] + '30' }]}>
-                <Text style={{ color: lighten(uConfig.colors[0], 0.5), fontSize: 11, fontWeight: '900' }}>L{uConfig.lvl} • {uConfig.label.split(' ')[0]}</Text>
+            <View style={[styles.podiumLvl, { backgroundColor: uColor + '30' }]}>
+                <Text style={{ color: lighten(uColor, 0.5), fontSize: 11, fontWeight: '900' }}>L{uConfig.lvl} • {uConfig.label.split(' ')[0]}</Text>
             </View>
             <LinearGradient colors={[meta.c0 + 'CC', meta.c1 + '44', 'rgba(2,6,23,0.2)']} style={[styles.podiumBlock, { height: meta.h, borderColor: meta.c1 + 'AA' }]}>
                 <LinearGradient colors={['rgba(255,255,255,0.35)', 'rgba(255,255,255,0)']} style={styles.podiumGloss} pointerEvents="none" />
+                <View style={[styles.podiumSide, { backgroundColor: meta.c1 + '77' }]} pointerEvents="none" />
                 <Text style={[styles.podiumBigNum, { color: '#FFF' }]}>{pos + 1}</Text>
                 <View style={styles.podiumRewardPill}>
                     <Text style={{ fontSize: 11 }}>🎖️</Text>
@@ -427,13 +614,18 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     const totalBeansEarned = stats?.totalBeansEarned || expertData?.totalBeansEarned || 0;
     const config = getLevelConfig(totalBeansEarned);
     
+    // 🆕 Level colours brighten pannirukken (dark colours -> vivid) so dark shade kammi
     const primary = config.colors?.[0] || '#ad57a6';
     const mid = config.colors?.[1] || primary;
     const secondary = config.colors?.[2] || '#5e2a5b';
     
     // 🆕 THEME = LEVEL BASED. Level maarina theme-um auto-a maarum (colors, glow, background tint ellame).
     const tierColor = config.glow !== 'transparent' ? (config.glow || primary) : primary;
-    const bgTint = config.lvl >= 3 ? 0.18 : 0.12;
+    // 🆕 DARKER SHADE: background tint kammi pannirukken (0.18/0.12 -> 0.13/0.08) so dark shade konjam adhigam
+    const bgTint = config.lvl >= 3 ? 0.08 : 0.05;
+    // 🆕 LEVEL 0 = BLUE + PINK primary. Antha rendum border-la mix aaga (matha level-ku null)
+    const isLevel0 = config.lvl === 0;
+    const borderMix: string[] | null = isLevel0 ? [primary, secondary] : null;
     const theme = {
         primary: primary,
         secondary: mid,
@@ -446,12 +638,29 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         // 🆕 TEXT-SAFE colours (dark blue / dark accent colours text-la nalla theriya brighten panniruken)
         accentText: lighten(secondary, 0.62),
         tierText: lighten(tierColor, 0.45),
+        // 🆕 level-tinted panels (dark black illa - level colour kalandha lighter shade)
+        // 🆕 ANALYTICS BOARD (hero) mattum: level colour 1 + colour 2 (L0 = pink + blue) shade
+        // 🆕 DARKER SHADE: vivid min 0.34 -> 0.24 (hero romba lite-a theriyaama konjam dark)
+        heroA: vivid(primary, 0.14),
+        heroB: vivid(secondary, 0.14),
+        panel: '#0F0A28',
+        panelDeep: '#05030F',
+        cardBg: ROYAL.card,
         bgGradient: [
             blend(ROYAL.bg1, primary, bgTint),
             blend('#110A2E', mid, bgTint),
             ROYAL.bg0
         ] as any
     };
+
+    // 🆕 Hero gradient dark shade (heroA/heroB ah konjam darken panni use pannurom, other colours same)
+    const heroDarkA = darken(theme.heroA, 0.38);
+    const heroDarkB = darken(theme.heroB, 0.38);
+
+    // 🆕 LEVEL 0 mixed border style (per-side colour: pink + blue) - matha level-la empty object
+    const mixBorderStyle: any = borderMix
+        ? { borderTopColor: borderMix[0], borderLeftColor: borderMix[0], borderBottomColor: borderMix[1], borderRightColor: borderMix[1] }
+        : {};
 
     // 🆕 Level based timeline + particle colors
     const MONTH_COLORS = [theme.primary, theme.secondary, theme.accent, theme.tier, lighten(primary, 0.35), lighten(mid, 0.35), lighten(secondary, 0.35), darken(tierColor, 0.2)];
@@ -1054,6 +1263,10 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
     const dotOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.9, 0.3] });
     const trophyGlow = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.7] });
     const crestScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.06] });
+    // 🆕 hero card gentle 3D tilt + trophy ground shadow
+    const heroTiltY = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: ['-1.8deg', '1.8deg'] });
+    const heroTiltX = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: ['1deg', '-1deg'] });
+    const trophyShadowScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0.65] });
 
     // 🆕 Hero level progress
     const levelGoal = LEVEL_GOALS[config.lvl] || 0;
@@ -1061,6 +1274,10 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         ? Math.max(0, Math.min((totalBeansEarned - levelGoal) / (config.next - levelGoal), 1))
         : 1;
     const levelBarWidth = heroCountAnim.interpolate({ inputRange: [0, 1], outputRange: ['0%', `${levelPct * 100}%`] }) as any;
+    // 🆕 Clear wording values: completed % / balance % / balance rewards (100% nu thappa kaattaama floor use pannirukken)
+    const levelPctDisplay = config.next > 0 ? Math.min(99, Math.floor(levelPct * 100)) : 100;
+    const levelRemainPct = config.next > 0 ? 100 - levelPctDisplay : 0;
+    const levelRemainBeans = config.next > 0 ? Math.max(config.next - totalBeansEarned, 0) : 0;
 
     // 🆕 Mission colors (level theme; completed = green)
     const missionColor = isCompleted ? ROYAL.emerald : currentMilestone.color;
@@ -1134,21 +1351,23 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
         const isMe = user.id === auth.currentUser?.uid;
         const uConfig = getLevelConfig(user.totalBeansEarned || 0);
+        const uColor = uConfig.colors[0];
 
         // 🆕 ================= RANK 4+ : UNIQUE DESIGN =================
         if (!isTop3) {
-            const lvlColor = uConfig.colors[0];
+            const lvlColor = uColor;
             const topScore = Number(leaderboardData[0]?.totalBeansEarned) || 0;
             const myScore = Number(user.totalBeansEarned) || 0;
             const pctOfTop = topScore > 0 ? Math.max(0.04, Math.min(myScore / topScore, 1)) : 0;
             const ringColors = isMe ? [lighten(theme.accent, 0.5), theme.accent] : [lighten(lvlColor, 0.45), lvlColor];
 
             return (
-                <View key={`rank-${user.id}-${index}`} style={{ marginBottom: 14 }}>
+                <Reveal key={`rank-${user.id}-${index}`} delay={(index - 3) * 70} style={{ marginBottom: 14 }}>
                     <GlowCard
                         colors={(isMe ? [theme.accent, theme.secondary, theme.primary] : [lvlColor + 'CC', lvlColor + '22', theme.accent + '66']) as any}
                         radius={24}
                         glow={isMe ? theme.accent : lvlColor}
+                        keepColors
                     >
                         <View style={styles.rankCardInner}>
                             <LinearGradient colors={[lvlColor + '26', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
@@ -1206,7 +1425,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             </View>
                         </View>
                     </GlowCard>
-                </View>
+                </Reveal>
             );
         }
 
@@ -1279,8 +1498,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                         </Text>
                         
                         <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, flexWrap: 'wrap' }}>
-                            <View style={{ backgroundColor: uConfig.colors[0] + '30', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginRight: 6 }}>
-                                <Text style={{ color: lighten(uConfig.colors[0], 0.5), fontSize: 11, fontWeight: '900' }}>L{uConfig.lvl}</Text>
+                            <View style={{ backgroundColor: uColor + '30', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, marginRight: 6 }}>
+                                <Text style={{ color: lighten(uColor, 0.5), fontSize: 11, fontWeight: '900' }}>L{uConfig.lvl}</Text>
                             </View>
                             <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700' }} numberOfLines={1} adjustsFontSizeToFit>
                                 {uConfig.label}
@@ -1343,6 +1562,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 colors={[it.color, it.color + '22', it.color + '77'] as any}
                 radius={24}
                 glow={it.color}
+                shine
+                shineDelay={900 + idx * 500}
+                keepColors
             >
                 <View style={styles.distBox}>
                     <LinearGradient colors={[it.color + '30', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
@@ -1383,9 +1605,12 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
         );
     };
 
-    const tabSegW = tabW > 0 ? (tabW - 10) / 3 : 0;
+    // 🆕 tabs: padding 6 each side -> (tabW - 12) / 3
+    const tabSegW = tabW > 0 ? (tabW - 12) / 3 : 0;
 
     return (
+        <CardCtx.Provider value={theme.cardBg}>
+        <BorderCtx.Provider value={borderMix}>
         <View style={{ flex: 1, backgroundColor: ROYAL.bg0 }}>
             <LinearGradient colors={theme.bgGradient} style={StyleSheet.absoluteFill} />
             <Animated.View style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
@@ -1415,23 +1640,25 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
             <ScrollView style={styles.container} showsVerticalScrollIndicator={false} contentContainerStyle={{paddingBottom: 150}}>
                 <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
                     
-                    {/* 🏆 PREMIUM ROYAL HERO */}
-                    <View style={[styles.eliteHeroWrapper, { shadowColor: theme.accent }]}>
+                    {/* 🏆 PREMIUM ROYAL HERO (🆕 gentle 3D tilt) */}
+                    <Animated.View style={[styles.eliteHeroWrapper, { shadowColor: theme.accent, transform: [{ perspective: 1100 }, { rotateY: heroTiltY }, { rotateX: heroTiltX }] }]}>
                         <View style={styles.heroFrame}>
                             <Animated.View style={[styles.heroFrameSpin, { transform: [{ rotate: spin }] }]} pointerEvents="none">
                                 <LinearGradient
-                                    colors={[theme.accent, theme.primary, theme.secondary, theme.tier, theme.light, theme.accent] as any}
+                                    colors={(isLevel0
+                                        ? [theme.primary, theme.accent, theme.primary, theme.accent, theme.primary, theme.accent, theme.primary, theme.accent, theme.primary, theme.accent, theme.primary]
+                                        : [theme.primary, theme.accent, theme.primary, theme.accent, theme.primary, theme.accent, theme.primary, theme.accent, theme.primary, theme.accent, theme.primary]) as any}
                                     start={{ x: 0, y: 0 }}
                                     end={{ x: 1, y: 1 }}
                                     style={StyleSheet.absoluteFill}
                                 />
                             </Animated.View>
 
-                            {/* 🆕 Hero background tint kammi (66/33 -> 40/30) so text pinnaadi dark-a irukkum */}
-                            <LinearGradient colors={[theme.primary + '40', '#0A0620', theme.secondary + '30', '#060315'] as any} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.eliteHeroCard}>
+                            {/* 🆕 Hero background = level colour tint, DARK SHADE konjam adhigam (heroDarkA / heroDarkB, base darker) */}
+                            <LinearGradient colors={[heroDarkA + 'DD', blend('#0A0524', theme.heroA, 0.16), heroDarkB + 'DD', blend('#0A0524', theme.heroB, 0.16)] as any} start={{x:0, y:0}} end={{x:1, y:1}} style={styles.eliteHeroCard}>
                                 <View style={styles.cyberCircle} />
                                 <View style={styles.cyberCircleSmall} />
-                                <LinearGradient colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0)']} style={styles.heroSheen} pointerEvents="none" />
+                                <LinearGradient colors={['rgba(255,255,255,0.07)', 'rgba(255,255,255,0)']} style={styles.heroSheen} pointerEvents="none" />
 
                                 {/* royal sparkles */}
                                 <RoyalSparkle x={width * 0.5} y={70} size={13} color={theme.accent} delay={0} />
@@ -1441,25 +1668,28 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                                 {/* shine sweep */}
                                 <Animated.View pointerEvents="none" style={[styles.heroSweep, { transform: [{ translateX: sweepX }, { rotate: '20deg' }] }]}>
-                                    <LinearGradient colors={['transparent', 'rgba(255,255,255,0.15)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                    <LinearGradient colors={['transparent', 'rgba(255,255,255,0.18)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
                                 </Animated.View>
 
                                 <View style={styles.heroHeaderRow}>
-                                    <View style={styles.systemStatusBox}>
-                                        <View style={styles.pulseDotWrap}>
-                                            <Animated.View style={[styles.pulseDotRing, { opacity: dotOpacity, transform: [{ scale: dotScale }] }]} />
-                                            <View style={styles.pulseDot} />
+                                    {/* 🆕 DOUBLE COLOUR BORDER: theme primary + accent (L0 = pink + blue) */}
+                                    <LinearGradient colors={[theme.primary, theme.accent, theme.primary] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ borderRadius: 14, padding: 1.8 }}>
+                                        <View style={[styles.systemStatusBox, { borderWidth: 0, borderRadius: 12, backgroundColor: '#0A0524' }]}>
+                                            <View style={styles.pulseDotWrap}>
+                                                <Animated.View style={[styles.pulseDotRing, { opacity: dotOpacity, transform: [{ scale: dotScale }] }]} />
+                                                <View style={styles.pulseDot} />
+                                            </View>
+                                            <Text style={styles.systemStatusText}>ANALYTICS ACTIVE</Text>
                                         </View>
-                                        <Text style={styles.systemStatusText}>ANALYTICS ACTIVE</Text>
-                                    </View>
-                                    <View style={[styles.statusTag, { backgroundColor: 'rgba(0,0,0,0.4)', borderWidth: 1, borderColor: theme.tier + '99' }]}>
+                                    </LinearGradient>
+                                    <View style={[styles.statusTag, { backgroundColor: 'rgba(20,12,60,0.35)', borderWidth: 1, borderColor: theme.tier + '99' }, mixBorderStyle]}>
                                         <MaterialCommunityIcons name="star-circle" size={14} color={theme.tierText} />
                                         <Text style={[styles.statusTagText, { color: theme.tierText }]}>{config.label}</Text>
                                     </View>
                                 </View>
 
                                 {/* 🆕 ROYAL IDENTITY ROW */}
-                                <View style={[styles.identityRow, { borderColor: theme.accent + '40' }]}>
+                                <View style={[styles.identityRow, { borderColor: theme.accent + '55' }, mixBorderStyle]}>
                                     <Animated.View style={{ transform: [{ scale: crestScale }] }}>
                                         <LinearGradient colors={[lighten(theme.accent, 0.5), theme.accent, theme.deep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.identityRing}>
                                             <Image
@@ -1492,22 +1722,29 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     </View>
                                     <View style={styles.heroTrophyBox}>
                                         <Animated.View style={[styles.heroTrophyGlow, { backgroundColor: theme.accent, opacity: trophyGlow }]} />
+                                        <OrbitRing size={104} color={theme.accentText} spin={spin} />
                                         <FloatBox amp={7} dur={1700}>
                                             <Img3D uri={IMG.trophy} size={96} fallback="trophy-award" color={theme.accent} />
                                         </FloatBox>
+                                        <Animated.View style={[styles.heroTrophyShadow, { backgroundColor: theme.accent, transform: [{ scaleX: trophyShadowScale }] }]} />
                                     </View>
                                 </View>
 
-                                {/* 🆕 LEVEL PROGRESS v2: periya % number + thick bar + current/next goal (clear-a theriyum) */}
+                                {/* 🆕 LEVEL PROGRESS v3: clear wording -> % COMPLETED + % LEFT + rewards needed for next level */}
                                 <View style={styles.levelBarWrap}>
                                     <View style={styles.levelBarHeader}>
-                                        <View style={[styles.levelChip, { borderColor: theme.accent + '88' }]}>
-                                            <MaterialCommunityIcons name="shield-star" size={13} color={theme.accentText} />
-                                            <Text style={styles.levelChipText}>LEVEL {config.lvl}</Text>
+                                        <View>
+                                            <View style={[styles.levelChip, { borderColor: theme.accent + '88' }, mixBorderStyle]}>
+                                                <MaterialCommunityIcons name="shield-star" size={13} color={theme.accentText} />
+                                                <Text style={styles.levelChipText}>LEVEL {config.lvl}</Text>
+                                            </View>
+                                            <Text style={[styles.levelNextText, { color: theme.accentText }]}>
+                                                {config.next > 0 ? `NEXT: LEVEL ${config.lvl + 1}` : 'HIGHEST LEVEL'}
+                                            </Text>
                                         </View>
                                         <View style={styles.levelPctBox}>
-                                            <Text style={[styles.levelPctBig, { color: theme.light }]}>{Math.round(levelPct * 100)}%</Text>
-                                            <Text style={[styles.levelPctSub, { color: theme.accentText }]}>{config.next > 0 ? `TO L${config.lvl + 1}` : 'MAX RANK'}</Text>
+                                            <Text style={[styles.levelPctBig, { color: theme.light }]}>{levelPctDisplay}%</Text>
+                                            <Text style={[styles.levelPctSub, { color: theme.accentText }]}>{config.next > 0 ? 'COMPLETED' : 'MAX LEVEL'}</Text>
                                         </View>
                                     </View>
                                     <View style={styles.levelBarTrack}>
@@ -1515,6 +1752,9 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                             <LinearGradient colors={[theme.primary, theme.secondary, theme.accent] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
                                             <View style={styles.levelBarCap} />
                                         </Animated.View>
+                                        <View style={[styles.levelBarTick, { left: '25%' }]} pointerEvents="none" />
+                                        <View style={[styles.levelBarTick, { left: '50%' }]} pointerEvents="none" />
+                                        <View style={[styles.levelBarTick, { left: '75%' }]} pointerEvents="none" />
                                     </View>
                                     {config.next > 0 && (
                                         <View style={styles.levelBarFooter}>
@@ -1522,11 +1762,28 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                             <Text style={styles.levelBarFooterText}>GOAL {config.next.toLocaleString()}</Text>
                                         </View>
                                     )}
+                                    {config.next > 0 ? (
+                                        <View style={[styles.levelNeedChip, { borderColor: theme.accent + '66', backgroundColor: theme.accent + '22' }, mixBorderStyle]}>
+                                            <MaterialCommunityIcons name="flag-checkered" size={15} color={theme.accentText} />
+                                            <Text style={styles.levelNeedText} numberOfLines={2}>
+                                                <Text style={{ color: theme.light, fontWeight: '900' }}>{levelRemainPct}% LEFT</Text>
+                                                {`  •  🎖️ ${levelRemainBeans.toLocaleString()} more rewards to reach LEVEL ${config.lvl + 1}`}
+                                            </Text>
+                                        </View>
+                                    ) : (
+                                        <View style={[styles.levelNeedChip, { borderColor: GOLD + '88', backgroundColor: GOLD + '22' }]}>
+                                            <MaterialCommunityIcons name="crown" size={15} color={GOLD} />
+                                            <Text style={styles.levelNeedText} numberOfLines={2}>
+                                                <Text style={{ color: ROYAL.goldLight, fontWeight: '900' }}>100% COMPLETED</Text>
+                                                {'  •  You have reached the highest level'}
+                                            </Text>
+                                        </View>
+                                    )}
                                 </View>
 
                                 {/* 🆕 Stat chips: text overflow fix (label shrink-to-fit, value 2 lines) */}
                                 <View style={styles.heroSummaryGrid}>
-                                    <BlurView intensity={20} tint="dark" style={styles.summaryChip}>
+                                    <BlurView intensity={20} tint="dark" style={[styles.summaryChip, mixBorderStyle]}>
                                         <View style={styles.summaryTopRow}>
                                             <View style={[styles.summaryIconBubble, { backgroundColor: lighten(theme.primary, 0.4) + '30' }]}>
                                                 <MaterialCommunityIcons name="phone-in-talk" size={12} color={lighten(theme.primary, 0.4)} />
@@ -1535,7 +1792,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         </View>
                                         <Text style={styles.summaryValue} numberOfLines={2} ellipsizeMode="tail">{stats?.lastCaller}</Text>
                                     </BlurView>
-                                    <BlurView intensity={20} tint="dark" style={styles.summaryChip}>
+                                    <BlurView intensity={20} tint="dark" style={[styles.summaryChip, mixBorderStyle]}>
                                         <View style={styles.summaryTopRow}>
                                             <View style={[styles.summaryIconBubble, { backgroundColor: theme.accentText + '30' }]}>
                                                 <MaterialCommunityIcons name="crown" size={12} color={theme.accentText} />
@@ -1557,10 +1814,10 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 </View>
                             </LinearGradient>
                         </View>
-                    </View>
+                    </Animated.View>
 
-                    {/* 🎚 ANIMATED SLIDING TABS (level theme pill) */}
-                    <View style={[styles.tabsRow, { borderColor: theme.accent + '2E' }]} onLayout={(e) => setTabW(e.nativeEvent.layout.width)}>
+                    {/* 🎚 3D SLIDING TABS v2 (icon circle + label, thick glowing pill - line maadhiri illa) */}
+                    <View style={[styles.tabsRow, { borderColor: theme.accent + '55', shadowColor: theme.accent }, mixBorderStyle]} onLayout={(e) => setTabW(e.nativeEvent.layout.width)}>
                         {tabSegW > 0 && (
                             <Animated.View
                                 style={[
@@ -1570,19 +1827,21 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         borderColor: theme.accent,
                                         shadowColor: theme.accent,
                                         transform: [{ translateX: tabSlide.interpolate({ inputRange: [0, 1, 2], outputRange: [0, tabSegW, tabSegW * 2] }) }]
-                                    }
+                                    },
+                                    mixBorderStyle
                                 ]}
                             >
-                                <LinearGradient colors={[theme.primary + '88', theme.accent + '33']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-                                <LinearGradient colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']} style={styles.tabPillGloss} pointerEvents="none" />
+                                <LinearGradient colors={[theme.primary + 'CC', theme.accent + '66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                                <LinearGradient colors={['rgba(255,255,255,0.3)', 'rgba(255,255,255,0)']} style={styles.tabPillGloss} pointerEvents="none" />
+                                <View style={[styles.tabPillEdge, { backgroundColor: theme.light }]} pointerEvents="none" />
                             </Animated.View>
                         )}
                         {TAB_KEYS.map((key, idx) => {
                             const isActiveTab = mainTab === key;
                             return (
                                 <TouchableOpacity key={key} style={styles.tabBtn} onPress={() => setMainTab(key)} activeOpacity={0.8}>
-                                    <MaterialCommunityIcons name={TAB_ICONS[idx] as any} size={15} color={isActiveTab ? theme.light : '#CBD5E1'} />
-                                    <Text style={[styles.tabText, isActiveTab && styles.tabTextActive, isActiveTab && { color: theme.light }]} numberOfLines={1} adjustsFontSizeToFit>{TAB_LABELS[idx]}</Text>
+                                    <TabIcon name={TAB_ICONS[idx]} active={isActiveTab} color={isActiveTab ? '#FFF' : '#E2E8F0'} activeColor={theme.light} />
+                                    <Text style={[styles.tabText, isActiveTab && styles.tabTextActive, isActiveTab && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit>{TAB_LABELS[idx]}</Text>
                                 </TouchableOpacity>
                             );
                         })}
@@ -1603,18 +1862,19 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                 <SectionTitle title="PERFORMANCE MATRIX" icon="chart-box" color={theme.primary} />
                                 <View style={styles.matrixGrid}>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="time-outline" label="Today Session" value={`${finalTodayMins}m`} color={theme.primary} borderStyle={borderType2} delay={0} />
-                                        <MatrixBox icon="people-outline" label="Today Calls" value={finalTodayCalls} color={theme.secondary} borderStyle={borderType1} delay={80} />
+                                        <MatrixBox icon="time-outline" label="Today Session" value={`${finalTodayMins}m`} color={theme.primary} borderStyle={borderType2} delay={0} img={IMG.clock} imgFallback="clock-outline" />
+                                        <MatrixBox icon="people-outline" label="Today Calls" value={finalTodayCalls} color={theme.secondary} borderStyle={borderType1} delay={80} img={IMG.phone} imgFallback="phone-in-talk" />
                                     </View>
                                     <View style={styles.matrixRow}>
-                                        <MatrixBox icon="stats-chart-outline" label="Total Time" value={`${stats?.displayMins}m`} color={theme.accent} borderStyle={borderType1} delay={160} />
-                                        <MatrixBox icon="cash-outline" label="Paid Out" value={`₹${stats?.totalWithdrawn}`} color={theme.tier} borderStyle={borderType2} delay={240} />
+                                        <MatrixBox icon="stats-chart-outline" label="Total Time" value={`${stats?.displayMins}m`} color={theme.accent} borderStyle={borderType1} delay={160} img={IMG.hourglass} imgFallback="timer-sand" />
+                                        <MatrixBox icon="cash-outline" label="Redeemed" value={`₹${stats?.totalWithdrawn}`} color={theme.tier} borderStyle={borderType2} delay={240} img={IMG.wallet} imgFallback="wallet" />
                                     </View>
                                 </View>
 
                                 {/* 🆕 REWARD BREAKDOWN v2: donut summary box + 4 thani thani source boxes */}
+                                <Reveal delay={120}>
                                 <SectionTitle title="REWARD BREAKDOWN" icon="chart-donut" color={theme.secondary} />
-                                <GlowCard colors={['#22D3EE', '#F59E0B', '#FF5C9E', '#34D399'] as any} radius={28}>
+                                <GlowCard colors={['#22D3EE', '#F59E0B', '#FF5C9E', '#34D399'] as any} radius={28} shine shineDelay={400} keepColors>
                                     <View style={styles.distCard}>
                                         <LinearGradient colors={[theme.primary + '24', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
                                         <View style={styles.donutRow}>
@@ -1672,16 +1932,19 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         {renderDistBox(distItems[3], 3)}
                                     </View>
                                 </View>
+                                </Reveal>
 
                                 {/* 🎁 LIFETIME GIFT REWARDS */}
+                                <Reveal delay={200}>
                                 <View style={styles.dailyFlowContainer}>
-                                    <GlowCard colors={[theme.accent, theme.secondary, theme.primary] as any} radius={30} glow={theme.accent}>
+                                    <GlowCard colors={[theme.accent, theme.secondary, theme.primary] as any} radius={30} glow={theme.accent} shine shineDelay={1200}>
                                         <View style={styles.dailyFlowPill}>
                                             <LinearGradient colors={[theme.accent + '38', theme.accent + '0D', 'transparent']} start={{x:0, y:0}} end={{x:1, y:1}} style={StyleSheet.absoluteFill} pointerEvents="none" />
                                             <RoyalSparkle x={74} y={10} size={9} color={theme.light} delay={300} />
                                             <RoyalSparkle x={20} y={58} size={8} color={theme.secondary} delay={900} />
                                             <View style={styles.flowImgBox}>
                                                 <View style={[styles.flowIconGlow, { backgroundColor: theme.accent }]} />
+                                                <OrbitRing size={64} color={theme.accentText} spin={spin} />
                                                 <FloatBox amp={5} dur={1500}>
                                                     <Img3D uri={IMG.gift} size={62} fallback="gift-outline" color={theme.accent} />
                                                 </FloatBox>
@@ -1691,7 +1954,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                             </View>
                                             <View style={styles.flowValueNode}>
                                                 <View style={[styles.flowValueGlow, { backgroundColor: theme.accent }]} />
-                                                <View style={[styles.flowValueBox, { backgroundColor: 'rgba(0,0,0,0.6)', borderColor: theme.accent + '80' }]}>
+                                                <View style={[styles.flowValueBox, { backgroundColor: 'rgba(0,0,0,0.6)', borderColor: theme.accent + '80' }, mixBorderStyle]}>
                                                     <Text style={[styles.flowBeanSymbol, {color: theme.accentText, marginRight: 4}]}>🎖️</Text>
                                                     <Text style={[styles.flowValText, { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                                                         {(breakdown.totalDeepGifts > 0 ? breakdown.totalDeepGifts : Math.floor((Number(stats?.totalDiamondsReceived) || 0) / 2)).toLocaleString()}
@@ -1701,12 +1964,16 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         </View>
                                     </GlowCard>
                                 </View>
+                                </Reveal>
 
+                                <Reveal delay={260}>
                                 <SectionTitle title="MISSION: DAILY GOAL" icon="flag-checkered" color={missionColor} />
                                 <GlowCard
                                     colors={(isCompleted ? ['#10B981', '#34D399', '#22D3EE'] : [currentMilestone.color, currentMilestone.color2, theme.accent]) as any}
                                     radius={34}
                                     glow={missionColor}
+                                    shine
+                                    shineDelay={1800}
                                 >
                                     <View style={styles.massChallengeCard}>
                                         <LinearGradient colors={['rgba(15, 10, 40, 0.9)', 'rgba(5, 3, 15, 1)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
@@ -1727,7 +1994,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                     <Text style={styles.missionSubText}>Reach {currentMilestone.target.toLocaleString()} Rewards to unlock</Text>
                                                 </View>
                                             </View>
-                                            <View style={[styles.bountyBox, { backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.15)' : missionColor + '20', borderColor: missionColor }]}>
+                                            <View style={[styles.bountyBox, { backgroundColor: isCompleted ? 'rgba(16, 185, 129, 0.15)' : missionColor + '20', borderColor: missionColor }, !isCompleted && mixBorderStyle]}>
                                                 <Text style={styles.bountyLabel}>REWARDS</Text>
                                                 <Text style={[styles.bountyValue, { color: isCompleted ? missionColor : lighten(missionColor, 0.55) }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>+{currentMilestone.bonus.toLocaleString()}</Text>
                                             </View>
@@ -1743,7 +2010,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                         onPress={() => setActiveTab(index)} 
                                                         style={[
                                                             styles.holoTab, 
-                                                            isTabActive && { backgroundColor: m.color + '30', borderColor: m.color }
+                                                            isTabActive && { backgroundColor: m.color + '30', borderColor: m.color },
+                                                            isTabActive && mixBorderStyle
                                                         ]}
                                                         activeOpacity={0.7}
                                                     >
@@ -1804,9 +2072,11 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         </View>
                                     </View>
                                 </GlowCard>
+                                </Reveal>
 
+                                <Reveal delay={320}>
                                 <SectionTitle title="VIP INSIGHTS" icon="shield-star" color={theme.accent} />
-                                <GlowCard colors={[theme.accent, theme.secondary, theme.primary] as any} radius={30} glow={theme.accent}>
+                                <GlowCard colors={[theme.accent, theme.secondary, theme.primary] as any} radius={30} glow={theme.accent} shine shineDelay={2400}>
                                     <View style={styles.insightPremiumCard}>
                                         <LinearGradient colors={['rgba(30, 20, 60, 0.4)', 'rgba(5, 3, 15, 0.9)']} style={StyleSheet.absoluteFill} pointerEvents="none" />
                                         <RoyalSparkle x={60} y={8} size={9} color={theme.light} delay={200} />
@@ -1814,6 +2084,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         <View style={styles.insightTopRow}>
                                             <View style={styles.insightImgBox}>
                                                 <View style={[styles.insightGlow, { backgroundColor: theme.accent }]} />
+                                                <OrbitRing size={64} color={theme.accentText} spin={spin} />
                                                 <FloatBox amp={5} dur={1600}>
                                                     <Img3D uri={IMG.trophy} size={58} fallback="trophy-variant" color={theme.accent} />
                                                 </FloatBox>
@@ -1827,7 +2098,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
 
                                         {/* 🆕 Yaar kooda pesunaanga: photo + name */}
                                         {longestCall && (
-                                            <View style={[styles.insightPartnerRow, { borderColor: theme.accent + '40' }]}>
+                                            <View style={[styles.insightPartnerRow, { borderColor: theme.accent + '55' }, mixBorderStyle]}>
                                                 <LinearGradient colors={[lighten(theme.accent, 0.5), theme.accent, theme.deep]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.insightPartnerRing}>
                                                     <Image
                                                         source={{ uri: longestCall.pic || `https://ui-avatars.com/api/?name=${longestCall.name || 'U'}&background=0F172A&color=fff` }}
@@ -1838,7 +2109,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                     <Text style={styles.insightPartnerLabel} numberOfLines={1}>LONGEST SESSION WITH</Text>
                                                     <Text style={styles.insightPartnerName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{longestCall.name}</Text>
                                                 </View>
-                                                <View style={[styles.insightPartnerPill, { backgroundColor: theme.accent + '30', borderColor: theme.accent + '88' }]}>
+                                                <View style={[styles.insightPartnerPill, { backgroundColor: theme.accent + '38', borderColor: theme.accent + '99' }, mixBorderStyle]}>
                                                     <MaterialCommunityIcons name="timer-outline" size={13} color={theme.accentText} />
                                                     <Text style={[styles.insightPartnerPillText, { color: theme.light }]}>{Math.floor(longestCall.secs / 60)}m</Text>
                                                 </View>
@@ -1846,20 +2117,26 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                         )}
                                     </View>
                                 </GlowCard>
+                                </Reveal>
                             </View>
                         )}
 
                         {mainTab === 'MONTHLY' && (
                             <View>
+                                <Reveal>
                                 <View style={styles.lifetimeHeader}>
-                                    <FloatBox amp={6} dur={1700}>
-                                        <Img3D uri={IMG.money} size={70} fallback="cash-multiple" color={theme.accent} />
-                                    </FloatBox>
+                                    <View style={{ alignItems: 'center', justifyContent: 'center' }}>
+                                        <OrbitRing size={100} color={theme.accentText} spin={spin} />
+                                        <FloatBox amp={6} dur={1700}>
+                                            <Img3D uri={IMG.money} size={70} fallback="cash-multiple" color={theme.accent} />
+                                        </FloatBox>
+                                    </View>
                                     <Text style={[styles.totalTalkLabel, { color: theme.accentText, marginBottom: 5, marginTop: 8 }]}>LIFETIME REWARDS ACCUMULATED</Text>
                                     <Text style={{color: theme.light, fontSize: 34, fontWeight: '900', letterSpacing: -1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 }}} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.4}>
                                         {stats?.totalBeansEarned?.toLocaleString() || 0} 🎖️
                                     </Text>
                                 </View>
+                                </Reveal>
 
                                 {historyLoading ? (
                                     <View style={{ paddingVertical: 40, alignItems: 'center' }}>
@@ -1871,8 +2148,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                     const yColor = MONTH_COLORS[yIdx % MONTH_COLORS.length];
 
                                     return (
-                                        <View key={`year-group-${yIdx}`} style={{ marginBottom: 16 }}>
-                                            <TouchableOpacity activeOpacity={0.85} onPress={() => setExpandedYear(isYearExpanded ? null : y.year)}>
+                                        <Reveal key={`year-group-${yIdx}`} delay={yIdx * 90} style={{ marginBottom: 16 }}>
+                                            <Press3D onPress={() => setExpandedYear(isYearExpanded ? null : y.year)}>
                                                 <GlowCard
                                                     colors={(isYearExpanded ? [theme.accent, yColor, theme.secondary] : [yColor, theme.accent + 'AA', yColor + '55']) as any}
                                                     radius={26}
@@ -1897,7 +2174,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                         </View>
                                                     </View>
                                                 </GlowCard>
-                                            </TouchableOpacity>
+                                            </Press3D>
 
                                             {isYearExpanded && (
                                                 <View style={styles.timelineWrap}>
@@ -1910,7 +2187,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                         return (
                                                             <View key={`month-group-${mIdx}`} style={{ marginBottom: 10 }}>
                                                                 <View style={[styles.timelineDot, { backgroundColor: isMonthExpanded ? theme.accent : mColor, shadowColor: mColor }]} />
-                                                                <TouchableOpacity activeOpacity={0.85} onPress={() => setExpandedMonth(isMonthExpanded ? null : monthUniqueKey)}>
+                                                                <Press3D onPress={() => setExpandedMonth(isMonthExpanded ? null : monthUniqueKey)}>
                                                                     <GlowCard
                                                                         colors={(isMonthExpanded ? [theme.accent, mColor] : [mColor + 'AA', mColor + '33']) as any}
                                                                         radius={22}
@@ -1933,7 +2210,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                                             </View>
                                                                         </View>
                                                                     </GlowCard>
-                                                                </TouchableOpacity>
+                                                                </Press3D>
 
                                                                 {isMonthExpanded && (
                                                                     <View style={{ paddingLeft: 6, paddingRight: 2 }}>
@@ -1945,7 +2222,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                                                     })}
                                                 </View>
                                             )}
-                                        </View>
+                                        </Reveal>
                                     );
                                 }) : (
                                     <View style={styles.emptyBox}>
@@ -1960,6 +2237,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                             <View style={{ marginTop: 10 }}>
                                 <View style={{ alignItems: 'center', marginBottom: 20 }}>
                                     <View>
+                                        <OrbitRing size={104} color={theme.accentText} spin={spin} style={{ left: -20, top: 2 }} />
                                         <FloatBox amp={6} dur={1600}>
                                             <Img3D uri={IMG.trophy} size={64} fallback="trophy" color={theme.accent} />
                                         </FloatBox>
@@ -2009,7 +2287,7 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 onRequestClose={() => setBlockModalVisible(false)}
             >
                 <View style={styles.modalOverlay}>
-                    <View style={[styles.modalContainer, { borderColor: theme.primary }]}>
+                    <View style={[styles.modalContainer, { borderColor: theme.primary }, mixBorderStyle]}>
                         <View style={{ alignItems: 'center', marginBottom: 15 }}>
                             <View style={[styles.modalIconRing, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
                                 <MaterialCommunityIcons name="shield-off-outline" size={32} color="#EF4444" />
@@ -2048,6 +2326,8 @@ export default function ExpertStats({ expertData }: { expertData: any }) {
                 </View>
             </Modal>
         </View>
+        </BorderCtx.Provider>
+        </CardCtx.Provider>
     );
 }
 
@@ -2058,7 +2338,7 @@ const styles = StyleSheet.create({
     loaderPulseBox: { width: 90, height: 90, justifyContent: 'center', alignItems: 'center' },
     loaderPulseRing: { position: 'absolute', width: 80, height: 80, borderRadius: 40, borderWidth: 2 },
     
-    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15 },
+    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.09 },
 
     // section titles
     sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 34, marginBottom: 16 },
@@ -2072,16 +2352,16 @@ const styles = StyleSheet.create({
     heroFrame: { borderRadius: 40, overflow: 'hidden', padding: 2.5, backgroundColor: '#0A0620' },
     heroFrameSpin: { position: 'absolute', top: '50%', left: '50%', width: 900, height: 900, marginLeft: -450, marginTop: -450 },
     eliteHeroCard: { borderRadius: 37.5, padding: 22, overflow: 'hidden' },
-    cyberCircle: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.03)' },
-    cyberCircleSmall: { position: 'absolute', bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.05)' },
+    cyberCircle: { position: 'absolute', top: -50, right: -50, width: 200, height: 200, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.05)' },
+    cyberCircleSmall: { position: 'absolute', bottom: -20, left: -20, width: 100, height: 100, borderRadius: 50, backgroundColor: 'rgba(255,255,255,0.07)' },
     heroSheen: { position: 'absolute', top: 0, left: 0, right: 0, height: 90 },
     heroSweep: { position: 'absolute', top: -60, bottom: -60, width: 90 },
     heroHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18 },
-    systemStatusBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+    systemStatusBox: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(20,12,60,0.35)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     pulseDotWrap: { width: 14, height: 14, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
     pulseDotRing: { position: 'absolute', width: 8, height: 8, borderRadius: 4, backgroundColor: '#10B981' },
     pulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
-    systemStatusText: { color: '#10B981', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+    systemStatusText: { color: '#34D399', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
     statusTag: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12 },
     statusTagText: { fontSize: 11, fontWeight: '900', letterSpacing: 1 },
 
@@ -2095,23 +2375,24 @@ const styles = StyleSheet.create({
     identityStatusText: { fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
 
     heroMainRow: { flexDirection: 'row', alignItems: 'center' },
-    revenueTitle: { color: 'rgba(255,255,255,0.78)', fontSize: 11, fontWeight: '800', letterSpacing: 2 },
+    revenueTitle: { color: 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: '800', letterSpacing: 2 },
     revenueNumberContainer: { flexDirection: 'row', alignItems: 'center', marginTop: 8, flexWrap: 'nowrap' },
     revenueSymbol: { fontSize: 24, fontWeight: '800', marginRight: 5 },
     // 🆕 Glow (radius 16) remove -> chinna dark shadow (radius 2) so letters sharp-a theriyum
     revenueMainValue: { color: '#FFE9A8', fontSize: 40, fontWeight: '900', letterSpacing: -1, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 } },
     revenueMainUnit: { fontSize: 14, fontWeight: '900', letterSpacing: 3, marginTop: 2 },
-    heroTrophyBox: { width: 104, height: 110, justifyContent: 'center', alignItems: 'center' },
+    heroTrophyBox: { width: 104, height: 118, justifyContent: 'center', alignItems: 'center' },
     heroTrophyGlow: { position: 'absolute', width: 80, height: 80, borderRadius: 40 },
+    heroTrophyShadow: { position: 'absolute', bottom: 2, width: 58, height: 9, borderRadius: 5, opacity: 0.4 },
     levelBarWrap: { marginTop: 18 },
     levelBarHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     levelBarLabel: { color: 'rgba(255,255,255,0.82)', fontSize: 11, fontWeight: '900', letterSpacing: 1.8 },
-    levelBarTrack: { height: 14, borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.1)', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' },
+    levelBarTrack: { height: 14, borderRadius: 7, backgroundColor: 'rgba(255,255,255,0.14)', overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
     levelBarFillWrap: { height: '100%', borderRadius: 7, overflow: 'hidden' },
     heroSummaryGrid: { flexDirection: 'row', gap: 10, marginTop: 18 },
-    summaryChip: { flex: 1, minWidth: 0, padding: 12, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(0,0,0,0.25)' },
+    summaryChip: { flex: 1, minWidth: 0, padding: 12, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(0,0,0,0.28)' },
     summaryTopRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 7 },
-    summaryLabel: { flex: 1, color: 'rgba(255,255,255,0.72)', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8 },
+    summaryLabel: { flex: 1, color: 'rgba(255,255,255,0.78)', fontSize: 9.5, fontWeight: '900', letterSpacing: 0.8 },
     summaryValue: { color: '#FFF', fontSize: 14, fontWeight: '800', lineHeight: 19 },
 
     // 🆕 key user diamond row
@@ -2119,23 +2400,29 @@ const styles = StyleSheet.create({
     summaryDiamondEmoji: { fontSize: 13 },
     summaryDiamondText: { flexShrink: 1, fontSize: 15, fontWeight: '900', letterSpacing: 0.3 },
 
-    // 🆕 level bar v2 + summary chip icon
+    // 🆕 level bar v3 + summary chip icon
     summaryIconBubble: { width: 20, height: 20, borderRadius: 7, justifyContent: 'center', alignItems: 'center' },
-    levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.35)' },
+    levelChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(20,12,60,0.35)', alignSelf: 'flex-start' },
     levelChipText: { color: '#FFF', fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+    levelNextText: { fontSize: 10, fontWeight: '900', letterSpacing: 1.3, marginTop: 6, marginLeft: 2 },
     levelPctBox: { alignItems: 'flex-end' },
     levelPctBig: { fontSize: 28, fontWeight: '900', letterSpacing: -0.5, lineHeight: 30, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 3, textShadowOffset: { width: 0, height: 1 } },
     levelPctSub: { fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
     levelBarCap: { position: 'absolute', right: 0, top: 0, bottom: 0, width: 5, backgroundColor: 'rgba(255,255,255,0.85)' },
+    levelBarTick: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.28)' },
     levelBarFooter: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 7 },
-    levelBarFooterText: { color: 'rgba(255,255,255,0.75)', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 },
+    levelBarFooterText: { color: 'rgba(255,255,255,0.8)', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5 },
+    levelNeedChip: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+    levelNeedText: { flex: 1, color: '#F1F5F9', fontSize: 11.5, fontWeight: '800', lineHeight: 16, letterSpacing: 0.3 },
 
-    // tabs
-    tabsRow: { flexDirection: 'row', marginHorizontal: 0, marginTop: 22, marginBottom: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 22, padding: 5, borderWidth: 1, borderColor: 'rgba(245,200,76,0.18)' },
-    tabPill: { position: 'absolute', top: 5, left: 5, bottom: 5, borderRadius: 17, borderWidth: 1.2, overflow: 'hidden', shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
-    tabPillGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 18 },
-    tabBtn: { flex: 1, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }, 
-    tabText: { color: '#CBD5E1', fontSize: 11, fontWeight: '900', letterSpacing: 1, flexShrink: 1 },
+    // tabs (🆕 thick 3D tab bar)
+    tabsRow: { flexDirection: 'row', marginHorizontal: 0, marginTop: 24, marginBottom: 6, backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 28, padding: 6, borderWidth: 1, borderColor: 'rgba(245,200,76,0.18)', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
+    tabPill: { position: 'absolute', top: 6, left: 6, bottom: 6, borderRadius: 22, borderWidth: 1.2, overflow: 'hidden', shadowOpacity: 0.8, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 8 },
+    tabPillGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 26 },
+    tabPillEdge: { position: 'absolute', bottom: 0, left: '22%', right: '22%', height: 3, borderTopLeftRadius: 3, borderTopRightRadius: 3, opacity: 0.9 },
+    tabBtn: { flex: 1, paddingVertical: 11, alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: 5 }, 
+    tabIconCircle: { width: 34, height: 34, borderRadius: 13, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.1)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+    tabText: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 1, flexShrink: 1 },
     tabTextActive: { color: '#FFE9A8' },
     menuBox: { paddingHorizontal: 0, marginTop: 0 },
 
@@ -2144,10 +2431,11 @@ const styles = StyleSheet.create({
     matrixRow: { flexDirection: 'row', gap: 14 },
     matrixCard: { padding: 18, alignItems: 'flex-start', width: '100%', overflow: 'hidden' },
     matrixWatermark: { position: 'absolute', right: -14, bottom: -16 },
+    matrixImg: { position: 'absolute', top: 8, right: 8 },
     matrixIconCircle: { width: 42, height: 42, borderRadius: 15, justifyContent: 'center', alignItems: 'center', marginBottom: 14, overflow: 'hidden' },
     matrixIconGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 18 },
     matrixValue: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5, maxWidth: '100%' },
-    matrixLabel: { color: '#CBD5E1', fontSize: 12, fontWeight: '800', marginTop: 4, maxWidth: '100%' },
+    matrixLabel: { color: '#E2E8F0', fontSize: 12, fontWeight: '800', marginTop: 4, maxWidth: '100%' },
     bottomGlowLine: { position: 'absolute', bottom: 0, left: 18, width: '34%', height: 3, borderRadius: 2 },
 
     // distribution
@@ -2168,7 +2456,7 @@ const styles = StyleSheet.create({
     donutBox: { width: DONUT_SIZE, height: DONUT_SIZE, justifyContent: 'center', alignItems: 'center' },
     donutCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
     donutCenterEmoji: { fontSize: 24 },
-    donutCenterLabel: { color: '#CBD5E1', fontSize: 9, fontWeight: '900', letterSpacing: 2, marginTop: 2 },
+    donutCenterLabel: { color: '#E2E8F0', fontSize: 9, fontWeight: '900', letterSpacing: 2, marginTop: 2 },
     donutInfo: { flex: 1, marginLeft: 16 },
     donutInfoLabel: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
     donutInfoValue: { fontSize: 24, fontWeight: '900', marginTop: 6, letterSpacing: -0.5 },
@@ -2211,7 +2499,7 @@ const styles = StyleSheet.create({
     missionImgBox: { width: 54, height: 54, justifyContent: 'center', alignItems: 'center' },
     missionTextGroup: { marginLeft: 10, flex: 1 },
     missionMainTitle: { fontSize: 16, fontWeight: '900', letterSpacing: 0.5 },
-    missionSubText: { color: '#CBD5E1', fontSize: 12, fontWeight: '700', marginTop: 3 },
+    missionSubText: { color: '#E2E8F0', fontSize: 12, fontWeight: '700', marginTop: 3 },
     bountyBox: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 16, borderWidth: 1, maxWidth: '35%' },
     bountyLabel: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 2, opacity: 0.9 },
     bountyValue: { fontSize: 15, fontWeight: '900', flexShrink: 1 },
@@ -2224,14 +2512,14 @@ const styles = StyleSheet.create({
     quantumProgressContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.25)', padding: 16, borderRadius: 24, borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
     missionRingBox: { width: MISSION_RING, height: MISSION_RING, justifyContent: 'center', alignItems: 'center' },
     missionRingCenter: { position: 'absolute', alignItems: 'center', justifyContent: 'center' },
-    missionRingSub: { color: '#CBD5E1', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginTop: 1 },
+    missionRingSub: { color: '#E2E8F0', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginTop: 1 },
     quantumProgressLabel: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 2, marginBottom: 6 },
     quantumProgressPct: { fontSize: 22, fontWeight: '900' },
     quantumCollected: { color: '#FFF', fontSize: 15, fontWeight: '900' },
     // 🆕 remaining chip: full width, number + label (text cut aagaathu)
     remainChip: { marginTop: 10, alignSelf: 'stretch', paddingHorizontal: 10, paddingVertical: 7, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', backgroundColor: 'rgba(255,255,255,0.04)' },
     remainValue: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 0.3 },
-    remainLabel: { color: '#CBD5E1', fontSize: 9.5, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
+    remainLabel: { color: '#E2E8F0', fontSize: 9.5, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
     quantumRemaining: { color: '#E2E8F0', fontSize: 11, fontWeight: '900', letterSpacing: 0.5 },
 
     // vip insight
@@ -2245,7 +2533,7 @@ const styles = StyleSheet.create({
     insightPartnerRow: { flexDirection: 'row', alignItems: 'center', marginTop: 14, padding: 10, borderRadius: 20, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.3)' },
     insightPartnerRing: { width: 50, height: 50, borderRadius: 25, padding: 2.5, justifyContent: 'center', alignItems: 'center' },
     insightPartnerImg: { width: '100%', height: '100%', borderRadius: 23, backgroundColor: '#0F172A' },
-    insightPartnerLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
+    insightPartnerLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
     insightPartnerName: { color: '#FFF', fontSize: 15, fontWeight: '900', marginTop: 3 },
     insightPartnerPill: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
     insightPartnerPillText: { fontSize: 13, fontWeight: '900' },
@@ -2263,14 +2551,14 @@ const styles = StyleSheet.create({
     logCard: { flexDirection: 'row', alignItems: 'center', padding: 13, paddingLeft: 16, borderRadius: 18, marginBottom: 9, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', backgroundColor: 'rgba(15, 10, 40, 0.55)', overflow: 'hidden' },
     logAccent: { position: 'absolute', left: 0, top: 10, bottom: 10, width: 3.5, borderTopRightRadius: 3, borderBottomRightRadius: 3 },
     logIconBox: { width: 40, height: 40, borderRadius: 14, justifyContent: 'center', alignItems: 'center' },
-    logAmountPill: { alignItems: 'flex-end', justifyContent: 'center', backgroundColor: 'rgba(16,185,129,0.1)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.25)', maxWidth: '38%' },
+    logAmountPill: { alignItems: 'flex-end', justifyContent: 'center', backgroundColor: 'rgba(16,185,129,0.14)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16,185,129,0.3)', maxWidth: '38%' },
     logAmountText: { fontSize: 13, fontWeight: '900' },
     historyTitle: { color: '#FFF', fontSize: 14, fontWeight: 'bold', marginBottom: 4, letterSpacing: 0.5, lineHeight: 20 },
-    historyDate: { color: '#CBD5E1', fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5 },
+    historyDate: { color: '#E2E8F0', fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5 },
     historyAmount: { fontSize: 16, fontWeight: '900', marginBottom: 4 },
     historyStatus: { fontSize: 11, fontWeight: '900', letterSpacing: 1, textTransform: 'uppercase' },
     emptyBox: { alignItems: 'center', marginTop: 20, marginBottom: 20, opacity: 0.9 },
-    emptyText: { color: '#CBD5E1', marginTop: 10, fontSize: 13, fontWeight: '700', letterSpacing: 1 },
+    emptyText: { color: '#E2E8F0', marginTop: 10, fontSize: 13, fontWeight: '700', letterSpacing: 1 },
     totalTalkLabel: { fontSize: 11, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
 
     // podium
@@ -2282,6 +2570,7 @@ const styles = StyleSheet.create({
     podiumLvl: { paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, marginTop: 4, marginBottom: 8 },
     podiumBlock: { width: '100%', borderTopLeftRadius: 20, borderTopRightRadius: 20, borderWidth: 1, borderBottomWidth: 0, alignItems: 'center', justifyContent: 'center', overflow: 'hidden', paddingHorizontal: 4 },
     podiumGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 30 },
+    podiumSide: { position: 'absolute', top: 0, right: 0, bottom: 0, width: 7 },
     podiumBigNum: { fontSize: 38, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.4)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 2 } },
     podiumRewardPill: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(0,0,0,0.45)', paddingHorizontal: 7, paddingVertical: 3, borderRadius: 9, marginTop: 4, maxWidth: '96%' },
     podiumRewardText: { color: '#FFF', fontSize: 12, fontWeight: '900', flexShrink: 1 },
@@ -2304,9 +2593,9 @@ const styles = StyleSheet.create({
     rankLvlLabel: { color: '#E2E8F0', fontSize: 11.5, fontWeight: '800', flexShrink: 1 },
     rankTrack: { height: 5, borderRadius: 3, backgroundColor: 'rgba(255,255,255,0.09)', overflow: 'hidden', marginTop: 8 },
     rankRewardCol: { alignItems: 'flex-end', flexShrink: 0, maxWidth: '34%' },
-    rankRewardLabel: { color: 'rgba(255,255,255,0.7)', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
-    rankRewardPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.15)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.3)', maxWidth: '100%' },
-    rankRewardText: { color: '#10B981', fontSize: 14, fontWeight: '900', flexShrink: 1 },
+    rankRewardLabel: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginBottom: 4 },
+    rankRewardPill: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(16, 185, 129, 0.18)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(16, 185, 129, 0.35)', maxWidth: '100%' },
+    rankRewardText: { color: '#34D399', fontSize: 14, fontWeight: '900', flexShrink: 1 },
 
     modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
     modalContainer: { backgroundColor: '#0F172A', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1, borderBottomWidth: 0 },

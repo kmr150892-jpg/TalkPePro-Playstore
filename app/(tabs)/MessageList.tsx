@@ -2,8 +2,8 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 // 🔥 Added deleteDoc to the imports
-import { collection, deleteDoc, doc, getDoc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import { collection, deleteDoc, doc, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
@@ -21,6 +21,12 @@ const safeAlpha = (hex: string, alpha: string = 'FF') => {
   const base = (hex || '#000000').length >= 7 ? hex.slice(0, 7) : hex;
   return base + alpha;
 };
+
+// 🔥 HOST PROFILE HELPERS
+// users doc-la `name` (host edit pannum latest name) & `displayName` (registration time-la set aana old name) rendum irukku.
+// So `name` ku PRIORITY. (Host app `displayName` update panna, rendu idathilum `pickName`-la 'name' & 'displayName' order-a maathunga)
+const pickName = (p: any) => p?.name || p?.displayName || null;
+const pickImage = (p: any) => p?.profilePic || p?.photoURL || null;
 
 // 🆕🆕 NEW: color helpers (royal metallic tones - always 6-digit safe)
 const hexToRgb = (hex: string) => {
@@ -307,7 +313,9 @@ const ThreadCard = ({ item, index, count, userTier, floatAnim, shimmerAnim, scro
 };
 
 export default function MessageList() {
-  const [chatThreads, setChatThreads] = useState<any[]>([]);
+  // 🔥 LIVE SYNC: raw chat docs + live host profiles are kept separately, then merged below
+  const [rawThreads, setRawThreads] = useState<any[]>([]);
+  const [hostProfiles, setHostProfiles] = useState<Record<string, any>>({});
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const user = auth.currentUser;
@@ -387,34 +395,65 @@ export default function MessageList() {
       orderBy("lastMessageTime", "desc")
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const threads = await Promise.all(
-        snapshot.docs.map(async (chatDoc) => {
-          const data = chatDoc.data();
-          const expertId = data.participants.find((id: string) => id !== user.uid);
-
-          const expertRef = doc(db, "users", expertId);
-          const expertSnap = await getDoc(expertRef);
-          const expertData = expertSnap.exists() ? expertSnap.data() : {};
-
-          const myUnreadCount = data.unreadCount ? data.unreadCount[user.uid] || 0 : 0;
-
-          return {
-            id: chatDoc.id,
-            ...data,
-            expertName: expertData.displayName || expertData.name || "Host Node",
-            expertImage: expertData.profilePic || expertData.photoURL || null,
-            receiverId: expertId,
-            unread: myUnreadCount
-          };
-        })
-      );
-      setChatThreads(threads);
+    // 🔥 Only chat data here (host name/photo now come LIVE from the profile listeners below)
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const threads = snapshot.docs.map((chatDoc) => {
+        const data = chatDoc.data();
+        const expertId = data.participants.find((id: string) => id !== user.uid);
+        const myUnreadCount = data.unreadCount ? data.unreadCount[user.uid] || 0 : 0;
+        return { id: chatDoc.id, ...data, receiverId: expertId, unread: myUnreadCount };
+      });
+      setRawThreads(threads);
       setLoading(false);
     });
 
     return () => { unsubscribe(); unsubUser(); };
   }, [user]);
+
+  // 🔥 LIVE HOST PROFILES: host name / photo maarina udane Messages-la update aagum
+  const hostIdsKey = rawThreads
+    .map((t) => t.receiverId)
+    .filter(Boolean)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (!hostIdsKey) {
+      setHostProfiles({});
+      return;
+    }
+    const ids = hostIdsKey.split(',');
+    const unsubs = ids.map((id) =>
+      onSnapshot(
+        doc(db, 'users', id),
+        (snap) => {
+          setHostProfiles((prev) => ({ ...prev, [id]: snap.exists() ? snap.data() : null }));
+        },
+        () => {
+          // permission / network error -> mark as loaded so the screen never gets stuck on the loader
+          setHostProfiles((prev) => ({ ...prev, [id]: null }));
+        }
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [hostIdsKey]);
+
+  // 🔥 MERGED THREADS (chat doc + live host profile) - same shape as before, so the whole UI works untouched
+  const chatThreads = useMemo(
+    () =>
+      rawThreads.map((t) => {
+        const p = hostProfiles[t.receiverId];
+        return {
+          ...t,
+          expertName: pickName(p) || "Host Node",
+          expertImage: pickImage(p) || null,
+        };
+      }),
+    [rawThreads, hostProfiles]
+  );
+
+  // ⏳ keep the loader until every host profile has arrived (same behaviour as the old await-based loading)
+  const profilesReady = rawThreads.every((t) => !t.receiverId || t.receiverId in hostProfiles);
 
   // 🔥 SATTI FIX: Synced Highest Balance check for accurate Level display in Messages!
   const userDiamonds = userData?.totalSpentDiamonds || 0;
@@ -490,7 +529,7 @@ export default function MessageList() {
       backgroundColor: 'rgba(10, 10, 10, 0.8)',
   };
 
-  if (loading) {
+  if (loading || !profilesReady) {
     return (
       <View style={styles.darkLoader}>
         <ActivityIndicator size="large" color={userTier.color} />

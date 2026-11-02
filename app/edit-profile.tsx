@@ -1084,7 +1084,7 @@ export default function EditProfileScreen() {
                           </FloatBox>
                         </View>
                         <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text style={[styles.rateTitle, { color: lighten(PAL.gold, 0.4) }]}>YOUR PER MINUTE RATE</Text>
+                          <Text style={[styles.rateTitle, { color: lighten(PAL.gold, 0.4) }]}>YOUR PER MINUTE REWARD</Text>
                           <Text style={styles.rateHint}>Allowed range: ₹3 to ₹{maxRateRupees} per minute</Text>
                         </View>
                       </View>

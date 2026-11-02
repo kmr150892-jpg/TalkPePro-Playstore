@@ -7,7 +7,8 @@ import { getDatabase, onDisconnect, onValue, ref, set } from 'firebase/database'
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc, where, writeBatch } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 // 🔥 SATTI FIX: Added ScrollView to imports for the Disclaimer Modal
-import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+// 🆕 PanResponder added for the Beauty Studio sliders
+import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, PanResponder, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
@@ -15,7 +16,7 @@ import createAgoraRtcEngine, {
     LighteningContrastLevel,
     RtcTextureView,
 } from 'react-native-agora';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
 import { checkAndRequestCallPermissions } from '../../utils/permissions';
 
@@ -26,6 +27,28 @@ import MemoryMatch from '../../components/MemoryMatch';
 
 const { width, height } = Dimensions.get('window');
 const AGORA_APP_ID = '718cedc3c47e44d1bfa4853d6ac6cd80';
+
+// 🎨 PREMIUM HELPER: safe hex + alpha (works with 6 digit and 8 digit hex colors)
+const withAlpha = (hex: string, a: number) => {
+    const base = (hex || '#ffffff').slice(0, 7);
+    const v = Math.round(Math.max(0, Math.min(1, a)) * 255).toString(16).padStart(2, '0');
+    return base + v;
+};
+
+// 🎨 PREMIUM HELPER: solid lighten (+) / darken (-) of a hex colour -> fully opaque result (for solid buttons)
+const shade = (hex: string, amt: number) => {
+    const h = (hex || '#ffffff').slice(1, 7);
+    const n = parseInt(h.length === 6 ? h : 'ffffff', 16);
+    const target = amt < 0 ? 0 : 255;
+    const p = Math.min(1, Math.abs(amt));
+    const mix = (c: number) => Math.round(c + (target - c) * p);
+    const r = mix((n >> 16) & 255);
+    const g = mix((n >> 8) & 255);
+    const b = mix(n & 255);
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+};
+
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 
 const getLevelConfig = (beans: number) => {
     if (beans >= 100000000) return { lvl: 10, label: 'LEGEND L10', colors: ['#ff0404', '#F59E0B', '#df03ee'] as const, glow: '#F59E0B', next: 0, prev: 50000000, rate: 8000 };
@@ -41,9 +64,508 @@ const getLevelConfig = (beans: number) => {
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'] as const, glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
 };
 
+// 🆕 BEAUTY STUDIO CONFIG (presets + default levels)
+const DEFAULT_BEAUTY = { light: 0.7, smooth: 0.8, red: 0.5, sharp: 0.3 };
+const BEAUTY_PRESETS = [
+    { key: 'Natural', icon: 'leaf', color: '#34D399', lv: { light: 0.5, smooth: 0.4, red: 0.3, sharp: 0.3 } },
+    { key: 'Glam', icon: 'diamond-stone', color: '#F472B6', lv: { light: 0.8, smooth: 0.9, red: 0.6, sharp: 0.4 } },
+    { key: 'Fresh', icon: 'water', color: '#22D3EE', lv: { light: 0.7, smooth: 0.6, red: 0.4, sharp: 0.5 } },
+    { key: 'Studio', icon: 'camera-iris', color: '#FBBF24', lv: { light: 0.6, smooth: 0.7, red: 0.2, sharp: 0.6 } },
+];
+const BEAUTY_SLIDERS: { key: 'smooth' | 'light' | 'red' | 'sharp', label: string, icon: string, color: string }[] = [
+    { key: 'smooth', label: 'Smooth', icon: 'blur', color: '#A78BFA' },
+    { key: 'light', label: 'Brighten', icon: 'white-balance-sunny', color: '#FBBF24' },
+    { key: 'red', label: 'Rosy', icon: 'heart', color: '#F472B6' },
+    { key: 'sharp', label: 'Sharpen', icon: 'details', color: '#22D3EE' },
+];
+
+// ✨ SPINNING GRADIENT RING (3D feel avatar frame)
+const SpinRing = ({ size, colors, children, speed = 6000 }: { size: number, colors: any, children?: React.ReactNode, speed?: number }) => {
+    const spin = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(spin, { toValue: 1, duration: speed, easing: Easing.linear, useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    return (
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, overflow: 'hidden', transform: [{ rotate }] }}>
+                <LinearGradient colors={colors} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={{ flex: 1 }} />
+            </Animated.View>
+            <View style={{ width: size - 6, height: size - 6, borderRadius: (size - 6) / 2, backgroundColor: '#020617', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                {children}
+            </View>
+        </View>
+    );
+};
+
+// ✨ PULSING LIVE DOT
+const PulseDot = ({ color = '#EF4444', size = 8 }: { color?: string, size?: number }) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(a, { toValue: 1, duration: 1400, easing: Easing.out(Easing.quad), useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const scale = a.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] });
+    const opacity = a.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] });
+    return (
+        <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center' }}>
+            <Animated.View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity, transform: [{ scale }] }} />
+            <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: color }} />
+        </View>
+    );
+};
+
+// ✨ SONAR PULSE RINGS (connecting screen + incoming call)
+const PulseRings = ({ color, size }: { color: string, size: number }) => {
+    const rings = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
+    useEffect(() => {
+        const loops = rings.map((v, i) => {
+            const l = Animated.loop(
+                Animated.sequence([
+                    Animated.delay(i * 600),
+                    Animated.timing(v, { toValue: 1, duration: 1800, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+                    Animated.delay((2 - i) * 600),
+                ])
+            );
+            l.start();
+            return l;
+        });
+        return () => loops.forEach(l => l.stop());
+    }, []);
+    return (
+        <>
+            {rings.map((v, i) => (
+                <Animated.View
+                    key={i}
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute',
+                        width: size,
+                        height: size,
+                        borderRadius: size / 2,
+                        borderWidth: 2,
+                        borderColor: color,
+                        opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] }),
+                        transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.6, 2] }) }],
+                    }}
+                />
+            ))}
+        </>
+    );
+};
+
+// ✨ SOLID 3D ORB BUTTON (🆕 opaque deep gradient + crisp white ring, NO gloss/shadow over the icon -> icon always solid & clear)
+const GlowOrbButton = ({ onPress, disabled, color, active, children, size = 46, glow = true }: { onPress?: () => void, disabled?: boolean, color: string, active?: boolean, children?: React.ReactNode, size?: number, glow?: boolean }) => {
+    const press = useRef(new Animated.Value(0)).current;
+    const pulse = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        if (!glow) return;
+        const loop = Animated.loop(Animated.timing(pulse, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, [glow]);
+    const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
+    const glowScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.3] });
+    const glowOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [0.4, 0] });
+    return (
+        <TouchableOpacity
+            activeOpacity={0.9}
+            disabled={disabled}
+            onPress={onPress}
+            onPressIn={() => Animated.spring(press, { toValue: 1, speed: 40, bounciness: 4, useNativeDriver: true }).start()}
+            onPressOut={() => Animated.spring(press, { toValue: 0, speed: 20, bounciness: 10, useNativeDriver: true }).start()}
+        >
+            <View style={{ width: size, height: size, alignItems: 'center', justifyContent: 'center', opacity: disabled ? 0.55 : 1 }}>
+                {glow && (
+                    <Animated.View style={{ position: 'absolute', width: size, height: size, borderRadius: size / 2, backgroundColor: color, opacity: glowOpacity, transform: [{ scale: glowScale }] }} />
+                )}
+                <Animated.View style={{ transform: [{ scale }] }}>
+                    <LinearGradient
+                        colors={[shade(color, active ? 0.08 : -0.08), shade(color, -0.5)]}
+                        start={{ x: 0.2, y: 0 }}
+                        end={{ x: 0.8, y: 1 }}
+                        style={[styles.orbBtn, { width: size, height: size, borderRadius: size / 2, borderColor: active ? '#FFFFFF' : 'rgba(255,255,255,0.85)' }]}
+                    >
+                        {children}
+                    </LinearGradient>
+                </Animated.View>
+            </View>
+        </TouchableOpacity>
+    );
+};
+
+// 🔮 RAIL ITEM: right-side control flips in with a 3D spring (staggered by index)
+const RailItem = ({ index, color, active, onPress, children, size = 46 }: { index: number, color: string, active?: boolean, onPress?: () => void, children?: React.ReactNode, size?: number }) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.sequence([
+            Animated.delay(300 + index * 90),
+            Animated.spring(a, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true }),
+        ]).start();
+    }, []);
+    return (
+        <Animated.View
+            style={{
+                opacity: a,
+                transform: [
+                    { perspective: 700 },
+                    { translateX: a.interpolate({ inputRange: [0, 1], outputRange: [70, 0] }) },
+                    { rotateY: a.interpolate({ inputRange: [0, 1], outputRange: ['-80deg', '0deg'] }) },
+                    { scale: a },
+                ],
+            }}
+        >
+            <GlowOrbButton color={color} active={active} onPress={onPress} size={size} glow={false}>
+                {children}
+            </GlowOrbButton>
+        </Animated.View>
+    );
+};
+
+// ✨ MAGIC PANEL: grows out of the bottom & shrinks back (kept in-place, NOT a Modal -> no conflicts)
+const MagicPanel = ({ visible, children, style }: { visible: boolean, children?: React.ReactNode, style?: any }) => {
+    const a = useRef(new Animated.Value(0)).current;
+    const [mounted, setMounted] = useState(visible);
+    useEffect(() => {
+        if (visible) {
+            setMounted(true);
+            Animated.spring(a, { toValue: 1, friction: 8, tension: 70, useNativeDriver: true }).start();
+        } else {
+            Animated.timing(a, { toValue: 0, duration: 220, easing: Easing.in(Easing.quad), useNativeDriver: true }).start(({ finished }) => {
+                if (finished) setMounted(false);
+            });
+        }
+    }, [visible]);
+    if (!mounted) return null;
+    return (
+        <Animated.View
+            pointerEvents={visible ? 'auto' : 'none'}
+            style={[
+                style,
+                {
+                    opacity: a,
+                    transform: [
+                        { perspective: 900 },
+                        { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [90, 0] }) },
+                        { rotateX: a.interpolate({ inputRange: [0, 1], outputRange: ['40deg', '0deg'] }) },
+                        { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1] }) },
+                    ],
+                },
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// ✨ CHAT MESSAGE 3D POP-IN
+const ChatPop = ({ children, style }: { children?: React.ReactNode, style?: any }) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.spring(a, { toValue: 1, friction: 7, tension: 80, useNativeDriver: true }).start();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                {
+                    opacity: a,
+                    transform: [
+                        { perspective: 600 },
+                        { rotateX: a.interpolate({ inputRange: [0, 1], outputRange: ['40deg', '0deg'] }) },
+                        { translateX: a.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) },
+                        { scale: a.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+                    ],
+                },
+                style,
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// 🆕 ✨ TWINKLE STAR (tiny sparkle for the ultra beauty button)
+const TwinkleStar = ({ x, y, size = 10, color = '#FFD700', delay = 0 }: { x: number, y: number, size?: number, color?: string, delay?: number }) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                left: x,
+                top: y,
+                opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.15, 1] }),
+                transform: [
+                    { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.4, 1.2] }) },
+                    { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '90deg'] }) },
+                ],
+            }}
+        >
+            <MaterialCommunityIcons name="star-four-points" size={size} color={color} />
+        </Animated.View>
+    );
+};
+
+// 🆕 💎 ULTRA BEAUTY BUTTON (standalone, always visible: rainbow spin ring + aura + PRO tag)
+const BeautyUltraButton = ({ active, onPress }: { active?: boolean, onPress?: () => void }) => {
+    const press = useRef(new Animated.Value(0)).current;
+    const scale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
+    return (
+        <TouchableOpacity
+            activeOpacity={0.92}
+            onPress={onPress}
+            onPressIn={() => Animated.spring(press, { toValue: 1, speed: 40, bounciness: 4, useNativeDriver: true }).start()}
+            onPressOut={() => Animated.spring(press, { toValue: 0, speed: 20, bounciness: 10, useNativeDriver: true }).start()}
+        >
+            <Animated.View style={{ transform: [{ scale }], alignItems: 'center' }}>
+                <View style={{ width: 62, height: 62, alignItems: 'center', justifyContent: 'center' }}>
+                    {!active && <PulseRings color="#EC4899" size={56} />}
+                    <SpinRing size={62} colors={['#F472B6', '#A855F7', '#22D3EE', '#FFD700', '#F472B6']} speed={3200}>
+                        <LinearGradient
+                            colors={active ? ['#F472B6', '#9D174D'] : ['#EC4899', '#5B21B6']}
+                            start={{ x: 0.2, y: 0 }}
+                            end={{ x: 0.8, y: 1 }}
+                            style={{ width: 56, height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center' }}
+                        >
+                            <MaterialCommunityIcons name="face-man-shimmer" size={30} color="#FFFFFF" />
+                        </LinearGradient>
+                    </SpinRing>
+                    <TwinkleStar x={-2} y={2} size={11} color="#FFD700" delay={0} />
+                    <TwinkleStar x={50} y={-2} size={9} color="#22D3EE" delay={500} />
+                    <TwinkleStar x={52} y={48} size={10} color="#F472B6" delay={900} />
+                </View>
+                <View style={styles.proTag}>
+                    <Text style={styles.proTagText}>BEAUTY PRO</Text>
+                </View>
+            </Animated.View>
+        </TouchableOpacity>
+    );
+};
+
+// 🆕 🪄 MAGIC DOCK: ONE slider handle on the side. Tap -> glass capsule slides open & the 4 buttons fly out with equal spacing
+const DOCK_BTN = 46;
+const DOCK_GAP = 14;
+const DOCK_PAD = 12;
+const DOCK_COUNT = 4;
+const DOCK_H = DOCK_COUNT * DOCK_BTN + (DOCK_COUNT - 1) * DOCK_GAP + DOCK_PAD * 2;
+const DOCK_W = DOCK_BTN + 22;
+const DOCK_TOGGLE = 54;
+const BURST_DIRS = Array.from({ length: 8 }, (_, k) => ({ dx: Math.cos((k * Math.PI) / 4) * 40, dy: Math.sin((k * Math.PI) / 4) * 40 }));
+
+const MagicDock = ({ items, open, onToggle, c0, c2 }: { items: { key: string, color: string, icon: React.ReactNode, onPress: () => void, active?: boolean }[], open: boolean, onToggle: () => void, c0: string, c2: string }) => {
+    const h = useRef(new Animated.Value(0)).current;               // capsule height (JS driver)
+    const spinV = useRef(new Animated.Value(0)).current;           // handle icon rotation
+    const burst = useRef(new Animated.Value(0)).current;           // sparkle burst
+    const press = useRef(new Animated.Value(0)).current;
+    const itemAnims = useRef(items.map(() => new Animated.Value(0))).current;
+
+    useEffect(() => {
+        if (open) {
+            Animated.timing(h, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+            Animated.timing(spinV, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+            burst.setValue(0);
+            Animated.timing(burst, { toValue: 1, duration: 800, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+            Animated.stagger(85, itemAnims.map(v => Animated.spring(v, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }))).start();
+        } else {
+            Animated.stagger(40, [...itemAnims].reverse().map(v => Animated.timing(v, { toValue: 0, duration: 180, easing: Easing.in(Easing.quad), useNativeDriver: true }))).start();
+            Animated.timing(h, { toValue: 0, duration: 320, delay: 120, easing: Easing.in(Easing.cubic), useNativeDriver: false }).start();
+            Animated.timing(spinV, { toValue: 0, duration: 320, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start();
+        }
+    }, [open]);
+
+    const pressScale = press.interpolate({ inputRange: [0, 1], outputRange: [1, 0.9] });
+    const handleRotate = spinV.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '180deg'] });
+
+    return (
+        <View style={{ alignItems: 'center' }}>
+            {/* HANDLE (the single slider button) */}
+            <View style={{ width: DOCK_TOGGLE, height: DOCK_TOGGLE, alignItems: 'center', justifyContent: 'center' }}>
+                {open && <PulseRings color={c0} size={DOCK_TOGGLE - 6} />}
+                {BURST_DIRS.map((d, i) => (
+                    <Animated.View
+                        key={i}
+                        pointerEvents="none"
+                        style={{
+                            position: 'absolute',
+                            opacity: burst.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 1, 0] }),
+                            transform: [
+                                { translateX: burst.interpolate({ inputRange: [0, 1], outputRange: [0, d.dx] }) },
+                                { translateY: burst.interpolate({ inputRange: [0, 1], outputRange: [0, d.dy] }) },
+                                { scale: burst.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0.3, 1.2, 0.4] }) },
+                            ],
+                        }}
+                    >
+                        <MaterialCommunityIcons name="star-four-points" size={12} color={i % 2 === 0 ? '#FFD700' : '#22D3EE'} />
+                    </Animated.View>
+                ))}
+                <TouchableOpacity
+                    activeOpacity={0.92}
+                    onPress={onToggle}
+                    onPressIn={() => Animated.spring(press, { toValue: 1, speed: 40, bounciness: 4, useNativeDriver: true }).start()}
+                    onPressOut={() => Animated.spring(press, { toValue: 0, speed: 20, bounciness: 10, useNativeDriver: true }).start()}
+                >
+                    <Animated.View style={{ transform: [{ scale: pressScale }] }}>
+                        <SpinRing size={DOCK_TOGGLE} colors={[c0, c2, '#FFFFFF', c0]} speed={4500}>
+                            <LinearGradient
+                                colors={open ? ['#22D3EE', '#4338CA'] : ['#7C3AED', '#312E81']}
+                                start={{ x: 0.2, y: 0 }}
+                                end={{ x: 0.8, y: 1 }}
+                                style={{ width: DOCK_TOGGLE - 6, height: DOCK_TOGGLE - 6, borderRadius: (DOCK_TOGGLE - 6) / 2, alignItems: 'center', justifyContent: 'center' }}
+                            >
+                                <Animated.View style={{ transform: [{ rotate: handleRotate }] }}>
+                                    <Ionicons name={open ? 'close' : 'apps'} size={24} color="#FFFFFF" />
+                                </Animated.View>
+                            </LinearGradient>
+                        </SpinRing>
+                    </Animated.View>
+                </TouchableOpacity>
+            </View>
+
+            {/* GLASS CAPSULE (slider track) with the 4 buttons inside */}
+            <Animated.View
+                style={{
+                    marginTop: 10,
+                    width: DOCK_W,
+                    height: h.interpolate({ inputRange: [0, 1], outputRange: [0, DOCK_H] }),
+                    borderRadius: DOCK_W / 2,
+                    overflow: 'hidden',
+                    opacity: h.interpolate({ inputRange: [0, 0.12, 1], outputRange: [0, 1, 1] }),
+                }}
+            >
+                <LinearGradient colors={[c0, c2, c0]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                <View style={{ position: 'absolute', top: 1.5, left: 1.5, right: 1.5, bottom: 1.5, borderRadius: DOCK_W / 2 - 1.5, backgroundColor: 'rgba(6,10,26,0.92)' }} />
+                <LinearGradient
+                    colors={['transparent', c0, c2, 'transparent']}
+                    style={{ position: 'absolute', left: DOCK_W / 2 - 1.5, width: 3, top: DOCK_PAD, height: DOCK_H - DOCK_PAD * 2, borderRadius: 2, opacity: 0.5 }}
+                />
+                <View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: DOCK_H, paddingVertical: DOCK_PAD, alignItems: 'center' }}>
+                    {items.map((it, i) => {
+                        const v = itemAnims[i];
+                        const fromY = -(DOCK_PAD + i * (DOCK_BTN + DOCK_GAP) + DOCK_BTN / 2 + 6);
+                        return (
+                            <Animated.View
+                                key={it.key}
+                                style={{
+                                    marginBottom: i === items.length - 1 ? 0 : DOCK_GAP,
+                                    opacity: v.interpolate({ inputRange: [0, 0.4, 1], outputRange: [0, 1, 1] }),
+                                    transform: [
+                                        { perspective: 700 },
+                                        { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [fromY, 0] }) },
+                                        { rotateY: v.interpolate({ inputRange: [0, 1], outputRange: ['90deg', '0deg'] }) },
+                                        { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['-200deg', '0deg'] }) },
+                                        { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.2, 1] }) },
+                                    ],
+                                }}
+                            >
+                                <GlowOrbButton color={it.color} active={it.active} onPress={it.onPress} size={DOCK_BTN} glow={false}>
+                                    {it.icon}
+                                </GlowOrbButton>
+                            </Animated.View>
+                        );
+                    })}
+                </View>
+            </Animated.View>
+        </View>
+    );
+};
+
+// 🆕 🎚️ BEAUTY SLIDER (drag with finger, smooth, touch never leaks to anything else)
+const BeautySlider = ({ label, icon, color, value, onChange }: { label: string, icon: string, color: string, value: number, onChange: (v: number) => void }) => {
+    const [w, setW] = useState(0);
+    const wRef = useRef(0);
+    const startV = useRef(0);
+    const latest = useRef(value);
+    const lastPush = useRef(0);
+    const dragging = useRef(false);
+    const cb = useRef(onChange);
+    cb.current = onChange;
+    const [local, setLocal] = useState(value);
+
+    useEffect(() => {
+        if (!dragging.current) {
+            setLocal(value);
+            latest.current = value;
+        }
+    }, [value]);
+
+    const pan = useRef(
+        PanResponder.create({
+            onStartShouldSetPanResponder: () => true,
+            onMoveShouldSetPanResponder: () => true,
+            onPanResponderTerminationRequest: () => false,
+            onPanResponderGrant: (e) => {
+                dragging.current = true;
+                const v = clamp01(e.nativeEvent.locationX / (wRef.current || 1));
+                startV.current = v;
+                latest.current = v;
+                setLocal(v);
+                lastPush.current = Date.now();
+                cb.current(Math.round(v * 100) / 100);
+            },
+            onPanResponderMove: (_, g) => {
+                const v = clamp01(startV.current + g.dx / (wRef.current || 1));
+                latest.current = v;
+                setLocal(v);
+                const now = Date.now();
+                if (now - lastPush.current > 80) {
+                    lastPush.current = now;
+                    cb.current(Math.round(v * 100) / 100);
+                }
+            },
+            onPanResponderRelease: () => {
+                dragging.current = false;
+                cb.current(Math.round(latest.current * 100) / 100);
+            },
+            onPanResponderTerminate: () => {
+                dragging.current = false;
+                cb.current(Math.round(latest.current * 100) / 100);
+            },
+        })
+    ).current;
+
+    const knob = 22;
+    const x = Math.max(0, Math.min(w, local * w));
+    return (
+        <View style={styles.sliderRow}>
+            <View style={[styles.sliderIcon, { backgroundColor: color }]}>
+                <MaterialCommunityIcons name={icon as any} size={16} color="#FFFFFF" />
+            </View>
+            <Text style={styles.sliderLabel} numberOfLines={1}>{label}</Text>
+            <View
+                style={styles.sliderHit}
+                onLayout={(e) => { wRef.current = e.nativeEvent.layout.width; setW(e.nativeEvent.layout.width); }}
+                {...pan.panHandlers}
+            >
+                <View pointerEvents="none" style={styles.sliderTrack}>
+                    <LinearGradient colors={[color, shade(color, 0.35)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={{ width: x, height: '100%', borderRadius: 4 }} />
+                </View>
+                <View pointerEvents="none" style={[styles.sliderKnob, { left: x - knob / 2, borderColor: color }]}>
+                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color }} />
+                </View>
+            </View>
+            <Text style={styles.sliderValue}>{Math.round(local * 100)}</Text>
+        </View>
+    );
+};
+
 export default function LiveStreamScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
+    const insets = useSafeAreaInsets();
     const engine = useRef<IRtcEngine | null>(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
     const shimmerAnim = useRef(new Animated.Value(0)).current;
@@ -74,7 +596,14 @@ export default function LiveStreamScreen() {
     
     const [activeViewers, setActiveViewers] = useState<any[]>([]);
     const [showProSettings, setShowProSettings] = useState(false);
-    const [ProLevel, setProLevel] = useState({ light: 0.7, smooth: 0.8 });
+    // 🆕 ProLevel now has 4 levels (light, smooth, red, sharp) - defaults keep the old behaviour (0.7 / 0.8 / 0.5 / 0.3)
+    const [ProLevel, setProLevel] = useState({ ...DEFAULT_BEAUTY });
+    const [activePreset, setActivePreset] = useState<string | null>(null);
+
+    // 🆕 Magic dock open/close + panel/rail animation values
+    const [dockOpen, setDockOpen] = useState(false);
+    const chatFade = useRef(new Animated.Value(1)).current;
+    const railIn = useRef(new Animated.Value(0)).current;
 
     const [currentLiveId] = useState(params.liveId as string || `live_${auth.currentUser?.uid}_${Date.now()}`);
 
@@ -203,6 +732,18 @@ export default function LiveStreamScreen() {
         const subscription = AppState.addEventListener('change', handleAppStateChange);
         return () => { subscription.remove(); };
     }, [currentLiveId]);
+
+    // 🆕 Rail flips in once + chat fades out while Beauty Studio is open (no more chat/panel touch conflict)
+    useEffect(() => {
+        Animated.sequence([
+            Animated.delay(300),
+            Animated.spring(railIn, { toValue: 1, friction: 6, tension: 70, useNativeDriver: true }),
+        ]).start();
+    }, []);
+
+    useEffect(() => {
+        Animated.timing(chatFade, { toValue: showProSettings ? 0 : 1, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+    }, [showProSettings]);
 
     useEffect(() => {
         const init = async () => {
@@ -613,18 +1154,49 @@ export default function LiveStreamScreen() {
         setIsFrontCamera(!isFrontCamera);
     };
 
-    const updatePro = (type: 'light' | 'smooth', val: number) => {
-        const newLevels = { ...ProLevel, [type]: val };
-        setProLevel(newLevels);
-        
+    // 🆕 BEAUTY STUDIO ENGINE: one place that pushes all 4 levels to Agora
+    const applyBeauty = (lv: { light: number, smooth: number, red: number, sharp: number }, preset: string | null = null) => {
+        setProLevel(lv);
+        setActivePreset(preset);
         engine.current?.setBeautyEffectOptions(true, {
             lighteningContrastLevel: LighteningContrastLevel.LighteningContrastNormal,
-            lighteningLevel: newLevels.light,
-            smoothnessLevel: newLevels.smooth,
-            rednessLevel: 0.5,
-            sharpnessLevel: 0.3
+            lighteningLevel: lv.light,
+            smoothnessLevel: lv.smooth,
+            rednessLevel: lv.red,
+            sharpnessLevel: lv.sharp
         });
         setIsProEnabled(true);
+    };
+
+    // old API kept (light / smooth) + new (red / sharp)
+    const updatePro = (type: 'light' | 'smooth' | 'red' | 'sharp', val: number) => {
+        applyBeauty({ ...ProLevel, [type]: val }, null);
+    };
+
+    const toggleBeautyPower = () => {
+        if (isProEnabled) {
+            engine.current?.setBeautyEffectOptions(false, {});
+            setIsProEnabled(false);
+        } else {
+            applyBeauty(ProLevel, activePreset);
+        }
+    };
+
+    const resetBeauty = () => {
+        applyBeauty({ ...DEFAULT_BEAUTY }, null);
+    };
+
+    // 🆕 open one, close the other (dock <-> beauty never overlap)
+    const toggleBeautyPanel = () => {
+        const next = !showProSettings;
+        setShowProSettings(next);
+        if (next) setDockOpen(false);
+    };
+
+    const toggleDock = () => {
+        const next = !dockOpen;
+        setDockOpen(next);
+        if (next) setShowProSettings(false);
     };
 
     const sendMessage = async () => {
@@ -762,8 +1334,85 @@ export default function LiveStreamScreen() {
 
     const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 
+    // ✨ Premium theme colours (from the host's level config)
+    const c0: string = hostConfig.colors[0];
+    const c2: string = hostConfig.colors[2];
+
+    // ✨ Gentle 3D sway for the host board (re-uses the shimmer loop)
+    const boardTiltX = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['2deg', '-2deg'] });
+    const boardTiltY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] });
+
+    const topPad = insets.top + 8;
+    const bottomPad = Math.max(insets.bottom, 10) + 8;
+
+    // 🆕 The 4 dock buttons (Reflex, Memory, Mute, Flip) - icons are solid white vector icons (clear, no shadow)
+    const dockItems = [
+        { key: 'reflex', color: '#06B6D4', icon: <MaterialCommunityIcons name="lightning-bolt" size={25} color="#FFFFFF" />, onPress: () => { setPendingGameType('reflex'); setDisclaimerVisible(true); } },
+        { key: 'memory', color: '#A855F7', icon: <MaterialCommunityIcons name="cards" size={24} color="#FFFFFF" />, onPress: () => { setPendingGameType('memory'); setDisclaimerVisible(true); } },
+        { key: 'mute', color: isMuted ? '#EF4444' : '#0EA5E9', active: isMuted, icon: <Ionicons name={isMuted ? "mic-off" : "mic"} size={23} color="#FFFFFF" />, onPress: toggleMute },
+        { key: 'flip', color: '#6366F1', icon: <Ionicons name="camera-reverse" size={24} color="#FFFFFF" />, onPress: switchCamera },
+    ];
+
+    // ✨ ALWAYS-FLOATING CHAT ROW (host can clearly see who joins / who messages). Older rows fade out gradually.
+    const renderChatItem = ({ item, index }: { item: any, index: number }) => {
+        const fade = Math.max(0.3, 1 - index * 0.12);
+
+        if (item.isGift) {
+            return (
+                <View style={{ opacity: fade, alignSelf: 'flex-start' }}>
+                    <ChatPop style={styles.chatPopWrap}>
+                        <LinearGradient
+                            colors={['rgba(245, 158, 11, 0.35)', 'rgba(236, 72, 153, 0.35)']}
+                            start={{x:0, y:0}} end={{x:1, y:1}}
+                            style={styles.giftChatBubble}
+                        >
+                            <Text style={styles.giftChatText}>{item.text}</Text>
+                        </LinearGradient>
+                    </ChatPop>
+                </View>
+            );
+        }
+
+        if (item.isSystem) {
+            const t = String(item.text || '');
+            const isJoin = /joined/i.test(t);
+            const isLeft = /left|kicked/i.test(t);
+            const accent = isJoin ? '#22D3EE' : isLeft ? '#94A3B8' : '#F472B6';
+            return (
+                <View style={{ opacity: fade, alignSelf: 'flex-start' }}>
+                    <ChatPop style={styles.chatPopWrap}>
+                        <View style={[styles.sysPill, { borderColor: withAlpha(accent, 0.75) }]}>
+                            <View style={[styles.sysDot, { backgroundColor: accent }]}>
+                                <Ionicons name={isJoin ? 'person-add' : isLeft ? 'exit-outline' : 'information-circle'} size={11} color="#020617" />
+                            </View>
+                            <Text style={styles.sysText}>{t}</Text>
+                        </View>
+                    </ChatPop>
+                </View>
+            );
+        }
+
+        const msgBorder = index % 2 === 0 ? borderType1 : borderType2;
+        return (
+            <View style={{ opacity: fade, alignSelf: 'flex-start' }}>
+                <ChatPop style={styles.chatPopWrap}>
+                    {/* 🔥 Chat Message is Clickable to open the Kick/Block/Report menu 🔥 */}
+                    <TouchableOpacity activeOpacity={0.8} style={[styles.chatBubble, styles.chatBubbleRow, msgBorder]} onPress={() => handleUserClick(item, true)}>
+                        <LinearGradient colors={[c0, c2]} style={styles.chatInitial}>
+                            <Text style={styles.chatInitialText}>{(item.senderName || "U").charAt(0).toUpperCase()}</Text>
+                        </LinearGradient>
+                        <View style={{ flexShrink: 1 }}>
+                            <Text style={styles.chatName} numberOfLines={1}>{item.senderName}</Text>
+                            <Text style={styles.chatMessage}>{item.text}</Text>
+                        </View>
+                    </TouchableOpacity>
+                </ChatPop>
+            </View>
+        );
+    };
+
     return (
-        <SafeAreaView style={styles.container}>
+        <View style={styles.container}>
             <LinearGradient colors={hostConfig.colors[0] === '#ad57a6' ? ['#020617', '#0F172A'] : [`${hostConfig.colors[0]}15`, '#020617']} style={StyleSheet.absoluteFill} />
             <Animated.View style={[styles.shimmerOrb, { top: 100, right: -60, backgroundColor: hostConfig.colors[0], transform: [{ translateY: orbTranslateY }] }]} />
             <Animated.View style={[styles.shimmerOrb, { bottom: 150, left: -60, backgroundColor: hostConfig.colors[2], transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
@@ -775,114 +1424,101 @@ export default function LiveStreamScreen() {
                         {guestUid && <RtcTextureView canvas={{ uid: guestUid }} style={styles.halfVideo} />}
                     </View>
                 )}
-                {!joined && <Text style={styles.loadingText}>Connecting...</Text>}
+                {!joined && (
+                    <View style={styles.connectWrap}>
+                        {hostImage ? <Image source={{ uri: hostImage }} style={StyleSheet.absoluteFill} blurRadius={35} /> : null}
+                        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(2,6,23,0.72)' }]} />
+                        <View style={styles.pulseWrap}>
+                            <PulseRings color={c0} size={110} />
+                            <SpinRing size={96} colors={[c0, c2, '#FFFFFF', c0]} speed={3500}>
+                                {hostImage ? (
+                                    <Image source={{ uri: hostImage }} style={{ width: 90, height: 90, borderRadius: 45 }} />
+                                ) : (
+                                    <Text style={styles.initialsText}>{hostName ? hostName.charAt(0).toUpperCase() : "E"}</Text>
+                                )}
+                            </SpinRing>
+                        </View>
+                        <Text style={styles.loadingText}>Connecting...</Text>
+                    </View>
+                )}
             </View>
 
-            <View style={styles.headerContainer}>
-                <BlurView intensity={90} tint="dark" style={[styles.fullWidthCard, borderType1]}>
-                    <View style={styles.topRow}>
-                        <View style={styles.profileInfoSide}>
-                            <View style={styles.avatarWrapper}>
+            {/* 🔮 HOST BOARD (top of the phone): 3D swaying glass card with avatar, level, timer, viewers, rewards */}
+            <Animated.View pointerEvents="none" style={[styles.boardWrap, { top: topPad, transform: [{ perspective: 900 }, { rotateX: boardTiltX }, { rotateY: boardTiltY }] }]}>
+                <LinearGradient colors={[c0, c2, c0]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.boardBorder}>
+                    <BlurView intensity={70} tint="dark" style={styles.boardInner}>
+                        <View style={styles.avatarWrapper}>
+                            <SpinRing size={54} colors={[c0, c2, '#FFFFFF', c0]} speed={5000}>
                                 {hostImage ? (
-                                    <Image source={{ uri: hostImage }} style={[styles.hostAvatarMass, { borderColor: hostConfig.colors[0] }]} />
+                                    <Image source={{ uri: hostImage }} style={styles.hostAvatarMass} />
                                 ) : (
-                                    <View style={[styles.initialsCircleMass, { borderColor: hostConfig.colors[0] }]}>
+                                    <View style={styles.initialsCircleMass}>
                                         <Text style={styles.initialsText}>{hostName ? hostName.charAt(0).toUpperCase() : "E"}</Text>
                                     </View>
                                 )}
-                                <View style={[styles.crownBadgeMass, { borderColor: '#020617' }]}>
-                                    <MaterialCommunityIcons name="crown" size={10} color="#FFF" />
-                                </View>
+                            </SpinRing>
+                            <View style={[styles.crownBadgeMass, { backgroundColor: c0 }]}>
+                                <MaterialCommunityIcons name="crown" size={10} color="#FFF" />
                             </View>
-                            <View style={styles.nameAndStats}>
-                                <View style={{flexDirection: 'column', alignItems: 'flex-start', gap: 2}}>
-                                    <Text style={styles.hostNameHeaderMass} numberOfLines={1}>{hostName || "Host"}</Text>
-                                    <View style={{ backgroundColor: hostConfig.colors[0] + '30', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6, borderWidth: 1, borderColor: hostConfig.colors[0], alignSelf: 'flex-start' }}>
-                                        <Text style={{ color: hostConfig.colors[0] === '#ad57a6' ? '#FFF' : hostConfig.colors[0], fontSize: 8, fontWeight: '900', textTransform: 'uppercase' }}>{hostConfig.label}</Text>
-                                    </View>
+                        </View>
+                        <View style={styles.boardTextCol}>
+                            <Text style={styles.hostNameHeaderMass} numberOfLines={1}>{hostName || "Host"}</Text>
+                            <View style={[styles.levelPill, { backgroundColor: withAlpha(c0, 0.22), borderColor: c0 }]}>
+                                <Text style={styles.levelPillText} numberOfLines={1}>{hostConfig.label}</Text>
+                            </View>
+                            <View style={styles.statsRow}>
+                                <LinearGradient colors={['#EF4444', '#F97316']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.liveBadgeMass}>
+                                    <PulseDot color="#FFF" size={5} />
+                                    <Text style={styles.liveText}>{formatTime(seconds)}</Text>
+                                </LinearGradient>
+                                <View style={styles.viewerBadgeMass}>
+                                    <Ionicons name="eye" size={11} color="#00F2FE" />
+                                    <Text style={styles.viewerCountTextMass}>{viewerCount}</Text>
                                 </View>
-                                
-                                <View style={styles.statsRow}>
-                                    <View style={styles.liveBadgeMass}>
-                                        <Text style={styles.liveText}>{formatTime(seconds)}</Text>
-                                    </View>
-                                    <View style={styles.viewerBadgeMass}>
-                                        <Ionicons name="eye" size={10} color="#00F2FE" />
-                                        <Text style={styles.viewerCountTextMass}>{viewerCount}</Text>
-                                    </View>
+                                <View style={styles.beanBadge}>
+                                    <Text style={styles.beanText}>🎖️ {sessionEarnedBeans}</Text>
                                 </View>
                             </View>
                         </View>
+                    </BlurView>
+                </LinearGradient>
+            </Animated.View>
 
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            {/* 🔥 SATTI FIX: REPLACED DIRECT GAME LAUNCH WITH DISCLAIMER TRIGGER 🔥 */}
-                            <TouchableOpacity onPress={() => { setPendingGameType('reflex'); setDisclaimerVisible(true); }} style={[styles.closeIcon, { borderColor: '#00f2ff', borderWidth: 1, backgroundColor: 'rgba(0, 242, 254, 0.15)' }]}>
-                                <View style={{ width: 16, height: 16 }}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 2 }}>
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#FF2A5F', borderRadius: 2 }} />
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#00F2FE', borderRadius: 2 }} />
-                                    </View>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#10B981', borderRadius: 2 }} />
-                                        <View style={{ width: 7, height: 7, backgroundColor: '#FFD700', borderRadius: 2 }} />
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
+            {/* END LIVE BUTTON (same action as the old X) */}
+            <View style={[styles.endBtnWrap, { top: topPad + 17 }]}>
+                <GlowOrbButton color="#EF4444" size={48} onPress={leaveChannel}>
+                    <Ionicons name="power" size={22} color="#FFF" />
+                </GlowOrbButton>
+            </View>
 
-                            {/* 🔥 SATTI FIX: REPLACED DIRECT GAME LAUNCH WITH DISCLAIMER TRIGGER 🔥 */}
-                            <TouchableOpacity
-                                onPress={() => { setPendingGameType('memory'); setDisclaimerVisible(true); }}
-                                style={[styles.closeIcon, {
-                                    borderColor: '#A855F7',
-                                    borderWidth: 1.5,
-                                    backgroundColor: 'rgba(168, 85, 247, 0.2)',
-                                    justifyContent: 'center',
-                                    alignItems: 'center'
-                                }]}
-                            >
-                                <View style={{
-                                    width: 24,
-                                    height: 24,
-                                    flexDirection: 'row',
-                                    flexWrap: 'wrap',
-                                    justifyContent: 'center',
-                                    alignItems: 'center'
-                                }}>
-                                    <Text style={{ fontSize: 9 }}>🍎</Text>
-                                    <Text style={{ fontSize: 9 }}>🍌</Text>
-                                    <Text style={{ fontSize: 9 }}>🍇</Text>
-                                    <Text style={{ fontSize: 9 }}>🍓</Text>
-                                </View>
-                            </TouchableOpacity>
-
-                            <TouchableOpacity onPress={leaveChannel} style={[styles.closeIcon, { borderColor: hostConfig.colors[2] + '40', borderWidth: 1 }]}>
-                                <Ionicons name="close" size={22} color="#FFF" />
-                            </TouchableOpacity>
-
-                        </View>
+            {/* 👥 AUDIENCE STRIP: avatars of everyone watching (tap = Kick / Block / Report menu) */}
+            <View style={[styles.viewersWrap, { top: topPad + 94 }]}>
+                <BlurView intensity={55} tint="dark" style={styles.viewersInner}>
+                    <View style={styles.viewersIcon}>
+                        <Ionicons name="people" size={14} color="#FFF" />
                     </View>
-                </BlurView>
-                
-                <View style={styles.activeViewersList}>
                     <FlatList
                         horizontal
                         data={activeViewers}
                         keyExtractor={(item) => item.id}
                         showsHorizontalScrollIndicator={false}
+                        style={{ flex: 1 }}
+                        contentContainerStyle={{ alignItems: 'center', paddingRight: 8 }}
+                        ListEmptyComponent={<Text style={styles.waitingText}>Waiting for viewers...</Text>}
                         renderItem={({ item }) => (
-                            // 🔥 NEW: Viewer List Item is now Clickable to show Profile Menu 🔥
+                            // 🔥 Viewer List Item is Clickable to show Profile Menu 🔥
                             <TouchableOpacity style={styles.viewerItem} activeOpacity={0.8} onPress={() => handleUserClick(item, false)}>
                                 {item.photoURL ? (
-                                    <Image source={{ uri: item.photoURL }} style={styles.viewerAvatar} />
+                                    <Image source={{ uri: item.photoURL }} style={[styles.viewerAvatar, { borderColor: c0 }]} />
                                 ) : (
-                                    <View style={[styles.viewerAvatar, { backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' }]}>
+                                    <View style={[styles.viewerAvatar, { borderColor: c0, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' }]}>
                                         <Text style={{ color: '#FFF', fontSize: 12, fontWeight: '900' }}>{item.name?.charAt(0).toUpperCase()}</Text>
                                     </View>
                                 )}
                             </TouchableOpacity>
                         )}
                     />
-                </View>
+                </BlurView>
             </View>
 
             <GiftOverlay
@@ -891,53 +1527,58 @@ export default function LiveStreamScreen() {
             />
 
             {pinnedMessage && (
-                <View style={styles.pinnedBox}>
+                <View style={[styles.pinnedBox, { top: topPad + 156 }]}>
                     <Ionicons name="pin" size={16} color="#00F2FE" />
                     <Text style={styles.pinnedText} numberOfLines={1}>{pinnedMessage.text}</Text>
                 </View>
             )}
 
+            {/* 📞 INCOMING CALL (premium 3D card) */}
             {incomingCall && (
                 <View style={styles.callOverlayMass}>
                     <Animated.View style={[styles.callCardWrapper, { transform: [{ scale: pulseAnim }] }]}>
-                        <BlurView intensity={90} tint="dark" style={styles.callCardMass}>
-                            <LinearGradient
-                                colors={['rgba(2, 6, 23, 0.98)', 'rgba(15, 23, 42, 0.95)', 'rgba(0, 242, 254, 0.15)']}
-                                style={StyleSheet.absoluteFill}
-                            />
-                            
-                            <View style={styles.callerAvatarRing}>
-                                {incomingCall.callerImage ? (
-                                    <Image source={{ uri: incomingCall.callerImage }} style={styles.callerCallAvatar} />
-                                ) : (
-                                    <View style={styles.callerCallInitials}>
-                                        <Text style={styles.callerCallInitialsText}>
-                                            {incomingCall.userName ? incomingCall.userName.charAt(0).toUpperCase() : "U"}
-                                        </Text>
-                                    </View>
-                                )}
-                                <View style={styles.radarGlow} />
-                            </View>
+                        <LinearGradient colors={['#00F2FE', c0, '#00F2FE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.callCardBorder}>
+                            <BlurView intensity={90} tint="dark" style={styles.callCardMass}>
+                                <LinearGradient
+                                    colors={['rgba(2, 6, 23, 0.98)', 'rgba(15, 23, 42, 0.95)', 'rgba(0, 242, 254, 0.15)']}
+                                    style={StyleSheet.absoluteFill}
+                                />
 
-                            <Text style={styles.callPulseText}>INCOMING CALL</Text>
-                            <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "USER"}</Text>
-                            
-                            <View style={styles.callActionsMass}>
-                                <TouchableOpacity onPress={() => handleCallAction('rejected')} activeOpacity={0.8} style={styles.actionBtnHitbox}>
-                                    <LinearGradient colors={['#F43F5E', '#9F1239']} style={styles.callBtnMass}>
-                                        <Ionicons name="close" size={28} color="#FFF" />
-                                    </LinearGradient>
-                                    <Text style={styles.callBtnLabel}>DECLINE</Text>
-                                </TouchableOpacity>
-                                
-                                <TouchableOpacity onPress={() => handleCallAction('accepted')} activeOpacity={0.8} style={styles.actionBtnHitbox}>
-                                    <LinearGradient colors={['#10B981', '#059669']} style={styles.callBtnMass}>
-                                        <Ionicons name="videocam" size={28} color="#FFF" />
-                                    </LinearGradient>
-                                    <Text style={styles.callBtnLabel}>ACCEPT</Text>
-                                </TouchableOpacity>
-                            </View>
-                        </BlurView>
+                                <View style={styles.callerAvatarRing}>
+                                    <PulseRings color="#00F2FE" size={92} />
+                                    <SpinRing size={96} colors={['#00F2FE', c0, '#FFFFFF', '#00F2FE']} speed={3500}>
+                                        {incomingCall.callerImage ? (
+                                            <Image source={{ uri: incomingCall.callerImage }} style={styles.callerCallAvatar} />
+                                        ) : (
+                                            <View style={styles.callerCallInitials}>
+                                                <Text style={styles.callerCallInitialsText}>
+                                                    {incomingCall.userName ? incomingCall.userName.charAt(0).toUpperCase() : "U"}
+                                                </Text>
+                                            </View>
+                                        )}
+                                    </SpinRing>
+                                </View>
+
+                                <Text style={styles.callPulseText}>INCOMING CALL</Text>
+                                <Text style={styles.callInfoTextMass} numberOfLines={1}>{incomingCall.userName?.toUpperCase() || "USER"}</Text>
+
+                                <View style={styles.callActionsMass}>
+                                    <View style={styles.actionBtnHitbox}>
+                                        <GlowOrbButton color="#F43F5E" size={68} onPress={() => handleCallAction('rejected')}>
+                                            <Ionicons name="close" size={30} color="#FFF" />
+                                        </GlowOrbButton>
+                                        <Text style={styles.callBtnLabel}>DECLINE</Text>
+                                    </View>
+
+                                    <View style={styles.actionBtnHitbox}>
+                                        <GlowOrbButton color="#10B981" size={68} onPress={() => handleCallAction('accepted')}>
+                                            <Ionicons name="videocam" size={30} color="#FFF" />
+                                        </GlowOrbButton>
+                                        <Text style={styles.callBtnLabel}>ACCEPT</Text>
+                                    </View>
+                                </View>
+                            </BlurView>
+                        </LinearGradient>
                     </Animated.View>
                 </View>
             )}
@@ -945,101 +1586,135 @@ export default function LiveStreamScreen() {
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }} pointerEvents="box-none">
                 <View style={{ flex: 1 }} pointerEvents="none" />
 
-                <View style={styles.interactionArea} pointerEvents="box-none">
-
-                    {showProSettings && (
-                        <View style={styles.ProSettingsBar}>
-                            <View style={styles.settingGroup}>
-                                <Text style={styles.settingLabel}>BRIGHTNESS</Text>
-                                <View style={styles.chipRow}>
-                                    <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
-                                        <Text style={styles.chipText}>High</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
-                                        <Text style={styles.chipText}>Low</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                            <View style={styles.settingDivider} />
-                            <View style={styles.settingGroup}>
-                                <Text style={styles.settingLabel}>SMOOTHNESS</Text>
-                                <View style={styles.chipRow}>
-                                    <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
-                                        <Text style={styles.chipText}>Max</Text>
-                                    </TouchableOpacity>
-                                    <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
-                                        <Text style={styles.chipText}>Natural</Text>
-                                    </TouchableOpacity>
-                                </View>
-                            </View>
-                        </View>
-                    )}
-
-                    <FlatList
-                        data={messages}
-                        keyExtractor={(item) => item.id}
-                        inverted={true}
-                        renderItem={({ item, index }) => {
-                            if (item.isGift) {
-                                return (
-                                    <LinearGradient
-                                        colors={['rgba(245, 158, 11, 0.2)', 'rgba(236, 72, 153, 0.2)']}
-                                        start={{x:0, y:0}} end={{x:1, y:1}}
-                                        style={styles.giftChatBubble}
-                                    >
-                                        <Text style={styles.giftChatText}>{item.text}</Text>
-                                    </LinearGradient>
-                                );
-                            }
-
-                            if (item.isSystem) {
-                                return (
-                                    <View style={[styles.chatBubble, { backgroundColor: 'rgba(16, 185, 129, 0.1)', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6 }]}>
-                                        <Text style={[styles.chatText, { color: '#fc05ae', fontWeight: 'bold' }]}>{item.text}</Text>
-                                    </View>
-                                );
-                            }
-
-                            const msgBorder = index % 2 === 0 ? borderType1 : borderType2;
-                            return (
-                                // 🔥 NEW: Chat Message is now Clickable too 🔥
-                                <TouchableOpacity activeOpacity={0.8} style={[styles.chatBubble, msgBorder]} onPress={() => handleUserClick(item, true)}>
-                                    <Text style={styles.chatName}>{item.senderName}: <Text style={styles.chatMessage}>{item.text}</Text></Text>
-                                </TouchableOpacity>
-                            );
-                        }}
-                        style={styles.chatList}
-                        contentContainerStyle={{ paddingTop: 20 }}
-                        showsVerticalScrollIndicator={false}
-                    />
-
-                    <View style={styles.bottomBar}>
-                        <TextInput
-                            style={styles.input}
-                            placeholder="Connect..."
-                            placeholderTextColor="#94A3B8"
-                            value={inputText}
-                            onChangeText={setInputText}
+                <View style={[styles.interactionArea, { paddingBottom: bottomPad }]} pointerEvents="box-none">
+                    {/* 💬 ALWAYS-FLOATING LIVE CHAT: newest at the bottom, older messages fade up.
+                        🆕 Fades out + stops taking touches while the Beauty Studio is open (no conflict) */}
+                    <Animated.View style={{ flex: 1, justifyContent: 'flex-end', opacity: chatFade }} pointerEvents={showProSettings ? 'none' : 'box-none'}>
+                        <FlatList
+                            data={messages}
+                            keyExtractor={(item) => item.id}
+                            inverted={true}
+                            renderItem={renderChatItem}
+                            style={styles.chatList}
+                            contentContainerStyle={{ paddingTop: 20 }}
+                            showsVerticalScrollIndicator={false}
                         />
-                        
-                        <TouchableOpacity onPress={sendMessage} style={styles.iconAction}>
-                            <Ionicons name="send" size={18} color="#00F2FE" />
-                        </TouchableOpacity>
 
-                        <TouchableOpacity onPress={() => setShowProSettings(!showProSettings)} style={[styles.iconAction, showProSettings && styles.activePro]}>
-                            <MaterialCommunityIcons name="face-man-shimmer" size={20} color={showProSettings ? "#FFF" : "#00F2FE"} />
-                        </TouchableOpacity>
+                        <View style={styles.bottomBar}>
+                            <LinearGradient colors={[withAlpha(c0, 0.9), withAlpha(c2, 0.9)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.inputBorder}>
+                                <TextInput
+                                    style={styles.input}
+                                    placeholder="Connect..."
+                                    placeholderTextColor="#94A3B8"
+                                    value={inputText}
+                                    onChangeText={setInputText}
+                                />
+                            </LinearGradient>
 
-                        <TouchableOpacity onPress={toggleMute} style={[styles.iconAction, isMuted && styles.activeIcon]}>
-                            <Ionicons name={isMuted ? "mic-off" : "mic"} size={18} color={isMuted ? "#FFF" : "#00F2FE"} />
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={switchCamera} style={styles.iconAction}>
-                            <Ionicons name="camera-reverse" size={18} color="#00F2FE" />
-                        </TouchableOpacity>
-                    </View>
+                            <GlowOrbButton color="#00BCD4" size={46} onPress={sendMessage}>
+                                <Ionicons name="send" size={18} color="#FFF" />
+                            </GlowOrbButton>
+                        </View>
+                    </Animated.View>
                 </View>
             </KeyboardAvoidingView>
+
+            {/* 🎛️ RIGHT SIDE: Ultra Beauty button + ONE magic slider handle (the 4 buttons live inside it).
+                🆕 Rendered AFTER the chat layer so it always sits on top and never loses touches */}
+            <Animated.View
+                pointerEvents="box-none"
+                style={[
+                    styles.rail,
+                    {
+                        top: topPad + 160,
+                        opacity: railIn,
+                        transform: [
+                            { perspective: 700 },
+                            { translateX: railIn.interpolate({ inputRange: [0, 1], outputRange: [70, 0] }) },
+                            { rotateY: railIn.interpolate({ inputRange: [0, 1], outputRange: ['-70deg', '0deg'] }) },
+                            { scale: railIn },
+                        ],
+                    },
+                ]}
+            >
+                <BeautyUltraButton active={showProSettings} onPress={toggleBeautyPanel} />
+                <View style={{ height: 16 }} />
+                <MagicDock items={dockItems} open={dockOpen} onToggle={toggleDock} c0={c0} c2={c2} />
+            </Animated.View>
+
+            {/* ✨ BEAUTY STUDIO (pro filter panel) - root level, above chat, own touch layer */}
+            <MagicPanel visible={showProSettings} style={[styles.proPanelWrap, { bottom: bottomPad }]}>
+                <LinearGradient colors={['#EC4899', '#A855F7', '#22D3EE', '#EC4899']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.panelBorder}>
+                    <BlurView intensity={80} tint="dark" style={styles.panelInner}>
+                        {/* header */}
+                        <View style={styles.panelHeader}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+                                <LinearGradient colors={['#F472B6', '#7C3AED']} style={styles.studioIcon}>
+                                    <MaterialCommunityIcons name="face-man-shimmer" size={20} color="#FFFFFF" />
+                                </LinearGradient>
+                                <View style={{ flexShrink: 1 }}>
+                                    <Text style={styles.panelTitle} numberOfLines={1}>Beauty Studio</Text>
+                                    <Text style={styles.panelSub} numberOfLines={1}>Smooth • Glow • Rosy • Sharp</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity onPress={toggleBeautyPower} activeOpacity={0.85} style={[styles.powerPill, { backgroundColor: isProEnabled ? '#10B981' : '#475569' }]}>
+                                <Text style={styles.powerText}>{isProEnabled ? 'ON' : 'OFF'}</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={resetBeauty} activeOpacity={0.85} style={[styles.panelCloseBtn, { marginLeft: 8 }]}>
+                                <Ionicons name="refresh" size={17} color="#FFF" />
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => setShowProSettings(false)} activeOpacity={0.85} style={[styles.panelCloseBtn, { marginLeft: 8 }]}>
+                                <Ionicons name="chevron-down" size={20} color="#FFF" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* presets */}
+                        <View style={styles.presetRow}>
+                            {BEAUTY_PRESETS.map((p) => {
+                                const on = activePreset === p.key;
+                                return (
+                                    <TouchableOpacity key={p.key} activeOpacity={0.85} onPress={() => applyBeauty({ ...p.lv }, p.key)} style={[styles.presetCard, on && { borderColor: p.color, backgroundColor: withAlpha(p.color, 0.22) }]}>
+                                        <View style={[styles.presetIcon, { backgroundColor: p.color }]}>
+                                            <MaterialCommunityIcons name={p.icon as any} size={18} color="#FFFFFF" />
+                                        </View>
+                                        <Text style={styles.presetText}>{p.key}</Text>
+                                    </TouchableOpacity>
+                                );
+                            })}
+                        </View>
+
+                        {/* sliders */}
+                        <View style={styles.sliderBox}>
+                            {BEAUTY_SLIDERS.map((s) => (
+                                <BeautySlider
+                                    key={s.key}
+                                    label={s.label}
+                                    icon={s.icon}
+                                    color={s.color}
+                                    value={ProLevel[s.key]}
+                                    onChange={(v) => updatePro(s.key, v)}
+                                />
+                            ))}
+                        </View>
+
+                        {/* quick chips (old High / Low / Max / Natural kept) */}
+                        <View style={styles.quickRow}>
+                            <TouchableOpacity onPress={() => updatePro('light', 0.9)} style={[styles.chip, ProLevel.light === 0.9 && styles.activeChip]}>
+                                <Text style={styles.chipText}>Bright High</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => updatePro('light', 0.4)} style={[styles.chip, ProLevel.light === 0.4 && styles.activeChip]}>
+                                <Text style={styles.chipText}>Bright Low</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => updatePro('smooth', 0.9)} style={[styles.chip, ProLevel.smooth === 0.9 && styles.activeChip]}>
+                                <Text style={styles.chipText}>Smooth Max</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity onPress={() => updatePro('smooth', 0.3)} style={[styles.chip, ProLevel.smooth === 0.3 && styles.activeChip]}>
+                                <Text style={styles.chipText}>Natural</Text>
+                            </TouchableOpacity>
+                        </View>
+                    </BlurView>
+                </LinearGradient>
+            </MagicPanel>
 
             <LiveGameSheet
                 visible={gameVisible}
@@ -1057,21 +1732,46 @@ export default function LiveStreamScreen() {
                 entryFee={0}
             />
 
+            {/* 📊 SESSION SUMMARY */}
             <Modal visible={showSummary} transparent animationType="fade">
                 <View style={styles.modalOverlay}>
                     <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
-                    <View style={styles.summaryCard}>
-                        <Text style={styles.summaryTitle}>SESSION SUMMARY</Text>
-                        <View style={styles.statGrid}>
-                            <View style={styles.statItem}><Text style={styles.statVal}>{formatTime(seconds)}</Text><Text style={styles.statLabel}>Duration</Text></View>
-                            <View style={styles.statItem}><Text style={styles.statVal}>{viewerCount}</Text><Text style={styles.statLabel}>Viewers</Text></View>
-                            <View style={styles.statItem}>
-                                <Text style={styles.statVal}>{sessionEarnedBeans} 🎖️</Text>
-                                <Text style={styles.statLabel}>Rewards Accrued</Text>
+                    <LinearGradient colors={[c0, c2, c0]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.summaryBorder}>
+                        <View style={styles.summaryCard}>
+                            <View style={{ marginBottom: 14 }}>
+                                <SpinRing size={72} colors={[c0, c2, '#FFFFFF', c0]} speed={5000}>
+                                    {hostImage ? (
+                                        <Image source={{ uri: hostImage }} style={{ width: 66, height: 66, borderRadius: 33 }} />
+                                    ) : (
+                                        <Text style={styles.initialsText}>{hostName ? hostName.charAt(0).toUpperCase() : "E"}</Text>
+                                    )}
+                                </SpinRing>
                             </View>
+                            <Text style={styles.summaryTitle}>SESSION SUMMARY</Text>
+                            <View style={styles.statGrid}>
+                                <View style={styles.statItem}>
+                                    <Ionicons name="time" size={16} color="#00F2FE" />
+                                    <Text style={styles.statVal}>{formatTime(seconds)}</Text>
+                                    <Text style={styles.statLabel}>Duration</Text>
+                                </View>
+                                <View style={styles.statItem}>
+                                    <Ionicons name="eye" size={16} color="#00F2FE" />
+                                    <Text style={styles.statVal}>{viewerCount}</Text>
+                                    <Text style={styles.statLabel}>Viewers</Text>
+                                </View>
+                                <View style={styles.statItem}>
+                                    <Ionicons name="gift" size={16} color="#F59E0B" />
+                                    <Text style={styles.statVal}>{sessionEarnedBeans} 🎖️</Text>
+                                    <Text style={styles.statLabel}>Rewards Accrued</Text>
+                                </View>
+                            </View>
+                            <TouchableOpacity activeOpacity={0.85} onPress={confirmExit} style={{ width: '100%' }}>
+                                <LinearGradient colors={['#00F2FE', '#0EA5E9']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.exitBtn}>
+                                    <Text style={styles.exitBtnText}>DONE</Text>
+                                </LinearGradient>
+                            </TouchableOpacity>
                         </View>
-                        <TouchableOpacity style={styles.exitBtn} onPress={confirmExit}><Text style={styles.exitBtnText}>DONE</Text></TouchableOpacity>
-                    </View>
+                    </LinearGradient>
                 </View>
             </Modal>
 
@@ -1081,6 +1781,7 @@ export default function LiveStreamScreen() {
                     <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setActionSheetVisible(false)} />
                     <View style={styles.actionSheetContainer}>
                         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <LinearGradient colors={['transparent', withAlpha(c0, 0.95), 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topEdgeGlow} pointerEvents="none" />
                         <View style={styles.actionSheetHandle} />
                         
                         <View style={styles.actionSheetProfileHeader}>
@@ -1115,6 +1816,7 @@ export default function LiveStreamScreen() {
                     <TouchableOpacity style={styles.actionSheetDismiss} onPress={() => setReportSheetVisible(false)} />
                     <View style={styles.actionSheetContainer}>
                         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <LinearGradient colors={['transparent', 'rgba(239,68,68,0.95)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topEdgeGlow} pointerEvents="none" />
                         <View style={styles.actionSheetHandle} />
                         <Text style={[styles.actionSheetTitle, { marginBottom: 15 }]}>Select Report Reason</Text>
 
@@ -1153,6 +1855,7 @@ export default function LiveStreamScreen() {
                 <View style={styles.actionSheetOverlay}>
                     <View style={[styles.actionSheetContainer, { paddingBottom: Platform.OS === 'ios' ? 40 : 30 }]}>
                         <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
+                        <LinearGradient colors={['transparent', 'rgba(245,158,11,0.95)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.topEdgeGlow} pointerEvents="none" />
                         <View style={styles.actionSheetHandle} />
                         <Text style={[styles.actionSheetTitle, { marginBottom: 15, color: '#F59E0B' }]}>🛡️ Host Skill Gaming Policy</Text>
 
@@ -1203,7 +1906,7 @@ export default function LiveStreamScreen() {
                 </View>
             </Modal>
 
-        </SafeAreaView>
+        </View>
     );
 }
 
@@ -1213,92 +1916,136 @@ const styles = StyleSheet.create({
     videoGrid: { flex: 1, flexDirection: 'column' },
     fullVideo: { flex: 1 },
     halfVideo: { flex: 0.5, borderBottomWidth: 1, borderColor: '#1E293B' },
-    loadingText: { color: '#00F2FE', alignSelf: 'center', marginTop: '50%', fontWeight: '900', letterSpacing: 2 },
-    
-    headerContainer: { position: 'absolute', top: 50, left: 15, right: 15, zIndex: 10 },
-    fullWidthCard: { padding: 18, borderRadius: 30, backgroundColor: 'rgba(2, 6, 23, 0.85)', overflow: 'hidden' },
-    topRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    profileInfoSide: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+    connectWrap: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    pulseWrap: { width: 220, height: 220, justifyContent: 'center', alignItems: 'center' },
+    loadingText: { color: '#00F2FE', alignSelf: 'center', marginTop: 10, fontWeight: '900', letterSpacing: 2 },
+    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+    topEdgeGlow: { position: 'absolute', top: 0, left: 20, right: 20, height: 1.5 },
+    orbBtn: { justifyContent: 'center', alignItems: 'center', borderWidth: 2 },
+
+    // 🔮 HOST BOARD (top of the phone)
+    boardWrap: { position: 'absolute', left: 12, right: 68, zIndex: 10 },
+    boardBorder: { padding: 1.5, borderRadius: 28 },
+    boardInner: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 26.5, overflow: 'hidden', backgroundColor: 'rgba(2, 6, 23, 0.6)' },
     avatarWrapper: { position: 'relative' },
-    hostAvatarMass: { width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)' },
-    initialsCircleMass: { width: 46, height: 46, borderRadius: 23, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)' },
+    hostAvatarMass: { width: 48, height: 48, borderRadius: 24 },
+    initialsCircleMass: { width: 48, height: 48, borderRadius: 24, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' },
     initialsText: { color: '#00F2FE', fontSize: 18, fontWeight: '900' },
     crownBadgeMass: { position: 'absolute', top: -3, right: -3, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#020617' },
-    nameAndStats: { marginLeft: 12, paddingVertical: 2 },
-    hostNameHeaderMass: { color: '#FFF', fontSize: 15, fontWeight: '900', maxWidth: 120, letterSpacing: -0.5 },
-    statsRow: { flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 10 },
-    liveBadgeMass: { backgroundColor: '#EF4444', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, elevation: 5, shadowColor: '#EF4444', shadowOpacity: 0.5, shadowRadius: 5 },
+    boardTextCol: { flex: 1, minWidth: 0, gap: 4 },
+    hostNameHeaderMass: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: -0.3, textShadowColor: 'rgba(0,0,0,0.7)', textShadowRadius: 4 },
+    levelPill: { alignSelf: 'flex-start', maxWidth: '100%', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 7, borderWidth: 1 },
+    levelPillText: { color: '#FFF', fontSize: 8, fontWeight: '900', textTransform: 'uppercase' },
+    statsRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+    liveBadgeMass: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 },
     liveText: { color: '#FFF', fontWeight: '900', fontSize: 10, letterSpacing: 1 },
-    viewerBadgeMass: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0, 242, 254, 0.1)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
+    viewerBadgeMass: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: 'rgba(0, 242, 254, 0.12)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.3)' },
     viewerCountTextMass: { color: '#00F2FE', fontSize: 11, fontWeight: '900' },
-    
-    gameBadgePill: { flexDirection: 'row', alignItems: 'center', height: 38, borderRadius: 19, paddingHorizontal: 12, gap: 8, justifyContent: 'center' },
-    gameBadgeText: { color: '#00F2FE', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
-    
-    closeIcon: { width: 38, height: 38, borderRadius: 19, backgroundColor: 'rgba(255,255,255,0.05)', justifyContent: 'center', alignItems: 'center' },
-    
-    activeViewersList: { marginTop: 15, paddingHorizontal: 15 },
-    viewerItem: { marginRight: 10 },
-    viewerAvatar: { width: 38, height: 38, borderRadius: 19, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: '#1E293B' },
-    
+    beanBadge: { backgroundColor: 'rgba(245, 158, 11, 0.16)', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)' },
+    beanText: { color: '#FCD34D', fontSize: 10, fontWeight: '900' },
+
+    endBtnWrap: { position: 'absolute', right: 12, zIndex: 11 },
+
+    // 👥 AUDIENCE STRIP
+    viewersWrap: { position: 'absolute', left: 12, right: 12, zIndex: 9 },
+    viewersInner: { flexDirection: 'row', alignItems: 'center', height: 50, borderRadius: 25, paddingHorizontal: 8, overflow: 'hidden', backgroundColor: 'rgba(2, 6, 23, 0.45)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+    viewersIcon: { width: 30, height: 30, borderRadius: 15, backgroundColor: 'rgba(255,255,255,0.16)', justifyContent: 'center', alignItems: 'center', marginRight: 8 },
+    waitingText: { color: '#CBD5E1', fontSize: 12, fontWeight: '700' },
+    viewerItem: { marginRight: 8 },
+    viewerAvatar: { width: 36, height: 36, borderRadius: 18, borderWidth: 2, borderColor: 'rgba(255,255,255,0.2)', backgroundColor: '#1E293B' },
+
+    pinnedBox: { position: 'absolute', left: 12, right: 72, backgroundColor: 'rgba(15, 23, 42, 0.7)', padding: 12, borderRadius: 15, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 5, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
+    pinnedText: { color: '#FFF', fontSize: 13, fontWeight: '700', flexShrink: 1 },
+
+    // 🎛️ RIGHT SIDE (beauty button + magic dock) - 🆕 on top of everything except modals / call card
+    rail: { position: 'absolute', right: 10, alignItems: 'center', zIndex: 20, elevation: 20 },
+    proTag: { marginTop: -4, backgroundColor: '#FFD700', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, borderWidth: 1, borderColor: '#FFFFFF' },
+    proTagText: { color: '#1F1300', fontSize: 7.5, fontWeight: '900', letterSpacing: 0.6 },
+
+    // 📞 INCOMING CALL
     callOverlayMass: { position: 'absolute', top: 0, bottom: 0, left: 0, right: 0, justifyContent: 'center', alignItems: 'center', zIndex: 99999, elevation: 99999, backgroundColor: 'rgba(2, 6, 23, 0.8)' },
-    callCardWrapper: { width: '80%', borderRadius: 30, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.4)', elevation: 30, shadowColor: '#00F2FE', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 25 },
-    callCardMass: { paddingVertical: 35, paddingHorizontal: 20, alignItems: 'center' },
-    callerAvatarRing: { width: 90, height: 90, borderRadius: 45, borderWidth: 2, borderColor: '#00F2FE', justifyContent: 'center', alignItems: 'center', marginBottom: 20, backgroundColor: '#0F172A', position: 'relative', elevation: 20, shadowColor: '#00F2FE', shadowRadius: 20, shadowOpacity: 0.6 },
-    callerCallAvatar: { width: 82, height: 82, borderRadius: 41 },
-    callerCallInitials: { width: 82, height: 82, borderRadius: 41, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' },
+    callCardWrapper: { width: '82%', borderRadius: 32, overflow: 'hidden' },
+    callCardBorder: { padding: 1.5, borderRadius: 32 },
+    callCardMass: { paddingVertical: 32, paddingHorizontal: 20, alignItems: 'center', borderRadius: 30.5, overflow: 'hidden' },
+    callerAvatarRing: { width: 110, height: 110, justifyContent: 'center', alignItems: 'center', marginBottom: 18 },
+    callerCallAvatar: { width: 90, height: 90, borderRadius: 45 },
+    callerCallInitials: { width: 90, height: 90, borderRadius: 45, backgroundColor: '#1E293B', justifyContent: 'center', alignItems: 'center' },
     callerCallInitialsText: { color: '#00F2FE', fontSize: 32, fontWeight: '900' },
-    radarGlow: { position: 'absolute', width: 130, height: 130, borderRadius: 65, backgroundColor: '#00F2FE', opacity: 0.2, filter: 'blur(15px)' },
     callPulseText: { color: '#00F2FE', fontSize: 11, fontWeight: '900', letterSpacing: 5, marginBottom: 10, textShadowColor: '#00F2FE', textShadowRadius: 5 },
-    callInfoTextMass: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 0, marginBottom: 30, textAlign: 'center', textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 10 },
-    callActionsMass: { flexDirection: 'row', gap: 40, width: '100%', justifyContent: 'center' },
+    callInfoTextMass: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 0, marginBottom: 28, textAlign: 'center', textShadowColor: 'rgba(255,255,255,0.4)', textShadowRadius: 10 },
+    callActionsMass: { flexDirection: 'row', gap: 44, width: '100%', justifyContent: 'center' },
     actionBtnHitbox: { alignItems: 'center' },
-    callBtnMass: { width: 65, height: 65, borderRadius: 32.5, justifyContent: 'center', alignItems: 'center', elevation: 20, shadowColor: '#000', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.3)' },
-    callBtnLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', textAlign: 'center', marginTop: 10, letterSpacing: 2 },
-    
-    giftPopup: { position: 'absolute', top: 150, alignSelf: 'center', zIndex: 10 },
-    giftGradient: { flexDirection: 'row', alignItems: 'center', padding: 12, borderRadius: 25, gap: 10 },
-    giftText: { color: '#FFF', fontWeight: 'bold' },
-    pinnedBox: { position: 'absolute', top: 185, left: 20, right: 20, backgroundColor: 'rgba(15, 23, 42, 0.7)', padding: 12, borderRadius: 15, flexDirection: 'row', alignItems: 'center', gap: 10, zIndex: 5, borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
-    pinnedText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
-    
-    interactionArea: { height: height * 0.45, paddingHorizontal: 20, paddingBottom: 15, justifyContent: 'flex-end' },
-    chatList: { flex: 1, marginBottom: 15 },
-    chatBubble: { backgroundColor: 'rgba(15, 23, 42, 0.6)', padding: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '85%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
+    callBtnLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', textAlign: 'center', marginTop: 12, letterSpacing: 2 },
+
+    // 💬 FLOATING CHAT
+    interactionArea: { height: height * 0.45, paddingHorizontal: 12, justifyContent: 'flex-end' },
+    chatList: { flex: 1, marginBottom: 12, width: '78%', alignSelf: 'flex-start' },
+    chatPopWrap: { alignSelf: 'flex-start', maxWidth: width * 0.74 },
+    chatBubble: { backgroundColor: 'rgba(8, 12, 28, 0.72)', padding: 10, borderRadius: 18, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '100%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    chatBubbleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    chatInitial: { width: 30, height: 30, borderRadius: 15, justifyContent: 'center', alignItems: 'center' },
+    chatInitialText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
     chatName: { color: '#fec300', fontWeight: '900', fontSize: 11, letterSpacing: 0.5 },
-    chatMessage: { color: '#FFF', fontWeight: '600', fontSize: 12 },
-    chatText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600' },
-    
-    giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 15, marginBottom: 8, alignSelf: 'flex-start', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.4)' },
-    giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 11, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 },
+    chatMessage: { color: '#FFF', fontWeight: '700', fontSize: 14 },
+    sysPill: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, paddingLeft: 6, paddingRight: 12, borderRadius: 18, marginBottom: 8, backgroundColor: 'rgba(8, 12, 28, 0.72)', borderWidth: 1, maxWidth: '100%' },
+    sysDot: { width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
+    sysText: { color: '#FFF', fontSize: 12, fontWeight: '800', flexShrink: 1 },
+    giftChatBubble: { paddingHorizontal: 15, paddingVertical: 10, borderRadius: 18, marginBottom: 8, alignSelf: 'flex-start', maxWidth: '100%', borderWidth: 1, borderColor: 'rgba(245, 158, 11, 0.7)' },
+    giftChatText: { color: '#FFF', fontWeight: '900', fontSize: 12, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 5 },
 
-    bottomBar: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-    input: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 25, height: 44, color: '#FFF', paddingHorizontal: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-    iconAction: { width: 40, height: 40, backgroundColor: 'rgba(15, 23, 42, 0.8)', borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
-    activeIcon: { backgroundColor: 'rgba(239, 68, 68, 0.2)', borderColor: '#EF4444' },
-    activePro: { backgroundColor: 'rgba(0, 242, 254, 0.2)', borderColor: '#feb200' },
-    
-    ProSettingsBar: { backgroundColor: 'rgba(15, 23, 42, 0.95)', borderRadius: 25, padding: 18, marginBottom: 15, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)' },
+    bottomBar: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    inputBorder: { flex: 1, padding: 1.5, borderRadius: 26 },
+    input: { backgroundColor: 'rgba(8, 12, 28, 0.92)', borderRadius: 24.5, height: 44, color: '#FFF', paddingHorizontal: 20 },
+
+    // ✨ BEAUTY STUDIO PANEL (🆕 root level, zIndex above chat)
+    proPanelWrap: { position: 'absolute', left: 12, right: 12, zIndex: 30, elevation: 30 },
+    panelBorder: { padding: 1.5, borderRadius: 28 },
+    panelInner: { borderRadius: 26.5, overflow: 'hidden', padding: 12, backgroundColor: 'rgba(6,10,26,0.82)' },
+    panelHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+    studioIcon: { width: 38, height: 38, borderRadius: 13, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#FFFFFF' },
+    panelTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', flexShrink: 1 },
+    panelSub: { color: '#94A3B8', fontSize: 10, fontWeight: '700', marginTop: 1, letterSpacing: 0.5 },
+    powerPill: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 14, marginLeft: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.7)' },
+    powerText: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
+    panelCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.16)', justifyContent: 'center', alignItems: 'center' },
+
+    presetRow: { flexDirection: 'row', gap: 8, marginBottom: 10 },
+    presetCard: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 16, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.14)', backgroundColor: 'rgba(255,255,255,0.06)' },
+    presetIcon: { width: 32, height: 32, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+    presetText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
+
+    sliderBox: { backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 18, paddingVertical: 4, paddingHorizontal: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', marginBottom: 10 },
+    sliderRow: { flexDirection: 'row', alignItems: 'center', height: 40 },
+    sliderIcon: { width: 26, height: 26, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+    sliderLabel: { color: '#FFF', fontSize: 12, fontWeight: '800', width: 62, marginLeft: 8 },
+    sliderHit: { flex: 1, height: 36, justifyContent: 'center', marginHorizontal: 6 },
+    sliderTrack: { height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.18)', overflow: 'hidden' },
+    sliderKnob: { position: 'absolute', top: 7, width: 22, height: 22, borderRadius: 11, backgroundColor: '#FFFFFF', borderWidth: 3, justifyContent: 'center', alignItems: 'center' },
+    sliderValue: { color: '#FFF', fontSize: 12, fontWeight: '900', width: 30, textAlign: 'right' },
+
+    quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center' },
+    ProSettingsBar: { backgroundColor: 'rgba(255,255,255,0.08)', borderRadius: 22, padding: 16, flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)' },
     settingGroup: { flex: 1, alignItems: 'center' },
-    settingLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '900', marginBottom: 10, letterSpacing: 1.5 },
+    settingLabel: { color: '#CBD5E1', fontSize: 10, fontWeight: '900', marginBottom: 10, letterSpacing: 1.5 },
     chipRow: { flexDirection: 'row', gap: 10 },
-    chip: { backgroundColor: '#1E293B', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'transparent' },
-    activeChip: { backgroundColor: 'rgba(0, 242, 254, 0.1)', borderColor: '#00F2FE' },
+    chip: { backgroundColor: 'rgba(30,41,59,0.9)', paddingHorizontal: 12, paddingVertical: 8, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+    activeChip: { backgroundColor: 'rgba(0, 242, 254, 0.18)', borderColor: '#00F2FE' },
     chipText: { color: '#FFF', fontSize: 11, fontWeight: '800' },
-    settingDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.1)', marginHorizontal: 15 },
-    
-    modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-    summaryCard: { width: '85%', backgroundColor: '#0F172A', borderRadius: 30, padding: 30, alignItems: 'center', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.3)', elevation: 20 },
-    summaryTitle: { color: '#00F2FE', fontSize: 20, fontWeight: '900', letterSpacing: 3, marginBottom: 30 },
-    statGrid: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 40 },
-    statItem: { alignItems: 'center', flex: 1 },
-    statVal: { color: '#FFF', fontSize: 24, fontWeight: '900', marginBottom: 5 },
-    statLabel: { color: '#94A3B8', fontSize: 11, fontWeight: '700', letterSpacing: 1 },
-    exitBtn: { backgroundColor: '#00F2FE', width: '100%', padding: 18, borderRadius: 20, alignItems: 'center', elevation: 5, shadowColor: '#00F2FE', shadowOpacity: 0.5, shadowRadius: 10 },
-    exitBtnText: { color: '#020617', fontWeight: '900', fontSize: 14, letterSpacing: 2 },
-    shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
+    settingDivider: { width: 1, height: 40, backgroundColor: 'rgba(255,255,255,0.15)', marginHorizontal: 12 },
 
-    // 🔥 NEW: ACTION SHEET STYLES 🔥
+    // 📊 SUMMARY
+    modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+    summaryBorder: { width: '86%', padding: 1.5, borderRadius: 32 },
+    summaryCard: { backgroundColor: '#0B1220', borderRadius: 30.5, padding: 26, alignItems: 'center', overflow: 'hidden' },
+    summaryTitle: { color: '#00F2FE', fontSize: 20, fontWeight: '900', letterSpacing: 3, marginBottom: 24 },
+    statGrid: { flexDirection: 'row', justifyContent: 'space-between', width: '100%', marginBottom: 30, gap: 8 },
+    statItem: { alignItems: 'center', flex: 1, backgroundColor: 'rgba(255,255,255,0.06)', borderRadius: 18, paddingVertical: 14, paddingHorizontal: 4, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', gap: 4 },
+    statVal: { color: '#FFF', fontSize: 20, fontWeight: '900' },
+    statLabel: { color: '#94A3B8', fontSize: 10, fontWeight: '700', letterSpacing: 0.5, textAlign: 'center' },
+    exitBtn: { width: '100%', padding: 18, borderRadius: 20, alignItems: 'center' },
+    exitBtnText: { color: '#020617', fontWeight: '900', fontSize: 14, letterSpacing: 2 },
+
+    // 🔥 ACTION SHEET STYLES 🔥
     actionSheetOverlay: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
     actionSheetDismiss: { flex: 1 },
     actionSheetContainer: { borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(0, 242, 254, 0.2)', borderBottomWidth: 0 },
@@ -1316,7 +2063,7 @@ const styles = StyleSheet.create({
     actionSheetCancelBtn: { marginTop: 25, backgroundColor: 'rgba(255,255,255,0.1)', paddingVertical: 15, borderRadius: 15, alignItems: 'center' },
     actionSheetCancelText: { color: '#FFF', fontSize: 14, fontWeight: '900', letterSpacing: 1 },
 
-    // 🔥 NEW: DISCLAIMER STYLES 🔥
+    // 🔥 DISCLAIMER STYLES 🔥
     disclaimerBodyText: { color: '#CBD5E1', fontSize: 13, lineHeight: 20, marginBottom: 15 },
     disclaimerBullet: { color: '#CBD5E1', fontSize: 13, lineHeight: 22, marginBottom: 10 },
     disclaimerBold: { fontWeight: 'bold', color: '#FFF' },

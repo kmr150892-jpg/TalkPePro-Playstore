@@ -4,23 +4,23 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { addDoc, collection, doc, increment, limit, onSnapshot, orderBy, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Animated,
-  Dimensions,
-  Easing,
-  Image,
-  Keyboard,
-  Modal,
-  PanResponder,
-  Platform,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
+    ActivityIndicator,
+    Alert,
+    Animated,
+    Dimensions,
+    Easing,
+    Image,
+    Keyboard,
+    Modal,
+    PanResponder,
+    Platform,
+    Pressable,
+    ScrollView,
+    StyleSheet,
+    Text,
+    TextInput,
+    TouchableOpacity,
+    View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { auth, db } from '../../../firebaseConfig';
@@ -33,6 +33,19 @@ const HEADER_BG = 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?
 const CARD_BG = 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?q=80&w=1200&auto=format&fit=crop';
 const BANK_BG = 'https://images.unsplash.com/photo-1518531933037-91b2f5f229cc?q=80&w=1200&auto=format&fit=crop';
 
+// 🆕 3D IMAGES (icons8 3D Fluency) - load aagalana automatic-a icon fallback varum
+const IMG = {
+    coin: 'https://img.icons8.com/3d-fluency/512/coin.png',
+    bag: 'https://img.icons8.com/3d-fluency/512/money-bag.png',
+    gift: 'https://img.icons8.com/3d-fluency/512/gift.png',
+    trophy: 'https://img.icons8.com/3d-fluency/512/trophy.png',
+    diamond: 'https://img.icons8.com/3d-fluency/512/diamond.png',
+    crown: 'https://img.icons8.com/3d-fluency/512/crown.png',
+    star: 'https://img.icons8.com/3d-fluency/512/star.png',
+    shield: 'https://img.icons8.com/3d-fluency/512/shield.png',
+    clock: 'https://img.icons8.com/3d-fluency/512/clock.png',
+};
+
 const CARD_WIDTH = width - 40;
 const CARD_HEIGHT = 264;
 
@@ -41,7 +54,32 @@ const QUICK_AMOUNTS = [500, 1000, 2000, 5000];
 // ✨ LEVEL START POINTS (used only for the level progress bar on the rewards card)
 const LEVEL_FLOORS = [0, 30000, 100000, 300000, 1000000, 3000000, 5000000, 10000000, 30000000, 50000000, 100000000];
 
+// 🆕 scroll thresholds
+const MINI_SHOW_AT = 260;   // scroll offset where the compact mini bar appears
+
 const clamp = (v: number, min = -1, max = 1) => Math.max(min, Math.min(max, v));
+
+// 🆕 COLOR + NUMBER HELPERS
+const hexToRgb = (hex: string) => {
+    const h = (hex || '').replace('#', '');
+    if (h.length !== 6) return null;
+    return { r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+};
+const blend = (c1: string, c2: string, t: number) => {
+    const a = hexToRgb(c1);
+    const b = hexToRgb(c2);
+    if (!a || !b) return c1;
+    const mix = (x: number, y: number) => Math.round(x * (1 - t) + y * t).toString(16).padStart(2, '0');
+    return `#${mix(a.r, b.r)}${mix(a.g, b.g)}${mix(a.b, b.b)}`;
+};
+const lighten = (hex: string, t: number) => blend(hex, '#FFFFFF', t);
+const darken = (hex: string, t: number) => blend(hex, '#000000', t);
+const formatCompact = (n: number) => {
+    if (n >= 1000000000) return (n / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+    if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+    if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+    return String(n);
+};
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS)
 const getLevelConfig = (beans: number) => {
@@ -57,6 +95,126 @@ const getLevelConfig = (beans: number) => {
     if (beans >= 30000)    return { lvl: 1, label: 'ROOKIE L1', colors: ['#03ffc8', '#13feea', '#f64a06'], glow: 'transparent', next: 100000, prev: 0, rate: 1200 };
     return { lvl: 0, label: 'BEGINNER L0', colors: ['#f807cf', '#f607e2', '#2a06f5'], glow: 'transparent', next: 30000, prev: 0, rate: 1000 };
 };
+
+// 🆕 3D image with auto icon fallback
+const Img3D = ({ uri, size, fallback, color = '#FFF', style }: any) => {
+    const [err, setErr] = useState(false);
+    if (err) return <Ionicons name={fallback} size={size * 0.7} color={color} />;
+    return <Image source={{ uri }} style={[{ width: size, height: size }, style]} resizeMode="contain" onError={() => setErr(true)} />;
+};
+
+// 🆕 Floating (bob + sway) wrapper
+const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                style,
+                {
+                    transform: [
+                        { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -amp] }) },
+                        { rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] }) }
+                    ]
+                }
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+// 🆕 ORBIT RING (rotating dashed ring + glowing satellite dot)
+const OrbitRing = ({ size, color, dur = 6000, reverse = false, dotSize = 6, style }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.linear, useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const spin = v.interpolate({ inputRange: [0, 1], outputRange: reverse ? ['360deg', '0deg'] : ['0deg', '360deg'] });
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={[
+                {
+                    position: 'absolute',
+                    width: size,
+                    height: size,
+                    borderRadius: size / 2,
+                    borderWidth: 1,
+                    borderStyle: 'dashed',
+                    borderColor: color + '66',
+                    transform: [{ rotate: spin }]
+                },
+                style
+            ]}
+        >
+            <View
+                style={{
+                    position: 'absolute',
+                    top: -dotSize / 2 - 1,
+                    left: size / 2 - dotSize / 2 - 1,
+                    width: dotSize,
+                    height: dotSize,
+                    borderRadius: dotSize / 2,
+                    backgroundColor: color,
+                    shadowColor: color,
+                    shadowOpacity: 1,
+                    shadowRadius: 6,
+                    shadowOffset: { width: 0, height: 0 },
+                    elevation: 6
+                }}
+            />
+        </Animated.View>
+    );
+};
+
+// 🆕 EMBER (background floating dust, rises slowly)
+const Ember = ({ x, y, size, color, dur, delay }: any) => {
+    const a = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(a, { toValue: 1, duration: dur, easing: Easing.linear, useNativeDriver: true }),
+                Animated.timing(a, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                top: y,
+                left: x,
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                backgroundColor: color,
+                opacity: a.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.8, 0.5, 0] }),
+                transform: [{ translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -280] }) }]
+            }}
+        />
+    );
+};
+
+// 🆕 SECTION DOT (glowing dot before section titles)
+const SectionDot = ({ color }: any) => (
+    <View style={{ width: 8, height: 8, borderRadius: 4, marginRight: 8, backgroundColor: color, shadowColor: color, shadowOpacity: 1, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 4 }} />
+);
 
 // 📄 FULL-SCREEN FORM PAGE (replaces bottom sheets)
 // Nothing here moves when the keyboard opens: header stays on top, the form scrolls, and extra scroll room is added at the bottom
@@ -272,7 +430,7 @@ const RewardCoin = ({ lvl, c1, c2 }: any) => {
     );
 };
 
-// ✨ 3D FLOATING SHIELD ORB (payout details hero)
+// ✨ 3D FLOATING SHIELD ORB (details page hero)
 const ShieldOrb = ({ c1, c2 }: any) => {
     const sway = useRef(new Animated.Value(0)).current;
     const bob = useRef(new Animated.Value(0)).current;
@@ -347,7 +505,7 @@ const LedgerRow = ({ tx, index, theme, borderStyle }: any) => {
         >
             {/* 🔥 DYNAMIC DUAL-TONE LEDGER ITEMS WITH REJECT FIX */}
             <View style={[styles.ledgerItem, borderStyle]}>
-                <View style={[styles.ledgerAccent, { backgroundColor: statusColor }]} />
+                <View style={[styles.ledgerAccent, { backgroundColor: statusColor, shadowColor: statusColor, shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 } }]} />
                 <View style={[styles.ledgerIcon, { backgroundColor: isRejected ? '#EF444420' : isPending ? '#F59E0B20' : `${theme.primary}20` }]}>
                     <MaterialCommunityIcons
                         name={isRejected ? "close-circle" : isPending ? "clock-fast" : "check-circle"}
@@ -388,6 +546,14 @@ const RedeemBody = ({ theme, borderType1, availableRupees, loading, onSubmit }: 
     const [amount, setAmount] = useState('');
     return (
         <>
+            {/* 🆕 3D floating gift hero */}
+            <View style={styles.redeemHero}>
+                <OrbitRing size={96} color={theme.accent} dur={6500} dotSize={5} />
+                <FloatBox amp={6} dur={2000}>
+                    <Img3D uri={IMG.gift} size={64} fallback="gift" color={theme.accent} />
+                </FloatBox>
+            </View>
+
             <View style={styles.inputArea}>
                 <Text style={styles.currencyLabel}>ENTER REDEEM AMOUNT</Text>
                 <TextInput 
@@ -439,7 +605,7 @@ const RedeemBody = ({ theme, borderType1, availableRupees, loading, onSubmit }: 
     );
 };
 
-// 🛡️ PAYOUT FORM (local state: typing never re-renders the big Rewards screen)
+// 🛡️ DETAILS FORM (local state: typing never re-renders the big Rewards screen)
 const PayoutFormBody = ({ initial, idProofImage, loading, theme, borderType1, borderType2, onPickId, onCancel, onSubmit }: any) => {
     const [details, setDetails] = useState({
         holderName: initial?.holderName || '',
@@ -510,6 +676,7 @@ const PayoutFormBody = ({ initial, idProofImage, loading, theme, borderType1, bo
 };
 
 export default function WalletSystem({ expertData }: any) {
+    const insets = useSafeAreaInsets(); // 🆕 for the mini bar top spacing
     const [user, setUser] = useState(auth.currentUser); 
     const [modalVisible, setModalVisible] = useState(false);
     const [editBankVisible, setEditBankVisible] = useState(false);
@@ -525,7 +692,7 @@ export default function WalletSystem({ expertData }: any) {
 
     const [idProofImage, setIdProofImage] = useState(expertData?.idProof || null);
 
-    // keeps track of whether the payout page is open so background data refreshes never overwrite what the user is typing
+    // keeps track of whether the details page is open so background data refreshes never overwrite what the user is typing
     const editOpenRef = useRef(false);
     useEffect(() => { editOpenRef.current = editBankVisible; }, [editBankVisible]);
 
@@ -537,8 +704,43 @@ export default function WalletSystem({ expertData }: any) {
     const balanceAnim = useRef(new Animated.Value(0)).current;     // balance count-up
     const progressAnim = useRef(new Animated.Value(0)).current;    // min-redeem progress bar
     const levelAnim = useRef(new Animated.Value(0)).current;       // level progress bar on card
-    const sectionAnims = useRef(Array.from({ length: 7 }, () => new Animated.Value(0))).current; // staggered entrance
+    const sectionAnims = useRef(Array.from({ length: 8 }, () => new Animated.Value(0))).current; // staggered entrance
     const [balanceShown, setBalanceShown] = useState(0);
+
+    // 🆕 SCROLL ENGINE (parallax banner, card depth, mini bar, background depth)
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const scrollRef = useRef<any>(null);
+    const historyY = useRef(0);
+    const miniShown = useRef(false);
+    const [showMini, setShowMini] = useState(false);
+    const onScroll = useRef(
+        Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+            useNativeDriver: true,
+            listener: (e: any) => {
+                const show = e.nativeEvent.contentOffset.y > MINI_SHOW_AT;
+                if (show !== miniShown.current) {
+                    miniShown.current = show;
+                    setShowMini(show);
+                }
+            }
+        })
+    ).current;
+    const goScroll = (y: number) => {
+        const r = scrollRef.current;
+        const node = r?.scrollTo ? r : r?.getNode?.();
+        node?.scrollTo({ y: Math.max(0, y), animated: true });
+    };
+
+    // 🆕 background embers
+    const embers = useRef(
+        Array.from({ length: 10 }, (_, i) => ({
+            x: ((i * 47) % 100) / 100 * width,
+            y: 200 + ((i * 83) % 520),
+            size: 2 + (i % 3),
+            dur: 6000 + (i % 5) * 1300,
+            delay: i * 450,
+        }))
+    ).current;
 
     // 🔥 DYNAMIC THEME CALCULATION
     const totalBeans = expertData?.totalBeansEarned || expertData?.totalBeans || 0;
@@ -555,6 +757,7 @@ export default function WalletSystem({ expertData }: any) {
             '#020617'
         ] as const 
     };
+    const EMBER_COLORS = [theme.accent, theme.primary, theme.secondary, '#FFFFFF'];
 
     const isBankVerified = expertData?.isBankVerified || false; 
     const walletBalanceBeans = expertData?.walletBalance || 0; 
@@ -667,7 +870,7 @@ export default function WalletSystem({ expertData }: any) {
         return () => unsubscribe();
     }, [user]);
 
-    // 🔧 never overwrite details while the payout page is open
+    // 🔧 never overwrite details while the details page is open
     useEffect(() => {
         if (editOpenRef.current) return;
         if (expertData?.bankDetails) {
@@ -741,7 +944,7 @@ export default function WalletSystem({ expertData }: any) {
 
     const handleWithdrawal = async (amountStr: string) => {
         if (!bankDetails.accountNumber || !isBankVerified) {
-            Alert.alert("Payout Details Required", "Please add and verify your payout details first.");
+            Alert.alert("Redemption Details Required", "Please add and verify your redemption details first.");
             return;
         }
 
@@ -844,11 +1047,11 @@ export default function WalletSystem({ expertData }: any) {
                     details: { ...details, idProof: idProofImage }
                 });
 
-                // 🔥 NOTIFICATION TRIGGER 2: Bank Details Saved Update
+                // 🔥 NOTIFICATION TRIGGER 2: Details Saved Update
                 await sendNotificationToUser(
                     user.uid,
-                    "Payout Details Submitted 🛡️",
-                    "Your payout details have been submitted. Waiting for verification.",
+                    "Redemption Details Submitted 🛡️",
+                    "Your redemption details have been submitted. Waiting for verification.",
                     "system"
                 );
 
@@ -879,6 +1082,20 @@ export default function WalletSystem({ expertData }: any) {
     const dotPulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.6, 0] });
     const progressWidth = progressAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
     const levelWidth = levelAnim.interpolate({ inputRange: [0, 100], outputRange: ['0%', '100%'] });
+
+    // 🆕 scroll-driven interpolations
+    const bannerTY = scrollY.interpolate({ inputRange: [-200, 0, 320], outputRange: [0, 0, -100], extrapolate: 'clamp' });
+    const bannerScale = scrollY.interpolate({ inputRange: [-200, 0], outputRange: [1.45, 1], extrapolate: 'clamp' });
+    const headerFade = scrollY.interpolate({ inputRange: [0, 130], outputRange: [1, 0.15], extrapolate: 'clamp' });
+    const headerTY = scrollY.interpolate({ inputRange: [0, 130], outputRange: [0, -18], extrapolate: 'clamp' });
+    const heroRX = scrollY.interpolate({ inputRange: [0, 340], outputRange: ['0deg', '-12deg'], extrapolate: 'clamp' });
+    const heroScale = scrollY.interpolate({ inputRange: [0, 340], outputRange: [1, 0.92], extrapolate: 'clamp' });
+    const heroFade = scrollY.interpolate({ inputRange: [0, 200, 420], outputRange: [1, 0.85, 0.35], extrapolate: 'clamp' });
+    const heroTYScroll = scrollY.interpolate({ inputRange: [0, 340], outputRange: [0, 36], extrapolate: 'clamp' });
+    const miniOpacity = scrollY.interpolate({ inputRange: [MINI_SHOW_AT - 30, MINI_SHOW_AT + 40], outputRange: [0, 1], extrapolate: 'clamp' });
+    const miniTY = scrollY.interpolate({ inputRange: [MINI_SHOW_AT - 30, MINI_SHOW_AT + 40], outputRange: [-28, 0], extrapolate: 'clamp' });
+    const bgShift = scrollY.interpolate({ inputRange: [0, 1600], outputRange: [0, -320], extrapolate: 'clamp' });
+    const bgShiftSlow = scrollY.interpolate({ inputRange: [0, 1600], outputRange: [0, -150], extrapolate: 'clamp' });
 
     // ✨ 3D flip-up reveal
     const reveal = (i: number) => ({
@@ -917,35 +1134,72 @@ export default function WalletSystem({ expertData }: any) {
 
     const last4 = bankDetails.accountNumber ? bankDetails.accountNumber.slice(-4) : '';
 
+    // 🆕 redeem availability (same rule as the card button)
+    const redeemDisabled = availableRupees < 500 || !isBankVerified;
+
     return (
         <View style={[styles.mainWrapper, { backgroundColor: '#020617' }]}>
             {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
             <LinearGradient colors={theme.bgGradient} style={StyleSheet.absoluteFill} />
 
-            {/* 🖼️ TOP BANNER IMAGE (fades into the background) */}
-            <Image source={{ uri: HEADER_BG }} style={styles.topBgImage} />
+            {/* 🖼️ TOP BANNER IMAGE (fades into the background) + 🆕 parallax / stretchy zoom */}
+            <Animated.Image source={{ uri: HEADER_BG }} style={[styles.topBgImage, { transform: [{ translateY: bannerTY }, { scale: bannerScale }] }]} />
             <LinearGradient colors={['rgba(2,6,23,0.25)', '#020617']} style={styles.topBgFade} pointerEvents="none" />
             
-            {/* Shimmer Orbs for Animation */}
-            <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: orbTranslateY }] }]} />
-            <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: 450, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+            {/* Shimmer Orbs for Animation (🆕 + scroll depth) */}
+            <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: 120, right: -60, backgroundColor: theme.primary, transform: [{ translateY: Animated.add(orbTranslateY, bgShift) }] }]} />
+            <Animated.View pointerEvents="none" style={[styles.shimmerOrb, { top: 450, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.add(Animated.multiply(orbTranslateY, -1), bgShift) }] }]} />
 
-            <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            {/* 🆕 Floating 3D background objects with scroll parallax */}
+            <Animated.View pointerEvents="none" style={[styles.bgFloat, { top: 560, right: 12, opacity: 0.2, transform: [{ translateY: bgShiftSlow }] }]}>
+                <FloatBox amp={14} dur={2600}>
+                    <Img3D uri={IMG.diamond} size={64} fallback="diamond" color={theme.accent} />
+                </FloatBox>
+            </Animated.View>
+            <Animated.View pointerEvents="none" style={[styles.bgFloat, { top: 940, right: 26, opacity: 0.15, transform: [{ translateY: bgShiftSlow }] }]}>
+                <FloatBox amp={12} dur={3000}>
+                    <Img3D uri={IMG.star} size={48} fallback="star" color={theme.accent} />
+                </FloatBox>
+            </Animated.View>
 
-                {/* 👑 HEADER */}
-                <Animated.View style={[styles.headerRow, reveal(0)]}>
-                    <View>
-                        <Text style={styles.headerEyebrow}>TALKPE PRO CREATOR</Text>
-                        <Text style={styles.headerTitle}>Rewards Center</Text>
-                    </View>
-                    <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.levelPill}>
-                        <MaterialCommunityIcons name="crown" size={13} color="#FFF" />
-                        <Text style={styles.levelPillText}>{config.label}</Text>
-                    </LinearGradient>
+            {/* 🆕 Embers */}
+            {embers.map((p, i) => (
+                <Ember key={i} x={p.x} y={p.y} size={p.size} dur={p.dur} delay={p.delay} color={EMBER_COLORS[i % EMBER_COLORS.length]} />
+            ))}
+
+            <Animated.ScrollView
+                ref={scrollRef}
+                style={styles.container}
+                showsVerticalScrollIndicator={false}
+                onScroll={onScroll}
+                scrollEventThrottle={16}
+            >
+
+                {/* 👑 HEADER (🆕 fades + lifts on scroll) */}
+                <Animated.View style={{ opacity: headerFade, transform: [{ translateY: headerTY }] }}>
+                    <Animated.View style={[styles.headerRow, reveal(0)]}>
+                        <View>
+                            <Text style={styles.headerEyebrow}>TALKPE PRO CREATOR</Text>
+                            <Text style={styles.headerTitle}>Rewards Center</Text>
+                        </View>
+                        <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.levelPill}>
+                            <MaterialCommunityIcons name="crown" size={13} color="#FFF" />
+                            <Text style={styles.levelPillText}>{config.label}</Text>
+                        </LinearGradient>
+                    </Animated.View>
                 </Animated.View>
                 
-                {/* 🎁 REWARDS CARD (3D tilt + float) */}
+                {/* 🎁 REWARDS CARD (3D tilt + float) (🆕 leans back + fades on scroll) */}
+                <Animated.View
+                    style={{
+                        opacity: heroFade,
+                        transform: [{ perspective: 1000 }, { translateY: heroTYScroll }, { rotateX: heroRX }, { scale: heroScale }]
+                    }}
+                >
                 <Animated.View style={[styles.heroSection, reveal(1)]}>
+                    {/* 🆕 hologram base glow under the card */}
+                    <View pointerEvents="none" style={[styles.cardBaseGlow, { backgroundColor: theme.primary + '55', shadowColor: theme.accent }]} />
+
                     <Animated.View style={{ transform: [{ translateY: cardFloatY }] }}>
                         <Tilt3D radius={32} max={10} style={{ borderRadius: 32 }}>
                             <View style={[styles.premiumCard, { shadowColor: theme.primary, elevation: 20 }]}>
@@ -990,7 +1244,7 @@ export default function WalletSystem({ expertData }: any) {
                                 <View>
                                     <View style={styles.levelRowTop}>
                                         <Text style={styles.levelRowLabel}>LEVEL PROGRESS</Text>
-                                        <Text style={styles.levelRowValue}>{config.next === 0 ? 'MAX LEVEL' : `${Math.round(levelPct)}% TO NEXT`}</Text>
+                                        <Text style={styles.levelRowValue}>{config.next === 0 ? 'MAX LEVEL' : `${Math.round(levelPct)}% COMPLETE`}</Text>
                                     </View>
                                     <View style={styles.levelTrack}>
                                         <Animated.View style={[styles.levelFillWrap, { width: levelWidth }]}>
@@ -1036,9 +1290,57 @@ export default function WalletSystem({ expertData }: any) {
                         </View>
                     )}
                 </Animated.View>
+                </Animated.View>
+
+                {/* 🆕 QUICK ACTION DOCK (3D icons: Redeem / Details / History) */}
+                <Animated.View style={[styles.dockRow, reveal(2)]}>
+                    <ScaleBtn
+                        wrapStyle={{ flex: 1 }}
+                        style={[styles.dockTile, borderType1, redeemDisabled && { opacity: 0.45 }]}
+                        onPress={() => setModalVisible(true)}
+                        disabled={redeemDisabled}
+                    >
+                        <View style={styles.dockIconWrap}>
+                            <View style={[styles.dockGlow, { backgroundColor: theme.primary + '40' }]} />
+                            <FloatBox amp={3} dur={1800}>
+                                <Img3D uri={IMG.gift} size={40} fallback="gift" color={theme.accent} />
+                            </FloatBox>
+                        </View>
+                        <Text style={styles.dockLabel}>REDEEM</Text>
+                        <Text style={styles.dockSub}>{redeemDisabled ? 'LOCKED' : 'READY'}</Text>
+                    </ScaleBtn>
+                    <ScaleBtn
+                        wrapStyle={{ flex: 1 }}
+                        style={[styles.dockTile, borderType2]}
+                        onPress={() => setEditBankVisible(true)}
+                    >
+                        <View style={styles.dockIconWrap}>
+                            <View style={[styles.dockGlow, { backgroundColor: theme.secondary + '40' }]} />
+                            <FloatBox amp={3} dur={2100}>
+                                <Img3D uri={IMG.shield} size={40} fallback="shield-checkmark" color={theme.accent} />
+                            </FloatBox>
+                        </View>
+                        <Text style={styles.dockLabel}>DETAILS</Text>
+                        <Text style={styles.dockSub}>{isBankVerified ? 'VERIFIED' : expertData?.bankRejectReason ? 'FIX NOW' : last4 ? 'IN REVIEW' : 'ADD NOW'}</Text>
+                    </ScaleBtn>
+                    <ScaleBtn
+                        wrapStyle={{ flex: 1 }}
+                        style={[styles.dockTile, borderType1]}
+                        onPress={() => goScroll(historyY.current - 24)}
+                    >
+                        <View style={styles.dockIconWrap}>
+                            <View style={[styles.dockGlow, { backgroundColor: theme.accent + '40' }]} />
+                            <FloatBox amp={3} dur={2400}>
+                                <Img3D uri={IMG.clock} size={40} fallback="time" color={theme.accent} />
+                            </FloatBox>
+                        </View>
+                        <Text style={styles.dockLabel}>HISTORY</Text>
+                        <Text style={styles.dockSub}>{transactions.length} RECENT</Text>
+                    </ScaleBtn>
+                </Animated.View>
 
                 {/* 📜 RULES STRIP */}
-                <Animated.View style={[styles.rulesRow, reveal(2)]}>
+                <Animated.View style={[styles.rulesRow, reveal(3)]}>
                     <View style={[styles.ruleTile, borderType2]}>
                         <Ionicons name="flash-outline" size={18} color={theme.primary} />
                         <Text style={styles.ruleValue}>₹500</Text>
@@ -1057,7 +1359,11 @@ export default function WalletSystem({ expertData }: any) {
                 </Animated.View>
 
                 {/* 📘 HOW REWARDS WORK (transparency note) */}
-                <Animated.View style={[styles.infoCard, borderType1, reveal(3)]}>
+                <Animated.View style={[styles.infoCard, borderType1, reveal(4)]}>
+                    {/* 🆕 3D gift watermark */}
+                    <View pointerEvents="none" style={styles.infoWatermark}>
+                        <Img3D uri={IMG.gift} size={86} fallback="gift" color={theme.accent} style={{ opacity: 0.16 }} />
+                    </View>
                     <View style={styles.infoHeader}>
                         <MaterialCommunityIcons name="information-outline" size={16} color={theme.primary} />
                         <Text style={[styles.infoTitle, { color: theme.primary }]}>HOW REWARDS WORK</Text>
@@ -1076,17 +1382,20 @@ export default function WalletSystem({ expertData }: any) {
                     </View>
                 </Animated.View>
 
-                {/* 🛡️ PAYOUT DETAILS */}
-                <Animated.View style={reveal(4)}>
+                {/* 🛡️ REDEMPTION DETAILS */}
+                <Animated.View style={reveal(5)}>
                     <View style={styles.sectionHeaderRow}>
-                        <Text style={styles.sectionTitleMain}>REDEMPTION DETAILS</Text>
+                        <View style={styles.sectionTitleWrap}>
+                            <SectionDot color={theme.accent} />
+                            <Text style={styles.sectionTitleMain}>REDEMPTION DETAILS</Text>
+                        </View>
                         <TouchableOpacity onPress={() => setEditBankVisible(true)} style={styles.nodeEditBtn}>
                             <Ionicons name="settings-sharp" size={14} color={theme.primary} />
                             <Text style={[styles.nodeEditText, { color: theme.primary }]}>MANAGE</Text>
                         </TouchableOpacity>
                     </View>
 
-                    {/* 🔥 DYNAMIC DUAL-TONE PAYOUT CARD (TYPE 1) */}
+                    {/* 🔥 DYNAMIC DUAL-TONE DETAILS CARD (TYPE 1) */}
                     <ScaleBtn style={[styles.bankDetailCard, borderType1]} onPress={() => setEditBankVisible(true)}>
                         <Image source={{ uri: BANK_BG }} style={styles.bankBgImage} />
                         <View style={styles.bankInner}>
@@ -1130,12 +1439,23 @@ export default function WalletSystem({ expertData }: any) {
                 </Animated.View>
 
                 {/* 🧾 REDEMPTION HISTORY */}
-                <Animated.View style={reveal(5)}>
-                    <Text style={styles.sectionTitleMain}>REDEMPTION HISTORY</Text>
+                <Animated.View style={reveal(6)} onLayout={(e) => { historyY.current = e.nativeEvent.layout.y; }}>
+                    <View style={styles.sectionTitleWrap}>
+                        <SectionDot color={theme.accent} />
+                        <Text style={styles.sectionTitleMain}>REDEMPTION HISTORY</Text>
+                        <LinearGradient colors={[theme.accent + '88', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.sectionLine} />
+                    </View>
                 </Animated.View>
                 {transactions.length === 0 ? (
-                    <Animated.View style={[styles.emptyLedger, reveal(6)]}>
-                        <Ionicons name="gift-outline" size={40} color="#1e293b" />
+                    <Animated.View style={[styles.emptyLedger, reveal(7)]}>
+                        {/* 🆕 orbit rings + 3D gift for the empty state */}
+                        <View style={styles.emptyOrbit}>
+                            <OrbitRing size={96} color={theme.accent} dur={7000} dotSize={5} />
+                            <OrbitRing size={70} color={theme.primary} dur={5000} reverse dotSize={4} />
+                            <FloatBox amp={5} dur={1900}>
+                                <Img3D uri={IMG.gift} size={44} fallback="gift-outline" color="#1e293b" />
+                            </FloatBox>
+                        </View>
                         <Text style={styles.emptyLedgerText}>No redemptions yet</Text>
                     </Animated.View>
                 ) : (
@@ -1150,7 +1470,29 @@ export default function WalletSystem({ expertData }: any) {
                     ))
                 )}
                 <View style={{ height: 120 }} />
-            </ScrollView>
+            </Animated.ScrollView>
+
+            {/* 🆕 COMPACT MINI BAR (slides in after you scroll past the card) */}
+            <Animated.View
+                pointerEvents={showMini ? 'auto' : 'none'}
+                style={[styles.miniBarWrap, { opacity: miniOpacity, transform: [{ translateY: miniTY }] }]}
+            >
+                <LinearGradient
+                    colors={['rgba(2,6,23,0.97)', 'rgba(2,6,23,0.82)']}
+                    style={[styles.miniBar, { paddingTop: insets.top + 8, borderBottomColor: theme.accent + '55' }]}
+                >
+                    <TouchableOpacity style={styles.miniLeft} activeOpacity={0.8} onPress={() => goScroll(0)}>
+                        <View>
+                            <Text style={styles.miniLabel}>REWARD BALANCE</Text>
+                            <Text style={styles.miniBal}>₹{balanceShown.toLocaleString()}</Text>
+                        </View>
+                    </TouchableOpacity>
+                    <LinearGradient colors={[theme.primary, theme.secondary]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.miniPill}>
+                        <MaterialCommunityIcons name="crown" size={11} color="#FFF" />
+                        <Text style={styles.miniPillText}>{config.label}</Text>
+                    </LinearGradient>
+                </LinearGradient>
+            </Animated.View>
 
             {/* 🎁 REDEEM REWARDS PAGE */}
             <FormPage
@@ -1175,7 +1517,7 @@ export default function WalletSystem({ expertData }: any) {
                 />
             </FormPage>
 
-            {/* 🛡️ PAYOUT DETAILS PAGE */}
+            {/* 🛡️ REDEMPTION DETAILS PAGE */}
             <FormPage
                 visible={editBankVisible}
                 onClose={closeEdit}
@@ -1184,7 +1526,7 @@ export default function WalletSystem({ expertData }: any) {
                     <View style={styles.editHero}>
                         <ShieldOrb c1={theme.primary} c2={theme.secondary} />
                         <View style={{ flex: 1, marginLeft: 6 }}>
-                            <Text style={styles.modalTitle}>Payout Details</Text>
+                            <Text style={styles.modalTitle}>Redemption Details</Text>
                             <Text style={styles.editSubtitle}>Secure verification for approved reward redemptions</Text>
                         </View>
                         <TouchableOpacity onPress={closeEdit} style={styles.modalClose}>
@@ -1261,13 +1603,17 @@ const styles = StyleSheet.create({
     topBgFade: { position: 'absolute', top: 0, left: 0, right: 0, height: 280 },
     container: { padding: 20 },
 
+    // 🆕 floating 3D background objects
+    bgFloat: { position: 'absolute' },
+
     headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 18, marginTop: 6 },
     headerEyebrow: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 4 },
     headerTitle: { color: '#FFF', fontSize: 28, fontWeight: '900', letterSpacing: 0.5, marginTop: 2, textShadowColor: 'rgba(0,0,0,0.6)', textShadowOffset: { width: 0, height: 2 }, textShadowRadius: 8 },
     levelPill: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
     levelPillText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
 
-    heroSection: { marginBottom: 22 },
+    heroSection: { marginBottom: 22, marginTop: 6 },
+    cardBaseGlow: { position: 'absolute', bottom: -12, alignSelf: 'center', width: CARD_WIDTH * 0.72, height: 26, borderRadius: 20, opacity: 0.7, shadowOpacity: 1, shadowRadius: 24, shadowOffset: { width: 0, height: 10 } },
     premiumCard: { width: CARD_WIDTH, height: CARD_HEIGHT, borderRadius: 32, padding: 22, overflow: 'hidden', justifyContent: 'space-between', borderWidth: 1, borderColor: 'rgba(255,255,255,0.22)', backgroundColor: '#0F172A', shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 12 } },
     cardBgImage: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.45 },
     cardGlow: { position: 'absolute', top: -100, left: -100, width: 250, height: 250, borderRadius: 125, backgroundColor: 'rgba(255,255,255,0.1)' },
@@ -1302,12 +1648,20 @@ const styles = StyleSheet.create({
     whiteActionBtn: { flexDirection: 'row', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
     blackBtnText: { color: '#020617', fontWeight: '900', fontSize: 12, letterSpacing: 1.5 },
 
-    unlockBox: { marginTop: 18, alignItems: 'center' },
+    unlockBox: { marginTop: 26, alignItems: 'center' },
     limitWarning: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'center', backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 12, paddingVertical: 5, borderRadius: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
     warningText: { color: '#FFF', fontSize: 8, fontWeight: '900', letterSpacing: 0.5 },
     unlockTrack: { width: '100%', height: 7, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', marginTop: 12 },
     unlockFillWrap: { height: '100%', borderRadius: 4, overflow: 'hidden' },
     unlockText: { color: '#64748B', fontSize: 9, fontWeight: '800', marginTop: 8, letterSpacing: 0.5 },
+
+    // 🆕 QUICK ACTION DOCK
+    dockRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
+    dockTile: { borderRadius: 24, paddingVertical: 12, alignItems: 'center', justifyContent: 'center' },
+    dockIconWrap: { width: 52, height: 52, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
+    dockGlow: { position: 'absolute', width: 46, height: 46, borderRadius: 23 },
+    dockLabel: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
+    dockSub: { color: '#64748B', fontSize: 8, fontWeight: '900', letterSpacing: 1, marginTop: 3 },
 
     rulesRow: { flexDirection: 'row', gap: 10, marginBottom: 18 },
     ruleTile: { flex: 1, borderRadius: 22, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
@@ -1315,13 +1669,16 @@ const styles = StyleSheet.create({
     ruleLabel: { color: '#64748B', fontSize: 7, fontWeight: '900', letterSpacing: 1, marginTop: 3 },
 
     // 📘 HOW REWARDS WORK
-    infoCard: { borderRadius: 24, padding: 18, marginBottom: 26 },
+    infoCard: { borderRadius: 24, padding: 18, marginBottom: 26, overflow: 'hidden' },
+    infoWatermark: { position: 'absolute', right: -14, top: -12 },
     infoHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 12 },
     infoTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 2 },
     infoRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, marginBottom: 9 },
     infoText: { flex: 1, color: '#94A3B8', fontSize: 11, fontWeight: '600', lineHeight: 16 },
 
     sectionHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15, marginTop: 10 },
+    sectionTitleWrap: { flexDirection: 'row', alignItems: 'center' },
+    sectionLine: { flex: 1, height: 1.5, marginLeft: 10, marginBottom: 14, borderRadius: 1 },
     sectionTitleMain: { color: '#475569', fontSize: 11, fontWeight: '900', letterSpacing: 3, marginBottom: 14 },
     nodeEditBtn: { flexDirection: 'row', alignItems: 'center', gap: 5, backgroundColor: '#1e293b', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
     nodeEditText: { fontSize: 9, fontWeight: '900' },
@@ -1342,6 +1699,7 @@ const styles = StyleSheet.create({
     activeDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
     
     emptyLedger: { alignItems: 'center', padding: 40, backgroundColor: 'rgba(30, 41, 59, 0.2)', borderRadius: 25, marginTop: 10, borderWidth: 1, borderStyle: 'dashed', borderColor: '#1e293b' },
+    emptyOrbit: { width: 100, height: 100, justifyContent: 'center', alignItems: 'center' },
     emptyLedgerText: { color: '#334155', fontSize: 12, fontWeight: '800', marginTop: 10 },
     
     ledgerItem: { flexDirection: 'row', alignItems: 'center', padding: 18, paddingLeft: 22, borderRadius: 30, overflow: 'hidden' },
@@ -1357,6 +1715,15 @@ const styles = StyleSheet.create({
     rejectReasonBox: { flexDirection: 'row', backgroundColor: 'rgba(239, 68, 68, 0.1)', borderWidth: 1, borderColor: '#EF444450', borderRadius: 20, padding: 15, marginHorizontal: 10 },
     rejectLabel: { color: '#EF4444', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 2 },
     rejectReasonText: { color: '#FFF', fontSize: 11, fontWeight: '700', lineHeight: 16 },
+
+    // 🆕 MINI BAR (appears on scroll)
+    miniBarWrap: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 60 },
+    miniBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingBottom: 10, paddingHorizontal: 20, borderBottomWidth: 1 },
+    miniLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 10 },
+    miniLabel: { color: '#94A3B8', fontSize: 8, fontWeight: '900', letterSpacing: 1.5 },
+    miniBal: { color: '#FFF', fontSize: 18, fontWeight: '900', marginTop: 1 },
+    miniPill: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 6, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)' },
+    miniPillText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
     
     // 📄 FULL-SCREEN FORM PAGE
     pageRoot: { flex: 1, backgroundColor: '#020617' },
@@ -1367,6 +1734,7 @@ const styles = StyleSheet.create({
     modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
     modalTitle: { color: '#FFF', fontSize: 24, fontWeight: '900' },
     modalClose: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#1e293b', justifyContent: 'center', alignItems: 'center' },
+    redeemHero: { height: 110, justifyContent: 'center', alignItems: 'center', marginBottom: 4 },
     inputArea: { marginBottom: 30 },
     currencyLabel: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 2, textAlign: 'center', marginBottom: 15 },
     giantInput: { color: '#FFF', fontSize: 60, fontWeight: '900', textAlign: 'center', paddingVertical: 10 },
@@ -1398,7 +1766,7 @@ const styles = StyleSheet.create({
     saveNodeGrad: { paddingVertical: 18, alignItems: 'center' },
     saveNodeText: { color: '#FFF', fontWeight: '900', fontSize: 13 },
 
-    // ✨ PAYOUT PAGE: 3D SHIELD HERO + TRUST CHIPS
+    // ✨ DETAILS PAGE: 3D SHIELD HERO + TRUST CHIPS
     editHero: { flexDirection: 'row', alignItems: 'center' },
     editSubtitle: { color: '#94A3B8', fontSize: 10, fontWeight: '700', marginTop: 3, lineHeight: 14 },
     orbWrap: { width: 84, height: 84, justifyContent: 'center', alignItems: 'center', marginRight: 6 },

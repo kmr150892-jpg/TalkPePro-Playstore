@@ -1,11 +1,16 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { doc, onSnapshot } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
+    Animated,
     Dimensions,
-    ScrollView,
+    Easing,
+    ImageBackground,
+    Linking,
+    PanResponder,
     StatusBar,
     StyleSheet,
     Text,
@@ -16,6 +21,25 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig';
 
 const { width } = Dimensions.get('window');
+
+// 🖼️ PREMIUM IMAGE ASSETS (replace with your own: require('../assets/xxx.jpg') if you like)
+const IMG_HERO = 'https://images.unsplash.com/photo-1550684848-fac1c5b4e853?w=900&q=80';
+const IMG_CARD_BG = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=900&q=80';
+
+// ✨ TWINKLING STAR FIELD POSITIONS
+const STARS = [
+    { top: 70, left: 28, size: 3 }, { top: 140, left: width * 0.82, size: 2 }, { top: 250, left: width * 0.5, size: 3 },
+    { top: 360, left: 18, size: 2 }, { top: 470, left: width * 0.9, size: 3 }, { top: 560, left: width * 0.3, size: 2 },
+    { top: 680, left: width * 0.7, size: 3 }, { top: 780, left: 40, size: 2 }, { top: 190, left: width * 0.14, size: 2 },
+    { top: 610, left: width * 0.58, size: 2 },
+];
+
+// 🛡️ SAFE ALPHA HELPER: some tier colors are already 8-digit hex (e.g. '#970d50d4'),
+// so adding another alpha creates an INVALID color. This always normalizes first.
+const withAlpha = (hex: string, alpha: string = 'FF') => {
+    const base = (hex || '#000000').length >= 7 ? hex.slice(0, 7) : hex;
+    return base + alpha;
+};
 
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC FROM MEMORY V2)
 const calculateUserLevel = (totalSpent: number) => {
@@ -45,6 +69,180 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
+// 🆕 UPDATED LEGAL CONTENT (Play Store review friendly)
+// Diamonds = calls & gifts only | Games = free, entertainment only | Hosts = admin verified | Screenshots = blocked in live calls
+const TERMS_SECTIONS = [
+    {
+        icon: 'shield-account',
+        color: '#6366F1',
+        title: 'Eligibility & Community Guidelines (18+ Only)',
+        text: 'TalkPe Pro is a premium live interaction platform strictly restricted to users aged 18 and above. By using the app you confirm that you meet this age requirement. All participants must engage with respect. Any form of harassment, abuse, hate speech or policy violation will lead to immediate account suspension under our zero-tolerance policy.',
+    },
+    {
+        icon: 'diamond-stone',
+        color: '#0EA5E9',
+        title: 'Digital Assets (Diamonds) & Purchases',
+        text: 'Diamonds are virtual in-app credits used only to connect with hosts through live audio and video calls and to send virtual gifts to hosts. Diamonds have NO real-world monetary value and cannot be cashed out, transferred or exchanged for real money. Purchases are processed through Google Play Billing and are non-refundable once delivered, except where required by applicable law or Google Play policies. We strictly prohibit gambling of any kind.',
+    },
+    {
+        icon: 'gamepad-variant',
+        color: '#22C55E',
+        title: 'Free Games (Entertainment Only)',
+        text: 'In-app games (Reflex Arena, Memory Match) are completely free to play and provided for entertainment purposes only. No Diamonds are required, spent, won or lost in any game. There are no entry fees, no cash prizes and no real-money or Diamond rewards of any kind.',
+    },
+    {
+        icon: 'account-check',
+        color: '#EC4899',
+        title: 'Verified Hosts',
+        text: 'Every host on TalkPe Pro is reviewed and verified by our admin team before they can receive calls. Hosts must be 18 years or older and must follow our community guidelines. Accounts that violate our policies are warned, suspended or permanently removed.',
+    },
+    {
+        icon: 'alert-octagon',
+        color: '#F43F5E',
+        title: 'Interaction Safety & Reporting',
+        text: "Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, and on profiles. All user reports are reviewed by our moderation team within 24 hours to ensure platform integrity.",
+    },
+    {
+        icon: 'camera-off',
+        color: '#A855F7',
+        title: 'Screenshot & Screen Recording Protection',
+        text: 'To protect the privacy of both users and hosts, screenshots and screen recording are blocked during live audio and video calls. Attempting to bypass this protection, or capturing or sharing call content by any other means, is a serious violation and may result in permanent account termination.',
+    },
+    {
+        icon: 'security',
+        color: '#10B981',
+        title: 'User Responsibility',
+        text: 'You are responsible for maintaining the confidentiality of your account credentials. TalkPe Pro is not liable for unauthorized access resulting from user negligence or shared sensitive information.',
+    },
+    {
+        icon: 'gavel',
+        color: '#F59E0B',
+        title: 'Content Moderation & Spotlight',
+        text: 'We maintain strict User-Generated Content (UGC) policies. Spotlight videos can be reported and will be hidden pending a 24-hour administrator review. Violating content will result in permanent account termination without refunds.',
+    },
+    {
+        icon: 'wifi-off',
+        color: '#8B5CF6',
+        title: 'Network Disconnection Policy',
+        text: 'If a network disconnection occurs during a live call, our system evaluates the session state to ensure fair usage and protect your Diamond balance from unfair deduction. In the event of a disconnection during a free game, the match may end or restart automatically, and since games are free no Diamonds are charged or lost.',
+    },
+    {
+        icon: 'email-outline',
+        color: '#06B6D4',
+        title: 'Contact & Updates',
+        text: 'We may update these Terms from time to time to reflect changes in our services or legal requirements. Continued use of the app after an update means you accept the revised Terms. For any questions, contact us at support@talkpepro.com.',
+    },
+];
+
+const PRIVACY_SECTIONS = [
+    {
+        icon: 'microphone-off',
+        color: '#A855F7',
+        title: 'Communication Privacy & No Recording',
+        text: 'Live interactions (Quick Connect, Live Rooms) are secured in transit using industry-standard protection. Your private audio and video calls are NEVER recorded, stored, or monitored by TalkPe Pro. Screenshots and screen recording are blocked during live audio and video calls for your safety.',
+    },
+    {
+        icon: 'account-details',
+        color: '#6366F1',
+        title: 'Information We Collect',
+        text: 'We collect only the information needed to run the service: profile details you choose to provide (such as your name and photo), account and wallet balance information, and basic device and usage information used for security, fraud prevention and app performance. We do not record the content of your calls.',
+    },
+    {
+        icon: 'database-lock',
+        color: '#EC4899',
+        title: 'Information Security',
+        text: 'Your profile and identity data are stored on secure, encrypted cloud infrastructure provided by Google Firebase. We maintain a strict policy against selling or sharing your personal data with third-party advertisers for marketing purposes.',
+    },
+    {
+        icon: 'wallet',
+        color: '#F59E0B',
+        title: 'Transaction Protection',
+        text: 'Payments are processed exclusively through Google Play Billing. Sensitive payment information such as card numbers, CVV or banking passwords is handled by Google and never passes through or gets stored within the TalkPe Pro system.',
+    },
+    {
+        icon: 'eye-off',
+        color: '#06B6D4',
+        title: 'Data Permissions',
+        text: 'Camera and Microphone access is requested only for the duration of live calls. Any media access is limited to profile personalization. You can manage or revoke these permissions via your device settings at any time.',
+    },
+    {
+        icon: 'shield-check',
+        color: '#22C55E',
+        title: 'Age Restriction',
+        text: 'TalkPe Pro is intended only for users aged 18 and above. We do not knowingly collect personal information from anyone under 18. If we learn that an underage user has registered, the account and its data will be removed.',
+    },
+    {
+        icon: 'delete-sweep',
+        color: '#14B8A6',
+        title: 'Data Deletion Rights',
+        text: 'In strict compliance with Google Play Developer Policies, users retain full rights over their data. You can request complete deletion of your account and associated data through the app (Profile > Edit Profile > Delete Account) at any time, which will permanently wipe your identity from our servers.',
+    },
+    {
+        icon: 'email-outline',
+        color: '#F43F5E',
+        title: 'Contact Us',
+        text: 'For any privacy-related questions or data requests, reach our team at support@talkpepro.com. We aim to respond to all privacy requests promptly.',
+    },
+];
+
+// 🆕 STAGGERED ENTRANCE (each block pops in with its own delay + 3D tilt-in)
+const FadeInItem = ({ index, children }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.timing(v, { toValue: 1, duration: 650, delay: Math.min(index, 8) * 90, easing: Easing.out(Easing.back(1.1)), useNativeDriver: true }).start();
+    }, []);
+    return (
+        <Animated.View style={{
+            opacity: v,
+            transform: [
+                { perspective: 900 },
+                { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) },
+                { rotateX: v.interpolate({ inputRange: [0, 1], outputRange: ['30deg', '0deg'] }) },
+                { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.93, 1] }) },
+            ],
+        }}>
+            {children}
+        </Animated.View>
+    );
+};
+
+// 🆕 Reusable Content Block (glass card + glowing strip + orbit-ring icon)
+const ContentSection = ({ icon, title, text, color, index, orbitRotate }: { icon: any, title: string, text: string, color: string, index: number, orbitRotate: any }) => (
+    <FadeInItem index={index}>
+        <View style={styles.sectionGlow}>
+            <BlurView intensity={25} tint="dark" style={[styles.contentBlock, { borderColor: withAlpha(color, '35') }]}>
+                <LinearGradient
+                    pointerEvents="none"
+                    colors={[withAlpha(color, '1F'), 'rgba(255,255,255,0)']}
+                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                    style={StyleSheet.absoluteFill}
+                />
+                <LinearGradient
+                    pointerEvents="none"
+                    colors={[withAlpha(color, 'FF'), withAlpha(color, '00')]}
+                    start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}
+                    style={styles.blockStrip}
+                />
+                <View style={styles.titleRow}>
+                    <View style={styles.iconWrap}>
+                        <Animated.View style={[styles.iconRing, { borderColor: withAlpha(color, 'AA'), transform: [{ rotate: orbitRotate }] }]} />
+                        <View style={[styles.iconBox, { backgroundColor: `${color}20`, borderColor: `${color}50` }]}>
+                            <MaterialCommunityIcons name={icon} size={20} color={color} />
+                        </View>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                        <Text style={[styles.contentIndex, { color: withAlpha(color, 'AA') }]}>{String(index + 1).padStart(2, '0')}</Text>
+                        <Text style={[styles.contentTitle, { color: color }]}>{title}</Text>
+                    </View>
+                </View>
+                <View style={styles.textWrapper}>
+                    <Text style={styles.contentText}>{text}</Text>
+                </View>
+            </BlurView>
+        </View>
+    </FadeInItem>
+);
+
 /**
  * TALKPE LEGAL CENTER
  * Professional Play Store Compliant Version
@@ -55,7 +253,76 @@ export default function LegalScreen() {
     const [activeTab, setActiveTab] = useState<'terms' | 'privacy'>('terms');
     const [userData, setUserData] = useState<any>(null);
 
+    // 🆕 TAB INDICATOR WIDTH (measured)
+    const [tabInnerWidth, setTabInnerWidth] = useState(0);
+
+    // 🆕 ANIMATION ENGINE REFS
+    const scrollY = useRef(new Animated.Value(0)).current;
+    const shimmerAnim = useRef(new Animated.Value(0)).current;  // ambient orbs + stars
+    const mainLoop = useRef(new Animated.Value(0)).current;     // rotation loop (orbit rings)
+    const pulseAnim = useRef(new Animated.Value(0)).current;    // pulse halos
+    const holoAnim = useRef(new Animated.Value(0)).current;     // holographic sweep (hero card)
+    const floatAnim = useRef(new Animated.Value(0)).current;    // floating hero
+    const tabAnim = useRef(new Animated.Value(0)).current;      // sliding tab indicator
+    const headerEnter = useRef(new Animated.Value(0)).current;  // header entrance
+    const tiltX = useRef(new Animated.Value(0)).current;        // hero card 3D tilt
+    const tiltY = useRef(new Animated.Value(0)).current;
+
+    // 🆕 HERO CARD DRAG-TO-TILT (3D)
+    const panResponder = useRef(
+        PanResponder.create({
+            onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 4 || Math.abs(g.dy) > 4,
+            onPanResponderMove: (_, g) => {
+                tiltY.setValue(Math.max(-1, Math.min(1, g.dx / 120)));
+                tiltX.setValue(Math.max(-1, Math.min(1, g.dy / 60)));
+            },
+            onPanResponderRelease: () => {
+                Animated.spring(tiltX, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+                Animated.spring(tiltY, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+            },
+            onPanResponderTerminate: () => {
+                Animated.spring(tiltX, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+                Animated.spring(tiltY, { toValue: 0, friction: 4, tension: 60, useNativeDriver: true }).start();
+            },
+        })
+    ).current;
+
     useEffect(() => {
+        // Ambient shimmer
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(shimmerAnim, { toValue: 1, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(shimmerAnim, { toValue: 0, duration: 4000, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ).start();
+
+        // Orbit rotation loop
+        Animated.loop(Animated.timing(mainLoop, { toValue: 1, duration: 4500, easing: Easing.linear, useNativeDriver: true })).start();
+
+        // Pulse halo loop
+        Animated.loop(Animated.sequence([
+            Animated.timing(pulseAnim, { toValue: 1, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+            Animated.timing(pulseAnim, { toValue: 0, duration: 1100, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])).start();
+
+        // Holo sweep loop
+        Animated.loop(Animated.sequence([
+            Animated.delay(1200),
+            Animated.timing(holoAnim, { toValue: 1, duration: 2200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+            Animated.timing(holoAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
+        ])).start();
+
+        // Float loop
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(floatAnim, { toValue: -6, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+                Animated.timing(floatAnim, { toValue: 0, duration: 2200, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+            ])
+        ).start();
+
+        // Header entrance
+        Animated.timing(headerEnter, { toValue: 1, duration: 1000, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
+
         if (!user) return;
         const userRef = doc(db, "users", user.uid);
         const unsubscribe = onSnapshot(userRef, (snap) => {
@@ -70,20 +337,55 @@ export default function LegalScreen() {
     const userDiamonds = userData?.totalSpentDiamonds || 0;
     const userTier = calculateUserLevel(userDiamonds);
 
-    // Reusable Content Block for cleaner code
-    const ContentSection = ({ icon, title, text, color }: { icon: any, title: string, text: string, color: string }) => (
-        <View style={styles.contentBlock}>
-            <View style={styles.titleRow}>
-                <View style={[styles.iconBox, { backgroundColor: `${color}20`, borderColor: `${color}50` }]}>
-                    <MaterialCommunityIcons name={icon} size={20} color={color} />
-                </View>
-                <Text style={[styles.contentTitle, { color: color }]}>{title}</Text>
-            </View>
-            <View style={styles.textWrapper}>
-                <Text style={styles.contentText}>{text}</Text>
-            </View>
-        </View>
-    );
+    // 🆕 SWITCH TAB WITH SLIDING INDICATOR
+    const switchTab = (tab: 'terms' | 'privacy') => {
+        setActiveTab(tab);
+        Animated.spring(tabAnim, { toValue: tab === 'terms' ? 0 : 1, friction: 7, tension: 70, useNativeDriver: true }).start();
+    };
+
+    // 🆕 DERIVED ANIMATION VALUES
+    const parallaxHeader = scrollY.interpolate({ inputRange: [0, 200], outputRange: [0, -40], extrapolate: 'clamp' });
+    const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -40] });
+    const orbitRotate = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const orbitRotateRev = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
+    const pulseScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.6] });
+    const pulseOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] });
+    const holoX = holoAnim.interpolate({ inputRange: [0, 1], outputRange: [-width, width] });
+    const tabW = tabInnerWidth > 0 ? tabInnerWidth / 2 : 0;
+    const tabX = tabAnim.interpolate({ inputRange: [0, 1], outputRange: [0, tabW] });
+    const heroTilt = {
+        transform: [
+            { perspective: 1000 },
+            { rotateX: tiltX.interpolate({ inputRange: [-1, 1], outputRange: ['12deg', '-12deg'] }) },
+            { rotateY: tiltY.interpolate({ inputRange: [-1, 1], outputRange: ['-18deg', '18deg'] }) },
+        ],
+    };
+    const headerReveal = {
+        opacity: headerEnter,
+        transform: [{ translateY: headerEnter.interpolate({ inputRange: [0, 1], outputRange: [-30, 0] }) }],
+    };
+
+    const heroBorder = {
+        borderLeftWidth: 2,
+        borderRightWidth: 2,
+        borderTopWidth: 0.5,
+        borderBottomWidth: 0.5,
+        borderLeftColor: userTier.color,
+        borderRightColor: userTier.color,
+        borderTopColor: withAlpha(userTier.secondaryColor, '80'),
+        borderBottomColor: withAlpha(userTier.secondaryColor, '80'),
+        backgroundColor: 'rgba(10, 10, 10, 0.65)',
+    };
+
+    // 🆕 KEY HIGHLIGHTS (quick trust summary shown at the top of the policy)
+    const highlights = [
+        { icon: 'person', label: '18+ ONLY' },
+        { icon: 'shield-checkmark', label: 'VERIFIED HOSTS' },
+        { icon: 'mic-off', label: 'NO RECORDING' },
+        { icon: 'game-controller', label: 'FREE GAMES' },
+    ];
+
+    const sections = activeTab === 'terms' ? TERMS_SECTIONS : PRIVACY_SECTIONS;
 
     return (
         <View style={styles.mainContainer}>
@@ -95,13 +397,39 @@ export default function LegalScreen() {
                 style={StyleSheet.absoluteFill} 
             />
 
+            {/* 🆕 HERO IMAGE FADING INTO BACKGROUND */}
+            <ImageBackground source={{ uri: IMG_HERO }} style={styles.heroImg} imageStyle={{ opacity: 0.22 }}>
+                <LinearGradient colors={['rgba(0,0,0,0)', 'rgba(2,6,23,0.85)', '#020617']} style={StyleSheet.absoluteFill} />
+            </ImageBackground>
+
+            {/* 🆕 TWINKLING STAR FIELD */}
+            {STARS.map((st, i) => (
+                <Animated.View
+                    key={`star-${i}`}
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute', top: st.top, left: st.left, width: st.size, height: st.size, borderRadius: st.size,
+                        backgroundColor: '#FFF',
+                        opacity: shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: i % 2 === 0 ? [0.1, 0.9] : [0.9, 0.1] }),
+                    }}
+                />
+            ))}
+
+            {/* 🆕 FLOATING SHIMMER ORBS */}
+            <Animated.View style={[styles.shimmerOrb, { top: 80, left: -60, backgroundColor: userTier.color, transform: [{ translateY: orbTranslateY }] }]} />
+            <Animated.View style={[styles.shimmerOrb, { bottom: 150, right: -60, backgroundColor: userTier.secondaryColor, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+
+            {/* 🌌 Animated Parallax Auras */}
+            <Animated.View style={[styles.aura, { top: -50, left: -100, backgroundColor: userTier.color, opacity: 0.15, transform: [{ translateY: parallaxHeader }] }]} />
+            <Animated.View style={[styles.aura, { bottom: 100, right: -100, backgroundColor: userTier.secondaryColor, opacity: 0.1, transform: [{ translateY: parallaxHeader }] }]} />
+
             <SafeAreaView style={{ flex: 1 }} edges={['top']}>
                 
                 {/* --- HEADER HUD --- */}
-                <View style={styles.header}>
+                <Animated.View style={[styles.header, headerReveal]}>
                     <TouchableOpacity 
                         onPress={() => router.back()} 
-                        style={[styles.backBtn, { borderColor: userTier.color + '40' }]}
+                        style={[styles.backBtn, { borderColor: withAlpha(userTier.color, '40') }]}
                         activeOpacity={0.7}
                     >
                         <Ionicons name="chevron-back" size={24} color="#FFF" />
@@ -109,123 +437,168 @@ export default function LegalScreen() {
                     <View style={styles.headerTextContainer}>
                         <Text style={styles.headerTitle}>LEGAL CENTER</Text>
                         <View style={styles.syncRow}>
-                            <View style={[styles.pulseDot, { backgroundColor: userTier.color }]} />
-                            <Text style={styles.headerSub}>LAST UPDATED: OCTOBER 2026</Text>
+                            <View style={styles.pulseDotWrap}>
+                                <Animated.View style={[styles.pulseHalo, { backgroundColor: userTier.color, opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                                <View style={[styles.pulseDot, { backgroundColor: userTier.color }]} />
+                            </View>
+                            <Text style={styles.headerSub}>LAST UPDATED: NOVEMBER 2026</Text>
                         </View>
                     </View>
-                </View>
+                    {/* 🆕 LEVEL BADGE WITH ORBIT RING */}
+                    <View style={styles.levelOrbitWrap}>
+                        <Animated.View style={[styles.levelOrbitRing, { borderColor: userTier.color, transform: [{ rotate: orbitRotate }] }]} />
+                        <View style={[styles.levelOrbitCore, { borderColor: userTier.color }]}>
+                            <Text style={[styles.levelOrbitText, { color: userTier.color }]}>L{userTier.lvl}</Text>
+                        </View>
+                    </View>
+                </Animated.View>
 
-                {/* --- TAB SWITCHER --- */}
-                <View style={styles.tabContainer}>
-                    <TouchableOpacity 
-                        activeOpacity={0.9}
-                        style={[styles.tab, activeTab === 'terms' && { backgroundColor: userTier.color }]} 
-                        onPress={() => setActiveTab('terms')}
-                    >
-                        <Text style={[styles.tabText, activeTab === 'terms' && styles.activeTabText]}>
-                            TERMS OF SERVICE
-                        </Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        activeOpacity={0.9}
-                        style={[styles.tab, activeTab === 'privacy' && { backgroundColor: userTier.secondaryColor }]} 
-                        onPress={() => setActiveTab('privacy')}
-                    >
-                        <Text style={[styles.tabText, activeTab === 'privacy' && styles.activeTabText]}>
-                            PRIVACY POLICY
-                        </Text>
-                    </TouchableOpacity>
-                </View>
+                {/* --- TAB SWITCHER (sliding gradient indicator) --- */}
+                <Animated.View style={[styles.tabContainer, headerReveal]}>
+                    <View style={styles.tabInner} onLayout={(e) => setTabInnerWidth(e.nativeEvent.layout.width)}>
+                        {tabW > 0 && (
+                            <Animated.View style={[styles.tabIndicator, { width: tabW, transform: [{ translateX: tabX }] }]}>
+                                <LinearGradient
+                                    colors={[withAlpha(userTier.color, 'FF'), withAlpha(userTier.secondaryColor, 'FF')]}
+                                    start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                    style={styles.tabIndicatorGrad}
+                                />
+                            </Animated.View>
+                        )}
+                        <TouchableOpacity 
+                            activeOpacity={0.9}
+                            style={styles.tab} 
+                            onPress={() => switchTab('terms')}
+                        >
+                            <Text style={[styles.tabText, activeTab === 'terms' && styles.activeTabText]}>
+                                TERMS OF SERVICE
+                            </Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                            activeOpacity={0.9}
+                            style={styles.tab} 
+                            onPress={() => switchTab('privacy')}
+                        >
+                            <Text style={[styles.tabText, activeTab === 'privacy' && styles.activeTabText]}>
+                                PRIVACY POLICY
+                            </Text>
+                        </TouchableOpacity>
+                    </View>
+                </Animated.View>
 
-                <ScrollView 
+                <Animated.ScrollView 
                     showsVerticalScrollIndicator={false} 
                     contentContainerStyle={styles.scrollContent}
+                    onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+                    scrollEventThrottle={16}
                 >
-                    {activeTab === 'terms' ? (
-                        <View style={styles.glassCard}>
-                            <ContentSection 
-                                icon="shield-account"
-                                color="#6366F1"
-                                title="1. Community Guidelines (18+ ONLY)" 
-                                text="TalkPe Pro is a premium live interaction platform strictly restricted to users aged 18 and above. All participants must engage with respect. Any form of harassment or policy violation will lead to immediate account suspension under our zero-tolerance policy." 
+                    {/* 🆕 3D TILT HERO CARD (drag it!) */}
+                    <Animated.View style={[styles.heroSection, { transform: [{ translateY: floatAnim }] }]}>
+                        <Animated.View style={heroTilt} {...panResponder.panHandlers}>
+                            <View style={[styles.heroGlow, { shadowColor: userTier.color }]}>
+                                <View style={[styles.heroCard, heroBorder]}>
+                                    <ImageBackground source={{ uri: IMG_CARD_BG }} style={StyleSheet.absoluteFill} imageStyle={{ opacity: 0.35 }} />
+                                    <LinearGradient
+                                        colors={['rgba(0,0,0,0.55)', withAlpha(userTier.color, '30'), 'rgba(0,0,0,0.7)']}
+                                        start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                        style={StyleSheet.absoluteFill}
+                                    />
+                                    <Animated.View pointerEvents="none" style={[styles.holoStripe, { transform: [{ translateX: holoX }, { rotate: '25deg' }] }]} />
+
+                                    <View style={styles.heroIconWrap}>
+                                        <Animated.View style={[styles.heroRing, { borderColor: withAlpha(userTier.color, 'AA'), transform: [{ rotate: orbitRotate }] }]} />
+                                        <Animated.View style={[styles.heroRingInner, { borderColor: withAlpha(userTier.secondaryColor, 'AA'), transform: [{ rotate: orbitRotateRev }] }]} />
+                                        <Animated.View style={[styles.heroPulse, { backgroundColor: withAlpha(userTier.color, '40'), opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                                        <LinearGradient colors={[userTier.color, withAlpha(userTier.secondaryColor, 'FF')]} style={styles.heroIconBg}>
+                                            <MaterialCommunityIcons name="scale-balance" size={40} color="#FFF" />
+                                        </LinearGradient>
+                                    </View>
+
+                                    <Text style={styles.heroTitle}>{activeTab === 'terms' ? 'Terms of Service' : 'Privacy Policy'}</Text>
+                                    <Text style={styles.heroSub}>
+                                        {activeTab === 'terms'
+                                            ? 'Clear, fair rules that keep our 18+ community safe, respectful and secure.'
+                                            : 'Transparent practices that protect your identity, your calls and your data.'}
+                                    </Text>
+
+                                    <View style={styles.highlightRow}>
+                                        {highlights.map((h) => (
+                                            <View key={h.label} style={[styles.highlightChip, { borderColor: withAlpha(userTier.color, '50') }]}>
+                                                <Ionicons name={h.icon as any} size={11} color={userTier.color} />
+                                                <Text style={styles.highlightText}>{h.label}</Text>
+                                            </View>
+                                        ))}
+                                    </View>
+                                </View>
+                            </View>
+                        </Animated.View>
+                    </Animated.View>
+
+                    {/* 🆕 SECTION DIVIDER */}
+                    <View style={styles.sectionRow}>
+                        <Text style={[styles.sectionLabel, { color: userTier.color }]}>
+                            {activeTab === 'terms' ? 'TERMS & CONDITIONS' : 'DATA & PRIVACY'}
+                        </Text>
+                        <LinearGradient
+                            colors={[withAlpha(userTier.color, '80'), withAlpha(userTier.color, '00')]}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            style={styles.sectionLine}
+                        />
+                    </View>
+
+                    {/* key={activeTab} re-runs the staggered entrance on every tab switch */}
+                    <View key={activeTab}>
+                        {sections.map((s, i) => (
+                            <ContentSection
+                                key={s.title}
+                                index={i}
+                                icon={s.icon}
+                                color={s.color}
+                                title={s.title}
+                                text={s.text}
+                                orbitRotate={i % 2 === 0 ? orbitRotate : orbitRotateRev}
                             />
-                            <ContentSection 
-                                icon="gamepad-variant"
-                                color="#0EA5E9"
-                                title="2. Digital Assets & Free Games" 
-                                text="Diamonds are virtual in-app assets used to connect with hosts and to send virtual gifts. In-app games (Reflex Arena, Memory Match) are completely free to play: no Entry Fee is charged and no Diamond rewards are paid out. Diamonds have NO real-world monetary value and cannot be cashed out. We strictly prohibit gambling. All purchases are non-refundable." 
+                        ))}
+                    </View>
+
+                    {/* 🆕 CONTACT CARD */}
+                    <TouchableOpacity
+                        activeOpacity={0.85}
+                        onPress={() => Linking.openURL('mailto:support@talkpepro.com?subject=TalkPe%20Pro%20Legal%20Query')}
+                    >
+                        <BlurView intensity={25} tint="dark" style={[styles.contactCard, { borderColor: withAlpha(userTier.color, '45') }]}>
+                            <LinearGradient
+                                pointerEvents="none"
+                                colors={[withAlpha(userTier.color, '25'), 'rgba(255,255,255,0)']}
+                                start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+                                style={StyleSheet.absoluteFill}
                             />
-                            <ContentSection 
-                                icon="alert-octagon"
-                                color="#F43F5E"
-                                title="3. Interaction Safety & Reporting" 
-                                text="Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, and on profiles. All user reports are reviewed by our moderation team within 24 hours to ensure platform integrity." 
-                            />
-                            <ContentSection 
-                                icon="security"
-                                color="#10B981"
-                                title="4. User Responsibility" 
-                                text="You are responsible for maintaining the confidentiality of your account credentials. TalkPe Pro is not liable for unauthorized access resulting from user negligence or shared sensitive information." 
-                            />
-                            <ContentSection 
-                                icon="gavel"
-                                color="#F59E0B"
-                                title="5. Content Moderation & Spotlight" 
-                                text="We maintain strict User-Generated Content (UGC) policies. Spotlight videos can be reported and will be hidden pending a 24-hour administrator review. Violating content will result in permanent account termination without refunds." 
-                            />
-                            <ContentSection 
-                                icon="wifi-off"
-                                color="#8B5CF6"
-                                title="6. Game Disconnect Policy" 
-                                text="In the event of a network disconnection during a free game, the match may end or restart automatically. Since games are free to play, no Diamonds are charged or lost because of a disconnection." 
-                            />
-                        </View>
-                    ) : (
-                        <View style={styles.glassCard}>
-                            <ContentSection 
-                                icon="microphone-off"
-                                color="#A855F7"
-                                title="1. Communication Privacy & No Recording" 
-                                text="All live interactions (Quick Connect, Live Rooms) utilize industry-standard encryption. We operate under a strict zero-knowledge framework; your private video and audio calls are NEVER recorded, stored, or monitored by TalkPe Pro." 
-                            />
-                            <ContentSection 
-                                icon="database-lock"
-                                color="#EC4899"
-                                title="2. Information Security" 
-                                text="Your profile and identity data are secured within Firebase encrypted clusters. We maintain a strict policy against selling or sharing your personal data with third-party advertisers for marketing purposes." 
-                            />
-                            <ContentSection 
-                                icon="credit-card-chip"
-                                color="#F59E0B"
-                                title="3. Transaction Protection" 
-                                text="Financial details are processed exclusively via secure Google Play Billing and verified payment vaults. Sensitive information like CVV or banking passwords never pass through or get stored within the TalkPe Pro local system." 
-                            />
-                            <ContentSection 
-                                icon="eye-off"
-                                color="#06B6D4"
-                                title="4. Data Permissions" 
-                                text="Camera and Microphone access is strictly requested for live call durations only. Any media access is limited to profile personalization. You can manage or revoke these permissions via your device settings at any time." 
-                            />
-                            <ContentSection 
-                                icon="delete-sweep"
-                                color="#14B8A6"
-                                title="5. Data Deletion Rights" 
-                                text="In strict compliance with Google Play Developer Policies, users retain full rights over their data. You can request complete deletion of your account and associated data through the app settings at any time, which will permanently wipe your identity from our servers." 
-                            />
-                        </View>
-                    )}
+                            <View style={[styles.contactIcon, { backgroundColor: withAlpha(userTier.color, '25'), borderColor: withAlpha(userTier.color, '60') }]}>
+                                <Ionicons name="mail" size={20} color={userTier.color} />
+                            </View>
+                            <View style={{ flex: 1, marginLeft: 14 }}>
+                                <Text style={styles.contactTitle}>Questions about our policies?</Text>
+                                <Text style={[styles.contactSub, { color: userTier.color }]}>support@talkpepro.com</Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={20} color={userTier.color} />
+                        </BlurView>
+                    </TouchableOpacity>
 
                     {/* --- FOOTER HUD --- */}
                     <View style={styles.footer}>
-                        <LinearGradient 
-                            colors={[userTier.color, userTier.secondaryColor]} 
-                            start={{x:0, y:0}} end={{x:1, y:0}} 
-                            style={styles.shieldGlow}
-                        >
-                            <View style={styles.shieldInner}>
-                                <Ionicons name="shield-checkmark" size={30} color="#FFF" />
-                            </View>
-                        </LinearGradient>
+                        <View style={styles.shieldWrap}>
+                            <Animated.View style={[styles.shieldRing, { borderColor: withAlpha(userTier.color, 'AA'), transform: [{ rotate: orbitRotate }] }]} />
+                            <Animated.View style={[styles.shieldPulse, { backgroundColor: withAlpha(userTier.color, '40'), opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                            <LinearGradient 
+                                colors={[userTier.color, userTier.secondaryColor]} 
+                                start={{x:0, y:0}} end={{x:1, y:0}} 
+                                style={styles.shieldGlow}
+                            >
+                                <View style={styles.shieldInner}>
+                                    <Ionicons name="shield-checkmark" size={30} color="#FFF" />
+                                </View>
+                            </LinearGradient>
+                        </View>
                         <Text style={styles.footerText}>SECURE PROTOCOL v1.0.5</Text>
                         <View style={styles.brandRow}>
                             <Text style={styles.footerSub}>MANAGED BY </Text>
@@ -233,7 +606,7 @@ export default function LegalScreen() {
                         </View>
                     </View>
                     <View style={{ height: 40 }} />
-                </ScrollView>
+                </Animated.ScrollView>
             </SafeAreaView>
         </View>
     );
@@ -241,29 +614,82 @@ export default function LegalScreen() {
 
 const styles = StyleSheet.create({
     mainContainer: { flex: 1, backgroundColor: '#020617' },
+    heroImg: { position: 'absolute', top: 0, left: 0, right: 0, height: 340 },
+    shimmerOrb: { position: 'absolute', width: 400, height: 400, borderRadius: 200, opacity: 0.15, filter: 'blur(100px)' },
+    aura: { position: 'absolute', width: 450, height: 450, borderRadius: 225 },
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 25 },
-    headerTextContainer: { marginLeft: 18 },
+    headerTextContainer: { marginLeft: 18, flex: 1 },
     headerTitle: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: -0.5 },
     syncRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-    pulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981', marginRight: 8 },
+    pulseDotWrap: { width: 14, height: 14, justifyContent: 'center', alignItems: 'center', marginRight: 6 },
+    pulseHalo: { position: 'absolute', width: 12, height: 12, borderRadius: 6 },
+    pulseDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
     headerSub: { color: '#475569', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
     backBtn: { backgroundColor: 'rgba(255,255,255,0.05)', padding: 10, borderRadius: 15, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+
+    // 🆕 LEVEL ORBIT BADGE
+    levelOrbitWrap: { width: 48, height: 48, justifyContent: 'center', alignItems: 'center' },
+    levelOrbitRing: { position: 'absolute', width: 48, height: 48, borderRadius: 24, borderWidth: 1.5, borderStyle: 'dashed', opacity: 0.8 },
+    levelOrbitCore: { width: 36, height: 36, borderRadius: 18, borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+    levelOrbitText: { fontSize: 11, fontWeight: '900' },
+
+    // 🆕 TABS (sliding indicator)
     tabContainer: { flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.03)', marginHorizontal: 20, borderRadius: 25, padding: 6, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    tabInner: { flex: 1, flexDirection: 'row' },
+    tabIndicator: { position: 'absolute', top: 0, bottom: 0, left: 0 },
+    tabIndicatorGrad: { flex: 1, borderRadius: 20 },
     tab: { flex: 1, paddingVertical: 15, alignItems: 'center', borderRadius: 20 },
     activeTabTerms: { backgroundColor: '#6366F1' }, 
     activeTabPrivacy: { backgroundColor: '#A855F7' }, 
     tabText: { color: '#475569', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
     activeTabText: { color: '#FFF' },
     scrollContent: { padding: 20 },
+
+    // 🆕 3D HERO CARD
+    heroSection: { marginBottom: 32, marginTop: 6 },
+    heroGlow: { borderRadius: 36 },
+    heroCard: { borderRadius: 36, overflow: 'hidden', alignItems: 'center', paddingVertical: 28, paddingHorizontal: 20 },
+    holoStripe: { position: 'absolute', width: 60, height: '240%', top: '-70%', backgroundColor: 'rgba(255,255,255,0.14)' },
+    heroIconWrap: { width: 136, height: 136, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
+    heroRing: { position: 'absolute', width: 132, height: 132, borderRadius: 66, borderWidth: 1.5, borderStyle: 'dashed' },
+    heroRingInner: { position: 'absolute', width: 110, height: 110, borderRadius: 55, borderWidth: 1, borderStyle: 'dotted' },
+    heroPulse: { position: 'absolute', width: 90, height: 90, borderRadius: 45 },
+    heroIconBg: { width: 90, height: 90, borderRadius: 32, justifyContent: 'center', alignItems: 'center' },
+    heroTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', letterSpacing: -0.5 },
+    heroSub: { color: '#CBD5E1', fontSize: 13, textAlign: 'center', marginTop: 10, fontWeight: '600', lineHeight: 21 },
+    highlightRow: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 8, marginTop: 18 },
+    highlightChip: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
+    highlightText: { color: '#E2E8F0', fontSize: 8, fontWeight: '900', letterSpacing: 1.2 },
+
+    sectionRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 20, paddingLeft: 4 },
+    sectionLabel: { fontSize: 12, fontWeight: '900', letterSpacing: 3 },
+    sectionLine: { flex: 1, height: 1, marginLeft: 12 },
+
+    // 🆕 CONTENT CARDS
+    sectionGlow: { marginBottom: 20, borderRadius: 30 },
     glassCard: { backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: 35, padding: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
-    contentBlock: { marginBottom: 30 },
-    titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-    iconBox: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1, marginRight: 15 },
-    contentTitle: { fontSize: 14, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.2 },
-    textWrapper: { paddingLeft: 53 },
+    contentBlock: { borderRadius: 30, padding: 22, overflow: 'hidden', borderWidth: 1, backgroundColor: 'rgba(8, 13, 28, 0.92)' },
+    blockStrip: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 5 },
+    titleRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 14 },
+    iconWrap: { width: 56, height: 56, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+    iconRing: { position: 'absolute', width: 54, height: 54, borderRadius: 27, borderWidth: 1.5, borderStyle: 'dashed' },
+    iconBox: { width: 38, height: 38, borderRadius: 12, justifyContent: 'center', alignItems: 'center', borderWidth: 1 },
+    contentIndex: { fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 3 },
+    contentTitle: { fontSize: 13, fontWeight: '900', textTransform: 'uppercase', letterSpacing: 1.1, lineHeight: 19 },
+    textWrapper: { paddingLeft: 4 },
     contentText: { color: '#94A3B8', fontSize: 13, lineHeight: 22, fontWeight: '600' },
-    footer: { marginTop: 30, alignItems: 'center' },
-    shieldGlow: { width: 70, height: 70, borderRadius: 35, padding: 2, justifyContent: 'center', alignItems: 'center', marginBottom: 20 },
+
+    // 🆕 CONTACT CARD
+    contactCard: { flexDirection: 'row', alignItems: 'center', borderRadius: 28, padding: 20, overflow: 'hidden', borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.03)', marginTop: 4 },
+    contactIcon: { width: 46, height: 46, borderRadius: 16, borderWidth: 1, justifyContent: 'center', alignItems: 'center' },
+    contactTitle: { color: '#FFF', fontSize: 14, fontWeight: '900' },
+    contactSub: { fontSize: 12, fontWeight: '800', marginTop: 3 },
+
+    footer: { marginTop: 36, alignItems: 'center' },
+    shieldWrap: { width: 100, height: 100, justifyContent: 'center', alignItems: 'center', marginBottom: 14 },
+    shieldRing: { position: 'absolute', width: 96, height: 96, borderRadius: 48, borderWidth: 1.5, borderStyle: 'dashed' },
+    shieldPulse: { position: 'absolute', width: 70, height: 70, borderRadius: 35 },
+    shieldGlow: { width: 70, height: 70, borderRadius: 35, padding: 2, justifyContent: 'center', alignItems: 'center' },
     shieldInner: { width: '100%', height: '100%', borderRadius: 33, backgroundColor: '#020617', justifyContent: 'center', alignItems: 'center' },
     footerText: { color: '#334155', fontSize: 11, fontWeight: '900', letterSpacing: 3 },
     brandRow: { flexDirection: 'row', alignItems: 'center', marginTop: 10 },

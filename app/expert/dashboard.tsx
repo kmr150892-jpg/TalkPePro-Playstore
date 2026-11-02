@@ -947,7 +947,7 @@ export default function ExpertDashboard() {
                                             <Animated.View style={{ opacity: blinkOpacity }}>
                                                 <View style={styles.studioHeadDot} />
                                             </Animated.View>
-                                            <Text style={styles.studioHeadTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>STUDIO ROOM</Text>
+                                            <Text style={styles.studioHeadTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>CREATOR HUB</Text>
                                         </View>
                                         <View style={styles.studioHeadDivider}>
                                             <LinearGradient colors={['#F5D77A', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.studioHeadDividerLine} />

@@ -3,7 +3,7 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { arrayRemove, collection, deleteDoc, doc, getDoc, increment, onSnapshot, query, updateDoc, where } from 'firebase/firestore';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Animated, Dimensions, Easing, Image, ImageBackground, PanResponder, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
@@ -27,6 +27,12 @@ const withAlpha = (hex: string, alpha: string = 'FF') => {
   const base = (hex || '#000000').length >= 7 ? hex.slice(0, 7) : hex;
   return base + alpha;
 };
+
+// 🔥 HOST PROFILE HELPERS
+// users doc-la `name` (host edit pannum latest name) & `displayName` (registration time-la set aana old name) rendum irukku.
+// So `name` ku PRIORITY. (Host app `displayName` update panna, rendu idathilum `pickName`-la 'name' & 'displayName' order-a maathunga)
+const pickName = (p: any) => p?.name || p?.displayName || null;
+const pickImage = (p: any) => p?.profilePic || p?.photoURL || null;
 
 // 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC FROM MEMORY V2)
 const calculateUserLevel = (totalSpent: number) => {
@@ -79,7 +85,9 @@ const FadeInItem = ({ index, children }: any) => {
 };
 
 export default function FriendsList() {
-  const [friends, setFriends] = useState<any[]>([]);
+  // 🔥 LIVE DATA: raw connections + live host profiles (merged into `friends` below)
+  const [connections, setConnections] = useState<any[]>([]);
+  const [hostProfiles, setHostProfiles] = useState<Record<string, any>>({});
   const [userData, setUserData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -193,39 +201,58 @@ export default function FriendsList() {
       where("status", "==", "friend")
     );
 
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const friendsData = await Promise.all(
-        snapshot.docs.map(async (connectionDoc) => {
-          const data = connectionDoc.data();
-          const expertId = data.receiverId;
-          const expertRef = doc(db, "users", expertId);
-          const expertSnap = await getDoc(expertRef);
-
-          let expertInfo = {
-            name: data.receiverName || "Host",
-            image: data.receiverImage || null
-          };
-
-          if (expertSnap.exists()) {
-            const expertData = expertSnap.data();
-            expertInfo.name = expertData.displayName || expertData.name || expertInfo.name;
-            expertInfo.image = expertData.profilePic || expertData.photoURL || expertInfo.image;
-          }
-
-          return {
-            id: connectionDoc.id,
-            ...data,
-            realName: expertInfo.name,
-            realImage: expertInfo.image
-          };
-        })
-      );
-      setFriends(friendsData);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setConnections(snapshot.docs.map((d) => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
 
     return () => { unsubscribe(); unsubUser(); };
   }, [user]);
+
+  // 🔥 LIVE HOST PROFILES: host name/photo maarina udane update aagum
+  const hostIdsKey = connections
+    .map((c) => c.receiverId)
+    .filter(Boolean)
+    .sort()
+    .join(',');
+
+  useEffect(() => {
+    if (!hostIdsKey) {
+      setHostProfiles({});
+      return;
+    }
+    const ids = hostIdsKey.split(',');
+    const unsubs = ids.map((id) =>
+      onSnapshot(
+        doc(db, 'users', id),
+        (snap) => {
+          setHostProfiles((prev) => ({ ...prev, [id]: snap.exists() ? snap.data() : null }));
+        },
+        () => {
+          // permission / network error -> mark as loaded so the screen never gets stuck on the loader
+          setHostProfiles((prev) => ({ ...prev, [id]: null }));
+        }
+      )
+    );
+    return () => unsubs.forEach((u) => u());
+  }, [hostIdsKey]);
+
+  // 🔥 MERGED LIST (connection + live profile)
+  const friends = useMemo(
+    () =>
+      connections.map((c) => {
+        const p = hostProfiles[c.receiverId];
+        return {
+          ...c,
+          realName: pickName(p) || c.receiverName || 'Host',
+          realImage: pickImage(p) || c.receiverImage || null,
+        };
+      }),
+    [connections, hostProfiles]
+  );
+
+  // ⏳ ella host profile-um vara varaikkum loader (so "Host" flash aagaadhu)
+  const profilesReady = connections.every((c) => !c.receiverId || c.receiverId in hostProfiles);
 
   // 🔥 NEW EFFECT TO FETCH BLOCKED PROFILES PROPERLY
   useEffect(() => {
@@ -380,7 +407,7 @@ export default function FriendsList() {
       backgroundColor: 'rgba(10, 10, 10, 0.8)',
   };
 
-  if (loading) {
+  if (loading || !profilesReady) {
     return (
       <View style={styles.darkLoader}>
         <View style={styles.loaderOrbit}>

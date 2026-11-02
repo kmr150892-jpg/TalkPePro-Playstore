@@ -123,7 +123,7 @@ const FAQS = [
        {
         id: 1,
         question: "When will my reward redemption be processed?",
-        answer: "Redemption requests are reviewed manually by our team and are usually processed within 5-7 working days. During review, we may verify your account activity and the details you submitted to keep the platform safe and fair. Please make sure your payout details and ID document are accurate, as incorrect details can delay or prevent processing."
+        answer: "Redemption requests are reviewed manually by our team and are usually processed within 5-7 working days. During review, we may verify your account activity and the details you submitted to keep the platform safe and fair. Please make sure your redemption details and ID document are accurate, as incorrect details can delay or prevent processing."
     },
     {
         id: 2,
@@ -1212,7 +1212,7 @@ export default function SupportHubScreen() {
                                                 <LinearGradient colors={[primaryColor, primaryColor + '66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rSectionIcon}>
                                                     <MaterialCommunityIcons name="account-search-outline" size={14} color="#0B1026" />
                                                 </LinearGradient>
-                                                <Text style={[styles.rSectionText, { color: lighten(primaryColor, 0.55) }]}>USER DETAILS (OPTIONAL)</Text>
+                                                <Text style={[styles.rSectionText, { color: lighten(primaryColor, 0.55) }]}>USER DETAILS</Text>
                                                 <LinearGradient colors={[primaryColor + '88', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.rSectionLine} />
                                             </View>
 
