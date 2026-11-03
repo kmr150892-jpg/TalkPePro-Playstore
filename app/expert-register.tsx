@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage'; // 🔥 SATTI UPDATE: Firebase Storage Added
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -14,7 +14,7 @@ import {
     Dimensions,
     Easing,
     Image,
-    KeyboardAvoidingView,
+    Keyboard,
     LayoutAnimation,
     Platform,
     ScrollView,
@@ -23,6 +23,7 @@ import {
     Text,
     TextInput,
     TouchableOpacity,
+    TouchableWithoutFeedback,
     UIManager,
     View
 } from 'react-native';
@@ -35,7 +36,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 const EXPERTISE_TAGS = [
-    "🎤 Singing", "💃 Dancing", "🔮 Astrology", "🎴 Tarot Reading", "🤝 Community Advice", "💼 Career Counseling", "🌱 Life Coaching", 
+    "🎤 Singing", "💃 Dancing", "🤝 Community Advice", "💼 Career Counseling", "🌱 Life Coaching", 
     "🧘 Mindfulness & Motivation",  "🧘‍♀️ Yoga", "📿 Meditation", "🍳 Cooking", "🧁 Baking", "📸 Photography", "🎬 Video Editing", 
     "🎨 Graphic Design", "📈 Digital Marketing", "💻 Programming", "📱 App Development", "🌐 Web Development",  
     "📊 Business Strategy", "🗣️ Public Speaking", "🌍 Language Tutor", "🗣️ English Fluency", 
@@ -66,13 +67,158 @@ const PERSONALITY_TAGS = [
     "😎 Chill & Relaxed", "⚡ High Energy"
 ];
 
+// 🔥 SATTI UPDATE: Play Store friendly wording (Loneliness Support -> Friendly Company, Just Venting -> Casual Chat)
 const CONNECT_TAGS = [
-    "🌱 Life Advice", "💼 Career Guidance", "❤️ Relationship Tips", "🗣️ Just Venting", 
+    "🌱 Life Advice", "💼 Career Guidance", "❤️ Relationship Tips", "🗣️ Casual Chat", 
     "✨ Spiritual Growth", "💪 Daily Motivation", "🎭 Entertainment", "📚 Skill Learning", 
-    "🤝 Loneliness Support", "🔮 Astrology & Tarot"
+    "🤝 Friendly Company", "🔮 Astrology & Tarot"
 ];
 
 const LANGUAGES = ["English", "Tamil", "Hindi", "Malayalam", "Kannada", "Telugu"];
+
+// 🔥 SATTI UPDATE: Floating particles for 3D depth background
+const PARTICLES = [
+    { l: '8%', t: '14%', s: 5, r: 26 },
+    { l: '82%', t: '10%', s: 4, r: 34 },
+    { l: '66%', t: '30%', s: 6, r: 20 },
+    { l: '16%', t: '44%', s: 3, r: 30 },
+    { l: '90%', t: '58%', s: 5, r: 24 },
+    { l: '34%', t: '72%', s: 4, r: 36 },
+    { l: '74%', t: '84%', s: 6, r: 22 },
+    { l: '12%', t: '90%', s: 3, r: 28 },
+];
+
+// 🔥 SATTI UPDATE: Step hero icons + tips
+const STEP_ICONS: any[] = ['account-circle', 'shield-check', 'star-four-points', 'emoticon-happy', 'rocket-launch'];
+const STEP_TIPS = [
+    "Clear, recent photos build trust fast.",
+    "Takes just 30 seconds. Private & secure.",
+    "Pick up to 3 skills you love sharing.",
+    "A friendly bio gets more connections.",
+    "One tap away from joining the community!"
+];
+
+// 🔥 SATTI UPDATE (NEW): Step names shown above the progress bar
+const STEP_NAMES = ["Profile", "Safety", "Skills", "Vibe", "Review"];
+
+// 🔥 SATTI UPDATE: Config for the floating keyboard input box
+const FIELD_CONFIG: any = {
+    name: { label: 'Display Name', placeholder: 'e.g. Sarah Smith', max: 40, keyboard: 'default', multiline: false, icon: 'user' },
+    age: { label: 'Your Age', placeholder: '25', max: 2, keyboard: 'numeric', multiline: false, icon: 'calendar' },
+    location: { label: 'Location', placeholder: 'City, Country', max: 40, keyboard: 'default', multiline: false, icon: 'map-pin' },
+    bio: { label: 'A Bit About Me', placeholder: 'Write a small bio about who you are, your vibe, and why people should talk to you...', max: 150, keyboard: 'default', multiline: true, icon: 'edit-3' },
+};
+
+// ============================================================
+// 🔥 SATTI UPDATE: REUSABLE 3D COMPONENTS
+// ============================================================
+
+// 3D press effect (scale + tilt) for every tappable thing
+const Press3D = ({ children, onPress, style, disabled }: any) => {
+    const scale = useRef(new Animated.Value(1)).current;
+    const tilt = useRef(new Animated.Value(0)).current;
+
+    const pressIn = () => {
+        Animated.parallel([
+            Animated.spring(scale, { toValue: 0.95, useNativeDriver: true, speed: 40, bounciness: 0 }),
+            Animated.spring(tilt, { toValue: 1, useNativeDriver: true, speed: 40, bounciness: 0 }),
+        ]).start();
+    };
+    const pressOut = () => {
+        Animated.parallel([
+            Animated.spring(scale, { toValue: 1, useNativeDriver: true, speed: 20, bounciness: 12 }),
+            Animated.spring(tilt, { toValue: 0, useNativeDriver: true, speed: 20, bounciness: 12 }),
+        ]).start();
+    };
+    const rotateX = tilt.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '10deg'] });
+
+    return (
+        <TouchableWithoutFeedback onPress={onPress} onPressIn={pressIn} onPressOut={pressOut} disabled={disabled}>
+            <Animated.View style={[style, { transform: [{ perspective: 700 }, { rotateX }, { scale }] }]}>
+                {children}
+            </Animated.View>
+        </TouchableWithoutFeedback>
+    );
+};
+
+// Chip with pop animation when selected
+const Chip = ({ label, selected, onPress, gradient, start, end }: any) => {
+    const pop = useRef(new Animated.Value(1)).current;
+    useEffect(() => {
+        if (selected) {
+            pop.setValue(0.82);
+            Animated.spring(pop, { toValue: 1, friction: 4, tension: 140, useNativeDriver: true }).start();
+        }
+    }, [selected]);
+
+    return (
+        <Animated.View style={{ transform: [{ scale: pop }] }}>
+            <Press3D onPress={onPress} style={[styles.chip, selected && styles.chipActive]}>
+                {selected && <LinearGradient colors={gradient} start={start || { x: 0, y: 0 }} end={end || { x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
+                <Text style={[styles.chipText, selected && styles.chipTextActive]}>{label}</Text>
+            </Press3D>
+        </Animated.View>
+    );
+};
+
+// Glass card with top light reflection
+const GlassCard = ({ children, style }: any) => (
+    <View style={[styles.formCard, style]}>
+        <LinearGradient
+            colors={['rgba(255,255,255,0.10)', 'rgba(255,255,255,0.0)']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.8, y: 0.7 }}
+            style={StyleSheet.absoluteFill}
+            pointerEvents="none"
+        />
+        {children}
+    </View>
+);
+
+// Tap field -> opens the floating keyboard input box
+const FieldButton = ({ label, icon, value, placeholder, onPress, color, multiline, style }: any) => (
+    <View style={[styles.inputGroup, style]}>
+        <Text style={styles.inputLabel}>{label}</Text>
+        <Press3D onPress={onPress} style={[styles.inputField, multiline && styles.bioField]}>
+            {icon ? <Feather name={icon} size={18} color={value ? color : "#64748B"} style={multiline ? { marginTop: 20, marginLeft: 16 } : undefined} /> : null}
+            <Text
+                style={[styles.input, !value && { color: '#475569' }, multiline && { paddingTop: 20, paddingRight: 16 }]}
+                numberOfLines={multiline ? 4 : 1}
+            >
+                {value || placeholder}
+            </Text>
+            {!multiline && <Feather name="edit-3" size={14} color="#475569" />}
+        </Press3D>
+    </View>
+);
+
+// 🔥 SATTI UPDATE (NEW): Animated checklist row for the final review step
+const CheckRow = ({ label, done, color, delay }: any) => {
+    const anim = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        Animated.timing(anim, { toValue: 1, duration: 420, delay, easing: Easing.out(Easing.back(1.6)), useNativeDriver: true }).start();
+    }, []);
+    return (
+        <Animated.View
+            style={[
+                styles.checkRow,
+                {
+                    opacity: anim,
+                    transform: [
+                        { perspective: 700 },
+                        { translateX: anim.interpolate({ inputRange: [0, 1], outputRange: [-24, 0] }) },
+                        { rotateY: anim.interpolate({ inputRange: [0, 1], outputRange: ['-40deg', '0deg'] }) },
+                    ],
+                },
+            ]}
+        >
+            <View style={[styles.checkDot, done ? { backgroundColor: color, borderColor: color } : { borderColor: 'rgba(255,255,255,0.2)' }]}>
+                <Feather name={done ? 'check' : 'minus'} size={12} color={done ? '#fff' : '#64748B'} />
+            </View>
+            <Text style={[styles.checkRowText, !done && { color: '#64748B' }]}>{label}</Text>
+        </Animated.View>
+    );
+};
 
 export default function RegisterExpert() {
     const [isRestored, setIsRestored] = useState(false);
@@ -98,11 +244,27 @@ export default function RegisterExpert() {
     const [capturedPhoto, setCapturedPhoto] = useState<string | null>(null);
     const [capturedVideo, setCapturedVideo] = useState<string | null>(null);
 
+    // 🔥 SATTI UPDATE: Floating keyboard input box states + consent
+    const [activeField, setActiveField] = useState<string | null>(null);
+    const [kbHeight, setKbHeight] = useState(0);
+    const [agreed, setAgreed] = useState(false);
+
+    // 🔥 SATTI UPDATE (NEW): Exact keyboard position tracking (fixes box / Continue hidden behind keyboard)
+    const [kbTop, setKbTop] = useState<number | null>(null);
+    const [sheetLift, setSheetLift] = useState(0);
+    const overlayRef = useRef<View>(null);
+
     const [uploading, setUploading] = useState(false);
     const router = useRouter();
 
     const shimmerAnim = useRef(new Animated.Value(0)).current;
     const pulseAnim = useRef(new Animated.Value(1)).current;
+    // 🔥 SATTI UPDATE: New animation values
+    const floatAnim = useRef(new Animated.Value(0)).current;
+    const enterAnim = useRef(new Animated.Value(0)).current;
+    // 🔥 SATTI UPDATE (NEW): Smooth progress fill + sheet slide-in
+    const progressAnim = useRef(new Animated.Value(0)).current;
+    const sheetAnim = useRef(new Animated.Value(0)).current;
 
     useEffect(() => {
         const loadDraft = async () => {
@@ -164,7 +326,93 @@ export default function RegisterExpert() {
                 Animated.timing(pulseAnim, { toValue: 1, duration: 1500, useNativeDriver: true, easing: Easing.inOut(Easing.ease) })
             ])
         ).start();
+
+        // 🔥 SATTI UPDATE: Floating 3D loop (hero tile + particles)
+        Animated.loop(
+            Animated.sequence([
+                Animated.timing(floatAnim, { toValue: 1, duration: 3200, useNativeDriver: true, easing: Easing.inOut(Easing.sin) }),
+                Animated.timing(floatAnim, { toValue: 0, duration: 3200, useNativeDriver: true, easing: Easing.inOut(Easing.sin) })
+            ])
+        ).start();
     }, []);
+
+    // 🔥 SATTI UPDATE: 3D card entrance on every step change
+    useEffect(() => {
+        enterAnim.setValue(0);
+        Animated.spring(enterAnim, { toValue: 1, friction: 7, tension: 50, useNativeDriver: true }).start();
+    }, [step]);
+
+    // 🔥 SATTI UPDATE (NEW): Progress percentage animates smoothly on every step change
+    useEffect(() => {
+        Animated.timing(progressAnim, { toValue: step / 5, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
+    }, [step]);
+
+    // 🔥 SATTI UPDATE (NEW): Floating box slides up each time it opens
+    useEffect(() => {
+        if (activeField) {
+            sheetAnim.setValue(0);
+            Animated.spring(sheetAnim, { toValue: 1, friction: 8, tension: 70, useNativeDriver: true }).start();
+        }
+    }, [activeField]);
+
+    // 🔥 SATTI UPDATE: Keyboard listeners -> floating input box sits right above keyboard
+    useEffect(() => {
+        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+        const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+        const showSub = Keyboard.addListener(showEvt, (e) => {
+            setKbHeight(e.endCoordinates?.height || 0);
+            setKbTop(typeof e.endCoordinates?.screenY === 'number' ? e.endCoordinates.screenY : null);
+        });
+        const hideSub = Keyboard.addListener(hideEvt, () => {
+            setKbHeight(0);
+            setKbTop(null);
+            setSheetLift(0);
+            setActiveField(null);
+        });
+        return () => {
+            showSub.remove();
+            hideSub.remove();
+        };
+    }, []);
+
+    // 🔥 SATTI UPDATE (NEW): Measure how much of the screen the keyboard really covers.
+    // Works on iOS, Android resize mode AND Android edge-to-edge (where the window does not resize),
+    // so the floating box + DONE button are never hidden behind the keyboard.
+    const recalcLift = useCallback(() => {
+        if (!kbTop || !kbHeight || !overlayRef.current) {
+            setSheetLift(0);
+            return;
+        }
+        overlayRef.current.measureInWindow((_x: number, y: number, _w: number, h: number) => {
+            const overlap = Math.max(0, y + h - kbTop);
+            setSheetLift(Math.min(overlap, kbHeight));
+        });
+    }, [kbTop, kbHeight]);
+
+    useEffect(() => {
+        if (!activeField) return;
+        const t = setTimeout(recalcLift, 60);
+        return () => clearTimeout(t);
+    }, [activeField, kbTop, kbHeight, recalcLift]);
+
+    const openField = (field: string) => setActiveField(field);
+    const closeField = () => {
+        Keyboard.dismiss();
+        setActiveField(null);
+    };
+    const getFieldValue = (field: string) => {
+        if (field === 'name') return name;
+        if (field === 'age') return age;
+        if (field === 'location') return location;
+        if (field === 'bio') return bio;
+        return '';
+    };
+    const handleFieldChange = (field: string, text: string) => {
+        if (field === 'name') setName(text);
+        else if (field === 'age') setAge(text.replace(/[^0-9]/g, ''));
+        else if (field === 'location') setLocation(text);
+        else if (field === 'bio') setBio(text);
+    };
 
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -306,6 +554,11 @@ export default function RegisterExpert() {
     };
 
     const handleRegistration = async () => {
+        // 🔥 SATTI UPDATE: Consent check (Play Store data-safety friendly)
+        if (!agreed) {
+            return Alert.alert("Consent Needed", "Please accept the Terms of Use & Privacy Policy to submit your application.");
+        }
+
         setUploading(true);
         try {
             const user = auth.currentUser;
@@ -417,6 +670,29 @@ export default function RegisterExpert() {
     const rotateAnim = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
     const reverseRotateAnim = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
 
+    // 🔥 SATTI UPDATE: 3D interpolations
+    const heroRotateY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: ['-22deg', '22deg'] });
+    const heroRotateX = floatAnim.interpolate({ inputRange: [0, 1], outputRange: ['10deg', '-10deg'] });
+    const heroFloatY = floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -8] });
+
+    const enterStyle = {
+        opacity: enterAnim,
+        transform: [
+            { perspective: 1000 },
+            { translateY: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) },
+            { rotateX: enterAnim.interpolate({ inputRange: [0, 1], outputRange: ['14deg', '0deg'] }) },
+            { scale: enterAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
+        ],
+    };
+
+    // 🔥 SATTI UPDATE (NEW): Review checklist data
+    const checklist = [
+        { label: 'Profile photo added', done: !!image },
+        { label: 'Live selfie & 5s video verified', done: !!capturedPhoto && !!capturedVideo },
+        { label: 'Skills selected', done: selectedExpertise.length > 0 },
+        { label: 'Personality & bio ready', done: selectedPersonality.length > 0 && bio.length >= 10 },
+    ];
+
     if (!isRestored) {
         return (
             <View style={[styles.container, { justifyContent: 'center', alignItems: 'center', backgroundColor: darkBg }]}>
@@ -425,12 +701,79 @@ export default function RegisterExpert() {
         );
     }
 
+    // 🔥 SATTI UPDATE: Floating keyboard input box (appears right above keyboard)
+    const renderFloatingInput = () => {
+        if (!activeField) return null;
+        const cfg = FIELD_CONFIG[activeField];
+        const value = getFieldValue(activeField);
+
+        return (
+            <View ref={overlayRef} style={styles.sheetOverlay} pointerEvents="box-none" onLayout={recalcLift}>
+                <TouchableWithoutFeedback onPress={closeField}>
+                    <View style={styles.sheetBackdrop} />
+                </TouchableWithoutFeedback>
+
+                <Animated.View
+                    style={[
+                        styles.sheet,
+                        {
+                            bottom: sheetLift,
+                            opacity: sheetAnim,
+                            transform: [
+                                { perspective: 900 },
+                                { translateY: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) },
+                                { rotateX: sheetAnim.interpolate({ inputRange: [0, 1], outputRange: ['18deg', '0deg'] }) },
+                            ],
+                        },
+                    ]}
+                >
+                    <BlurView intensity={80} tint="dark" style={StyleSheet.absoluteFill} />
+                    <LinearGradient
+                        colors={[activeGradient[0], activeGradient[1]]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 0 }}
+                        style={styles.sheetAccent}
+                    />
+                    <View style={styles.sheetHeaderRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <Feather name={cfg.icon} size={16} color={activeGradient[0]} />
+                            <Text style={styles.sheetLabel}>{cfg.label}</Text>
+                        </View>
+                        <Text style={styles.limitBadge}>{value.length}/{cfg.max}</Text>
+                    </View>
+
+                    <View style={[styles.sheetInputWrap, cfg.multiline && { height: 110, alignItems: 'flex-start' }]}>
+                        <TextInput
+                            style={[styles.sheetInput, cfg.multiline && { textAlignVertical: 'top', paddingTop: 14 }]}
+                            placeholder={cfg.placeholder}
+                            placeholderTextColor="#475569"
+                            value={value}
+                            onChangeText={(t) => handleFieldChange(activeField, t)}
+                            autoFocus
+                            multiline={cfg.multiline}
+                            maxLength={cfg.max}
+                            keyboardType={cfg.keyboard}
+                            returnKeyType={cfg.multiline ? 'default' : 'done'}
+                            onSubmitEditing={cfg.multiline ? undefined : closeField}
+                            blurOnSubmit={!cfg.multiline}
+                        />
+                    </View>
+
+                    <TouchableOpacity style={styles.sheetDoneBtn} onPress={closeField} activeOpacity={0.85}>
+                        <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.sheetDoneInner}>
+                            <Text style={styles.sheetDoneText}>DONE</Text>
+                            <Feather name="check" size={18} color="#fff" />
+                        </LinearGradient>
+                    </TouchableOpacity>
+                </Animated.View>
+            </View>
+        );
+    };
+
+    // 🔥 SATTI UPDATE (NEW): KeyboardAvoidingView removed -> it was pushing the whole screen / footer and fighting the floating box.
+    // The floating box now handles the keyboard by itself, so Continue stays in a fixed, visible place.
     return (
-        <KeyboardAvoidingView 
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined} 
-            style={styles.container}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 40 : 0}
-        >
+        <View style={styles.container}>
             <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
             
             <View style={StyleSheet.absoluteFill}>
@@ -439,10 +782,45 @@ export default function RegisterExpert() {
                 <Animated.View style={[styles.glowOrb, { bottom: -100, left: -80, backgroundColor: activeGradient[1], transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }, { translateX: Animated.multiply(orbTranslateX, -1) }] }]} />
                 <BlurView intensity={100} tint="dark" style={StyleSheet.absoluteFill} />
                 <View style={styles.noiseOverlay} />
+
+                {/* 🔥 SATTI UPDATE: Floating 3D depth particles */}
+                {PARTICLES.map((p, i) => (
+                    <Animated.View
+                        key={i}
+                        pointerEvents="none"
+                        style={{
+                            position: 'absolute',
+                            left: p.l as any,
+                            top: p.t as any,
+                            width: p.s,
+                            height: p.s,
+                            borderRadius: p.s / 2,
+                            backgroundColor: i % 2 === 0 ? activeGradient[0] : activeGradient[1],
+                            opacity: 0.55,
+                            transform: [{ translateY: floatAnim.interpolate({ inputRange: [0, 1], outputRange: [0, i % 2 === 0 ? -p.r : p.r] }) }],
+                        }}
+                    />
+                ))}
             </View>
 
+            {/* 🔥 SATTI UPDATE (NEW): Step name + animated % above the segmented progress */}
+            <View style={styles.progressTopRow}>
+                <Text style={styles.progressStepName}>{STEP_NAMES[step - 1]}</Text>
+                <Text style={[styles.progressPercent, { color: activeGradient[0] }]}>{step * 20}% done</Text>
+            </View>
+
+            {/* 🔥 SATTI UPDATE: Segmented glowing progress */}
             <View style={styles.progressContainer}>
-                <View style={[styles.progressBar, { width: `${(step / 5) * 100}%`, backgroundColor: activeGradient[0] }]} />
+                {[1, 2, 3, 4, 5].map((i) => (
+                    <View
+                        key={i}
+                        style={[
+                            styles.progressSeg,
+                            i <= step && { backgroundColor: activeGradient[0] },
+                            i === step && { shadowColor: activeGradient[0], shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+                        ]}
+                    />
+                ))}
             </View>
 
             <ScrollView 
@@ -452,26 +830,50 @@ export default function RegisterExpert() {
             >
                 {step < 5 && (
                     <View style={styles.header}>
-                        <LinearGradient colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.02)']} style={styles.stepBadge}>
-                            <Text style={styles.stepBadgeText}>STEP {step} OF 5</Text>
-                        </LinearGradient>
-                        
-                        <Text style={styles.title}>
-                            {step === 1 && "Create Your Identity"}
-                            {step === 2 && "Verification"}
-                            {step === 3 && "Choose Your Expertise"}
-                            {step === 4 && "Your Vibe & Connection"}
-                        </Text>
-                        <Text style={styles.subtitle}>
-                            {step === 1 && "Add your best photo and real name."}
-                            {step === 2 && "Ensure you meet our platform policy."}
-                            {step === 3 && "Select the skills that define you."}
-                            {step === 4 && "Let people know who you are and your interests."}
-                        </Text>
+                        <View style={styles.headerRow}>
+                            <View style={{ flex: 1, paddingRight: 12 }}>
+                                <LinearGradient colors={['rgba(255, 255, 255, 0.15)', 'rgba(255, 255, 255, 0.02)']} style={styles.stepBadge}>
+                                    <Text style={styles.stepBadgeText}>STEP {step} OF 5</Text>
+                                </LinearGradient>
+                                
+                                <Text style={styles.title}>
+                                    {step === 1 && "Let's Build Your Profile"}
+                                    {step === 2 && "Quick Safety Check"}
+                                    {step === 3 && "What Are You Great At?"}
+                                    {step === 4 && "Show Your Vibe"}
+                                </Text>
+                                <Text style={styles.subtitle}>
+                                    {step === 1 && "Add a clear photo and your real name to get started."}
+                                    {step === 2 && "A short check keeps our community real and safe for everyone."}
+                                    {step === 3 && "Select the skills you love sharing with others."}
+                                    {step === 4 && "Let people know who you are and what you enjoy."}
+                                </Text>
+                            </View>
+
+                            {/* 🔥 SATTI UPDATE: Floating 3D hero tile */}
+                            <Animated.View
+                                style={{
+                                    transform: [
+                                        { perspective: 600 },
+                                        { translateY: heroFloatY },
+                                        { rotateY: heroRotateY },
+                                        { rotateX: heroRotateX },
+                                    ],
+                                }}
+                            >
+                                <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroTile}>
+                                    <MaterialCommunityIcons name={STEP_ICONS[step - 1]} size={34} color="#fff" />
+                                </LinearGradient>
+                            </Animated.View>
+                        </View>
+
+                        <View style={styles.tipPill}>
+                            <Text style={styles.tipText}>💡 {STEP_TIPS[step - 1]}</Text>
+                        </View>
                     </View>
                 )}
 
-                <View style={styles.formContainer}>
+                <Animated.View style={[styles.formContainer, enterStyle]}>
                     {step === 1 && (
                         <View style={styles.stepWrapper}>
                             <TouchableOpacity style={styles.imagePicker} onPress={pickImage} activeOpacity={0.9}>
@@ -480,7 +882,7 @@ export default function RegisterExpert() {
                                     <Animated.View style={[styles.rotatingSolidRing, { borderColor: activeGradient[1], transform: [{ rotate: rotateAnim }] }]} />
                                     <Animated.View style={[styles.reverseRotatingThinRing, { borderTopColor: activeGradient[0], borderBottomColor: activeGradient[0], transform: [{ rotate: reverseRotateAnim }] }]} />
                                     
-                                    <View style={styles.imageWrapper}>
+                                    <Animated.View style={[styles.imageWrapper, { transform: [{ perspective: 800 }, { rotateY: heroRotateY }, { rotateX: heroRotateX }] }]}>
                                         {image ? (
                                             <Image source={{ uri: image }} style={styles.selectedImage} />
                                         ) : (
@@ -489,97 +891,104 @@ export default function RegisterExpert() {
                                                 <Text style={styles.placeholderText}>UPLOAD PHOTO</Text>
                                             </View>
                                         )}
-                                    </View>
+                                    </Animated.View>
                                     <LinearGradient colors={activeGradient} style={styles.editIconBadge}>
                                          <Feather name={image ? "edit-2" : "plus"} size={18} color="#fff" />
                                     </LinearGradient>
                                 </View>
                             </TouchableOpacity>
+                            <Text style={styles.photoHint}>Tap to add a clear, recent photo of yourself</Text>
 
-                            <View style={styles.formCard}>
+                            <GlassCard>
                                 <Text style={styles.sectionTitle}>Account Setup</Text>
                                 <View style={styles.genderRow}>
                                     {['Male', 'Female'].map((item) => {
                                         const isSelected = gender === item;
                                         return (
-                                            <TouchableOpacity 
+                                            <Press3D 
                                                 key={item} 
                                                 style={[styles.genderCard, isSelected && styles.genderCardActive]} 
                                                 onPress={() => setGender(item)}
-                                                activeOpacity={0.8}
                                             >
                                                 {isSelected && <LinearGradient colors={activeGradient} style={StyleSheet.absoluteFill} />}
                                                 <View style={styles.genderContent}>
                                                     <Ionicons name={item === 'Female' ? 'female' : 'male'} size={20} color={isSelected ? '#FFF' : '#64748B'} />
                                                     <Text style={[styles.genderText, isSelected && styles.genderTextActive]}>{item}</Text>
                                                 </View>
-                                            </TouchableOpacity>
+                                            </Press3D>
                                         );
                                     })}
                                 </View>
 
-                                <View style={styles.inputGroup}>
-                                    <Text style={styles.inputLabel}>Display Name</Text>
-                                    <View style={styles.inputField}>
-                                        <Feather name="user" size={18} color={name ? activeGradient[0] : "#64748B"} />
-                                        <TextInput style={styles.input} placeholder="e.g. Sarah Smith" placeholderTextColor="#475569" value={name} onChangeText={setName} />
-                                    </View>
-                                </View>
-                            </View>
+                                {/* 🔥 SATTI UPDATE: Tap -> floating input box above keyboard */}
+                                <FieldButton
+                                    label="Display Name"
+                                    icon="user"
+                                    value={name}
+                                    placeholder="e.g. Sarah Smith"
+                                    color={activeGradient[0]}
+                                    onPress={() => openField('name')}
+                                />
+                            </GlassCard>
                         </View>
                     )}
 
                     {step === 2 && (
                         <View style={styles.stepWrapper}>
-                            <View style={styles.formCard}>
+                            <GlassCard>
                                 <View style={styles.ageVerificationBox}>
                                     <View style={[styles.iconWrapperGlow, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
                                         <MaterialCommunityIcons name="shield-check" size={24} color="#EF4444" />
                                     </View>
                                     <Text style={styles.ageTitle}>18+ Verification Required</Text>
-                                    <Text style={styles.ageDesc}>You must be at least 18 years old to build connections on this platform.</Text>
+                                    <Text style={styles.ageDesc}>You must be at least 18 years old to join as a Community Host.</Text>
                                 </View>
 
                                 <View style={styles.rowInputs}>
-                                    <View style={[styles.inputGroup, {flex: 0.35}]}>
-                                        <Text style={styles.inputLabel}>Age</Text>
-                                        <View style={styles.inputField}>
-                                            <TextInput style={[styles.input, {textAlign: 'center'}]} placeholder="25" placeholderTextColor="#475569" keyboardType="numeric" value={age} onChangeText={setAge} maxLength={2} />
-                                        </View>
-                                    </View>
-                                    <View style={[styles.inputGroup, {flex: 0.65}]}>
-                                        <Text style={styles.inputLabel}>Location</Text>
-                                        <View style={styles.inputField}>
-                                            <Feather name="map-pin" size={18} color={location ? activeGradient[0] : "#64748B"} />
-                                            <TextInput style={styles.input} placeholder="City, Country" placeholderTextColor="#475569" value={location} onChangeText={setLocation} />
-                                        </View>
-                                    </View>
+                                    <FieldButton
+                                        style={{ flex: 0.35 }}
+                                        label="Age"
+                                        value={age}
+                                        placeholder="25"
+                                        color={activeGradient[0]}
+                                        onPress={() => openField('age')}
+                                    />
+                                    <FieldButton
+                                        style={{ flex: 0.65 }}
+                                        label="Location"
+                                        icon="map-pin"
+                                        value={location}
+                                        placeholder="City, Country"
+                                        color={activeGradient[0]}
+                                        onPress={() => openField('location')}
+                                    />
                                 </View>
-                            </View>
+                            </GlassCard>
 
                             {/* 🔥 SATTI UPDATE: NEW HOST VERIFICATION UI (ADDED IN STEP 2) 🔥 */}
-                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                            <GlassCard style={{ marginTop: 20 }}>
                                 <Text style={styles.sectionTitle}>Identity Verification</Text>
                                 <Text style={{ color: '#94A3B8', fontSize: 11, textAlign: 'center', marginBottom: 15, lineHeight: 16 }}>
-                                    To ensure platform safety & comply with Play Store policies, please take a live selfie and a 5-second video (e.g., just say "Hi").
+                                    To keep our community safe, please take a live selfie and a 5-second video (e.g., just say "Hi"). These are used only to confirm you are a real person and are never shown publicly.
                                 </Text>
 
                                 <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 25, marginBottom: 10 }}>
                                     {/* 🔹 PHOTO CIRCLE 🔹 */}
                                     <View style={{ alignItems: 'center' }}>
-                                        <TouchableOpacity onPress={takeLiveSelfie} style={[styles.verifyCircle, { borderColor: activeGradient[0] }]}>
+                                        <Press3D onPress={takeLiveSelfie} style={[styles.verifyCircle, { borderColor: capturedPhoto ? '#02fa0a' : activeGradient[0] }]}>
                                             {capturedPhoto ? (
                                                 <Image source={{ uri: capturedPhoto }} style={styles.verifyImage} />
                                             ) : (
                                                 <Ionicons name="camera" size={32} color={activeGradient[0]} />
                                             )}
-                                        </TouchableOpacity>
+                                        </Press3D>
                                         <Text style={styles.verifyLabelText}>Live Selfie</Text>
+                                        <Text style={[styles.verifyStatus, capturedPhoto && { color: '#02fa0a' }]}>{capturedPhoto ? 'Done ✓' : 'Tap to capture'}</Text>
                                     </View>
 
                                     {/* 🔹 VIDEO CIRCLE 🔹 */}
                                     <View style={{ alignItems: 'center' }}>
-                                        <TouchableOpacity onPress={recordIntroVideo} style={[styles.verifyCircle, { borderColor: activeGradient[1] }]}>
+                                        <Press3D onPress={recordIntroVideo} style={[styles.verifyCircle, { borderColor: capturedVideo ? '#02fa0a' : activeGradient[1] }]}>
                                             {capturedVideo ? (
                                                 <View style={[styles.verifyImage, { backgroundColor: '#1A1A1A', justifyContent: 'center', alignItems: 'center' }]}>
                                                     <Ionicons name="checkmark-circle" size={32} color="#02fa0a" />
@@ -587,157 +996,170 @@ export default function RegisterExpert() {
                                             ) : (
                                                 <Ionicons name="videocam" size={32} color={activeGradient[1]} />
                                             )}
-                                        </TouchableOpacity>
+                                        </Press3D>
                                         <Text style={styles.verifyLabelText}>5s Intro Video</Text>
+                                        <Text style={[styles.verifyStatus, capturedVideo && { color: '#02fa0a' }]}>{capturedVideo ? 'Done ✓' : 'Tap to record'}</Text>
                                     </View>
                                 </View>
-                            </View>
+                            </GlassCard>
                             {/* 🔥 SATTI UPDATE END 🔥 */}
 
-                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                            <GlassCard style={{ marginTop: 20 }}>
                                 <View style={styles.tagSectionHeader}>
-                                    <Text style={styles.sectionTitle}>Languages You Speak</Text>
+                                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Languages You Speak</Text>
                                     <Text style={styles.limitBadge}>{selectedLanguages.length}/3</Text>
                                 </View>
                                 <View style={styles.chipWrap}>
-                                    {LANGUAGES.map((tag) => {
-                                        const isSelected = selectedLanguages.includes(tag);
-                                        return (
-                                            <TouchableOpacity 
-                                                key={tag} 
-                                                style={[styles.chip, isSelected && styles.chipActive]}
-                                                onPress={() => toggleTag(tag, selectedLanguages, setSelectedLanguages, 3)}
-                                                activeOpacity={0.8}
-                                            >
-                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
-                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                                    {LANGUAGES.map((tag) => (
+                                        <Chip
+                                            key={tag}
+                                            label={tag}
+                                            selected={selectedLanguages.includes(tag)}
+                                            gradient={activeGradient}
+                                            onPress={() => toggleTag(tag, selectedLanguages, setSelectedLanguages, 3)}
+                                        />
+                                    ))}
                                 </View>
-                            </View>
+                            </GlassCard>
                         </View>
                     )}
 
                     {step === 3 && (
                         <View style={styles.stepWrapper}>
-                            <View style={styles.formCard}>
+                            <GlassCard>
                                 <View style={styles.tagSectionHeader}>
-                                    <Text style={styles.sectionTitle}>Core Expertise</Text>
+                                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Core Expertise</Text>
                                     <Text style={styles.limitBadge}>{selectedExpertise.length}/3</Text>
                                 </View>
                                 <View style={styles.chipWrap}>
-                                    {EXPERTISE_TAGS.map((tag) => {
-                                        const isSelected = selectedExpertise.includes(tag);
-                                        return (
-                                            <TouchableOpacity 
-                                                key={tag} 
-                                                style={[styles.chip, isSelected && styles.chipActive]}
-                                                onPress={() => toggleTag(tag, selectedExpertise, setSelectedExpertise, 3)}
-                                                activeOpacity={0.8}
-                                            >
-                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
-                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                                    {EXPERTISE_TAGS.map((tag) => (
+                                        <Chip
+                                            key={tag}
+                                            label={tag}
+                                            selected={selectedExpertise.includes(tag)}
+                                            gradient={activeGradient}
+                                            onPress={() => toggleTag(tag, selectedExpertise, setSelectedExpertise, 3)}
+                                        />
+                                    ))}
                                 </View>
-                            </View>
+                            </GlassCard>
                         </View>
                     )}
 
                     {step === 4 && (
                         <View style={styles.stepWrapper}>
-                            <View style={styles.formCard}>
+                            <GlassCard>
                                 <View style={styles.tagSectionHeader}>
-                                    <Text style={styles.sectionTitle}>My Personality</Text>
+                                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>My Personality</Text>
                                     <Text style={styles.limitBadge}>{selectedPersonality.length}/3</Text>
                                 </View>
                                 <View style={styles.chipWrap}>
-                                    {PERSONALITY_TAGS.map((tag) => {
-                                        const isSelected = selectedPersonality.includes(tag);
-                                        return (
-                                            <TouchableOpacity 
-                                                key={tag} 
-                                                style={[styles.chip, isSelected && styles.chipActive]}
-                                                onPress={() => toggleTag(tag, selectedPersonality, setSelectedPersonality, 3)}
-                                                activeOpacity={0.8}
-                                            >
-                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />}
-                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                                    {PERSONALITY_TAGS.map((tag) => (
+                                        <Chip
+                                            key={tag}
+                                            label={tag}
+                                            selected={selectedPersonality.includes(tag)}
+                                            gradient={activeGradient}
+                                            onPress={() => toggleTag(tag, selectedPersonality, setSelectedPersonality, 3)}
+                                        />
+                                    ))}
                                 </View>
-                            </View>
+                            </GlassCard>
 
-                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                            <GlassCard style={{ marginTop: 20 }}>
                                 <View style={styles.tagSectionHeader}>
-                                    <Text style={styles.sectionTitle}>Other Interests</Text>
+                                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>Other Interests</Text>
                                     <Text style={styles.limitBadge}>{selectedHobbies.length}/5</Text>
                                 </View>
                                 <View style={styles.chipWrap}>
-                                    {HOBBIES_TAGS.map((tag) => {
-                                        const isSelected = selectedHobbies.includes(tag);
-                                        return (
-                                            <TouchableOpacity 
-                                                key={tag} 
-                                                style={[styles.chip, isSelected && styles.chipActive]}
-                                                onPress={() => toggleTag(tag, selectedHobbies, setSelectedHobbies, 5)}
-                                                activeOpacity={0.8}
-                                            >
-                                                {isSelected && <LinearGradient colors={activeGradient} start={{ x: 1, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />}
-                                                <Text style={[styles.chipText, isSelected && styles.chipTextActive]}>{tag}</Text>
-                                            </TouchableOpacity>
-                                        );
-                                    })}
+                                    {HOBBIES_TAGS.map((tag) => (
+                                        <Chip
+                                            key={tag}
+                                            label={tag}
+                                            selected={selectedHobbies.includes(tag)}
+                                            gradient={activeGradient}
+                                            start={{ x: 1, y: 0 }}
+                                            end={{ x: 0, y: 1 }}
+                                            onPress={() => toggleTag(tag, selectedHobbies, setSelectedHobbies, 5)}
+                                        />
+                                    ))}
                                 </View>
-                            </View>
+                            </GlassCard>
 
-                            <View style={[styles.formCard, { marginTop: 20 }]}>
+                            <GlassCard style={{ marginTop: 20 }}>
                                 <View style={styles.tagSectionHeader}>
-                                    <Text style={styles.sectionTitle}>A Bit About Me</Text>
+                                    <Text style={[styles.sectionTitle, { marginBottom: 0 }]}>A Bit About Me</Text>
                                     <Text style={styles.limitBadge}>{bio.length}/150</Text>
                                 </View>
-                                <View style={[styles.inputField, styles.bioField]}>
-                                    <TextInput 
-                                        style={styles.bioInput} 
-                                        placeholder="Write a small bio about who you are, your vibe, and why people should talk to you..." 
-                                        placeholderTextColor="#475569" 
-                                        value={bio} 
-                                        onChangeText={setBio} 
-                                        multiline 
-                                        maxLength={150}
-                                    />
-                                </View>
-                            </View>
+                                {/* 🔥 SATTI UPDATE: Bio also opens the floating keyboard box */}
+                                <FieldButton
+                                    label=""
+                                    icon="edit-3"
+                                    value={bio}
+                                    placeholder="Write a small bio about who you are, your vibe, and why people should talk to you..."
+                                    color={activeGradient[0]}
+                                    multiline
+                                    style={{ marginBottom: 0 }}
+                                    onPress={() => openField('bio')}
+                                />
+                            </GlassCard>
                         </View>
                     )}
 
                     {step === 5 && (
                         <Animated.View style={styles.stepWrapper}>
-                            <View style={[styles.formCard, styles.finalCard]}>
-                                <Animated.View style={[styles.shieldIconWrap, { transform: [{ scale: pulseAnim }] }]}>
+                            <GlassCard style={styles.finalCard}>
+                                <Animated.View style={[styles.shieldIconWrap, { transform: [{ perspective: 700 }, { scale: pulseAnim }, { rotateY: heroRotateY }] }]}>
                                     <LinearGradient colors={activeGradient} style={styles.shieldGradient}>
                                         <MaterialCommunityIcons name="shield-star" size={40} color="#FFF" />
                                     </LinearGradient>
                                 </Animated.View>
                                 
-                                <Text style={styles.finalTitle}>Welcome to the Elite, {name || 'Creator'}!</Text>
-                                <Text style={styles.finalSub}>Your application to join the <Text style={{color: activeGradient[0], fontWeight:'800'}}>Elite Creators Network</Text> is almost ready.</Text>
+                                <Text style={styles.finalTitle}>You're All Set, {name || 'Creator'}!</Text>
+                                <Text style={styles.finalSub}>Your application to join the <Text style={{color: activeGradient[0], fontWeight:'800'}}>Community Hosts Network</Text> is ready to submit.</Text>
+
+                                {/* 🔥 SATTI UPDATE: Profile preview card */}
+                                <View style={styles.previewCard}>
+                                    {image ? (
+                                        <Image source={{ uri: image }} style={styles.previewImg} />
+                                    ) : (
+                                        <View style={[styles.previewImg, { backgroundColor: 'rgba(255,255,255,0.08)' }]} />
+                                    )}
+                                    <View style={{ flex: 1 }}>
+                                        <Text style={styles.previewName} numberOfLines={1}>{name}</Text>
+                                        <Text style={styles.previewMeta} numberOfLines={1}>{age ? `${age} yrs` : ''}{age && location ? '  •  ' : ''}{location}</Text>
+                                        <Text style={styles.previewTags} numberOfLines={1}>{selectedExpertise.join('  ')}</Text>
+                                    </View>
+                                    <MaterialCommunityIcons name="check-decagram" size={22} color={activeGradient[0]} />
+                                </View>
+
+                                {/* 🔥 SATTI UPDATE (NEW): Animated readiness checklist */}
+                                <View style={styles.checklistBox}>
+                                    {checklist.map((c, idx) => (
+                                        <CheckRow key={c.label} label={c.label} done={c.done} color={activeGradient[0]} delay={250 + idx * 160} />
+                                    ))}
+                                </View>
                                 
                                 <View style={styles.termsBox}>
                                     <View style={styles.termsIcon}>
                                         <Feather name="check-circle" size={18} color={activeGradient[0]} />
                                     </View>
                                     <Text style={styles.termsText}>
-                                        By proceeding, you agree to our Terms of Use. We value your privacy and maintain a safe environment. Our team will verify your details to ensure community standards.
+                                        We value your privacy and maintain a safe environment. Your verification selfie and video are used only to confirm you are a real person and are never shown publicly. Our team will review your details to ensure community standards.
                                     </Text>
                                 </View>
-                            </View>
+
+                                {/* 🔥 SATTI UPDATE: Consent checkbox */}
+                                <Press3D onPress={() => setAgreed(!agreed)} style={styles.consentRow}>
+                                    <View style={[styles.checkbox, agreed && { backgroundColor: activeGradient[0], borderColor: activeGradient[0] }]}>
+                                        {agreed && <Feather name="check" size={14} color="#fff" />}
+                                    </View>
+                                    <Text style={styles.consentText}>I agree to the Terms of Use & Privacy Policy</Text>
+                                </Press3D>
+                            </GlassCard>
                         </Animated.View>
                     )}
-                </View>
+                </Animated.View>
             </ScrollView>
 
             <View style={styles.stickyFooter}>
@@ -772,7 +1194,10 @@ export default function RegisterExpert() {
                 </View>
             </View>
 
-        </KeyboardAvoidingView>
+            {/* 🔥 SATTI UPDATE: Floating keyboard input box (always on top) */}
+            {renderFloatingInput()}
+
+        </View>
     );
 }
 
@@ -781,28 +1206,39 @@ const styles = StyleSheet.create({
     glowOrb: { position: 'absolute', width: width * 1.5, height: width * 1.5, borderRadius: width * 0.75, opacity: 0.18 },
     noiseOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.01)', opacity: 0.5 },
 
-    progressContainer: { width: '100%', height: 4, backgroundColor: 'rgba(255,255,255,0.05)', marginTop: Platform.OS === 'ios' ? 50 : StatusBar.currentHeight },
+    progressContainer: { width: '100%', height: 4, flexDirection: 'row', gap: 6, paddingHorizontal: 20, marginTop: 8 },
     progressBar: { height: '100%', borderRadius: 2 },
+    // 🔥 SATTI UPDATE: segmented progress (container is overridden below to hold 5 segments)
+    progressSeg: { flex: 1, height: 4, borderRadius: 2, backgroundColor: 'rgba(255,255,255,0.08)' },
+
+    // 🔥 SATTI UPDATE (NEW): progress label row (safe top margin handled here)
+    progressTopRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 22, marginTop: Platform.OS === 'ios' ? 54 : (StatusBar.currentHeight || 24) + 6 },
+    progressStepName: { color: '#E2E8F0', fontSize: 12, fontWeight: '800', letterSpacing: 0.6 },
+    progressPercent: { fontSize: 11, fontWeight: '800', letterSpacing: 0.4 },
 
     scrollPadding: { paddingBottom: 150, paddingTop: 20, paddingHorizontal: 20 },
     
     header: { alignItems: 'flex-start', marginBottom: 25, marginTop: 5 },
-    stepBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)' },
+    headerRow: { flexDirection: 'row', alignItems: 'center', width: '100%' },
+    heroTile: { width: 74, height: 74, borderRadius: 24, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.35)', shadowColor: '#000', shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.6, shadowRadius: 16, elevation: 14 },
+    tipPill: { marginTop: 16, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    tipText: { color: '#CBD5E1', fontSize: 12, fontWeight: '600' },
+    stepBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.15)', alignSelf: 'flex-start' },
     stepBadgeText: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.5 },
-    title: { color: '#F8FAFC', fontSize: 32, fontWeight: '900', letterSpacing: -0.5 },
+    title: { color: '#F8FAFC', fontSize: 30, fontWeight: '900', letterSpacing: -0.5 },
     subtitle: { color: '#94A3B8', fontSize: 14, fontWeight: '600', marginTop: 6, lineHeight: 20 },
     
     formContainer: { width: '100%' },
     stepWrapper: { width: '100%' },
 
-    formCard: { backgroundColor: 'rgba(15, 23, 42, 0.45)', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)' },
+    formCard: { backgroundColor: 'rgba(15, 23, 42, 0.45)', borderRadius: 24, padding: 22, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.35, shadowRadius: 18, elevation: 6 },
     sectionTitle: { color: '#F8FAFC', fontSize: 15, fontWeight: '800', letterSpacing: 0.5, marginBottom: 18 },
 
     finalCard: { alignItems: 'center', paddingVertical: 45, paddingHorizontal: 25, backgroundColor: 'rgba(15, 23, 42, 0.65)', borderRadius: 32, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.1)', marginTop: 25 },
     shieldIconWrap: { padding: 10, borderRadius: 100, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 25, borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     shieldGradient: { width: 84, height: 84, borderRadius: 42, justifyContent: 'center', alignItems: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 10 }, shadowOpacity: 0.5, shadowRadius: 20, elevation: 12 },
     finalTitle: { color: '#FFF', fontSize: 28, fontWeight: '900', marginBottom: 14, textAlign: 'center', letterSpacing: -0.5 },
-    finalSub: { color: '#94A3B8', fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 35, fontWeight: '500', paddingHorizontal: 5 },
+    finalSub: { color: '#94A3B8', fontSize: 15, textAlign: 'center', lineHeight: 24, marginBottom: 25, fontWeight: '500', paddingHorizontal: 5 },
     termsBox: { flexDirection: 'row', padding: 20, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'flex-start', gap: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)' },
     termsIcon: { marginTop: 2 },
     termsText: { flex: 1, color: '#94A3B8', fontSize: 12, lineHeight: 20, fontWeight: '500' },
@@ -819,6 +1255,7 @@ const styles = StyleSheet.create({
     placeholderText: { color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '800', marginTop: 5, letterSpacing: 1 },
     selectedImage: { flex: 1, width: '100%', height: '100%' },
     editIconBadge: { position: 'absolute', bottom: -5, right: 0, width: 44, height: 44, borderRadius: 22, justifyContent: 'center', alignItems: 'center', borderWidth: 4, borderColor: '#030014', elevation: 8, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.5, shadowRadius: 5 },
+    photoHint: { color: '#64748B', fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: -18, marginBottom: 24 },
 
     ageVerificationBox: { flexDirection: 'column', backgroundColor: 'rgba(239, 68, 68, 0.05)', padding: 18, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(239, 68, 68, 0.3)', marginBottom: 25, alignItems: 'center' },
     iconWrapperGlow: { padding: 12, borderRadius: 20, marginBottom: 5 },
@@ -842,7 +1279,7 @@ const styles = StyleSheet.create({
     genderTextActive: { color: '#FFF', fontWeight: '800' },
     
     tagSectionHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
-    limitBadge: { backgroundColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1', fontSize: 10, fontWeight: '800', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+    limitBadge: { backgroundColor: 'rgba(255,255,255,0.1)', color: '#CBD5E1', fontSize: 10, fontWeight: '800', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, overflow: 'hidden' },
     chipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 10 },
     chip: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.4)', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 20, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
     chipActive: { borderColor: 'transparent', elevation: 4 }, 
@@ -860,5 +1297,35 @@ const styles = StyleSheet.create({
     // 🔥 SATTI UPDATE: NEW STYLES FOR CAMERA VERIFICATION 🔥
     verifyCircle: { width: 75, height: 75, borderRadius: 37.5, borderWidth: 2, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', overflow: 'hidden', marginBottom: 8 },
     verifyImage: { width: '100%', height: '100%', resizeMode: 'cover' },
-    verifyLabelText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' }
+    verifyLabelText: { color: '#FFFFFF', fontSize: 11, fontWeight: 'bold', textAlign: 'center' },
+    verifyStatus: { color: '#64748B', fontSize: 10, fontWeight: '700', textAlign: 'center', marginTop: 2 },
+
+    // 🔥 SATTI UPDATE: FLOATING KEYBOARD INPUT BOX STYLES 🔥
+    sheetOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 100, elevation: 100 },
+    sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
+    sheet: { position: 'absolute', left: 0, right: 0, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18, borderTopLeftRadius: 30, borderTopRightRadius: 30, backgroundColor: 'rgba(10, 12, 30, 0.94)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
+    sheetAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
+    sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    sheetLabel: { color: '#F8FAFC', fontSize: 14, fontWeight: '800', letterSpacing: 0.4 },
+    sheetInputWrap: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', height: 58, paddingHorizontal: 16 },
+    sheetInput: { flex: 1, color: '#F8FAFC', fontSize: 16, fontWeight: '600', lineHeight: 22 },
+    sheetDoneBtn: { marginTop: 14 },
+    sheetDoneInner: { flexDirection: 'row', height: 50, borderRadius: 16, justifyContent: 'center', alignItems: 'center', gap: 8 },
+    sheetDoneText: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
+
+    // 🔥 SATTI UPDATE: PROFILE PREVIEW + CONSENT STYLES 🔥
+    previewCard: { flexDirection: 'row', alignItems: 'center', gap: 12, width: '100%', padding: 14, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.05)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)', marginBottom: 16 },
+    previewImg: { width: 54, height: 54, borderRadius: 27 },
+    previewName: { color: '#F8FAFC', fontSize: 16, fontWeight: '800' },
+    previewMeta: { color: '#94A3B8', fontSize: 12, fontWeight: '600', marginTop: 2 },
+    previewTags: { color: '#CBD5E1', fontSize: 11, marginTop: 3 },
+    consentRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 18, alignSelf: 'flex-start' },
+    checkbox: { width: 24, height: 24, borderRadius: 8, borderWidth: 2, borderColor: 'rgba(255,255,255,0.3)', justifyContent: 'center', alignItems: 'center' },
+    consentText: { color: '#E2E8F0', fontSize: 13, fontWeight: '700', flexShrink: 1 },
+
+    // 🔥 SATTI UPDATE (NEW): REVIEW CHECKLIST STYLES 🔥
+    checklistBox: { width: '100%', padding: 16, borderRadius: 20, backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', marginBottom: 16, gap: 12 },
+    checkRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    checkDot: { width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
+    checkRowText: { color: '#E2E8F0', fontSize: 13, fontWeight: '700', flexShrink: 1 }
 });

@@ -79,7 +79,7 @@ const getLevelConfig = (userData: any) => {
 
 // 🔥 50 STANDARD SKILLS FOR QUICK SELECTION
 const STANDARD_SKILLS = [
-    "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching", 
+    "Singing", "Dancing", "Community Advice", "Career Counseling", "Life Coaching", 
     "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing", 
     "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development", 
     "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency", 
@@ -613,7 +613,7 @@ export default function MasterClassScreen() {
                     await updateDoc(userDocRef, {
                         teaserVideo: responseData.secure_url
                     });
-                    Alert.alert("Success!", "Your Premium Showcase has been updated! 🎬");
+                    Alert.alert("Success!", "Your Profile Showcase has been updated! 🎬");
                 } else {
                     Alert.alert("Upload Failed", responseData.error?.message || "Could not upload video.");
                 }
@@ -632,7 +632,7 @@ export default function MasterClassScreen() {
 
         Alert.alert(
             "Delete Showcase? 🗑️",
-            "Your showcase video will be removed from your Premium Spotlight. You can upload a new one anytime.",
+            "Your showcase video will be removed from your Profile Spotlight. You can upload a new one anytime.",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -661,7 +661,7 @@ export default function MasterClassScreen() {
     // 🔥 SAVE SKILL NAME LOGIC
     const handleSaveSkill = async () => {
         if (!skillName.trim()) {
-            Alert.alert("Missing Details", "Skill name is required to start your Premium Spotlight! 🎓");
+            Alert.alert("Missing Details", "Skill name is required to start your Profile Spotlight! 🎓");
             return;
         }
 
@@ -673,7 +673,7 @@ export default function MasterClassScreen() {
                 hasMasterclass: true,
                 masterclassUpdatedAt: serverTimestamp()
             });
-            Alert.alert("CONGRATS 🔥", "Your Premium Spotlight is now live. Users can connect with you securely!");
+            Alert.alert("CONGRATS 🔥", "Your Profile Spotlight is now live. Users can connect with you securely!");
         } catch (error) {
             Alert.alert("Error", "Unable to update. Please try again");
         } finally {
@@ -713,7 +713,7 @@ export default function MasterClassScreen() {
                         <Ionicons name="arrow-back" size={24} color="#FFF" />
                     </TouchableOpacity>
                     <View style={{ flex: 1 }}>
-                        <Text style={styles.headerTitle}>Premium Spotlight</Text>
+                        <Text style={styles.headerTitle}>Profile Spotlight</Text>
                         <Text style={[styles.headerSub, { color: theme.primary }]}>Monetize your unique skills</Text>
                     </View>
                     {/* LEVEL BADGE */}
@@ -953,7 +953,7 @@ export default function MasterClassScreen() {
                                 <MaterialCommunityIcons name="rocket-launch" size={18} color={theme.accent} />
                                 <Text style={[styles.revenueTitle, { color: theme.accent }]}> ALGORITHM BOOST</Text>
                             </View>
-                            <Text style={styles.revenueDesc}>Activate Premium Spotlight for priority discovery. Experience new daily updates that bring more traffic and opportunities your way!</Text>
+                            <Text style={styles.revenueDesc}>Activate Profile Spotlight for priority discovery. Experience new daily updates that bring more traffic and opportunities your way!</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
                                 <Animated.View style={{ transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) }] }}>
                                     <MaterialCommunityIcons name="trending-up" size={28} color="#FFF" />
@@ -975,7 +975,7 @@ export default function MasterClassScreen() {
                                 ) : (
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                         <MaterialCommunityIcons name="rocket-launch" size={18} color="#FFF" />
-                                        <Text style={styles.btnText}>{currentSkill?.active ? "UPDATE PREMIUM SPOTLIGHT" : "START PREMIUM SPOTLIGHT"}</Text>
+                                        <Text style={styles.btnText}>{currentSkill?.active ? "UPDATE PROFILE SPOTLIGHT" : "START PROFILE SPOTLIGHT"}</Text>
                                     </View>
                                 )}
                                 {/* light sweep across the button */}
@@ -1099,7 +1099,7 @@ export default function MasterClassScreen() {
                             }
                         ]}
                     >
-                        PREMIUM SPOTLIGHT
+                        PROFILE SPOTLIGHT
                     </Animated.Text>
                 </Animated.View>
             )}

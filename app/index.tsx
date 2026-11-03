@@ -416,7 +416,7 @@ export default function LoginScreen() {
                   <View style={[styles.cardWrapper, { width: innerWidth }]}>
                     <Animated.View style={{ flex: 1, width: '100%', height: '100%', transform: [{ translateY: cardFloat1 }] }}>
                       <Image 
-                        source={require('../assets/images/uesr.png')} 
+                        source={require('../assets/images/user.png')} 
                         style={styles.fullImageCard} 
                         resizeMode="cover" 
                       />

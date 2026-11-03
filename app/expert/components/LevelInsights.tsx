@@ -17,11 +17,12 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-import Svg, { Circle, Defs, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
+import Svg, { Circle, Defs, Path, Stop, LinearGradient as SvgLinearGradient } from 'react-native-svg';
 import { db } from '../../../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+const AnimatedPath = Animated.createAnimatedComponent(Path);
 
 // ✅ ACCURATE THEME & LEVEL CONFIG (LOCKED DEEP-GLOW COLORS & DUAL RATES)
 export const getLevelData = (totalBeans: number) => {
@@ -218,17 +219,97 @@ const RoyalSparkle = ({ x, y, size = 12, color = GOLD, delay = 0, dur = 1800 }: 
     );
 };
 
-// 🆕 Progress ring geometry (avatar-ah suththi varra ring) - COMPACT SIZE
-const RING_SIZE = 108;
+// 🆕 🪙 3D MEDAL (bevelled coin: thickness edge + glossy highlight + optional spinning coin + contact shadow)
+// state: 'locked' | 'current' | 'done' | 'open'   mode: 'number' | 'icon'
+const Medal3D = ({ size, pv, pt, state, lvl, mode = 'number', iconName, spin, coin, bob, halo, glowOpacity, glowScale }: any) => {
+    const locked = state === 'locked';
+    const current = state === 'current';
+    const done = state === 'done';
+    const inner = size - 12;
+    const faceColors: any = locked ? ['#334155', '#111827'] : g([lighten(pv[0], 0.45), pv[0], pv[1], darken(pv[1], 0.6)]);
+    const coreColors: any = locked ? ['#1e293b', '#0b1220'] : g([pv[0], pv[1], darken(pv[1], 0.65)]);
+    const edgeColor = locked ? '#0b1220' : darken(pv[1], 0.55);
+    const iconSize = Math.round(inner * 0.55);
+    const resolvedIcon = iconName || (done ? 'check-decagram' : (lvl >= 7 ? 'crown' : 'star-face'));
+    return (
+        <View style={{ width: size + 16, height: size + 24, alignItems: 'center', justifyContent: 'center' }}>
+            {current && halo ? (
+                <Animated.View
+                    pointerEvents="none"
+                    style={{
+                        position: 'absolute',
+                        width: size + 16,
+                        height: size + 16,
+                        borderRadius: (size + 16) / 2,
+                        borderWidth: 2,
+                        borderColor: halo,
+                        opacity: glowOpacity,
+                        transform: [{ scale: glowScale }]
+                    }}
+                />
+            ) : null}
+            {/* contact shadow on the ground */}
+            <View style={{ position: 'absolute', bottom: 2, width: size * 0.78, height: 9, borderRadius: 6, backgroundColor: locked ? 'rgba(0,0,0,0.45)' : pv[0] + '66' }} />
+            <Animated.View style={{ width: size, height: size, transform: [{ perspective: 700 }, { translateY: bob || 0 }, { rotateY: spin && coin ? coin : '0deg' }] }}>
+                {/* coin thickness */}
+                <View style={{ position: 'absolute', top: 4, left: 0, width: size, height: size, borderRadius: size / 2, backgroundColor: edgeColor }} />
+                <LinearGradient
+                    colors={faceColors}
+                    start={{ x: 0.1, y: 0 }}
+                    end={{ x: 0.9, y: 1 }}
+                    style={{
+                        width: size,
+                        height: size,
+                        borderRadius: size / 2,
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        borderWidth: current ? 2 : 1.5,
+                        borderColor: locked ? 'rgba(255,255,255,0.18)' : (current ? pt[0] : pt[1]),
+                        elevation: 8,
+                        opacity: locked ? 0.8 : 1
+                    }}
+                >
+                    <LinearGradient
+                        colors={coreColors}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={{ width: inner, height: inner, borderRadius: inner / 2, alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}
+                    >
+                        {locked ? (
+                            <MaterialCommunityIcons name="lock" size={Math.round(inner * 0.45)} color="#64748B" />
+                        ) : mode === 'icon' || iconName ? (
+                            <MaterialCommunityIcons name={resolvedIcon} size={iconSize} color="#FFF" />
+                        ) : (
+                            <Text style={{ color: '#FFF', fontSize: Math.round(inner * 0.52), fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.55)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } }}>{lvl}</Text>
+                        )}
+                    </LinearGradient>
+                    {/* glossy highlight */}
+                    <View
+                        pointerEvents="none"
+                        style={{ position: 'absolute', top: size * 0.08, left: size * 0.16, width: size * 0.42, height: size * 0.2, borderRadius: size * 0.1, backgroundColor: 'rgba(255,255,255,0.32)', transform: [{ rotate: '-28deg' }] }}
+                    />
+                </LinearGradient>
+            </Animated.View>
+            {done && (
+                <View style={{ position: 'absolute', right: 3, bottom: 12, width: 18, height: 18, borderRadius: 9, backgroundColor: ROYAL.emerald, borderWidth: 1.5, borderColor: ROYAL.bg0, alignItems: 'center', justifyContent: 'center', zIndex: 5 }}>
+                    <MaterialCommunityIcons name="check" size={11} color="#FFF" />
+                </View>
+            )}
+        </View>
+    );
+};
+
+// 🆕 Progress ring geometry (avatar-ah suththi varra ring)
+const RING_SIZE = 126;
 const RING_STROKE = 7;
 const RING_RADIUS = (RING_SIZE - RING_STROKE) / 2;
 const RING_CIRCUMFERENCE = RING_RADIUS * 2 * Math.PI;
 
-// 🆕 Royal tick ring + rays - COMPACT SIZE
-const TICK_SIZE = 138;
-const TICK_RADIUS = 66;
+// 🆕 Royal tick ring + rays
+const TICK_SIZE = 164;
+const TICK_RADIUS = 78;
 const RAYS = Array.from({ length: 16 }, (_, i) => i);
-const HERO_STAGE = 148;
+const HERO_STAGE = 204;
 
 // 🆕 Level-up modal sparkle positions (crown-ah suththi)
 const SPARKLES = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
@@ -239,10 +320,10 @@ const SPARKLES = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
 // 🆕 Orbiting gems around hero avatar
 const GEM_POS = [0, 1, 2].map((i) => {
     const a = (i / 3) * 2 * Math.PI;
-    return { x: HERO_STAGE / 2 + 67 * Math.cos(a) - 5, y: HERO_STAGE / 2 + 67 * Math.sin(a) - 5 };
+    return { x: HERO_STAGE / 2 + 84 * Math.cos(a) - 5, y: HERO_STAGE / 2 + 84 * Math.sin(a) - 5 };
 });
 
-// 👑 NEW: ULTRA PREMIUM LEVEL-UP EMBLEM geometry (god-rays + tick ring + shockwaves)
+// 👑 ULTRA PREMIUM LEVEL-UP EMBLEM geometry (god-rays + tick ring + shockwaves)
 const M_STAGE = 270;
 const M_RAYS = Array.from({ length: 28 }, (_, i) => i);
 const M_TICK = 244;
@@ -255,6 +336,44 @@ const M_GEMS = [0, 1, 2, 3, 4, 5].map((i) => {
     return { x: M_STAGE / 2 + 124 * Math.cos(a) - 6, y: M_STAGE / 2 + 124 * Math.sin(a) - 6 };
 });
 
+// 🛣️ MILESTONE ROAD geometry (L0 bottom -> L10 top, FULL-SCREEN-WIDE road winds left <-> right)
+const ROAD_W = width;                       // 🆕 full screen width (edge to edge)
+const ROW_H = 196;                          // 🆕 taller rows -> long, broad road
+const NODE = 84;                            // 🆕 big medals
+const ROAD_TOP_PAD = 70;
+const ROAD_BOTTOM_PAD = 190;                // room for the L0 detail panel + start sign
+const ROAD_H = ROAD_TOP_PAD + ALL_LEVELS.length * ROW_H + ROAD_BOTTOM_PAD;
+const LANE = 66;                            // 🆕 broad road lane
+const PANEL_W = ROAD_W - 24;                // 🆕 tap-to-open detail panel
+const PANEL_H = 188;
+const nodeX = (lvl: number) => (lvl % 2 === 0 ? ROAD_W * 0.2 : ROAD_W * 0.8);
+const nodeY = (lvl: number) => ROAD_TOP_PAD + (ALL_LEVELS.length - 1 - lvl) * ROW_H + ROW_H / 2;
+const START_Y = ROAD_H - 30;
+
+const segPath = (i: number) => {
+    const x1 = nodeX(i), y1 = nodeY(i), x2 = nodeX(i + 1), y2 = nodeY(i + 1);
+    const off = ROW_H * 0.7;
+    return `M ${x1} ${y1} C ${x1} ${y1 - off} ${x2} ${y2 + off} ${x2} ${y2}`;
+};
+const segLength = (i: number) => {
+    const x1 = nodeX(i), y1 = nodeY(i), x2 = nodeX(i + 1), y2 = nodeY(i + 1);
+    const off = ROW_H * 0.7;
+    const p = [[x1, y1], [x1, y1 - off], [x2, y2 + off], [x2, y2]];
+    let len = 0;
+    let prev = p[0];
+    for (let s = 1; s <= 30; s++) {
+        const t = s / 30;
+        const u = 1 - t;
+        const x = u * u * u * p[0][0] + 3 * u * u * t * p[1][0] + 3 * u * t * t * p[2][0] + t * t * t * p[3][0];
+        const y = u * u * u * p[0][1] + 3 * u * u * t * p[1][1] + 3 * u * t * t * p[2][1] + t * t * t * p[3][1];
+        len += Math.sqrt((x - prev[0]) ** 2 + (y - prev[1]) ** 2);
+        prev = [x, y];
+    }
+    return len;
+};
+const SEGMENTS = Array.from({ length: ALL_LEVELS.length - 1 }, (_, i) => ({ d: segPath(i), len: segLength(i) }));
+const TAIL_D = `M ${nodeX(0)} ${START_Y} L ${nodeX(0)} ${nodeY(0)}`;
+
 export default function LevelInsights({ expertData }: any) {
     const [showModal, setShowModal] = useState(false);
     const [displayBeans, setDisplayBeans] = useState(0);
@@ -262,7 +381,11 @@ export default function LevelInsights({ expertData }: any) {
     // 🆕 Level-up modal: previous level + animated count-up rates
     const [prevLevel, setPrevLevel] = useState(0);
     const [modalRates, setModalRates] = useState({ call: 0, quick: 0 });
-    
+    // 🛣️ road section top offset (for "jump to my rank")
+    const [roadTop, setRoadTop] = useState(0);
+    // 🆕 which level's detail panel is open on the road (tap a medal -> magic open)
+    const [openLvl, setOpenLvl] = useState<number | null>(null);
+
     const totalBeans = expertData?.totalBeansEarned || expertData?.totalBeans || 0; 
     const currentLevelInfo = getLevelData(totalBeans);
 
@@ -301,14 +424,20 @@ export default function LevelInsights({ expertData }: any) {
     const orbAnim = useRef(new Animated.Value(0)).current;
 
     // 🆕 PREMIUM ANIMATION VALUES
-    const countAnim = useRef(new Animated.Value(0)).current;   // ring + progress bar + count-up numbers
+    const countAnim = useRef(new Animated.Value(0)).current;   // ring + progress bar + road fill + count-up numbers
     const rotAnim = useRef(new Animated.Value(0)).current;     // rotating frames / rays / sparkles
     const pulseAnim = useRef(new Animated.Value(0)).current;   // glow pulse (current rank)
     const sweepAnim = useRef(new Animated.Value(0)).current;   // hero card shine sweep
     const heroAnim = useRef(new Animated.Value(0)).current;    // hero entrance
-    const itemAnims = useRef(ALL_LEVELS.map(() => new Animated.Value(0))).current; // roadmap stagger entrance
+    const itemAnims = useRef(ALL_LEVELS.map(() => new Animated.Value(0))).current; // road milestone stagger entrance
+    const openAnims = useRef(ALL_LEVELS.map(() => new Animated.Value(0))).current; // 🆕 detail panel magic-open per level
     const nextAnim = useRef(new Animated.Value(0)).current;    // 🆕 next-reward card entrance
     const medalScrollRef = useRef<ScrollView>(null);
+    const mainScrollRef = useRef<ScrollView>(null);
+
+    // 🆕 3D animation values
+    const tiltAnim = useRef(new Animated.Value(0)).current;    // slow 3D sway for hero card + modal emblem
+    const coinAnim = useRef(new Animated.Value(0)).current;    // coin spin for current / next medal
 
     // 👑 NEW: level-up modal animation values
     const introAnim = useRef(new Animated.Value(0)).current;   // staggered cinematic entrance (emblem -> title -> rank flow -> cards -> button)
@@ -360,64 +489,86 @@ export default function LevelInsights({ expertData }: any) {
     const modalDeltaQuick = currentLevelInfo.qmRate - prevItem.qmRate;
 
     useEffect(() => {
+        const running: Animated.CompositeAnimation[] = [];
+        const run = (a: Animated.CompositeAnimation) => { a.start(); running.push(a); return a; };
+
         // Linear shimmer for progress bar
-        Animated.loop(
+        run(Animated.loop(
             Animated.sequence([
                 Animated.timing(shimmerAnim, { toValue: 1, duration: 2000, useNativeDriver: true, easing: Easing.linear }),
                 Animated.timing(shimmerAnim, { toValue: 0, duration: 0, useNativeDriver: true })
             ])
-        ).start();
+        ));
 
         // Sinusoidal float for background orbs
-        Animated.loop(
+        run(Animated.loop(
             Animated.timing(orbAnim, {
             toValue: 1,
             duration: 4000,
             easing: Easing.inOut(Easing.sin),
             useNativeDriver: true
             })
-        ).start();
+        ));
 
         // 🆕 Rotation (frames, rays, dashed ring)
-        Animated.loop(
+        run(Animated.loop(
             Animated.timing(rotAnim, { toValue: 1, duration: 14000, easing: Easing.linear, useNativeDriver: true })
-        ).start();
+        ));
 
         // 🆕 Glow pulse
-        Animated.loop(
+        run(Animated.loop(
             Animated.sequence([
                 Animated.timing(pulseAnim, { toValue: 1, duration: 1300, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
                 Animated.timing(pulseAnim, { toValue: 0, duration: 1300, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
             ])
-        ).start();
+        ));
+
+        // 🆕 3D sway (hero card + modal emblem)
+        run(Animated.loop(
+            Animated.sequence([
+                Animated.timing(tiltAnim, { toValue: 1, duration: 3400, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(tiltAnim, { toValue: 0, duration: 3400, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        ));
+
+        // 🆕 Coin spin (current + next medal) - spin, then rest
+        run(Animated.loop(
+            Animated.sequence([
+                Animated.timing(coinAnim, { toValue: 1, duration: 1700, easing: Easing.inOut(Easing.cubic), useNativeDriver: true }),
+                Animated.delay(3200),
+                Animated.timing(coinAnim, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        ));
 
         // 🆕 Hero card shine sweep (every few seconds)
-        Animated.loop(
+        run(Animated.loop(
             Animated.sequence([
                 Animated.delay(1800),
                 Animated.timing(sweepAnim, { toValue: 1, duration: 1600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
                 Animated.timing(sweepAnim, { toValue: 0, duration: 0, useNativeDriver: true })
             ])
-        ).start();
+        ));
 
         // 🆕 Floating particles
         particles.forEach((p) => {
-            Animated.loop(
+            run(Animated.loop(
                 Animated.sequence([
                     Animated.delay(p.delay),
                     Animated.timing(p.v, { toValue: 1, duration: p.dur, easing: Easing.linear, useNativeDriver: true }),
                     Animated.timing(p.v, { toValue: 0, duration: 0, useNativeDriver: true })
                 ])
-            ).start();
+            ));
         });
 
-        // 🆕 Hero entrance + roadmap stagger
-        Animated.spring(heroAnim, { toValue: 1, tension: 40, friction: 8, useNativeDriver: true }).start();
-        Animated.spring(nextAnim, { toValue: 1, delay: 350, tension: 40, friction: 8, useNativeDriver: true }).start();
-        Animated.stagger(
+        // 🆕 Hero entrance + road stagger
+        run(Animated.spring(heroAnim, { toValue: 1, tension: 40, friction: 8, useNativeDriver: true }));
+        run(Animated.spring(nextAnim, { toValue: 1, delay: 350, tension: 40, friction: 8, useNativeDriver: true }));
+        run(Animated.stagger(
             70,
             itemAnims.map((a) => Animated.timing(a, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }))
-        ).start();
+        ));
+
+        return () => running.forEach((a) => a.stop());
     }, []);
 
     // 🆕 Level-up confetti rain (modal open irukkumbodhu mattum)
@@ -534,6 +685,25 @@ export default function LevelInsights({ expertData }: any) {
         });
     };
 
+    // 🛣️ jump to my current milestone on the road
+    const jumpToMyRank = () => {
+        mainScrollRef.current?.scrollTo({ y: Math.max(0, roadTop + nodeY(currentLevelInfo.lvl) - height * 0.32), animated: true });
+    };
+
+    // 🆕 ✨ tap a level medal -> details panel magic-open (tap again = close)
+    const toggleLevel = (lvl: number) => {
+        if (openLvl === lvl) {
+            Animated.timing(openAnims[lvl], { toValue: 0, duration: 220, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+                setOpenLvl((c) => (c === lvl ? null : c));
+            });
+            return;
+        }
+        openAnims[lvl].setValue(0);
+        setOpenLvl(lvl);
+        Animated.spring(openAnims[lvl], { toValue: 1, tension: 55, friction: 7, useNativeDriver: true }).start();
+        mainScrollRef.current?.scrollTo({ y: Math.max(0, roadTop + nodeY(lvl) - height * 0.32), animated: true });
+    };
+
     const shimmerTranslate = shimmerAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [-width, width]
@@ -554,6 +724,13 @@ export default function LevelInsights({ expertData }: any) {
     const glowOpacity = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0.25, 0.75] });
     const glowScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.18] });
     const crownBob = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -4] });
+    const medalBob = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -5] });
+
+    // 🆕 3D interpolations
+    const tiltY = tiltAnim.interpolate({ inputRange: [0, 1], outputRange: ['-3deg', '3deg'] });
+    const tiltX = tiltAnim.interpolate({ inputRange: [0, 1], outputRange: ['1.5deg', '-1.5deg'] });
+    const coinRot = coinAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const pedestalScale = pulseAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] });
 
     // 👑 NEW: level-up modal staged entrance helpers
     const stageIn = (a: number, b: number): any => ({
@@ -597,6 +774,14 @@ export default function LevelInsights({ expertData }: any) {
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
 
+    // 🛣️ how much of each road segment is lit (done = full, current = progress %, locked = 0)
+    const segFill = (i: number) => {
+        const upGoal = ALL_LEVELS[i + 1].goal;
+        if (totalBeans >= upGoal) return 1;
+        if (currentLevelInfo.lvl === i) return progressPercent / 100;
+        return 0;
+    };
+
     return (
         <View style={[styles.mainContainer, { backgroundColor: ROYAL.bg0 }]}>
             <StatusBar barStyle="light-content" />
@@ -630,9 +815,9 @@ export default function LevelInsights({ expertData }: any) {
                 />
             ))}
 
-            <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+            <ScrollView ref={mainScrollRef} style={styles.container} showsVerticalScrollIndicator={false}>
                 
-                {/* 🔥 COMPACT CYBER HERO SECTION DYNAMIC (one-screen fit) */}
+                {/* 🔥 3D FLOATING HERO (COMPACT: avatar on a glowing pedestal on the left, info on the right) */}
                 <Animated.View
                     style={[
                         styles.heroWrapper,
@@ -640,6 +825,9 @@ export default function LevelInsights({ expertData }: any) {
                             shadowColor: vc(0),
                             opacity: heroAnim,
                             transform: [
+                                { perspective: 1100 },
+                                { rotateY: tiltY },
+                                { rotateX: tiltX },
                                 { scale: heroAnim.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
                                 { translateY: heroAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }
                             ]
@@ -709,8 +897,10 @@ export default function LevelInsights({ expertData }: any) {
                             </LinearGradient>
                         </View>
 
-                        {/* 🆕 COMPACT MIDDLE ROW: ring (left) + host info (right) */}
+                        {/* 🆕 COMPACT STAGE: ring + avatar + rays (left) + host info (right) */}
                         <View style={styles.heroMiddleRow}>
+                          <View style={styles.heroStageCol}>
+                            <View style={styles.heroStageBox}>
                             <View style={styles.ringBox}>
                                 <Animated.View style={[styles.ringGlow, { backgroundColor: vc(1), opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
 
@@ -788,13 +978,13 @@ export default function LevelInsights({ expertData }: any) {
                                 </View>
 
                                 {/* 🆕 Royal sparkles around avatar */}
-                                <RoyalSparkle x={HERO_STAGE - 34} y={14} size={11} color={acc} delay={0} />
-                                <RoyalSparkle x={10} y={HERO_STAGE - 50} size={10} color={acc2} delay={700} />
-                                <RoyalSparkle x={20} y={22} size={9} color={accLight} delay={1300} />
+                                <RoyalSparkle x={HERO_STAGE - 44} y={18} size={11} color={acc} delay={0} />
+                                <RoyalSparkle x={14} y={HERO_STAGE - 60} size={10} color={acc2} delay={700} />
+                                <RoyalSparkle x={26} y={28} size={9} color={accLight} delay={1300} />
 
                                 {/* 🆕 Floating crown */}
                                 <Animated.View style={[styles.floatCrown, { transform: [{ translateY: crownBob }] }]} pointerEvents="none">
-                                    <MaterialCommunityIcons name="crown" size={22} color={acc} />
+                                    <MaterialCommunityIcons name="crown" size={24} color={acc} />
                                 </Animated.View>
 
                                 {/* 🔥 Rank icon badge (old capsule icon logic) */}
@@ -806,8 +996,15 @@ export default function LevelInsights({ expertData }: any) {
                                     <Text style={styles.ringPercentText}>{displayPercent}%</Text>
                                 </LinearGradient>
                             </View>
+                            </View>
 
-                            {/* 🆕 Host info column */}
+                            {/* 🆕 3D pedestal under the avatar */}
+                            <Animated.View pointerEvents="none" style={[styles.pedestalOuter, { backgroundColor: vc(1) + '33', borderColor: vc(0) + '88', transform: [{ scaleX: pedestalScale }] }]}>
+                                <View style={[styles.pedestalCore, { backgroundColor: vc(0) + '55' }]} />
+                            </Animated.View>
+                          </View>
+
+                            {/* 🆕 Host info (right side) */}
                             <View style={styles.heroInfoCol}>
                                 <Text style={styles.heroName} numberOfLines={1}>{expertName.toUpperCase()}</Text>
                                 <LinearGradient colors={['transparent', acc, acc2, 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.heroNameLine} />
@@ -921,7 +1118,7 @@ export default function LevelInsights({ expertData }: any) {
                         {
                             shadowColor: nextPal[0],
                             opacity: nextAnim,
-                            transform: [{ translateY: nextAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }]
+                            transform: [{ perspective: 900 }, { rotateX: '4deg' }, { translateY: nextAnim.interpolate({ inputRange: [0, 1], outputRange: [30, 0] }) }]
                         }
                     ]}
                 >
@@ -933,16 +1130,14 @@ export default function LevelInsights({ expertData }: any) {
 
                             <View style={styles.nextMedalBox}>
                                 <Animated.View style={[styles.nextMedalHalo, { borderColor: nextPalT[0], opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
-                                <LinearGradient colors={g([nextPal[0], nextPal[1], '#020617'])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.nextMedal, { borderColor: nextPalT[1] }]}>
-                                    {nextLevelItem ? (
-                                        <Text style={styles.nextMedalText}>{nextLevelItem.lvl}</Text>
-                                    ) : (
-                                        <MaterialCommunityIcons name="crown" size={26} color="#FFF" />
-                                    )}
-                                </LinearGradient>
+                                {nextLevelItem ? (
+                                    <Medal3D size={52} pv={nextPal} pt={nextPalT} state="open" lvl={nextLevelItem.lvl} mode="number" spin coin={coinRot} bob={medalBob} />
+                                ) : (
+                                    <Medal3D size={52} pv={nextPal} pt={nextPalT} state="open" lvl={10} iconName="crown" spin coin={coinRot} bob={medalBob} />
+                                )}
                             </View>
 
-                            <View style={{ flex: 1, marginLeft: 14 }}>
+                            <View style={{ flex: 1, marginLeft: 10 }}>
                                 {nextLevelItem ? (
                                     <>
                                         <GradientText text={nextLevelItem.label} colors={[nextPalT[0], nextPalT[1]]} fit style={styles.nextTitle} />
@@ -981,7 +1176,7 @@ export default function LevelInsights({ expertData }: any) {
                     </LinearGradient>
                 </Animated.View>
 
-                {/* 🆕 RANK MEDALS STRIP */}
+                {/* 🆕 RANK MEDALS STRIP (3D coins) */}
                 <RoyalHeader title="RANK MEDALS" colors={textGrad} pulse={pulseAnim} accent={acc} accent2={acc2} />
                 <ScrollView
                     ref={medalScrollRef}
@@ -1003,155 +1198,316 @@ export default function LevelInsights({ expertData }: any) {
                         const isCurrent = currentLevelInfo.lvl === item.lvl;
                         const isLocked = totalBeans < item.goal && !isCurrent;
                         const pal = levelPalette(item.goal);
+                        const state = isCurrent ? 'current' : isLocked ? 'locked' : isCompleted ? 'done' : 'open';
                         return (
                             <View key={item.lvl} style={styles.medalWrap}>
-                                {isCurrent && (
-                                    <Animated.View
-                                        style={[
-                                            styles.medalHalo,
-                                            { borderColor: acc, opacity: glowOpacity, transform: [{ scale: glowScale }] }
-                                        ]}
-                                    />
-                                )}
-                                <LinearGradient
-                                    colors={isLocked ? ['#1e293b', '#0f172a'] : g([pal.vivid[0], pal.vivid[1], '#020617'])}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={[styles.medal, { borderColor: isLocked ? 'rgba(255,255,255,0.18)' : pal.text[1] }, isCurrent && { borderColor: acc, borderWidth: 2 }, isLocked && { opacity: 0.55 }]}
-                                >
-                                    {isLocked ? (
-                                        <MaterialCommunityIcons name="lock" size={18} color="#475569" />
-                                    ) : isCompleted ? (
-                                        <MaterialCommunityIcons name="check-decagram" size={22} color="#FFF" />
-                                    ) : (
-                                        <MaterialCommunityIcons name={item.lvl >= 7 ? "crown" : "star-face"} size={22} color="#FFF" />
-                                    )}
-                                </LinearGradient>
-                                {isCurrent && <RoyalSparkle x={38} y={-4} size={10} color={acc} delay={0} />}
+                                <Medal3D
+                                    size={42}
+                                    pv={pal.vivid}
+                                    pt={pal.text}
+                                    state={state}
+                                    lvl={item.lvl}
+                                    mode="icon"
+                                    spin={isCurrent}
+                                    coin={coinRot}
+                                    bob={isCurrent ? medalBob : 0}
+                                    halo={acc}
+                                    glowOpacity={glowOpacity}
+                                    glowScale={glowScale}
+                                />
+                                {isCurrent && <RoyalSparkle x={40} y={-2} size={10} color={acc} delay={0} />}
                                 <Text style={[styles.medalLabel, { color: isLocked ? '#94A3B8' : pal.text[0] }]}>L{item.lvl}</Text>
                             </View>
                         );
                     })}
                 </ScrollView>
 
+                {/* 🛣️ ELITE ROADMAP = FULL-WIDTH winding road, only level medals (L0 bottom -> L10 top). TAP a medal = details magic-open */}
                 <RoyalHeader title="ELITE ROADMAP" colors={textGrad} pulse={pulseAnim} accent={acc} accent2={acc2} />
+
+                <TouchableOpacity activeOpacity={0.8} onPress={jumpToMyRank} style={[styles.jumpPill, { borderColor: acc + '99' }]}>
+                    <MaterialCommunityIcons name="crosshairs-gps" size={14} color={acc} />
+                    <Text style={[styles.jumpText, { color: acc }]}>JUMP TO MY RANK</Text>
+                    <MaterialCommunityIcons name="chevron-down" size={14} color={acc2} />
+                </TouchableOpacity>
                 
-                <View style={styles.roadmapBox}>
-                    {ALL_LEVELS.map((item, index) => {
-                        const isCompleted = totalBeans >= (ALL_LEVELS[index + 1]?.goal || 999999999);
-                        const isCurrent = currentLevelInfo.lvl === item.lvl;
-                        const isLocked = totalBeans < item.goal && !isCurrent;
-                        const pal = levelPalette(item.goal);
-                        const pv = pal.vivid;   // raw 2 colours (fills)
-                        const pt = pal.text;    // text-safe 2 colours (text, thin lines)
-                        
-                        // 🔥 Alternate borders for roadmap items
-                        const roadmapBorderStyle = index % 2 === 0 ? borderType2 : borderType1;
+                <View style={styles.roadmapBox} onLayout={(e) => setRoadTop(e.nativeEvent.layout.y)}>
+                    <View style={{ width: ROAD_W, height: ROAD_H }}>
 
-                        const cardNode = (
-                            <TouchableOpacity activeOpacity={0.8} style={[styles.roadmapCard, roadmapBorderStyle, !isLocked && { borderLeftColor: pt[0], borderRightColor: pt[1] }, isCurrent && {borderColor: item.color, borderLeftColor: pt[0], borderRightColor: pt[1], borderLeftWidth: 4, backgroundColor: 'rgba(255,255,255,0.05)'}, isLocked && {opacity: 0.8}]}>
-                                <LinearGradient
-                                    colors={isLocked ? ['rgba(30,41,59,0.5)', 'rgba(15,23,42,0.4)'] : g([pv[0] + '30', pv[1] + '26', pv[0] + '1A'])}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={StyleSheet.absoluteFill}
-                                    pointerEvents="none"
-                                />
-                                {/* 🆕 Current card shine sweep */}
-                                {isCurrent && (
-                                    <Animated.View pointerEvents="none" style={[styles.cardSweep, { transform: [{ translateX: sweepX }, { rotate: '20deg' }] }]}>
-                                        <LinearGradient colors={['transparent', 'rgba(255,255,255,0.14)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                        {/* ---- ROAD SURFACE (rim -> asphalt -> dashed centre -> lit lane) ---- */}
+                        <Svg width={ROAD_W} height={ROAD_H} style={StyleSheet.absoluteFill} pointerEvents="none">
+                            <Defs>
+                                {SEGMENTS.map((seg, i) => (
+                                    <SvgLinearGradient
+                                        key={`gd${i}`}
+                                        id={`seg${i}`}
+                                        gradientUnits="userSpaceOnUse"
+                                        x1={nodeX(i)}
+                                        y1={nodeY(i)}
+                                        x2={nodeX(i + 1)}
+                                        y2={nodeY(i + 1)}
+                                    >
+                                        <Stop offset="0" stopColor={levelPalette(ALL_LEVELS[i].goal).vivid[0]} />
+                                        <Stop offset="1" stopColor={levelPalette(ALL_LEVELS[i + 1].goal).vivid[0]} />
+                                    </SvgLinearGradient>
+                                ))}
+                            </Defs>
+
+                            {/* start tail */}
+                            <Path d={TAIL_D} stroke="rgba(255,255,255,0.12)" strokeWidth={LANE + 6} strokeLinecap="round" fill="none" />
+                            <Path d={TAIL_D} stroke="#0E0A26" strokeWidth={LANE} strokeLinecap="round" fill="none" />
+                            <Path d={TAIL_D} stroke="rgba(255,255,255,0.22)" strokeWidth={2} strokeDasharray="7 9" fill="none" />
+
+                            {/* rim */}
+                            {SEGMENTS.map((seg, i) => (
+                                <Path key={`rim${i}`} d={seg.d} stroke="rgba(255,255,255,0.12)" strokeWidth={LANE + 6} strokeLinecap="round" fill="none" />
+                            ))}
+                            {/* asphalt */}
+                            {SEGMENTS.map((seg, i) => (
+                                <Path key={`as${i}`} d={seg.d} stroke="#0E0A26" strokeWidth={LANE} strokeLinecap="round" fill="none" />
+                            ))}
+                            {/* dashed centre line */}
+                            {SEGMENTS.map((seg, i) => (
+                                <Path key={`dash${i}`} d={seg.d} stroke="rgba(255,255,255,0.22)" strokeWidth={2} strokeDasharray="7 9" fill="none" />
+                            ))}
+                            {/* lit lane (animated draw-in: completed = full, current = progress %) */}
+                            {SEGMENTS.map((seg, i) => {
+                                const p = segFill(i);
+                                if (p <= 0) return null;
+                                const start = i * 0.06;
+                                const off = countAnim.interpolate({ inputRange: [start, start + 0.4], outputRange: [seg.len, seg.len * (1 - p)], extrapolate: 'clamp' });
+                                return (
+                                    <React.Fragment key={`lit${i}`}>
+                                        <AnimatedPath d={seg.d} stroke={`url(#seg${i})`} strokeOpacity={0.22} strokeWidth={LANE - 4} strokeLinecap="round" fill="none" strokeDasharray={seg.len} strokeDashoffset={off} />
+                                        <AnimatedPath d={seg.d} stroke={`url(#seg${i})`} strokeWidth={8} strokeLinecap="round" fill="none" strokeDasharray={seg.len} strokeDashoffset={off} />
+                                    </React.Fragment>
+                                );
+                            })}
+                        </Svg>
+
+                        {/* ---- START SIGN ---- */}
+                        <View style={[styles.startSign, { left: nodeX(0) - 40, top: START_Y + 2, borderColor: acc + '88' }]}>
+                            <MaterialCommunityIcons name="flag-checkered" size={13} color={acc} />
+                            <Text style={[styles.startText, { color: acc }]}>START</Text>
+                        </View>
+
+                        {/* ---- LEVELS: big medals on the road. TAP -> detail panel opens like magic ---- */}
+                        {ALL_LEVELS.map((item, index) => {
+                            const isCompleted = totalBeans >= (ALL_LEVELS[index + 1]?.goal || 999999999);
+                            const isCurrent = currentLevelInfo.lvl === item.lvl;
+                            const isLocked = totalBeans < item.goal && !isCurrent;
+                            const pal = levelPalette(item.goal);
+                            const pv = pal.vivid;   // raw 2 colours (fills)
+                            const pt = pal.text;    // text-safe 2 colours (text, thin lines)
+                            const state = isCurrent ? 'current' : isLocked ? 'locked' : isCompleted ? 'done' : 'open';
+
+                            const x = nodeX(item.lvl);
+                            const y = nodeY(item.lvl);
+                            const isOpen = openLvl === item.lvl;
+                            const prevLvlItem = index > 0 ? ALL_LEVELS[index - 1] : null;
+                            const dCall = prevLvlItem ? item.rate - prevLvlItem.rate : 0;
+                            const dQuick = prevLvlItem ? item.qmRate - prevLvlItem.qmRate : 0;
+                            const panelPct = isCurrent
+                                ? progressPercent
+                                : isLocked
+                                    ? Math.max(0, Math.min(100, Math.floor((totalBeans / item.goal) * 100)))
+                                    : 100;
+                            const panelInfo = isCurrent
+                                ? (remainingBeans > 0 ? `NEED ${remainingBeans.toLocaleString()} FOR ${nextLevelItem?.label}` : 'MAX RANK ACHIEVED')
+                                : isLocked
+                                    ? `NEED ${(item.goal - totalBeans).toLocaleString()} MORE TO UNLOCK`
+                                    : 'COMPLETED - UNLOCKED';
+                            const oa = openAnims[item.lvl];
+
+                            return (
+                                <React.Fragment key={item.lvl}>
+                                    {/* milestone 3D medal sitting on the road (TAP to open details) */}
+                                    <Animated.View
+                                        style={[
+                                            styles.nodeSlot,
+                                            {
+                                                left: x - (NODE + 16) / 2,
+                                                top: y - (NODE + 24) / 2,
+                                                opacity: itemAnims[index],
+                                                transform: [{ scale: itemAnims[index].interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) }]
+                                            }
+                                        ]}
+                                    >
+                                        <TouchableOpacity activeOpacity={0.85} onPress={() => toggleLevel(item.lvl)}>
+                                            <Medal3D
+                                                size={NODE}
+                                                pv={pv}
+                                                pt={pt}
+                                                state={state}
+                                                lvl={item.lvl}
+                                                mode="number"
+                                                spin={isCurrent}
+                                                coin={coinRot}
+                                                bob={isCurrent ? medalBob : 0}
+                                                halo={acc}
+                                                glowOpacity={glowOpacity}
+                                                glowScale={glowScale}
+                                            />
+                                        </TouchableOpacity>
                                     </Animated.View>
-                                )}
-                                {/* 🆕 Level medallion (this level's own 2 colours) */}
-                                <LinearGradient
-                                    colors={isLocked ? ['#1e293b', '#0f172a'] : g([pv[0], pv[1], '#020617'])}
-                                    start={{ x: 0, y: 0 }}
-                                    end={{ x: 1, y: 1 }}
-                                    style={[styles.rmMedal, !isLocked && { borderColor: pt[1] }]}
-                                >
-                                    <Text style={[styles.rmMedalText, { color: isLocked ? '#94A3B8' : '#FFF' }]}>{item.lvl}</Text>
-                                </LinearGradient>
 
-                                <View style={{ flex: 1, marginLeft: 12 }}>
-                                    {isLocked ? (
-                                        <Text style={[styles.rmLabel, {color: '#94A3B8'}]}>{item.label}</Text>
-                                    ) : (
-                                        <GradientText text={item.label} colors={[pt[0], pt[1]]} style={styles.rmLabel} />
-                                    )}
-                                    <Text style={styles.rmGoal}>{item.goal.toLocaleString()} XP Rewards</Text>
+                                    {/* level name pill under the medal (also tappable) */}
+                                    <Animated.View style={[styles.lvlPill, { left: x - 64, top: y + NODE / 2 + 6, opacity: itemAnims[index] }]}>
+                                        <TouchableOpacity
+                                            activeOpacity={0.8}
+                                            onPress={() => toggleLevel(item.lvl)}
+                                            style={[
+                                                styles.lvlPillInner,
+                                                { borderColor: isLocked ? 'rgba(255,255,255,0.15)' : pt[0] + '99' },
+                                                isCurrent && { borderColor: acc, backgroundColor: 'rgba(255,255,255,0.08)' }
+                                            ]}
+                                        >
+                                            {isCurrent ? (
+                                                <View style={[styles.statusTagDot, { backgroundColor: acc }]} />
+                                            ) : isCompleted ? (
+                                                <MaterialCommunityIcons name="check" size={10} color={ROYAL.emerald} />
+                                            ) : (
+                                                <MaterialCommunityIcons name="lock" size={10} color="#64748B" />
+                                            )}
+                                            <Text style={[styles.lvlPillText, { color: isLocked ? '#94A3B8' : pt[0] }]} numberOfLines={1}>{item.label}</Text>
+                                            <MaterialCommunityIcons name={isOpen ? 'chevron-up' : 'chevron-down'} size={13} color={isLocked ? '#64748B' : pt[1]} />
+                                        </TouchableOpacity>
+                                    </Animated.View>
+
+                                    {/* 📍 YOU ARE HERE pin */}
                                     {isCurrent && (
-                                        <View style={[styles.statusTag, { backgroundColor: acc + '26', borderColor: acc }]}>
-                                            <View style={[styles.statusTagDot, { backgroundColor: acc }]} />
-                                            <Text style={[styles.statusTagText, { color: acc }]}>CURRENT</Text>
-                                        </View>
+                                        <Animated.View pointerEvents="none" style={[styles.youPin, { left: x - 36, top: y - NODE / 2 - 46, borderColor: acc, transform: [{ translateY: crownBob }] }]}>
+                                            <Image source={{ uri: avatarUri }} style={styles.youAvatar} />
+                                            <Text style={[styles.youText, { color: acc }]}>YOU</Text>
+                                            <View style={[styles.youTail, { borderColor: acc }]} />
+                                        </Animated.View>
                                     )}
-                                    {isCompleted && !isCurrent && (
-                                        <View style={[styles.statusTag, { backgroundColor: 'rgba(16,185,129,0.18)', borderColor: '#10B981' }]}>
-                                            <MaterialCommunityIcons name="check" size={9} color="#10B981" />
-                                            <Text style={[styles.statusTagText, { color: '#10B981' }]}>UNLOCKED</Text>
-                                        </View>
-                                    )}
-                                </View>
-                                
-                                {/* 🔥 DUAL RATE DISPLAY FOR EACH LEVEL (colour 1 pill + colour 2 pill) */}
-                                <View style={styles.rateColumn}>
-                                    <View style={[styles.rmRateBox, {backgroundColor: isLocked ? '#1e293b' : pv[0] + '2E', marginBottom: 2}]}>
-                                        <Text style={[styles.rmRateText, {color: isLocked ? '#94A3B8' : pt[0]}]}>CALL: {item.rate}</Text>
-                                    </View>
-                                    <View style={[styles.rmRateBox, {backgroundColor: isLocked ? '#1e293b' : pv[1] + '2E'}]}>
-                                        <Text style={[styles.rmRateText, {color: isLocked ? '#94A3B8' : pt[1]}]}>QUICK: {item.qmRate}</Text>
-                                    </View>
-                                </View>
-                            </TouchableOpacity>
-                        );
-                        
-                        return (
-                            <Animated.View
-                                key={item.lvl}
-                                style={[
-                                    styles.roadmapRow,
-                                    {
-                                        opacity: itemAnims[index],
-                                        transform: [{ translateX: itemAnims[index].interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) }]
-                                    }
-                                ]}
-                            >
-                                <View style={styles.timelineLeft}>
-                                    <View style={[styles.verticalLine, isCompleted && {backgroundColor: '#10B981'}]} />
-                                    {isCurrent && (
+                                    {isCurrent && <RoyalSparkle x={x + NODE / 2 - 6} y={y - NODE / 2 - 4} size={12} color={acc2} delay={300} />}
+
+                                    {/* ✨ MAGIC DETAIL PANEL (pops out of the medal: scale + 3D flip + fade) */}
+                                    {isOpen && (
                                         <Animated.View
                                             style={[
-                                                styles.markerHalo,
-                                                { backgroundColor: acc, opacity: glowOpacity, transform: [{ scale: glowScale }] }
+                                                styles.detailPanel,
+                                                {
+                                                    left: (ROAD_W - PANEL_W) / 2,
+                                                    top: Math.min(y + NODE / 2 + 36, ROAD_H - PANEL_H - 8),
+                                                    width: PANEL_W,
+                                                    height: PANEL_H,
+                                                    shadowColor: isLocked ? '#000' : pv[0],
+                                                    opacity: oa.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 1, 1], extrapolate: 'clamp' }),
+                                                    transform: [
+                                                        { perspective: 900 },
+                                                        { translateY: oa.interpolate({ inputRange: [0, 1], outputRange: [-PANEL_H * 0.4, 0] }) },
+                                                        { rotateX: oa.interpolate({ inputRange: [0, 1], outputRange: ['45deg', '0deg'] }) },
+                                                        { scale: oa.interpolate({ inputRange: [0, 1], outputRange: [0.25, 1] }) }
+                                                    ]
+                                                }
                                             ]}
-                                        />
-                                    )}
-                                    <View style={[styles.markerDot, isCurrent && {backgroundColor: pv[0], shadowColor: pv[0], elevation: 10, borderColor: acc}, isCompleted && {backgroundColor: '#10B981'}]}>
-                                        {isCompleted && <MaterialCommunityIcons name="check" size={11} color="#FFF" />}
-                                        {isLocked && <MaterialCommunityIcons name="lock" size={9} color="#475569" />}
-                                    </View>
-                                </View>
-                                
-                                {/* 🆕 Current rank-ku rotating duotone frame */}
-                                {isCurrent ? (
-                                    <View style={styles.currentFrame}>
-                                        <Animated.View style={[styles.currentFrameSpin, { transform: [{ rotate: spin }] }]} pointerEvents="none">
-                                            <LinearGradient
-                                                colors={g([pv[0], pv[1], pv[0], pv[1], pv[0]])}
-                                                start={{ x: 0, y: 0 }}
-                                                end={{ x: 1, y: 1 }}
-                                                style={StyleSheet.absoluteFill}
-                                            />
+                                        >
+                                            <TouchableOpacity activeOpacity={1} onPress={() => toggleLevel(item.lvl)} style={{ flex: 1 }}>
+                                                <View style={styles.panelFrame}>
+                                                    {/* border: rotating duotone for CURRENT, static duotone for others */}
+                                                    {isCurrent ? (
+                                                        <Animated.View style={[styles.currentFrameSpin, { transform: [{ rotate: spin }] }]} pointerEvents="none">
+                                                            <LinearGradient
+                                                                colors={g([pv[0], pv[1], pv[0], pv[1], pv[0]])}
+                                                                start={{ x: 0, y: 0 }}
+                                                                end={{ x: 1, y: 1 }}
+                                                                style={StyleSheet.absoluteFill}
+                                                            />
+                                                        </Animated.View>
+                                                    ) : (
+                                                        <LinearGradient
+                                                            colors={isLocked ? ['#334155', '#1e293b'] : g([pv[0], pv[1], pv[0]])}
+                                                            start={{ x: 0, y: 0 }}
+                                                            end={{ x: 1, y: 1 }}
+                                                            style={StyleSheet.absoluteFill}
+                                                            pointerEvents="none"
+                                                        />
+                                                    )}
+                                                    <View style={styles.panelInner}>
+                                                        <LinearGradient
+                                                            colors={isLocked ? ['rgba(30,41,59,0.5)', 'rgba(15,23,42,0.4)'] : g([pv[0] + '30', pv[1] + '26', pv[0] + '1A'])}
+                                                            start={{ x: 0, y: 0 }}
+                                                            end={{ x: 1, y: 1 }}
+                                                            style={StyleSheet.absoluteFill}
+                                                            pointerEvents="none"
+                                                        />
+                                                        {/* current panel shine sweep */}
+                                                        {isCurrent && (
+                                                            <Animated.View pointerEvents="none" style={[styles.cardSweep, { transform: [{ translateX: sweepX }, { rotate: '20deg' }] }]}>
+                                                                <LinearGradient colors={['transparent', 'rgba(255,255,255,0.14)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                                            </Animated.View>
+                                                        )}
+
+                                                        {/* header: label + status */}
+                                                        <View style={styles.panelHeadRow}>
+                                                            <View style={{ flex: 1 }}>
+                                                                {isLocked ? (
+                                                                    <Text style={[styles.rmLabel, { color: '#94A3B8' }]} numberOfLines={1}>{item.label}</Text>
+                                                                ) : (
+                                                                    <GradientText text={item.label} colors={[pt[0], pt[1]]} fit style={styles.rmLabel} />
+                                                                )}
+                                                                <Text style={styles.rmGoal} numberOfLines={1} adjustsFontSizeToFit>{item.goal.toLocaleString()} XP Rewards</Text>
+                                                            </View>
+                                                            {isCurrent && (
+                                                                <View style={[styles.statusTag, { backgroundColor: '#0A0620', borderColor: acc, marginTop: 0 }]}>
+                                                                    <View style={[styles.statusTagDot, { backgroundColor: acc }]} />
+                                                                    <Text style={[styles.statusTagText, { color: acc }]}>CURRENT</Text>
+                                                                </View>
+                                                            )}
+                                                            {isCompleted && !isCurrent && (
+                                                                <View style={[styles.statusTag, { backgroundColor: '#06150F', borderColor: '#10B981', marginTop: 0 }]}>
+                                                                    <MaterialCommunityIcons name="check" size={9} color="#10B981" />
+                                                                    <Text style={[styles.statusTagText, { color: '#10B981' }]}>UNLOCKED</Text>
+                                                                </View>
+                                                            )}
+                                                            {isLocked && (
+                                                                <View style={[styles.statusTag, { backgroundColor: '#0F172A', borderColor: '#475569', marginTop: 0 }]}>
+                                                                    <MaterialCommunityIcons name="lock" size={9} color="#94A3B8" />
+                                                                    <Text style={[styles.statusTagText, { color: '#94A3B8' }]}>LOCKED</Text>
+                                                                </View>
+                                                            )}
+                                                        </View>
+
+                                                        {/* progress */}
+                                                        <View>
+                                                            <View style={styles.panelProgHead}>
+                                                                <Text style={styles.panelProgLabel}>{isCurrent ? 'PROGRESS TO NEXT' : isLocked ? 'PROGRESS TO UNLOCK' : 'COMPLETED'}</Text>
+                                                                <Text style={[styles.panelProgLabel, { color: isLocked ? '#94A3B8' : pt[1] }]}>{Math.floor(panelPct)}%</Text>
+                                                            </View>
+                                                            <View style={styles.panelTrack}>
+                                                                <LinearGradient
+                                                                    colors={isLocked ? ['#475569', '#334155'] : g([pv[0], pv[1]])}
+                                                                    start={{ x: 0, y: 0 }}
+                                                                    end={{ x: 1, y: 0 }}
+                                                                    style={{ width: `${panelPct}%`, height: '100%', borderRadius: 6 }}
+                                                                />
+                                                            </View>
+                                                            <Text style={styles.panelInfoText} numberOfLines={1}>{panelInfo}</Text>
+                                                        </View>
+
+                                                        {/* 🔥 DUAL RATE DISPLAY (colour 1 pill + colour 2 pill) */}
+                                                        <View style={styles.rateRow}>
+                                                            <View style={[styles.rmRateBox, { backgroundColor: isLocked ? '#1e293b' : pv[0] + '2E' }]}>
+                                                                <Text style={[styles.rmRateText, { color: isLocked ? '#94A3B8' : pt[0] }]} numberOfLines={1}>CALL: {item.rate}{dCall > 0 ? `  +${dCall}` : ''}</Text>
+                                                            </View>
+                                                            <View style={[styles.rmRateBox, { backgroundColor: isLocked ? '#1e293b' : pv[1] + '2E' }]}>
+                                                                <Text style={[styles.rmRateText, { color: isLocked ? '#94A3B8' : pt[1] }]} numberOfLines={1}>QUICK: {item.qmRate}{dQuick > 0 ? `  +${dQuick}` : ''}</Text>
+                                                            </View>
+                                                        </View>
+                                                    </View>
+                                                </View>
+                                            </TouchableOpacity>
+                                            <RoyalSparkle x={PANEL_W - 30} y={-4} size={12} color={pt[0]} delay={0} />
+                                            <RoyalSparkle x={10} y={PANEL_H - 12} size={10} color={pt[1]} delay={600} />
                                         </Animated.View>
-                                        {cardNode}
-                                    </View>
-                                ) : (
-                                    <View style={styles.cardSlot}>{cardNode}</View>
-                                )}
-                            </Animated.View>
-                        );
-                    })}
+                                    )}
+                                </React.Fragment>
+                            );
+                        })}
+                    </View>
                 </View>
 
                 <View style={{ height: 120 }} />
@@ -1199,7 +1555,8 @@ export default function LevelInsights({ expertData }: any) {
                     >
                         <Animated.View style={[styles.mContent, { opacity: fadeAnim, transform: [{ scale: scaleAnim.interpolate({ inputRange: [0, 1], outputRange: [0.85, 1] }) }] }]}>
 
-                            {/* ===== 1. HERO EMBLEM (god-rays + shockwaves + avatar + crown) ===== */}
+                            {/* ===== 1. HERO EMBLEM (god-rays + shockwaves + avatar + crown) - 3D sway ===== */}
+                            <Animated.View style={{ transform: [{ perspective: 900 }, { rotateY: tiltY }, { rotateX: tiltX }] }}>
                             <Animated.View style={[styles.mStage, emblemIn]}>
                                 {/* soft core glow */}
                                 <Animated.View style={[styles.mGlow, { backgroundColor: vc(1), opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
@@ -1314,6 +1671,7 @@ export default function LevelInsights({ expertData }: any) {
                                 <RoyalSparkle x={30} y={M_STAGE - 80} size={12} color={acc2} delay={600} />
                                 <RoyalSparkle x={46} y={40} size={10} color={accLight} delay={1100} />
                             </Animated.View>
+                            </Animated.View>
 
                             {/* ===== 2. TITLE BLOCK ===== */}
                             <Animated.View style={[styles.mTitleBlock, stageIn(0.28, 0.5)]}>
@@ -1333,24 +1691,26 @@ export default function LevelInsights({ expertData }: any) {
                                 <Text style={styles.mSubText}>You have ascended to a higher tier of the Royal Network</Text>
                             </Animated.View>
 
-                            {/* ===== 3. OLD RANK -> NEW RANK FLOW ===== */}
+                            {/* ===== 3. OLD RANK -> NEW RANK FLOW (3D medals joined by a lit road) ===== */}
                             <Animated.View style={[styles.mFlowRow, stageIn(0.42, 0.66)]}>
                                 <View style={styles.mFlowSide}>
-                                    <LinearGradient colors={g([prevPal.vivid[0], prevPal.vivid[1], '#020617'])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.mMedalSm, { borderColor: 'rgba(255,255,255,0.25)', opacity: 0.6 }]}>
-                                        <Text style={styles.mMedalSmText}>{prevItem.lvl}</Text>
-                                    </LinearGradient>
+                                    <View style={{ opacity: 0.65 }}>
+                                        <Medal3D size={50} pv={prevPal.vivid} pt={prevPal.text} state="done" lvl={prevItem.lvl} mode="number" />
+                                    </View>
                                     <Text style={styles.mFlowLabelOld}>{prevItem.label}</Text>
                                 </View>
 
-                                <Animated.View style={{ opacity: glowOpacity }}>
-                                    <MaterialCommunityIcons name="chevron-double-right" size={30} color={acc} />
-                                </Animated.View>
+                                <View style={styles.mFlowRoadWrap}>
+                                    <View style={styles.mFlowRoad}>
+                                        <LinearGradient colors={g([prevPal.vivid[0], vc(0), vc(1)])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                                    </View>
+                                    <Animated.View style={{ opacity: glowOpacity }}>
+                                        <MaterialCommunityIcons name="chevron-double-right" size={30} color={acc} />
+                                    </Animated.View>
+                                </View>
 
                                 <View style={styles.mFlowSide}>
-                                    <Animated.View style={[styles.mMedalHalo, { borderColor: acc, opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
-                                    <LinearGradient colors={g([vc(0), vc(1), '#020617'])} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.mMedalLg, { borderColor: acc }]}>
-                                        <Text style={styles.mMedalLgText}>{currentLevelInfo.lvl}</Text>
-                                    </LinearGradient>
+                                    <Medal3D size={64} pv={vivid} pt={[acc, acc2, acc]} state="current" lvl={currentLevelInfo.lvl} mode="number" spin coin={coinRot} bob={medalBob} halo={acc} glowOpacity={glowOpacity} glowScale={glowScale} />
                                     <GradientText text={currentLevelInfo.label} colors={textGrad} style={styles.mFlowLabelNew} />
                                 </View>
                             </Animated.View>
@@ -1463,13 +1823,13 @@ const styles = StyleSheet.create({
     royalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 20 },
     royalLine: { flex: 1, height: 1.5, borderRadius: 1 },
     royalTitle: { fontSize: 13, fontWeight: '900', letterSpacing: 2 },
-    royalDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12 },
+    royalDivider: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
 
-    // 🆕 COMPACT HERO (one-screen fit)
-    heroWrapper: { marginTop: 6, marginBottom: 22, borderRadius: 34, backgroundColor: '#0A0620', elevation: 22, shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 10 } },
+    // 🆕 3D HERO (COMPACT)
+    heroWrapper: { marginTop: 6, marginBottom: 16, borderRadius: 34, backgroundColor: '#0A0620', elevation: 22, shadowOpacity: 0.55, shadowRadius: 22, shadowOffset: { width: 0, height: 10 } },
     heroFrame: { borderRadius: 34, overflow: 'hidden', padding: 3, backgroundColor: '#0A0620' },
     heroFrameSpin: { position: 'absolute', top: '50%', left: '50%', width: 900, height: 900, marginLeft: -450, marginTop: -450 },
-    heroCard: { borderRadius: 31, padding: 15, overflow: 'hidden', position: 'relative' },
+    heroCard: { borderRadius: 31, padding: 12, overflow: 'hidden', position: 'relative' },
     heroGlow: { position: 'absolute', top: -50, right: -50, width: 150, height: 150, borderRadius: 75, backgroundColor: 'rgba(255,255,255,0.05)' },
     heroSheen: { position: 'absolute', top: 0, left: 0, right: 0, height: 80 },
     heroInnerRim: { ...StyleSheet.absoluteFillObject, borderRadius: 31, borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)' },
@@ -1481,33 +1841,37 @@ const styles = StyleSheet.create({
     rankChipText: { color: '#FFF', fontSize: 9.5, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
     badgeLabel: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1.5, marginBottom: 5 },
 
-    // 🆕 AVATAR + RING + RAYS (compact, left) + INFO (right)
-    heroMiddleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4 },
-    ringBox: { width: HERO_STAGE, height: HERO_STAGE, justifyContent: 'center', alignItems: 'center' },
-    ringGlow: { position: 'absolute', width: 96, height: 96, borderRadius: 48, filter: 'blur(24px)' },
+    // 🆕 AVATAR + RING + RAYS (left, scaled down) + INFO (right)
+    heroMiddleRow: { flexDirection: 'row', alignItems: 'center', marginTop: 0 },
+    heroStageCol: { width: 156, alignItems: 'center' },
+    heroStageBox: { width: 156, height: 156, alignItems: 'center', justifyContent: 'center' },
+    ringBox: { width: HERO_STAGE, height: HERO_STAGE, justifyContent: 'center', alignItems: 'center', transform: [{ scale: 0.76 }] },
+    ringGlow: { position: 'absolute', width: 110, height: 110, borderRadius: 55, filter: 'blur(26px)' },
     raysStage: { position: 'absolute', width: HERO_STAGE, height: HERO_STAGE },
     rayArm: { position: 'absolute', width: HERO_STAGE, height: HERO_STAGE, alignItems: 'center' },
     rayBeam: { width: 2.5, height: 14, borderRadius: 2 },
     tickRing: { position: 'absolute', width: TICK_SIZE, height: TICK_SIZE },
-    dashedRing: { position: 'absolute', width: 124, height: 124, borderRadius: 62, borderWidth: 1.5, borderStyle: 'dashed' },
+    dashedRing: { position: 'absolute', width: 146, height: 146, borderRadius: 73, borderWidth: 1.5, borderStyle: 'dashed' },
     ringSvg: { position: 'absolute', transform: [{ rotate: '-90deg' }] },
-    avatarFrame: { width: 78, height: 78, borderRadius: 39, borderWidth: 2.5, overflow: 'hidden', backgroundColor: '#0F172A', elevation: 12 },
+    avatarFrame: { width: 90, height: 90, borderRadius: 45, borderWidth: 2.5, overflow: 'hidden', backgroundColor: '#0F172A', elevation: 12 },
     avatarImg: { width: '100%', height: '100%' },
-    floatCrown: { position: 'absolute', top: 2, alignSelf: 'center' },
-    crestBadge: { position: 'absolute', top: 34, right: 17, width: 30, height: 30, borderRadius: 15, borderWidth: 2, justifyContent: 'center', alignItems: 'center', elevation: 10 },
-    ringPercentChip: { position: 'absolute', bottom: 12, paddingHorizontal: 10, paddingVertical: 2, borderRadius: 10, borderWidth: 1.5, borderColor: GOLD },
-    ringPercentText: { color: '#FFF', fontSize: 10.5, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
-    heroInfoCol: { flex: 1, marginLeft: 4, justifyContent: 'center' },
-    heroName: { color: 'rgba(255,255,255,0.92)', fontSize: 11, fontWeight: '900', letterSpacing: 2 },
-    heroNameLine: { height: 1.5, width: '70%', marginTop: 3, borderRadius: 1 },
-    heroTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', marginTop: 2, textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
+    floatCrown: { position: 'absolute', top: 6, alignSelf: 'center' },
+    crestBadge: { position: 'absolute', top: 58, right: 26, width: 30, height: 30, borderRadius: 15, borderWidth: 2, justifyContent: 'center', alignItems: 'center', elevation: 10 },
+    ringPercentChip: { position: 'absolute', bottom: 8, paddingHorizontal: 10, paddingVertical: 2, borderRadius: 10, borderWidth: 1.5, borderColor: GOLD },
+    ringPercentText: { color: '#FFF', fontSize: 13, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
+    pedestalOuter: { width: 120, height: 20, borderRadius: 60, borderWidth: 1, marginTop: -12, alignItems: 'center', justifyContent: 'center' },
+    pedestalCore: { width: 80, height: 9, borderRadius: 40 },
+    heroInfoCol: { flex: 1, alignItems: 'flex-start', justifyContent: 'center', marginLeft: 4 },
+    heroName: { color: 'rgba(255,255,255,0.92)', fontSize: 12, fontWeight: '900', letterSpacing: 2, textAlign: 'left' },
+    heroNameLine: { height: 1.5, width: '80%', marginTop: 4, borderRadius: 1 },
+    heroTitle: { color: '#FFF', fontSize: 22, fontWeight: '900', marginTop: 4, textAlign: 'left', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 4 },
     expertVerifiedRow: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 },
-    expertType: { fontSize: 10.5, fontWeight: '800' },
-    nextChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 10, paddingHorizontal: 9, paddingVertical: 4, borderRadius: 10, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)', maxWidth: '100%' },
-    nextChipText: { color: '#F1F5F9', fontSize: 10.5, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
+    expertType: { fontSize: 9.5, fontWeight: '800' },
+    nextChip: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start', marginTop: 8, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)', maxWidth: '100%' },
+    nextChipText: { color: '#F1F5F9', fontSize: 10, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
 
-    heroStatsContainer: { flexDirection: 'row', gap: 10, marginTop: 12 },
-    heroStatBox: { flex: 1, padding: 11, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
+    heroStatsContainer: { flexDirection: 'row', gap: 10, marginTop: 8 },
+    heroStatBox: { flex: 1, padding: 9, borderRadius: 20, overflow: 'hidden', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
     statTopLine: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
     statIconRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 },
     statIcon: { width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center' },
@@ -1516,8 +1880,8 @@ const styles = StyleSheet.create({
     hStatValue: { color: '#FFF', fontSize: 16, fontWeight: '900', flex: 1 }, 
     dualRateContainer: { flexDirection: 'column', marginTop: 0, gap: 1 },
     heroRateText: { color: '#FFF', fontSize: 12.5, fontWeight: '800', letterSpacing: 0.5 },
-    massProgressSection: { marginTop: 14 },
-    progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    massProgressSection: { marginTop: 10 },
+    progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
     progressTitle: { color: '#FFF', fontSize: 11.5, fontWeight: '900', letterSpacing: 1.5 },
     progressPercent: { fontSize: 16, fontWeight: '900' },
     trackWrap: { height: 14, justifyContent: 'center' },
@@ -1528,7 +1892,7 @@ const styles = StyleSheet.create({
     tick: { position: 'absolute', top: 0, bottom: 0, width: 1, backgroundColor: 'rgba(255,255,255,0.15)', zIndex: 2 },
     knobTrack: { position: 'absolute', left: 0, top: 0, bottom: 0, alignItems: 'flex-end', justifyContent: 'center' },
     knob: { width: 14, height: 14, borderRadius: 7, marginRight: -4, borderWidth: 2, borderColor: '#FFF', shadowOpacity: 0.9, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 8 },
-    remainingBadge: { backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 7, borderRadius: 14, marginTop: 10 },
+    remainingBadge: { backgroundColor: 'rgba(255,255,255,0.05)', paddingVertical: 6, borderRadius: 14, marginTop: 8 },
     maxBadge: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, borderWidth: 1 },
     remainingText: { color: '#E2E8F0', fontSize: 11.5, textAlign: 'center', fontWeight: '800', letterSpacing: 0.5 },
 
@@ -1538,10 +1902,8 @@ const styles = StyleSheet.create({
     nextCardWrap: { marginBottom: 28, borderRadius: 28, backgroundColor: '#0A0620', shadowOpacity: 0.4, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 9 },
     nextCardBorder: { borderRadius: 28, padding: 1.5 },
     nextCardInner: { borderRadius: 26.5, overflow: 'hidden', backgroundColor: 'rgba(10,6,32,0.97)', padding: 16, flexDirection: 'row', alignItems: 'center' },
-    nextMedalBox: { width: 70, height: 70, justifyContent: 'center', alignItems: 'center' },
-    nextMedalHalo: { position: 'absolute', width: 68, height: 68, borderRadius: 34, borderWidth: 2 },
-    nextMedal: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center', borderWidth: 2, elevation: 8 },
-    nextMedalText: { color: '#FFF', fontSize: 22, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
+    nextMedalBox: { width: 76, height: 84, justifyContent: 'center', alignItems: 'center' },
+    nextMedalHalo: { position: 'absolute', width: 70, height: 70, borderRadius: 35, borderWidth: 2 },
     nextTitle: { fontSize: 17, fontWeight: '900', letterSpacing: 0.5 },
     nextSub: { color: '#CBD5E1', fontSize: 12, fontWeight: '700', marginTop: 3 },
     perkRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 9 },
@@ -1550,103 +1912,99 @@ const styles = StyleSheet.create({
 
     // 🆕 MEDAL STRIP
     medalStrip: { paddingHorizontal: 8, paddingVertical: 10, gap: 12 },
-    medalThread: { position: 'absolute', left: 36, right: 36, top: 36, height: 2.5, borderRadius: 2, opacity: 0.4 },
+    medalThread: { position: 'absolute', left: 36, right: 36, top: 44, height: 2.5, borderRadius: 2, opacity: 0.4 },
     medalWrap: { width: 56, alignItems: 'center', justifyContent: 'center' },
-    medalHalo: { position: 'absolute', top: -4, width: 62, height: 62, borderRadius: 31, borderWidth: 2 },
-    medal: { width: 54, height: 54, borderRadius: 27, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.18)', elevation: 6 },
-    medalLabel: { marginTop: 6, fontSize: 11.5, fontWeight: '900', letterSpacing: 0.5 },
+    medalLabel: { marginTop: 2, fontSize: 11.5, fontWeight: '900', letterSpacing: 0.5 },
 
-    roadmapBox: { paddingHorizontal: 5 },
-    roadmapRow: { flexDirection: 'row', height: 96, alignItems: 'center' },
-    timelineLeft: { width: 30, alignItems: 'center', height: '100%', justifyContent: 'center' },
-    verticalLine: { width: 2, flex: 1, backgroundColor: 'rgba(255,255,255,0.1)', position: 'absolute', top: 0, bottom: 0 },
-    markerHalo: { position: 'absolute', width: 26, height: 26, borderRadius: 13 },
-    markerDot: { width: 16, height: 16, borderRadius: 8, backgroundColor: '#1e293b', zIndex: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.15)' },
-    cardSlot: { flex: 1, marginLeft: 15 },
-    currentFrame: { flex: 1, marginLeft: 15, borderRadius: 27, overflow: 'hidden', padding: 2, backgroundColor: '#0A0620' },
+    // 🛣️ MILESTONE ROAD (FULL WIDTH)
+    jumpPill: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 14, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)', marginBottom: 12 },
+    jumpText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1.5 },
+    roadmapBox: { alignItems: 'center', marginHorizontal: -15 },
+    startSign: { position: 'absolute', width: 80, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, paddingVertical: 4, borderRadius: 10, borderWidth: 1, backgroundColor: 'rgba(10,6,32,0.9)' },
+    startText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1.5 },
+    nodeSlot: { position: 'absolute', width: NODE + 16, height: NODE + 24, zIndex: 8 },
+    cardSlot: { position: 'absolute', zIndex: 6, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 7 },
+    currentFrame: { flex: 1, borderRadius: 26, overflow: 'hidden', padding: 2, backgroundColor: '#0A0620' },
     currentFrameSpin: { position: 'absolute', top: '50%', left: '50%', width: 420, height: 420, marginLeft: -210, marginTop: -210 },
-    roadmapCard: { flex: 1, height: 80, borderRadius: 25, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, overflow: 'hidden' },
+    roadmapCard: { flex: 1, borderRadius: 24, paddingHorizontal: 11, paddingVertical: 8, justifyContent: 'center', overflow: 'hidden' },
     cardSweep: { position: 'absolute', top: -40, bottom: -40, left: 0, width: 60 },
-    rmMedal: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)' },
-    rmMedalText: { fontSize: 15, fontWeight: '900' },
-    rmLabel: { fontSize: 15, fontWeight: '900' },
+    rmLabel: { fontSize: 18, fontWeight: '900' },
     rmGoal: { color: '#CBD5E1', fontSize: 11.5, fontWeight: '700', marginTop: 2 },
     statusTag: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8, borderWidth: 1, marginTop: 4 },
+    statusRibbon: { position: 'absolute', top: -10, right: 12, marginTop: 0, zIndex: 9 },
     statusTagDot: { width: 5, height: 5, borderRadius: 3 },
     statusTagText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.5 },
-    rateColumn: { flexDirection: 'column', alignItems: 'flex-end', justifyContent: 'center' },
-    rmRateBox: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-    rmRateText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 0.3 },
+    rateRow: { flexDirection: 'row', gap: 6, marginTop: 0 },
+    rmRateBox: { flex: 1, paddingHorizontal: 4, paddingVertical: 7, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+    rmRateText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.2 },
+    youPin: { position: 'absolute', width: 72, height: 30, zIndex: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, borderRadius: 15, borderWidth: 1.5, backgroundColor: '#0A0620' },
+    youAvatar: { width: 20, height: 20, borderRadius: 10 },
+    youText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 1.5 },
+    youTail: { position: 'absolute', bottom: -5, alignSelf: 'center', width: 8, height: 8, backgroundColor: '#0A0620', borderRightWidth: 1.5, borderBottomWidth: 1.5, transform: [{ rotate: '45deg' }] },
 
+    // 🆕 LEVEL NAME PILL + MAGIC DETAIL PANEL
+    lvlPill: { position: 'absolute', width: 128, height: 26, zIndex: 9 },
+    lvlPillInner: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, borderRadius: 13, borderWidth: 1, backgroundColor: 'rgba(10,6,32,0.92)', paddingHorizontal: 6 },
+    lvlPillText: { fontSize: 10.5, fontWeight: '900', letterSpacing: 0.5, flexShrink: 1 },
+    detailPanel: { position: 'absolute', zIndex: 20, shadowOpacity: 0.55, shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
+    panelFrame: { flex: 1, borderRadius: 26, overflow: 'hidden', padding: 2, backgroundColor: '#0A0620' },
+    panelInner: { flex: 1, borderRadius: 24, overflow: 'hidden', backgroundColor: 'rgba(10,6,32,0.97)', paddingHorizontal: 14, paddingVertical: 10, justifyContent: 'space-between' },
+    panelHeadRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    panelProgHead: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
+    panelProgLabel: { color: 'rgba(255,255,255,0.75)', fontSize: 9.5, fontWeight: '900', letterSpacing: 1 },
+    panelTrack: { height: 8, borderRadius: 6, backgroundColor: 'rgba(255,255,255,0.08)', overflow: 'hidden' },
+    panelInfoText: { color: '#CBD5E1', fontSize: 10, fontWeight: '800', letterSpacing: 0.4, marginTop: 4 },
+
+    // 👑 LEVEL-UP MODAL
     modalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center' },
     confettiPiece: { position: 'absolute', top: 0, borderRadius: 2 },
     modalContent: { width: width * 0.85, borderRadius: 40, overflow: 'hidden' },
     modalGradient: { padding: 40, alignItems: 'center' },
     fireworkContainer: { marginBottom: 10 },
-    congratsLabel: { color: '#FBBF24', fontSize: 13, fontWeight: '900', letterSpacing: 2 },
-    congratsTitle: { color: '#FFF', fontSize: 26, fontWeight: '900', marginTop: 5 },
-    modalRankCard: { width: '100%', padding: 30, borderRadius: 30, borderWidth: 2, borderStyle: 'dashed', alignItems: 'center', marginVertical: 30 },
-    crownStage: { width: 180, height: 180, justifyContent: 'center', alignItems: 'center' },
-    crownGlow: { position: 'absolute', width: 110, height: 110, borderRadius: 55, filter: 'blur(26px)' },
-    sparkleOrbit: { position: 'absolute', width: 180, height: 180 },
-    modalLevelName: { fontSize: 22, fontWeight: '900', marginTop: 15, textAlign: 'center' },
-    newBenefitBox: { backgroundColor: 'rgba(255,255,255,0.1)', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 15, marginTop: 15, alignItems: 'center', gap: 5 },
-    benefitText: { color: '#FFF', fontSize: 12, fontWeight: '800' },
-    claimBtnWrap: { width: '100%', borderRadius: 25, overflow: 'hidden', elevation: 10 },
-    claimBtn: { width: '100%', padding: 20, alignItems: 'center' },
-    claimBtnText: { color: '#FFF', fontSize: 18, fontWeight: '900', letterSpacing: 2, textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 6, textShadowOffset: { width: 0, height: 1 } },
-
-    // 👑 NEW: ULTRA PREMIUM LEVEL-UP MODAL STYLES
-    mAura: { position: 'absolute', width: 420, height: 420, borderRadius: 210, filter: 'blur(90px)' },
-    mScroll: { width: '100%' },
-    mScrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 36 },
-    mContent: { width: width * 0.9, alignItems: 'center' },
-
-    // emblem
+    mScroll: { flex: 1, width: '100%' },
+    mScrollContent: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+    mContent: { width: '100%', alignItems: 'center', paddingHorizontal: 18 },
+    mAura: { position: 'absolute', width: 320, height: 320, borderRadius: 160, filter: 'blur(70px)' },
     mStage: { width: M_STAGE, height: M_STAGE, justifyContent: 'center', alignItems: 'center' },
-    mGlow: { position: 'absolute', width: 150, height: 150, borderRadius: 75, filter: 'blur(34px)' },
-    mWave: { position: 'absolute', width: 130, height: 130, borderRadius: 65, borderWidth: 2 },
+    mGlow: { position: 'absolute', width: 170, height: 170, borderRadius: 85, filter: 'blur(40px)' },
+    mWave: { position: 'absolute', width: M_RING, height: M_RING, borderRadius: M_RING / 2, borderWidth: 2 },
     mRaysStage: { position: 'absolute', width: M_STAGE, height: M_STAGE },
     mRayArm: { position: 'absolute', width: M_STAGE, height: M_STAGE, alignItems: 'center' },
-    mRayBeam: { width: 2.5, height: 30, borderRadius: 2 },
+    mRayBeam: { width: 3, borderRadius: 2 },
     mTickRing: { position: 'absolute', width: M_TICK, height: M_TICK },
-    mDashed: { position: 'absolute', width: 214, height: 214, borderRadius: 107, borderWidth: 1.5, borderStyle: 'dashed' },
+    mDashed: { position: 'absolute', width: 226, height: 226, borderRadius: 113, borderWidth: 1.5, borderStyle: 'dashed' },
     mRingSvg: { position: 'absolute' },
-    mAvatarFrame: { width: 112, height: 112, borderRadius: 56, borderWidth: 3.5, overflow: 'hidden', backgroundColor: '#0F172A', elevation: 16, shadowOpacity: 0.9, shadowRadius: 18, shadowOffset: { width: 0, height: 0 } },
-    mCrown: { position: 'absolute', top: 30, alignSelf: 'center' },
-    mRankBadge: { position: 'absolute', bottom: 22, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, borderWidth: 1.5, elevation: 10 },
-    mRankBadgeText: { color: '#FFF', fontSize: 11.5, fontWeight: '900', letterSpacing: 1.5, textShadowColor: 'rgba(0,0,0,0.6)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
-
-    // title block
-    mTitleBlock: { width: '100%', alignItems: 'center', marginTop: 2 },
+    crownStage: { position: 'absolute', width: 180, height: 180, justifyContent: 'center', alignItems: 'center' },
+    sparkleOrbit: { position: 'absolute', width: 180, height: 180 },
+    mAvatarFrame: { width: 128, height: 128, borderRadius: 64, borderWidth: 3, overflow: 'hidden', backgroundColor: '#0F172A', shadowOpacity: 0.9, shadowRadius: 20, shadowOffset: { width: 0, height: 0 }, elevation: 16 },
+    mCrown: { position: 'absolute', top: 6, alignSelf: 'center' },
+    mRankBadge: { position: 'absolute', bottom: 14, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 5, borderRadius: 14, borderWidth: 1.5 },
+    mRankBadgeText: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
+    mTitleBlock: { alignItems: 'center', marginTop: 6, width: '100%' },
     mLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6, width: '100%' },
-    mCongratsTitle: { fontSize: 24, letterSpacing: 3, textShadowRadius: 14, textShadowOffset: { width: 0, height: 0 } },
-    mLevelName: { fontSize: 36, fontWeight: '900', letterSpacing: 1, marginTop: 2, width: '100%', textAlign: 'center' },
-    mSubText: { color: '#CBD5E1', fontSize: 11.5, fontWeight: '700', letterSpacing: 0.5, marginTop: 4, textAlign: 'center' },
-
-    // old -> new flow
-    mFlowRow: { width: '100%', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 20 },
-    mFlowSide: { alignItems: 'center', justifyContent: 'center', width: 120 },
-    mMedalSm: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, justifyContent: 'center', alignItems: 'center' },
-    mMedalSmText: { color: '#FFF', fontSize: 17, fontWeight: '900' },
-    mMedalLg: { width: 60, height: 60, borderRadius: 30, borderWidth: 2.5, justifyContent: 'center', alignItems: 'center', elevation: 10 },
-    mMedalLgText: { color: '#FFF', fontSize: 26, fontWeight: '900', textShadowColor: 'rgba(0,0,0,0.5)', textShadowRadius: 4, textShadowOffset: { width: 0, height: 1 } },
-    mMedalHalo: { position: 'absolute', top: -5, width: 70, height: 70, borderRadius: 35, borderWidth: 2 },
-    mFlowLabelOld: { color: '#94A3B8', fontSize: 10.5, fontWeight: '800', letterSpacing: 0.5, marginTop: 6 },
-    mFlowLabelNew: { fontSize: 12, fontWeight: '900', letterSpacing: 0.5, marginTop: 6 },
-
-    // rate cards
-    mRateRow: { width: '100%', flexDirection: 'row', gap: 12, marginTop: 20 },
+    congratsLabel: { color: '#FBBF24', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
+    congratsTitle: { color: '#FFF', fontSize: 30, fontWeight: '900', letterSpacing: 2 },
+    mCongratsTitle: { marginTop: 8, textAlign: 'center', textShadowRadius: 18, textShadowOffset: { width: 0, height: 0 } },
+    mLevelName: { fontSize: 34, fontWeight: '900', marginTop: 4, textAlign: 'center' },
+    mSubText: { color: '#CBD5E1', fontSize: 12.5, textAlign: 'center', marginTop: 6, fontWeight: '600' },
+    mFlowRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginTop: 14, paddingHorizontal: 4 },
+    mFlowSide: { alignItems: 'center', width: 104 },
+    mFlowRoadWrap: { flex: 1, alignItems: 'center', justifyContent: 'center', height: 40 },
+    mFlowRoad: { position: 'absolute', left: 0, right: 0, height: 8, borderRadius: 4, overflow: 'hidden', opacity: 0.55, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
+    mFlowLabelOld: { color: '#94A3B8', fontSize: 10.5, fontWeight: '900', marginTop: 2 },
+    mFlowLabelNew: { fontSize: 12, fontWeight: '900', marginTop: 2 },
+    mRateRow: { flexDirection: 'row', gap: 10, width: '100%', marginTop: 14 },
     mRateWrap: { flex: 1 },
-    mRateCard: { padding: 12, borderRadius: 22, overflow: 'hidden', borderWidth: 1, alignItems: 'flex-start' },
+    mRateCard: { padding: 12, borderRadius: 20, overflow: 'hidden', borderWidth: 1 },
     mOldRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
     mOldRate: { color: '#64748B', fontSize: 12, fontWeight: '800', textDecorationLine: 'line-through' },
-    mNewRate: { fontSize: 28, fontWeight: '900', letterSpacing: 0.5, width: '100%' },
-    mDeltaPill: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 9, borderWidth: 1, marginTop: 6, backgroundColor: 'rgba(255,255,255,0.04)' },
-
-    // next goal + button
-    mNextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, marginTop: 16, paddingHorizontal: 14, paddingVertical: 7, borderRadius: 14, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)', maxWidth: '100%' },
-    mNextText: { color: '#E2E8F0', fontSize: 11, fontWeight: '800', letterSpacing: 0.5, flexShrink: 1 },
-    mBtnOuter: { width: '100%', marginTop: 22 },
-    mClaimBtn: { flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 10, overflow: 'hidden' }
+    mNewRate: { fontSize: 26, fontWeight: '900', marginTop: 2 },
+    mDeltaPill: { flexDirection: 'row', alignItems: 'center', gap: 4, alignSelf: 'flex-start', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 10, borderWidth: 1, marginTop: 6 },
+    mNextRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 14, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 14, borderWidth: 1, backgroundColor: 'rgba(255,255,255,0.05)', maxWidth: '100%' },
+    mNextText: { color: '#E2E8F0', fontSize: 11.5, fontWeight: '800', letterSpacing: 0.5, flexShrink: 1 },
+    mBtnOuter: { width: '100%', marginTop: 20 },
+    claimBtnWrap: { borderRadius: 30, overflow: 'hidden', elevation: 10 },
+    claimBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 15, borderRadius: 30, overflow: 'hidden' },
+    mClaimBtn: { width: '100%' },
+    claimBtnText: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 2 },
 });

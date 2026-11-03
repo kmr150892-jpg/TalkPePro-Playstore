@@ -564,7 +564,7 @@ const getLevelConfig = (userData: any) => {
     return getObj(0);
 };
 
-const EXPERTISE_TAGS = [ "Singing", "Dancing", "Astrology", "Tarot Reading", "Community Advice", "Career Counseling", "Life Coaching",
+const EXPERTISE_TAGS = [ "Singing", "Dancing", "Community Advice", "Career Counseling", "Life Coaching",
     "Mindfulness & Motivation",  "Yoga", "Meditation", "Cooking", "Baking", "Photography", "Video Editing",
     "Graphic Design", "Digital Marketing", "Programming", "App Development", "Web Development",
     "Business Strategy", "Public Speaking", "Language Tutor", "English Fluency",
@@ -575,7 +575,7 @@ const EXPERTISE_TAGS = [ "Singing", "Dancing", "Astrology", "Tarot Reading", "Co
 const HOBBIES_TAGS = ["Reading 📚", "Writing ✍️", "Coding 💻", "Analytics 📊", "Public Speaking 🎙️", "Networking 🤝", "Planning 📅", "Strategy 🎯","Gaming 🎮", "Photography 📸", "Traveling ✈️", "Cooking 🍳",
     "Music 🎵", "Fitness & Gym 🏋️‍♂️", "Art & Design 🎨", "Gardening 🌱",
     "Movies & Anime 🍿", "Sports & Outdoors ⚽", "Yoga & Meditation 🧘‍♀️",
-    "DIY Crafts ✂️", "Podcasting 🎧", "Astrology ✨", "Pets & Animals 🐾",
+    "DIY Crafts ✂️", "Podcasting 🎧", "Pets & Animals 🐾",
     "Foodie & Cafe Hopping 🍕", "Vlogging 📹", "Board Games 🎲"];
 
 // 🆕🆕 NEW: tabs for the Update Identity modal

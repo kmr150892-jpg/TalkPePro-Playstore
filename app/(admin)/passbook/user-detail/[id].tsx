@@ -57,6 +57,100 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
+/* ============================================================
+   🎬 3D POP-IN WRAPPER - every card / tile flips up in 3D (staggered)
+   ============================================================ */
+const Pop = ({ index = 0, children, style }: { index?: number; children: React.ReactNode; style?: any }) => {
+  const v = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.spring(v, { toValue: 1, friction: 7, tension: 45, delay: 80 + index * 90, useNativeDriver: true }).start();
+  }, []);
+
+  return (
+    <Animated.View
+      style={[
+        style,
+        {
+          opacity: v.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1, 1], extrapolate: 'clamp' }),
+          transform: [
+            { perspective: 900 },
+            { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [50, 0] }) },
+            { rotateX: v.interpolate({ inputRange: [0, 1], outputRange: ['28deg', '0deg'] }) },
+            { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) },
+          ],
+        },
+      ]}
+    >
+      {children}
+    </Animated.View>
+  );
+};
+
+/* ============================================================
+   🎫 NEXT-GEN TICKET CARD (used by CALL LOG, REWARD and FLAGS)
+   ============================================================ */
+const Ticket = ({ accent, badgeIcon, badgeText, imageUri, title, subtitle, amount, children, floatAnim, index = 0 }: any) => (
+  <Pop index={index} style={styles.cardContainerUI}>
+    <Animated.View style={{ transform: [{ translateY: floatAnim }] }}>
+      <View style={[styles.ticketGlow, { shadowColor: accent }]}>
+        <View style={styles.stealthHistoryCard}>
+          <LinearGradient
+            colors={[accent + '30', 'transparent']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 0.9, y: 0.7 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <View style={[styles.quadBorderUI, { borderLeftColor: accent, borderRightColor: accent + '55', borderTopColor: accent + '33', borderBottomColor: accent + '33' }]} />
+          <View style={[styles.sessionBadge, { backgroundColor: accent }]}>
+            <MaterialCommunityIcons name={badgeIcon} size={10} color="#FFF" />
+            <Text style={styles.sessionTypeText}>{badgeText}</Text>
+          </View>
+          <View style={styles.cardHeaderUI}>
+            <View style={[styles.expertThumbRing, { borderColor: accent, shadowColor: accent, backgroundColor: accent + '1A' }]}>
+              <Image source={{ uri: imageUri }} style={styles.expertThumb} />
+            </View>
+            <View style={styles.expertInfo}>
+              <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{title}</Text>
+              <Text style={styles.callDateText} numberOfLines={1}>{subtitle}</Text>
+            </View>
+            {amount !== undefined && (
+              <View style={[styles.costContainer, { backgroundColor: accent + '1A', borderColor: accent + '44' }]}>
+                <Text style={[styles.costText, { color: accent }]} numberOfLines={1} adjustsFontSizeToFit>{amount}</Text>
+                <Ionicons name="diamond" size={12} color={accent} />
+              </View>
+            )}
+          </View>
+          <View style={[styles.ticketDash, { borderColor: accent + '40' }]} />
+          {children}
+        </View>
+      </View>
+    </Animated.View>
+  </Pop>
+);
+
+/* ============================================================
+   🏷️ SUMMARY PILL (top of each tab list)
+   ============================================================ */
+const SummaryPill = ({ color, icon, label }: any) => (
+  <View style={styles.talktimeHighlight}>
+    <View style={[styles.summaryPill, { borderColor: color + '55', backgroundColor: color + '14' }]}>
+      <MaterialCommunityIcons name={icon} size={14} color={color} />
+      <Text style={[styles.totalTalkLabel, { color, marginBottom: 0 }]}>{label}</Text>
+    </View>
+  </View>
+);
+
+// 🌌 floating particles config (background depth)
+const particles = [
+  { left: '10%', top: '22%', size: 3, range: -140 },
+  { left: '28%', top: '60%', size: 2, range: -100 },
+  { left: '47%', top: '35%', size: 4, range: -180 },
+  { left: '66%', top: '72%', size: 3, range: -120 },
+  { left: '82%', top: '28%', size: 2, range: -160 },
+  { left: '92%', top: '55%', size: 3, range: -110 },
+];
+
 export default function UserPassbookDetail() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
@@ -81,6 +175,9 @@ export default function UserPassbookDetail() {
   const [totalRedeemed, setTotalRedeemed] = useState<number>(0); 
   const [totalMinutes, setTotalMinutes] = useState<number>(0);
 
+  // 🆕 PREMIUM UI: sliding tab indicator state
+  const [tabsW, setTabsW] = useState(0);
+
   // 🌀 COMPLEX ANIMATION ENGINE MATRIX
   const scrollY = useRef(new Animated.Value(0)).current;
   const mainLoop = useRef(new Animated.Value(0)).current;
@@ -90,6 +187,10 @@ export default function UserPassbookDetail() {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const trailX = useRef(new Animated.Value(-width)).current;
   const shimmerAnim = useRef(new Animated.Value(0)).current;
+  // 🆕 PREMIUM UI animation values
+  const heroTilt = useRef(new Animated.Value(0)).current;   // 3D idle tilt of hero card
+  const tabAnim = useRef(new Animated.Value(0)).current;    // sliding tab indicator position
+  const tabFade = useRef(new Animated.Value(1)).current;    // indicator visibility (hidden on FLAGS)
 
   useEffect(() => {
     Animated.loop(Animated.timing(mainLoop, { toValue: 1, duration: 4500, easing: Easing.linear, useNativeDriver: true })).start();
@@ -118,7 +219,22 @@ export default function UserPassbookDetail() {
         Animated.timing(scaleAnim, { toValue: 1.03, duration: 1500, useNativeDriver: true }),
         Animated.timing(scaleAnim, { toValue: 1, duration: 1500, useNativeDriver: true })
     ])).start();
+
+    // 🆕 hero card idle 3D tilt (left <-> right)
+    Animated.loop(Animated.sequence([
+        Animated.timing(heroTilt, { toValue: 1, duration: 3600, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+        Animated.timing(heroTilt, { toValue: 0, duration: 3600, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+    ])).start();
   }, []);
+
+  // 🆕 sliding tab indicator follows the active tab (hides when FLAGS is open)
+  useEffect(() => {
+    const idx = activeTab === 'STATS' ? 0 : activeTab === 'CALLS' ? 1 : activeTab === 'REWARDS' ? 2 : -1;
+    if (idx >= 0) {
+        Animated.spring(tabAnim, { toValue: idx, friction: 8, tension: 70, useNativeDriver: true }).start();
+    }
+    Animated.timing(tabFade, { toValue: idx >= 0 ? 1 : 0, duration: 200, useNativeDriver: true }).start();
+  }, [activeTab]);
 
   // 🔥 FETCH LEDGER & MERGED HISTORY DATA DYNAMICALLY 🔥
   useEffect(() => {
@@ -310,6 +426,12 @@ export default function UserPassbookDetail() {
   const bgOpacity = scrollY.interpolate({ inputRange: [0, 200], outputRange: [0.12, 0.05], extrapolate: 'clamp' });
   const orbTranslateY = shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: [0, -30] });
 
+  // 🆕 scroll-linked hero (JS-driven wrapper only) + tab indicator geometry
+  const heroScrollY = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, 45], extrapolate: 'clamp' });
+  const heroScrollScale = scrollY.interpolate({ inputRange: [0, 300], outputRange: [1, 0.95], extrapolate: 'clamp' });
+  const tabW = tabsW > 0 ? (tabsW - 10 - 8) / 3 : 0;
+  const tabIndicatorX = tabAnim.interpolate({ inputRange: [0, 1, 2], outputRange: [0, tabW + 4, 2 * (tabW + 4)] });
+
   const getDynamicStyle = () => {
     switch(rank.anim) {
       case 'wave': return { transform: [{ translateY: mainLoop.interpolate({ inputRange:[0, 0.5, 1], outputRange:[0, 6, 0] }) }] };
@@ -332,7 +454,7 @@ export default function UserPassbookDetail() {
   const callsData = history.filter(item => item.isCall);
   const rewardsData = history.filter(item => item.isCallGift || item.isStandaloneGift);
 
-  const renderHistoryItem = ({ item }: { item: any }) => {
+  const renderHistoryItem = ({ item, index = 0 }: { item: any; index?: number }) => {
       if (item.isCallGift || item.isStandaloneGift) {
           const giftName = item.giftName || item.name || 'Virtual Reward';
           const amount = item.amount || item.price || item.diamonds || 0;
@@ -350,36 +472,26 @@ export default function UserPassbookDetail() {
           }
 
           return (
-              <Animated.View style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
-                  <View style={styles.stealthHistoryCard}>
-                      <View style={[styles.quadBorderUI, { borderLeftColor: '#A855F7', borderRightColor: '#A855F7', borderTopColor: 'rgba(168, 85, 247, 0.4)', borderBottomColor: 'rgba(168, 85, 247, 0.4)' }]} />
-                      <View style={[styles.sessionBadge, { backgroundColor: '#A855F7' }]}>
-                           <MaterialCommunityIcons name="gift" size={10} color="#FFF" />
-                           <Text style={styles.sessionTypeText}>REWARD SENT</Text>
-                      </View>
-                      <View style={styles.cardHeaderUI}>
-                          <View style={[styles.expertThumbRing, { borderColor: '#A855F7', shadowColor: '#A855F7', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(168, 85, 247, 0.1)' }]}>
-                              <Image source={{ uri: eImage }} style={styles.expertThumb} />
-                          </View>
-                          <View style={styles.expertInfo}>
-                              <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{eName.toUpperCase()}</Text>
-                              <Text style={styles.callDateText} numberOfLines={1}>{displayTime}</Text>
-                          </View>
-                          <View style={styles.costContainer}>
-                               <Text style={[styles.costText, { color: '#A855F7' }]} numberOfLines={1} adjustsFontSizeToFit>-{Number(amount).toLocaleString()}</Text>
-                               <Ionicons name="diamond" size={12} color="#A855F7" />
-                          </View>
-                      </View>
-                      <View style={styles.statsRow}>
-                          <View style={styles.statItem}>
-                              <Ionicons name="sparkles-outline" size={14} color="#A855F7" />
-                              <Text style={[styles.statValueText, { color: '#E2E8F0' }]} numberOfLines={1} adjustsFontSizeToFit>
-                                  Item Sent: {item.isCallGift ? 'In-Call Premium Rewards' : giftName}
-                              </Text>
-                          </View>
+              <Ticket
+                  index={index}
+                  floatAnim={floatAnim}
+                  accent="#A855F7"
+                  badgeIcon="gift"
+                  badgeText="REWARD SENT"
+                  imageUri={eImage}
+                  title={eName.toUpperCase()}
+                  subtitle={displayTime}
+                  amount={`-${Number(amount).toLocaleString()}`}
+              >
+                  <View style={styles.statsRow}>
+                      <View style={styles.statItem}>
+                          <Ionicons name="sparkles-outline" size={14} color="#A855F7" />
+                          <Text style={[styles.statValueText, { color: '#E2E8F0' }]} numberOfLines={1} adjustsFontSizeToFit>
+                              Item Sent: {item.isCallGift ? 'In-Call Premium Rewards' : giftName}
+                          </Text>
                       </View>
                   </View>
-              </Animated.View>
+              </Ticket>
           );
       }
 
@@ -392,82 +504,104 @@ export default function UserPassbookDetail() {
       const callEImage = item.expertImage || `https://ui-avatars.com/api/?name=${encodeURIComponent(callEName)}&background=1E293B&color=fff&bold=true`;
 
       return (
-          <Animated.View style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
-              <View style={styles.stealthHistoryCard}>
-                  <View style={[styles.quadBorderUI, { 
-                      borderLeftColor: rank.color, borderRightColor: rank.color, 
-                      borderTopColor: rank.secondaryColor, borderBottomColor: rank.secondaryColor 
-                  }]} />
-                  <View style={[styles.sessionBadge, { backgroundColor: rank.color }]}>
-                       <Ionicons name="videocam" size={10} color="#FFF" />
-                       <Text style={styles.sessionTypeText}>VERIFIED_LINK</Text>
+          <Ticket
+              index={index}
+              floatAnim={floatAnim}
+              accent={rank.color}
+              badgeIcon="video"
+              badgeText="VERIFIED_LINK"
+              imageUri={callEImage}
+              title={callEName.toUpperCase()}
+              subtitle={item.endedAt?.seconds 
+                  ? new Date(item.endedAt.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
+                  : 'SYNCHRONIZING...'}
+              amount={`-${totalSpentOnCall.toLocaleString()}`}
+          >
+              <View style={styles.statsRow}>
+                  <View style={styles.statItem}>
+                      <Ionicons name="time-outline" size={14} color="#64748B" />
+                      <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>{durationText}</Text>
                   </View>
-                  <View style={styles.cardHeaderUI}>
-                      <View style={[styles.expertThumbRing, { borderColor: rank.color, shadowColor: rank.color }]}>
-                          <Image source={{ uri: callEImage }} style={styles.expertThumb} />
-                      </View>
-                      <View style={styles.expertInfo}>
-                          <Text style={styles.expertName} numberOfLines={1} adjustsFontSizeToFit>{callEName.toUpperCase()}</Text>
-                          <Text style={styles.callDateText} numberOfLines={1}>
-                              {item.endedAt?.seconds 
-                              ? new Date(item.endedAt.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
-                              : 'SYNCHRONIZING...'}
-                          </Text>
-                      </View>
-                      <View style={styles.costContainer}>
-                           <Text style={[styles.costText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit>-{totalSpentOnCall.toLocaleString()}</Text>
-                           <Ionicons name="diamond" size={12} color={rank.color} />
-                      </View>
-                  </View>
-                  <View style={styles.statsRow}>
-                      <View style={styles.statItem}>
-                          <Ionicons name="time-outline" size={14} color="#64748B" />
-                          <Text style={styles.statValueText} numberOfLines={1} adjustsFontSizeToFit>{durationText}</Text>
-                      </View>
-                      <View style={styles.vDivider} />
-                      <View style={styles.talkAgainBtn}>
-                          <Text style={[styles.talkAgainText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit>SESSION LOG</Text>
-                          <Ionicons name="checkmark-circle" size={12} color={rank.color} />
-                      </View>
+                  <View style={styles.vDivider} />
+                  <View style={styles.talkAgainBtn}>
+                      <Text style={[styles.talkAgainText, { color: rank.color }]} numberOfLines={1} adjustsFontSizeToFit>SESSION LOG</Text>
+                      <Ionicons name="checkmark-circle" size={12} color={rank.color} />
                   </View>
               </View>
-          </Animated.View>
+          </Ticket>
       );
   };
 
   // 🆕 UPDATE: renderGameHistoryItem (game activity card renderer) removed.
 
   const renderDynamicProfileCard = () => {
+    const orbit = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
+    const tiltY = heroTilt.interpolate({ inputRange: [0, 1], outputRange: ['-5deg', '5deg'] });
+    const tiltX = heroTilt.interpolate({ inputRange: [0, 1], outputRange: ['3deg', '-3deg'] });
+    const ringSize = rank.avatarSize + 34;
+    const pulseScale = secondaryLoop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
+    const pulseOpacity = secondaryLoop.interpolate({ inputRange: [0, 1], outputRange: [0.45, 0] });
+
     return (
-      <Animated.View style={[styles.cardBase, borderType1, { borderRadius: rank.radius, ...getDynamicStyle() }]}>
-        <Animated.View style={[styles.glowTrail, { backgroundColor: rank.color, transform: [{ translateX: trailX }] }]} />
-        <View style={styles.cardGlassOverlay} />
-        
-        <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 10 }}>
-          <View style={styles.avatarNode}>
-            <View style={[styles.ring, { borderRadius: 100, borderWidth: 2, borderColor: rank.color, shadowColor: rank.color, shadowOpacity: 0.8, shadowRadius: 12, elevation: 12 }]}>
-              <Image source={{ uri: uPic }} style={{ width: rank.avatarSize, height: rank.avatarSize, borderRadius: 100 }} />
+      <Animated.View style={{ transform: [{ perspective: 1100 }, { rotateY: tiltY }, { rotateX: tiltX }] }}>
+        <Animated.View style={[styles.cardBase, borderType1, { borderRadius: rank.radius, backgroundColor: 'rgba(5, 6, 12, 0.94)' }]}>
+          {/* holographic tinted background */}
+          <LinearGradient
+            colors={[rank.color + '2E', 'transparent', rank.color + '12']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={StyleSheet.absoluteFill}
+          />
+          <Animated.View style={[styles.glowTrail, { backgroundColor: rank.color, transform: [{ translateX: trailX }] }]} />
+          <View style={styles.cardGlassOverlay} />
+
+          {/* top row: brand + gold chip */}
+          <View style={styles.heroTopRow}>
+            <View style={styles.heroBrand}>
+              <MaterialCommunityIcons name="shield-account" size={14} color={rank.color} />
+              <Text style={[styles.heroBrandText, { color: rank.color }]}>TALKPE • PASSBOOK</Text>
             </View>
+            <LinearGradient colors={['#F5D76E', '#B8860B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.chip}>
+              <View style={styles.chipLine} />
+              <View style={styles.chipLine} />
+            </LinearGradient>
           </View>
           
-          <View style={{ marginLeft: 15, flex: 1 }}>
-              <View style={[styles.badge, { borderColor: rank.color, backgroundColor: rank.color + '15' }]}>
-                <MaterialCommunityIcons name={rank.icon as any} size={11} color={rank.color} />
-                <Text style={[styles.badgeText, { color: rank.color }]}>{rank.label}</Text>
-              </View>
-              <Text style={styles.nameRow} numberOfLines={1}>{userData?.name || 'SYNCING...'}</Text>
-              <Text style={[styles.statusText, { color: rank.secondaryColor }]}>{rank.status}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', zIndex: 10 }}>
+            <View style={[styles.avatarNode, { width: ringSize, height: ringSize, alignItems: 'center', justifyContent: 'center' }]}>
+              {/* expanding radar pulse */}
+              <Animated.View style={[styles.pulseRing, { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: rank.color, opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+              {/* orbiting dashed ring with satellite dot */}
+              <Animated.View style={[styles.orbitRing, { width: ringSize, height: ringSize, borderRadius: ringSize / 2, borderColor: rank.color + '55', transform: [{ rotate: orbit }] }]}>
+                <View style={[styles.orbitDot, { backgroundColor: rank.color, shadowColor: rank.color }]} />
+              </Animated.View>
+              {/* tier-specific avatar animation (wave / sparkle / diamond / nebula / explosion / titan) */}
+              <Animated.View style={getDynamicStyle()}>
+                <View style={[styles.ring, { borderRadius: 100, borderWidth: 2, borderColor: rank.color, shadowColor: rank.color, shadowOpacity: 0.8, shadowRadius: 12, elevation: 12 }]}>
+                  <Image source={{ uri: uPic }} style={{ width: rank.avatarSize, height: rank.avatarSize, borderRadius: 100 }} />
+                </View>
+              </Animated.View>
+            </View>
+            
+            <View style={{ marginLeft: 12, flex: 1 }}>
+                <View style={[styles.badge, { borderColor: rank.color, backgroundColor: rank.color + '15' }]}>
+                  <MaterialCommunityIcons name={rank.icon as any} size={11} color={rank.color} />
+                  <Text style={[styles.badgeText, { color: rank.color }]}>{rank.label}</Text>
+                </View>
+                <Text style={styles.nameRow} numberOfLines={1}>{userData?.name || 'SYNCING...'}</Text>
+                <Text style={[styles.statusText, { color: rank.secondaryColor }]}>{rank.status}</Text>
+            </View>
           </View>
-        </View>
 
-        <View style={[styles.rowStats, { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
-          <View style={styles.stat}><Text style={styles.statV}>{userData?.friendsCount || 0}</Text><Text style={styles.statL}>NETWORK</Text></View>
-          <View style={[styles.stat, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }]}>
-            <Text style={styles.statV} adjustsFontSizeToFit numberOfLines={1}>{(userData?.balance || 0).toLocaleString()}</Text>
-            <Text style={styles.statL}>UNITS</Text>
+          <View style={[styles.rowStats, { borderTopColor: 'rgba(255,255,255,0.06)' }]}>
+            <View style={styles.stat}><Text style={styles.statV}>{userData?.friendsCount || 0}</Text><Text style={styles.statL}>NETWORK</Text></View>
+            <View style={[styles.stat, { borderLeftWidth: 1, borderRightWidth: 1, borderColor: 'rgba(255,255,255,0.06)' }]}>
+              <Text style={styles.statV} adjustsFontSizeToFit numberOfLines={1}>{(userData?.balance || 0).toLocaleString()}</Text>
+              <Text style={styles.statL}>UNITS</Text>
+            </View>
+            <View style={styles.stat}><Text style={[styles.statV, {color: rank.color}]}>L{rank.lvl}</Text><Text style={styles.statL}>TIER</Text></View>
           </View>
-          <View style={styles.stat}><Text style={[styles.statV, {color: rank.color}]}>L{rank.lvl}</Text><Text style={styles.statL}>TIER</Text></View>
-        </View>
+        </Animated.View>
       </Animated.View>
     );
   };
@@ -483,6 +617,27 @@ export default function UserPassbookDetail() {
       <Animated.View style={[styles.aura, { top: 40, left: -50, backgroundColor: rank.color, opacity: bgOpacity, transform: [{ translateY: parallaxBg }] }]} />
       <Animated.View style={[styles.aura, { bottom: 40, right: -50, backgroundColor: rank.secondaryColor, opacity: 0.06, transform: [{ translateY: parallaxBg }] }]} />
 
+      {/* ✨ floating particles (depth) */}
+      {particles.map((p, i) => (
+        <Animated.View
+          key={i}
+          pointerEvents="none"
+          style={[
+            styles.particle,
+            {
+              left: p.left as any,
+              top: p.top as any,
+              width: p.size,
+              height: p.size,
+              borderRadius: p.size,
+              backgroundColor: rank.color,
+              opacity: mainLoop.interpolate({ inputRange: [0, 0.2, 0.8, 1], outputRange: [0, 0.8, 0.8, 0] }),
+              transform: [{ translateY: mainLoop.interpolate({ inputRange: [0, 1], outputRange: [0, p.range] }) }],
+            },
+          ]}
+        />
+      ))}
+
       <ScrollView 
         showsVerticalScrollIndicator={false} 
         contentContainerStyle={styles.scrollPadding}
@@ -495,23 +650,48 @@ export default function UserPassbookDetail() {
               </TouchableOpacity>
               <View>
                   <Text style={styles.headerTitle}>Operational Ledger</Text>
-                  <Text style={styles.headerSub}>System Audit Access</Text>
+                  <View style={styles.headerSubRow}>
+                      <Animated.View style={[styles.liveDot, { opacity: secondaryLoop.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 0.25, 1] }) }]} />
+                      <Text style={styles.headerSub}>System Audit Access</Text>
+                  </View>
               </View>
               <MaterialCommunityIcons name="shield-account" size={24} color="#3B82F6" style={{marginLeft: 'auto'}} />
           </View>
           
-          <View style={styles.cardContainer}>{renderDynamicProfileCard()}</View>
+          <Animated.View style={[styles.cardContainer, { transform: [{ translateY: heroScrollY }, { scale: heroScrollScale }] }]}>
+            {renderDynamicProfileCard()}
+          </Animated.View>
         </SafeAreaView>
 
-        <View style={styles.tabsRow}>
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'STATS' && styles.tabBtnActive]} onPress={() => setActiveTab('STATS')}>
+        {/* 🆕 FLOATING GLASS TAB BAR WITH SLIDING 3D INDICATOR */}
+        <View style={styles.tabsRow} onLayout={(e) => setTabsW(e.nativeEvent.layout.width)}>
+            {tabW > 0 && (
+                <Animated.View
+                    pointerEvents="none"
+                    style={[
+                        styles.tabIndicator,
+                        {
+                            width: tabW,
+                            backgroundColor: rank.color + '33',
+                            borderColor: rank.color,
+                            shadowColor: rank.color,
+                            opacity: tabFade,
+                            transform: [{ translateX: tabIndicatorX }],
+                        },
+                    ]}
+                />
+            )}
+            <TouchableOpacity style={styles.tabBtn} onPress={() => setActiveTab('STATS')} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="chart-areaspline" size={15} color={activeTab === 'STATS' ? '#FFF' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'STATS' && styles.tabTextActive]} numberOfLines={1}>ANALYTICS</Text>
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'CALLS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('CALLS')}>
+            <TouchableOpacity style={styles.tabBtn} onPress={() => setActiveTab('CALLS')} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="video-outline" size={15} color={activeTab === 'CALLS' ? '#FFF' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'CALLS' && { color: '#FFF' }]} numberOfLines={1}>CALL LOG</Text>
             </TouchableOpacity>
             {/* 🆕 UPDATE: "ACTIVITY" tab removed */}
-            <TouchableOpacity style={[styles.tabBtn, activeTab === 'REWARDS' && { backgroundColor: rank.color + '40', borderColor: rank.color }]} onPress={() => setActiveTab('REWARDS')}>
+            <TouchableOpacity style={styles.tabBtn} onPress={() => setActiveTab('REWARDS')} activeOpacity={0.8}>
+                <MaterialCommunityIcons name="gift-outline" size={15} color={activeTab === 'REWARDS' ? '#FFF' : '#64748B'} />
                 <Text style={[styles.tabText, activeTab === 'REWARDS' && { color: '#FFF' }]} numberOfLines={1}>REWARD</Text>
             </TouchableOpacity>
         </View>
@@ -520,22 +700,30 @@ export default function UserPassbookDetail() {
             {/* STATS TAB */}
             {activeTab === 'STATS' && (
                 <View>
-                    <View style={[styles.balanceCard, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.3)' }]}>
-                        <Text style={styles.balLabel}>CURRENT SYSTEM BALANCE</Text>
-                        <Text style={[styles.balValue, { color: '#60A5FA' }]}>{userData?.balance || 0} 💎</Text>
-                    </View>
+                    {/* 💎 VAULT BALANCE CARD */}
+                    <Pop index={0}>
+                        <View style={[styles.balanceCard, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: 'rgba(59, 130, 246, 0.3)' }]}>
+                            <LinearGradient colors={['rgba(59,130,246,0.28)', 'transparent', 'rgba(96,165,250,0.12)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                            <Animated.View style={[styles.vaultPulse, { opacity: secondaryLoop.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }), transform: [{ scale: secondaryLoop.interpolate({ inputRange: [0, 1], outputRange: [0.6, 1.8] }) }] }]} />
+                            <MaterialCommunityIcons name="diamond-stone" size={92} color="rgba(96,165,250,0.08)" style={styles.vaultWatermark} />
+                            <Animated.View style={{ transform: [{ translateY: floatAnim }], alignItems: 'center' }}>
+                                <Text style={styles.balLabel}>CURRENT SYSTEM BALANCE</Text>
+                                <Text style={[styles.balValue, { color: '#60A5FA' }]}>{userData?.balance || 0} 💎</Text>
+                            </Animated.View>
+                        </View>
+                    </Pop>
 
                     {loading ? (
                         <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
                     ) : (
                         <View style={styles.statsContainer}>
-                            <StatBox icon="cash-plus" label="ASSETS ADDED" value={`${totalRechargeDiamonds} 💎`} color="#10B981" bgColor="rgba(16, 185, 129, 0.1)" />
-                            <StatBox icon="diamond-stone" label="ASSETS UTILIZED" value={`${totalSpentCalculated} 💎`} color="#F43F5E" bgColor="rgba(244, 63, 94, 0.1)" />
+                            <StatBox index={1} icon="cash-plus" label="ASSETS ADDED" value={`${totalRechargeDiamonds} 💎`} color="#10B981" bgColor="rgba(16, 185, 129, 0.1)" />
+                            <StatBox index={2} icon="diamond-stone" label="ASSETS UTILIZED" value={`${totalSpentCalculated} 💎`} color="#F43F5E" bgColor="rgba(244, 63, 94, 0.1)" />
                             {/* 🆕 UPDATE: "ACTIVITY REWARDS" stat box removed */}
-                            <StatBox icon="gift" label="REWARDS SENT" value={`${totalGiftsSpent} 💎`} color="#A855F7" bgColor="rgba(168, 85, 247, 0.1)" />
-                            <StatBox icon="video-vintage" label="CALL SPENT" value={`${totalVideoCallSpent} 💎`} color="#3B82F6" bgColor="rgba(59, 130, 246, 0.1)" />
+                            <StatBox index={3} icon="gift" label="REWARDS SENT" value={`${totalGiftsSpent} 💎`} color="#A855F7" bgColor="rgba(168, 85, 247, 0.1)" />
+                            <StatBox index={4} icon="video-vintage" label="CALL SPENT" value={`${totalVideoCallSpent} 💎`} color="#3B82F6" bgColor="rgba(59, 130, 246, 0.1)" />
                             {/* 🆕 UPDATE: "TOTAL ARENA ENTRY" stat box removed. CALL MINS now full width as the last box. */}
-                            <StatBox icon="clock-outline" label="CALL MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" width="100%" />
+                            <StatBox index={5} icon="clock-outline" label="CALL MINS" value={`${totalMinutes}`} color="#F59E0B" bgColor="rgba(245, 158, 11, 0.1)" width="100%" />
                         </View>
                     )}
                 </View>
@@ -544,13 +732,11 @@ export default function UserPassbookDetail() {
             {/* CALLS TAB */}
             {activeTab === 'CALLS' && (
                 <View>
-                    <View style={styles.talktimeHighlight}>
-                         <Text style={[styles.totalTalkLabel, { color: rank.color, marginBottom: 15 }]}>TOTAL ARCHIVED ACTIVITY: {totalMinutes} MINS</Text>
-                    </View>
+                    <SummaryPill color={rank.color} icon="history" label={`TOTAL ARCHIVED ACTIVITY: ${totalMinutes} MINS`} />
                     {loading ? (
                         <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
                     ) : callsData.length > 0 ? (
-                        callsData.map((item, index) => <View key={item.id || index}>{renderHistoryItem({item})}</View>)
+                        callsData.map((item, index) => <View key={item.id || index}>{renderHistoryItem({item, index})}</View>)
                     ) : (
                         <View style={styles.emptyBox}>
                             <Ionicons name="videocam-off" size={48} color="rgba(255,255,255,0.2)" />
@@ -565,13 +751,11 @@ export default function UserPassbookDetail() {
             {/* REWARDS TAB */}
             {activeTab === 'REWARDS' && (
                 <View>
-                    <View style={styles.talktimeHighlight}>
-                         <Text style={[styles.totalTalkLabel, { color: rank.color, marginBottom: 15 }]}>TOTAL REWARDS SENT: {rewardsData.length}</Text>
-                    </View>
+                    <SummaryPill color={rank.color} icon="gift-outline" label={`TOTAL REWARDS SENT: ${rewardsData.length}`} />
                     {loading ? (
                         <ActivityIndicator size="large" color={rank.color} style={{ marginTop: 40 }} />
                     ) : rewardsData.length > 0 ? (
-                        rewardsData.map((item, index) => <View key={item.id || index}>{renderHistoryItem({item})}</View>)
+                        rewardsData.map((item, index) => <View key={item.id || index}>{renderHistoryItem({item, index})}</View>)
                     ) : (
                         <View style={styles.emptyBox}>
                             <Ionicons name="gift-outline" size={48} color="rgba(255,255,255,0.2)" />
@@ -584,9 +768,7 @@ export default function UserPassbookDetail() {
             {/* 🔥 SATTI UPDATE: NEW FLAGS TAB CONTENT 🔥 */}
             {activeTab === 'FLAGS' && (
                 <View>
-                    <View style={styles.talktimeHighlight}>
-                         <Text style={[styles.totalTalkLabel, { color: '#EF4444', marginBottom: 15 }]}>HOST REPORTS AUDIT LOG: {flags.length} SECURE FLAGS</Text>
-                    </View>
+                    <SummaryPill color="#EF4444" icon="alert-octagon-outline" label={`HOST REPORTS AUDIT LOG: ${flags.length} SECURE FLAGS`} />
                     {loading ? (
                         <ActivityIndicator size="large" color="#EF4444" style={{ marginTop: 40 }} />
                     ) : flags.length > 0 ? (
@@ -594,32 +776,24 @@ export default function UserPassbookDetail() {
                             // 🔥 SATTI UPDATE: Rendering the Blocked Host Profile Picture (Actual Photo)
                             const hostPic = item.fetchedExpertPic || item.expertImage || item.profilePic || `https://ui-avatars.com/api/?name=${encodeURIComponent(item.expertName || 'Host')}&background=EF4444&color=fff&bold=true`;
                             return (
-                                <Animated.View key={item.alertId || index} style={[styles.cardContainerUI, { transform: [{ translateY: floatAnim }] }]}>
-                                    <View style={styles.stealthHistoryCard}>
-                                        <View style={[styles.quadBorderUI, { borderLeftColor: '#EF4444', borderRightColor: '#EF4444', borderTopColor: 'rgba(239, 68, 68, 0.2)', borderBottomColor: 'rgba(239, 68, 68, 0.2)' }]} />
-                                        <View style={[styles.sessionBadge, { backgroundColor: '#EF4444' }]}>
-                                             <MaterialCommunityIcons name="alert-circle" size={10} color="#FFF" />
-                                             <Text style={styles.sessionTypeText}>REPORTED_LOG</Text>
-                                        </View>
-                                        <View style={styles.cardHeaderUI}>
-                                            <View style={[styles.expertThumbRing, { borderColor: '#EF4444', shadowColor: '#EF4444', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
-                                                <Image source={{ uri: hostPic }} style={styles.expertThumb} />
-                                            </View>
-                                            <View style={styles.expertInfo}>
-                                                <Text style={styles.expertName} numberOfLines={1}>HOST: {(item.expertName || 'Unknown Host').toUpperCase()}</Text>
-                                                <Text style={styles.callDateText} numberOfLines={1}>
-                                                    {item.timestamp?.seconds 
-                                                    ? new Date(item.timestamp.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
-                                                    : 'RECENT FLAG'}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <View style={[styles.statsRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
-                                            <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '900' }}>REASON FOR BLOCK:</Text>
-                                            <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700' }}>{item.reason || 'No specific reason documented by the host.'}</Text>
-                                        </View>
+                                <Ticket
+                                    key={item.alertId || index}
+                                    index={index}
+                                    floatAnim={floatAnim}
+                                    accent="#EF4444"
+                                    badgeIcon="alert-circle"
+                                    badgeText="REPORTED_LOG"
+                                    imageUri={hostPic}
+                                    title={`HOST: ${(item.expertName || 'Unknown Host').toUpperCase()}`}
+                                    subtitle={item.timestamp?.seconds 
+                                        ? new Date(item.timestamp.seconds * 1000).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) 
+                                        : 'RECENT FLAG'}
+                                >
+                                    <View style={[styles.statsRow, { flexDirection: 'column', alignItems: 'flex-start', gap: 4 }]}>
+                                        <Text style={{ color: 'rgba(255,255,255,0.4)', fontSize: 9, fontWeight: '900' }}>REASON FOR BLOCK:</Text>
+                                        <Text style={{ color: '#E2E8F0', fontSize: 12, fontWeight: '700' }}>{item.reason || 'No specific reason documented by the host.'}</Text>
                                     </View>
-                                </Animated.View>
+                                </Ticket>
                             )
                         })
                     ) : (
@@ -634,16 +808,21 @@ export default function UserPassbookDetail() {
 
         {/* 🔥 SATTI UPDATE: FLAG BUTTON LAST LA BOTTOM LA VECHACHU! 🔥 */}
         <View style={styles.footerContainer}>
-            <TouchableOpacity 
-                style={[styles.bottomFlagBtn, flags.length > 0 ? {backgroundColor: '#EF4444'} : {backgroundColor: 'rgba(255,255,255,0.05)'}]}
-                onPress={() => setActiveTab('FLAGS')}
-                activeOpacity={0.8}
-            >
-                <MaterialCommunityIcons name={flags.length > 0 ? "alert-octagon" : "shield-check"} size={20} color={flags.length > 0 ? "#FFF" : "#10B981"} />
-                <Text style={[styles.bottomFlagText, {color: flags.length > 0 ? "#FFF" : "#10B981"}]}>
-                    {flags.length > 0 ? `VIEW SECURITY FLAGS (${flags.length})` : 'CLEAN RECORD (0 FLAGS)'}
-                </Text>
-            </TouchableOpacity>
+            <Animated.View style={{ width: '100%', transform: [{ scale: flags.length > 0 ? scaleAnim : 1 }] }}>
+                <TouchableOpacity 
+                    style={[styles.bottomFlagBtn, flags.length > 0 ? {backgroundColor: '#EF4444'} : {backgroundColor: 'rgba(255,255,255,0.05)'}]}
+                    onPress={() => setActiveTab('FLAGS')}
+                    activeOpacity={0.8}
+                >
+                    {flags.length > 0 && (
+                        <LinearGradient colors={['#FF6B6B', '#EF4444', '#B91C1C']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                    )}
+                    <MaterialCommunityIcons name={flags.length > 0 ? "alert-octagon" : "shield-check"} size={20} color={flags.length > 0 ? "#FFF" : "#10B981"} />
+                    <Text style={[styles.bottomFlagText, {color: flags.length > 0 ? "#FFF" : "#10B981"}]}>
+                        {flags.length > 0 ? `VIEW SECURITY FLAGS (${flags.length})` : 'CLEAN RECORD (0 FLAGS)'}
+                    </Text>
+                </TouchableOpacity>
+            </Animated.View>
 
             <View style={styles.footer}>
               <Text style={styles.verText}>TALKPE OS • SECURE_LEDGER</Text>
@@ -658,14 +837,22 @@ export default function UserPassbookDetail() {
   );
 }
 
-const StatBox = ({ icon, label, value, color, bgColor, width = '48%' }: any) => (
-    <View style={[styles.statBox, { borderColor: color, backgroundColor: bgColor, width: width as any }]}>
-        <View style={[styles.iconCircle, { backgroundColor: color + '30' }]}>
-            <MaterialCommunityIcons name={icon} size={28} color={color} />
+/* ============================================================
+   🧊 3D GLASS STAT TILE
+   ============================================================ */
+const StatBox = ({ icon, label, value, color, bgColor, width = '48%', index = 0 }: any) => (
+    <Pop index={index} style={{ width: width as any }}>
+        <View style={[styles.statBox, { borderColor: color + '55', backgroundColor: bgColor }]}>
+            <LinearGradient colors={[color + '33', 'rgba(5,6,12,0.9)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+            <MaterialCommunityIcons name={icon} size={84} color={color + '14'} style={styles.tileWatermark} />
+            <View style={[styles.iconCircle, { backgroundColor: color + '30', borderColor: color + '66' }]}>
+                <MaterialCommunityIcons name={icon} size={24} color={color} />
+            </View>
+            <Text style={[styles.statBoxValue, { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{value}</Text>
+            <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
+            <View style={[styles.tileBar, { backgroundColor: color }]} />
         </View>
-        <Text style={[styles.statBoxValue, { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.3}>{value}</Text>
-        <Text style={styles.statBoxLabel} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{label}</Text>
-    </View>
+    </Pop>
 );
 
 const styles = StyleSheet.create({
@@ -675,16 +862,27 @@ const styles = StyleSheet.create({
   shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
   scrollPadding: { paddingBottom: 150 },
   aura: { position: 'absolute', width: 450, height: 450, borderRadius: 225, filter: 'blur(120px)' },
+  particle: { position: 'absolute' },
   cardContainer: { margin: 16, marginTop: 10 },
   cardGlassOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(255,255,255,0.01)' },
   
   header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 15, gap: 15, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.05)' },
-  backBtn: { width: 40, height: 40, backgroundColor: 'rgba(255,255,255,0.05)', borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
+  backBtn: { width: 42, height: 42, backgroundColor: 'rgba(255,255,255,0.07)', borderRadius: 14, justifyContent: 'center', alignItems: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)' },
   headerTitle: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 0.5 },
-  headerSub: { color: '#3B82F6', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
+  headerSubRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+  headerSub: { color: '#3B82F6', fontSize: 10, fontWeight: '900', letterSpacing: 1, marginTop: 0 },
 
   cardBase: { padding: 25, elevation: 20, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.9, shadowRadius: 30 },
+  heroTopRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14, zIndex: 10 },
+  heroBrand: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  heroBrandText: { fontSize: 9, fontWeight: '900', letterSpacing: 2 },
+  chip: { width: 36, height: 27, borderRadius: 6, justifyContent: 'center', gap: 5, paddingHorizontal: 6 },
+  chipLine: { height: 1.5, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 1 },
   avatarNode: { position: 'relative' },
+  pulseRing: { position: 'absolute', borderWidth: 1.5 },
+  orbitRing: { position: 'absolute', borderWidth: 1, borderStyle: 'dashed', alignItems: 'center' },
+  orbitDot: { width: 8, height: 8, borderRadius: 4, marginTop: -4, shadowOpacity: 1, shadowRadius: 6, elevation: 6 },
   ring: { padding: 4, backgroundColor: 'rgba(0,0,0,0.4)' },
   badge: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10, borderWidth: 1, marginBottom: 10 },
   badgeText: { fontSize: 9, fontWeight: '900', letterSpacing: 1.5, marginLeft: 4 },
@@ -699,40 +897,48 @@ const styles = StyleSheet.create({
 
   menuBox: { paddingHorizontal: 16, marginTop: 10 },
   
-  tabsRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 10, marginBottom: 15, backgroundColor: '#0F172A', borderRadius: 12, padding: 5, borderWidth: 1, borderColor: '#1E293B', justifyContent: 'space-between', gap: 4 },
-  tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'transparent' },
+  tabsRow: { flexDirection: 'row', marginHorizontal: 16, marginTop: 10, marginBottom: 15, backgroundColor: 'rgba(15,23,42,0.85)', borderRadius: 18, padding: 5, borderWidth: 1, borderColor: 'rgba(255,255,255,0.08)', justifyContent: 'space-between', gap: 4, shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  tabIndicator: { position: 'absolute', left: 5, top: 5, bottom: 5, borderRadius: 13, borderWidth: 1, shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+  tabBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', borderRadius: 8, borderWidth: 1, borderColor: 'transparent', flexDirection: 'row', gap: 5 },
   tabBtnActive: { backgroundColor: '#334155' },
   tabText: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
   tabTextActive: { color: '#FFF' },
 
-  balanceCard: { padding: 18, borderRadius: 20, borderWidth: 1, marginBottom: 15, alignItems: 'center' },
+  balanceCard: { padding: 26, borderRadius: 26, borderWidth: 1, marginBottom: 15, alignItems: 'center', overflow: 'hidden', shadowColor: '#3B82F6', shadowOpacity: 0.35, shadowRadius: 20, shadowOffset: { width: 0, height: 10 }, elevation: 10 },
+  vaultPulse: { position: 'absolute', width: 160, height: 160, borderRadius: 80, borderWidth: 1.5, borderColor: '#60A5FA', top: '50%', marginTop: -80 },
+  vaultWatermark: { position: 'absolute', right: -10, bottom: -14 },
   balLabel: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginBottom: 8 },
-  balValue: { fontSize: 28, fontWeight: '900' },
+  balValue: { fontSize: 32, fontWeight: '900' },
 
   statsContainer: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  statBox: { padding: 20, borderRadius: 20, borderWidth: 1, alignItems: 'center' },
-  iconCircle: { width: 50, height: 50, borderRadius: 25, justifyContent: 'center', alignItems: 'center', marginBottom: 12 },
-  statBoxValue: { fontSize: 18, fontWeight: '900', marginBottom: 4 },
-  statBoxLabel: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 0.5, textAlign: 'center' },
+  statBox: { padding: 18, borderRadius: 24, borderWidth: 1, alignItems: 'flex-start', overflow: 'hidden', width: '100%', shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 14, shadowOffset: { width: 0, height: 8 }, elevation: 7 },
+  tileWatermark: { position: 'absolute', right: -12, bottom: -14 },
+  iconCircle: { width: 44, height: 44, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 14, borderWidth: 1 },
+  statBoxValue: { fontSize: 20, fontWeight: '900', marginBottom: 4, alignSelf: 'stretch' },
+  statBoxLabel: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 0.5, textAlign: 'left', alignSelf: 'stretch' },
+  tileBar: { width: 28, height: 3, borderRadius: 2, marginTop: 12, opacity: 0.9 },
 
   talktimeHighlight: { alignItems: 'center' },
+  summaryPill: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20, borderWidth: 1, marginBottom: 18 },
   totalTalkLabel: { fontSize: 9, fontWeight: '900', letterSpacing: 2, marginBottom: 5 },
 
   // User App Stealth Card UI Styles
   cardContainerUI: { marginBottom: 20 },
-  stealthHistoryCard: { backgroundColor: 'rgba(5,5,5,0.7)', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)', overflow: 'hidden' },
+  ticketGlow: { borderRadius: 24, shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 },
+  ticketDash: { height: 1, borderWidth: 1, borderStyle: 'dashed', borderRadius: 1, marginBottom: 14, zIndex: 10 },
+  stealthHistoryCard: { backgroundColor: 'rgba(5,6,12,0.88)', borderRadius: 22, padding: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.06)', overflow: 'hidden' },
   quadBorderUI: { ...StyleSheet.absoluteFillObject, borderLeftWidth: 4, borderRightWidth: 4, borderTopWidth: 1.2, borderBottomWidth: 1.2, borderRadius: 24, opacity: 0.8 },
   sessionBadge: { position: 'absolute', top: 0, right: 18, paddingHorizontal: 10, paddingVertical: 4, borderBottomLeftRadius: 8, borderBottomRightRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 4, zIndex: 10 },
   sessionTypeText: { color: '#FFF', fontSize: 7, fontWeight: '900', letterSpacing: 1 },
-  cardHeaderUI: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, zIndex: 10 },
-  expertThumbRing: { width: 54, height: 54, borderRadius: 18, borderWidth: 1.5, padding: 2, elevation: 10, shadowOpacity: 0.5, shadowRadius: 8 },
+  cardHeaderUI: { flexDirection: 'row', alignItems: 'center', marginBottom: 14, marginTop: 6, zIndex: 10 },
+  expertThumbRing: { width: 54, height: 54, borderRadius: 18, borderWidth: 1.5, padding: 2, elevation: 10, shadowOpacity: 0.5, shadowRadius: 8, justifyContent: 'center', alignItems: 'center' },
   expertThumb: { width: '100%', height: '100%', borderRadius: 15 },
   expertInfo: { flex: 1, marginLeft: 15, overflow: 'hidden' },
   expertName: { color: '#FFF', fontSize: 14, fontWeight: '900', marginBottom: 4, letterSpacing: 0.5 },
   callDateText: { color: '#475569', fontSize: 10, fontWeight: '800' },
-  costContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 10 },
-  costText: { fontSize: 17, fontWeight: '900' },
-  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 12, borderRadius: 12, zIndex: 10, width: '100%' },
+  costContainer: { flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 10, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12, borderWidth: 1 },
+  costText: { fontSize: 15, fontWeight: '900' },
+  statsRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.04)', padding: 12, borderRadius: 14, zIndex: 10, width: '100%', borderWidth: 1, borderColor: 'rgba(255,255,255,0.04)' },
   statItem: { flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, justifyContent: 'center' },
   statValueText: { color: '#94A3B8', fontSize: 10, fontWeight: '800', letterSpacing: 0.2 },
   vDivider: { width: 1, height: 16, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 4 },
@@ -744,7 +950,7 @@ const styles = StyleSheet.create({
 
   // 🔥 SATTI UPDATE: Bottom Button Styles Added 🔥
   footerContainer: { marginTop: 40, alignItems: 'center', paddingHorizontal: 20 },
-  bottomFlagBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 25, width: '100%', gap: 10, elevation: 5, shadowColor: '#EF4444', shadowOpacity: 0.3, shadowRadius: 10 },
+  bottomFlagBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 15, paddingHorizontal: 30, borderRadius: 25, width: '100%', gap: 10, elevation: 5, shadowColor: '#EF4444', shadowOpacity: 0.3, shadowRadius: 10, overflow: 'hidden' },
   bottomFlagText: { fontSize: 13, fontWeight: '900', letterSpacing: 1.5 },
   
   footer: { alignItems: 'center', marginTop: 40 },

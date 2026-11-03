@@ -984,7 +984,7 @@ export default function ExpertDashboard() {
                                                 <Text style={styles.onAirText}>ON AIR</Text>
                                             </Animated.View>
                                             <View>
-                                                <Text style={styles.stageTitle}>GO LIVE</Text>
+                                                <Text style={styles.stageTitle}>GO ONLINE</Text>
                                                 <Text style={styles.stageSub}>Broadcast to everyone, instantly</Text>
                                             </View>
                                         </View>
@@ -1067,7 +1067,7 @@ export default function ExpertDashboard() {
                                             <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                                                 <MaterialCommunityIcons name="crown" size={20} color="#3B2600" />
                                                 <View style={styles.royalDivider} />
-                                                <Text style={styles.royalSpotlightText}>PREMIUM SPOTLIGHT</Text>
+                                                <Text style={styles.royalSpotlightText}>PROFILE SPOTLIGHT</Text>
                                                 <View style={styles.royalDivider} />
                                                 <MaterialCommunityIcons name="crown" size={20} color="#3B2600" />
                                             </View>

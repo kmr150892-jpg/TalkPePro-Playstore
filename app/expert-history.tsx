@@ -1326,7 +1326,7 @@ export default function ExpertHistory() {
                             </Animated.View>
                         </View>
                         <Text style={styles.emptyTitleText}>No Activity Found</Text>
-                        <Text style={{color: '#CBD5E1', fontSize: 13, marginTop: 10, textAlign: 'center'}}>Your earning records will appear here after synchronization.</Text>
+                        <Text style={{color: '#CBD5E1', fontSize: 13, marginTop: 10, textAlign: 'center'}}>Your reward records will appear here after synchronization.</Text>
                     </Animated.View>
                 )
             }

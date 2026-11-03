@@ -127,8 +127,8 @@ const FAQS = [
     },
     {
         id: 2,
-        question: "How does the Premium Spotlight (Algorithm Boost) work?",
-        answer: "Premium Spotlight pushes your profile up to get more genuine call requests. Note: All Spotlight videos are subject to strict UGC (User Generated Content) guidelines. Users can report videos, which triggers a mandatory 24-hour admin review to ensure platform safety."
+        question: "How does the Profile Spotlight (Algorithm Boost) work?",
+        answer: "Profile Spotlight pushes your profile up to get more genuine call requests. Note: All Spotlight videos are subject to strict UGC (User Generated Content) guidelines. Users can report videos, which triggers a mandatory 24-hour admin review to ensure platform safety."
     },
     {
         id: 3,

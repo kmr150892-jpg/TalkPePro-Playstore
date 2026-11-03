@@ -3,8 +3,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { onAuthStateChanged } from 'firebase/auth';
 import { collection, doc, getDoc, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, FlatList, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Animated, Easing, FlatList, Image, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../../firebaseConfig';
 import { sendNotificationToUser } from '../../utils/notificationHelper';
@@ -23,9 +23,80 @@ const STATUS_MESSAGES: any = {
     dismissed: { title: "Report Reviewed", body: "Our team has reviewed your report and found no policy violation at this time. You can submit a new report if the issue continues." },
 };
 
-const ReportCard = ({ item, onStatus, onOpenUser, onRestrict, onOpenLedger }: any) => {
+/* ============================================================
+   🎬 3D POP-IN WRAPPER - cards flip up in 3D, staggered
+   ============================================================ */
+const Pop = ({ index = 0, children, style }: { index?: number; children: React.ReactNode; style?: any }) => {
+    const v = useRef(new Animated.Value(0)).current;
+
+    useEffect(() => {
+        Animated.spring(v, { toValue: 1, friction: 7, tension: 45, delay: 60 + Math.min(index, 8) * 90, useNativeDriver: true }).start();
+    }, []);
+
+    return (
+        <Animated.View
+            style={[
+                style,
+                {
+                    opacity: v.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1, 1], extrapolate: 'clamp' }),
+                    transform: [
+                        { perspective: 900 },
+                        { translateY: v.interpolate({ inputRange: [0, 1], outputRange: [55, 0] }) },
+                        { rotateX: v.interpolate({ inputRange: [0, 1], outputRange: ['30deg', '0deg'] }) },
+                        { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.92, 1] }) },
+                    ],
+                },
+            ]}
+        >
+            {children}
+        </Animated.View>
+    );
+};
+
+/* ============================================================
+   🧊 FILTER TILE - 3D lift when active
+   ============================================================ */
+const FilterTile = ({ f, active, count, onPress }: { f: string; active: boolean; count: number; onPress: () => void }) => {
+    const a = useRef(new Animated.Value(active ? 1 : 0)).current;
+
+    useEffect(() => {
+        Animated.spring(a, { toValue: active ? 1 : 0, friction: 7, tension: 90, useNativeDriver: true }).start();
+    }, [active]);
+
+    const color = STATUS_COLOR[f];
+
+    return (
+        <Animated.View
+            style={{
+                flex: 1,
+                transform: [
+                    { perspective: 700 },
+                    { translateY: a.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) },
+                    { rotateX: a.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '-8deg'] }) },
+                    { scale: a.interpolate({ inputRange: [0, 1], outputRange: [1, 1.05] }) },
+                ],
+            }}
+        >
+            <TouchableOpacity
+                onPress={onPress}
+                activeOpacity={0.85}
+                style={[
+                    styles.tab,
+                    active && { backgroundColor: color + '33', borderColor: color, shadowColor: color, shadowOpacity: 0.7, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 8 },
+                ]}
+            >
+                <Text style={[styles.tabCount, { color: active ? '#FFF' : color }]}>{count}</Text>
+                <Text style={[styles.tabText, active && { color: '#FFF' }]} numberOfLines={1} adjustsFontSizeToFit>{f.toUpperCase()}</Text>
+                <View style={[styles.tabBar, { backgroundColor: color, opacity: active ? 1 : 0.25 }]} />
+            </TouchableOpacity>
+        </Animated.View>
+    );
+};
+
+const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onRestrict, onOpenLedger }: any) => {
     const [reported, setReported] = useState<any>(null);
     const [reporter, setReporter] = useState<any>(null);
+    const press = useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
         const load = async () => {
@@ -70,111 +141,176 @@ const ReportCard = ({ item, onStatus, onOpenUser, onRestrict, onOpenLedger }: an
         onOpenLedger(item.reportedUserId, reportedRole);
     };
 
+    // 🆕 animation derivations
+    const dotOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.25] });
+    const haloScale = loop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] });
+    const haloOpacity = loop.interpolate({ inputRange: [0, 1], outputRange: [0.55, 0] });
+    const arrowX = pulse.interpolate({ inputRange: [0, 1], outputRange: [-4, 4] });
+    const shineX = shine.interpolate({ inputRange: [0, 1], outputRange: [-90, 320] });
+    const restrictScale = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.025] });
+
     return (
-        <TouchableOpacity activeOpacity={0.92} onPress={handleCardPress} style={[styles.card, { borderColor: color + '66' }, done && { opacity: 0.7 }]}>
-            <View style={styles.rowBetween}>
-                <View style={[styles.chip, { backgroundColor: color + '22', borderColor: color + '88' }]}>
-                    <Text style={[styles.chipText, { color }]}>{String(item.status || 'unread').toUpperCase()}</Text>
-                </View>
-                {item.priority === 'high' && (
-                    <View style={[styles.chip, { backgroundColor: '#EF444422', borderColor: '#EF4444' }]}>
-                        <Text style={[styles.chipText, { color: '#EF4444' }]}>HIGH PRIORITY</Text>
-                    </View>
-                )}
-            </View>
+        <Pop index={index} style={styles.cardWrap}>
+            <Animated.View style={{ transform: [{ scale: press }] }}>
+                <TouchableOpacity
+                    activeOpacity={0.92}
+                    onPress={handleCardPress}
+                    onPressIn={() => Animated.spring(press, { toValue: 0.98, friction: 6, tension: 120, useNativeDriver: true }).start()}
+                    onPressOut={() => Animated.spring(press, { toValue: 1, friction: 6, tension: 120, useNativeDriver: true }).start()}
+                    style={[{ shadowColor: color, shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 8 }, done && { opacity: 0.7 }]}
+                >
+                    <LinearGradient
+                        colors={[color, color + '33', color]}
+                        start={{ x: 0, y: 0 }}
+                        end={{ x: 1, y: 1 }}
+                        style={styles.cardBorder}
+                    >
+                        <View style={styles.card}>
+                            <LinearGradient
+                                colors={[color + '1F', 'transparent', 'rgba(99,102,241,0.1)']}
+                                start={{ x: 0, y: 0 }}
+                                end={{ x: 1, y: 1 }}
+                                style={StyleSheet.absoluteFill}
+                            />
+                            <MaterialCommunityIcons name="shield-alert" size={120} color={color + '0D'} style={styles.cardWatermark} />
 
-            <Text style={styles.category}>{item.categoryLabel || item.category}</Text>
-            <Text style={styles.time}>{when}  •  Ref {String(item.id).slice(0, 8).toUpperCase()}</Text>
+                            <View style={styles.rowBetween}>
+                                <View style={[styles.chip, { backgroundColor: color + '22', borderColor: color + '88', flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                                    <Animated.View style={[styles.statusDot, { backgroundColor: color, opacity: item.status === 'unread' || !item.status ? dotOpacity : 1 }]} />
+                                    <Text style={[styles.chipText, { color }]}>{String(item.status || 'unread').toUpperCase()}</Text>
+                                </View>
+                                {item.priority === 'high' && (
+                                    <Animated.View style={[styles.chip, { backgroundColor: '#EF444422', borderColor: '#EF4444', transform: [{ scale: restrictScale }] }]}>
+                                        <Text style={[styles.chipText, { color: '#EF4444' }]}>HIGH PRIORITY</Text>
+                                    </Animated.View>
+                                )}
+                            </View>
 
-            {/* FORM DETAILS - host form-la enna problem solli report pannaanga */}
-            <View style={styles.formBox}>
-                <View style={styles.formHead}>
-                    <MaterialCommunityIcons name="text-box-outline" size={14} color="#A5B4FC" />
-                    <Text style={styles.formLabel}>HOST'S REPORT FORM</Text>
-                </View>
-                <View style={styles.formRow}>
-                    <Text style={styles.formKey}>CATEGORY</Text>
-                    <Text style={styles.formVal}>{item.categoryLabel || item.category || '-'}</Text>
-                </View>
-                <View style={styles.formRow}>
-                    <Text style={styles.formKey}>PRIORITY</Text>
-                    <Text style={[styles.formVal, item.priority === 'high' && { color: '#EF4444' }]}>{String(item.priority || 'normal').toUpperCase()}</Text>
-                </View>
-                {!!typedName && (
-                    <View style={styles.formRow}>
-                        <Text style={styles.formKey}>USER TYPED</Text>
-                        <Text style={styles.formVal}>{typedName}</Text>
-                    </View>
-                )}
-                <Text style={styles.formKey}>DESCRIPTION</Text>
-                <Text style={styles.desc}>{item.description || 'No description provided.'}</Text>
-            </View>
+                            <Text style={styles.category}>{item.categoryLabel || item.category}</Text>
+                            <Text style={styles.time}>{when}  •  Ref {String(item.id).slice(0, 8).toUpperCase()}</Text>
 
-            <View style={styles.peopleRow}>
-                <View style={styles.person}>
-                    <Text style={styles.pLabel}>REPORTED BY</Text>
-                    <Image source={{ uri: pic(reporter, item.expertName) }} style={styles.avatar} />
-                    <Text style={styles.pName} numberOfLines={1}>{reporter?.name || item.expertName || 'Host'}</Text>
-                </View>
-                <MaterialCommunityIcons name="arrow-right-bold" size={20} color="#475569" />
-                <View style={styles.person}>
-                    <Text style={styles.pLabel}>REPORTED USER</Text>
-                    <Image source={{ uri: pic(reported, item.reportedUserName) }} style={[styles.avatar, { borderColor: '#F43F5E' }]} />
-                    <Text style={styles.pName} numberOfLines={1}>{reported?.name || item.reportedUserName || item.reportedUser || 'Not specified'}</Text>
-                    {item.reportedUserId ? (
-                        <>
-                            <Text style={styles.pId} numberOfLines={1}>ID: {item.reportedUserId.slice(0, 10)}...</Text>
-                            <Text style={[styles.pId, { color: blockCount > 0 ? '#F87171' : '#64748B' }]}>FLAGS: {blockCount}</Text>
-                        </>
-                    ) : (
-                        <Text style={[styles.pId, { color: '#F59E0B' }]}>No ID (typed name)</Text>
-                    )}
-                </View>
-            </View>
+                            {/* FORM DETAILS - host form-la enna problem solli report pannaanga */}
+                            <View style={styles.formBox}>
+                                <View style={styles.formHead}>
+                                    <MaterialCommunityIcons name="text-box-outline" size={14} color="#A5B4FC" />
+                                    <Text style={styles.formLabel}>HOST'S REPORT FORM</Text>
+                                </View>
+                                <View style={styles.formRow}>
+                                    <Text style={styles.formKey}>CATEGORY</Text>
+                                    <Text style={styles.formVal}>{item.categoryLabel || item.category || '-'}</Text>
+                                </View>
+                                <View style={styles.formRow}>
+                                    <Text style={styles.formKey}>PRIORITY</Text>
+                                    <Text style={[styles.formVal, item.priority === 'high' && { color: '#EF4444' }]}>{String(item.priority || 'normal').toUpperCase()}</Text>
+                                </View>
+                                {!!typedName && (
+                                    <View style={styles.formRow}>
+                                        <Text style={styles.formKey}>USER TYPED</Text>
+                                        <Text style={styles.formVal}>{typedName}</Text>
+                                    </View>
+                                )}
+                                <Text style={styles.formKey}>DESCRIPTION</Text>
+                                <Text style={styles.desc}>{item.description || 'No description provided.'}</Text>
+                            </View>
 
-            {/* ledger buttons (reported user + host) */}
-            <View style={styles.actions}>
-                {!!item.reportedUserId && (
-                    <TouchableOpacity style={[styles.btn, { borderColor: '#F43F5E' }]} onPress={() => onOpenLedger(item.reportedUserId, reportedRole)}>
-                        <MaterialCommunityIcons name="book-account-outline" size={14} color="#F87171" />
-                        <Text style={[styles.btnText, { color: '#F87171' }]}>REPORTED LEDGER</Text>
-                    </TouchableOpacity>
-                )}
-                {!!item.expertId && (
-                    <TouchableOpacity style={[styles.btn, { borderColor: '#6366F1' }]} onPress={() => onOpenLedger(item.expertId, 'expert')}>
-                        <MaterialCommunityIcons name="book-account-outline" size={14} color="#A5B4FC" />
-                        <Text style={[styles.btnText, { color: '#A5B4FC' }]}>HOST LEDGER</Text>
-                    </TouchableOpacity>
-                )}
-            </View>
+                            <View style={styles.peopleRow}>
+                                <View style={styles.person}>
+                                    <Text style={styles.pLabel}>REPORTED BY</Text>
+                                    <Image source={{ uri: pic(reporter, item.expertName) }} style={styles.avatar} />
+                                    <Text style={styles.pName} numberOfLines={1}>{reporter?.name || item.expertName || 'Host'}</Text>
+                                </View>
+                                <Animated.View style={{ transform: [{ translateX: arrowX }] }}>
+                                    <MaterialCommunityIcons name="arrow-right-bold" size={20} color="#475569" />
+                                </Animated.View>
+                                <View style={styles.person}>
+                                    <Text style={styles.pLabel}>REPORTED USER</Text>
+                                    <View style={styles.avatarHaloWrap}>
+                                        <Animated.View style={[styles.avatarHalo, { opacity: haloOpacity, transform: [{ scale: haloScale }] }]} />
+                                        <Image source={{ uri: pic(reported, item.reportedUserName) }} style={[styles.avatar, { borderColor: '#F43F5E' }]} />
+                                    </View>
+                                    <Text style={styles.pName} numberOfLines={1}>{reported?.name || item.reportedUserName || item.reportedUser || 'Not specified'}</Text>
+                                    {item.reportedUserId ? (
+                                        <>
+                                            <Text style={styles.pId} numberOfLines={1}>ID: {item.reportedUserId.slice(0, 10)}...</Text>
+                                            <Text style={[styles.pId, { color: blockCount > 0 ? '#F87171' : '#64748B' }]}>FLAGS: {blockCount}</Text>
+                                        </>
+                                    ) : (
+                                        <Text style={[styles.pId, { color: '#F59E0B' }]}>No ID (typed name)</Text>
+                                    )}
+                                </View>
+                            </View>
 
-            <View style={styles.actions}>
-                {!!item.reportedUserId && (
-                    <TouchableOpacity style={[styles.btn, { borderColor: '#6366F1' }]} onPress={() => onOpenUser(item.reportedUserId)}>
-                        <Ionicons name="person-outline" size={14} color="#A5B4FC" />
-                        <Text style={[styles.btnText, { color: '#A5B4FC' }]}>PROFILE</Text>
-                    </TouchableOpacity>
-                )}
-                <TouchableOpacity style={[styles.btn, { borderColor: '#F59E0B' }]} onPress={() => onStatus(item, 'reviewing')}>
-                    <Text style={[styles.btnText, { color: '#F59E0B' }]}>REVIEWING</Text>
+                            {/* ledger buttons (reported user + host) */}
+                            <View style={styles.actions}>
+                                {!!item.reportedUserId && (
+                                    <TouchableOpacity style={[styles.btn, { borderColor: '#F43F5E', backgroundColor: 'rgba(244,63,94,0.1)' }]} onPress={() => onOpenLedger(item.reportedUserId, reportedRole)}>
+                                        <MaterialCommunityIcons name="book-account-outline" size={14} color="#F87171" />
+                                        <Text style={[styles.btnText, { color: '#F87171' }]}>REPORTED LEDGER</Text>
+                                    </TouchableOpacity>
+                                )}
+                                {!!item.expertId && (
+                                    <TouchableOpacity style={[styles.btn, { borderColor: '#6366F1', backgroundColor: 'rgba(99,102,241,0.1)' }]} onPress={() => onOpenLedger(item.expertId, 'expert')}>
+                                        <MaterialCommunityIcons name="book-account-outline" size={14} color="#A5B4FC" />
+                                        <Text style={[styles.btnText, { color: '#A5B4FC' }]}>HOST LEDGER</Text>
+                                    </TouchableOpacity>
+                                )}
+                            </View>
+
+                            <View style={styles.actions}>
+                                {!!item.reportedUserId && (
+                                    <TouchableOpacity style={[styles.btn, { borderColor: '#6366F1', backgroundColor: 'rgba(99,102,241,0.1)' }]} onPress={() => onOpenUser(item.reportedUserId)}>
+                                        <Ionicons name="person-outline" size={14} color="#A5B4FC" />
+                                        <Text style={[styles.btnText, { color: '#A5B4FC' }]}>PROFILE</Text>
+                                    </TouchableOpacity>
+                                )}
+                                <TouchableOpacity style={[styles.btn, { borderColor: '#F59E0B', backgroundColor: 'rgba(245,158,11,0.1)' }]} onPress={() => onStatus(item, 'reviewing')}>
+                                    <Text style={[styles.btnText, { color: '#F59E0B' }]}>REVIEWING</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.btn, { borderColor: '#10B981', backgroundColor: 'rgba(16,185,129,0.1)' }]} onPress={() => onStatus(item, 'resolved')}>
+                                    <Text style={[styles.btnText, { color: '#10B981' }]}>RESOLVE</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity style={[styles.btn, { borderColor: '#64748B', backgroundColor: 'rgba(100,116,139,0.1)' }]} onPress={() => onStatus(item, 'dismissed')}>
+                                    <Text style={[styles.btnText, { color: '#94A3B8' }]}>DISMISS</Text>
+                                </TouchableOpacity>
+                            </View>
+
+                            {!!item.reportedUserId && item.status !== 'resolved' && (
+                                <TouchableOpacity style={styles.restrictBtn} onPress={() => onRestrict(item)} activeOpacity={0.85}>
+                                    <LinearGradient
+                                        colors={['#EF4444', '#B91C1C', '#7F1D1D']}
+                                        start={{ x: 0, y: 0 }}
+                                        end={{ x: 1, y: 1 }}
+                                        style={StyleSheet.absoluteFill}
+                                    />
+                                    <Animated.View pointerEvents="none" style={[styles.btnShine, { transform: [{ translateX: shineX }, { rotate: '20deg' }] }]}>
+                                        <LinearGradient
+                                            colors={['transparent', 'rgba(255,255,255,0.3)', 'transparent']}
+                                            start={{ x: 0, y: 0 }}
+                                            end={{ x: 1, y: 0 }}
+                                            style={{ flex: 1 }}
+                                        />
+                                    </Animated.View>
+                                    <MaterialCommunityIcons name="account-cancel-outline" size={16} color="#FFF" />
+                                    <Text style={styles.restrictText}>RESTRICT REPORTED USER</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    </LinearGradient>
                 </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, { borderColor: '#10B981' }]} onPress={() => onStatus(item, 'resolved')}>
-                    <Text style={[styles.btnText, { color: '#10B981' }]}>RESOLVE</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.btn, { borderColor: '#64748B' }]} onPress={() => onStatus(item, 'dismissed')}>
-                    <Text style={[styles.btnText, { color: '#94A3B8' }]}>DISMISS</Text>
-                </TouchableOpacity>
-            </View>
-
-            {!!item.reportedUserId && item.status !== 'resolved' && (
-                <TouchableOpacity style={styles.restrictBtn} onPress={() => onRestrict(item)}>
-                    <MaterialCommunityIcons name="account-cancel-outline" size={16} color="#FFF" />
-                    <Text style={styles.restrictText}>RESTRICT REPORTED USER</Text>
-                </TouchableOpacity>
-            )}
-        </TouchableOpacity>
+            </Animated.View>
+        </Pop>
     );
 };
+
+// 🌌 floating particles config (background depth)
+const particles = [
+    { left: '8%', top: '30%', size: 3, range: -150 },
+    { left: '24%', top: '70%', size: 2, range: -110 },
+    { left: '45%', top: '40%', size: 4, range: -190 },
+    { left: '63%', top: '78%', size: 3, range: -130 },
+    { left: '80%', top: '32%', size: 2, range: -170 },
+    { left: '93%', top: '60%', size: 3, range: -120 },
+];
 
 export default function AdminReportsScreen() {
     const router = useRouter();
@@ -184,6 +320,38 @@ export default function AdminReportsScreen() {
 
     // ✅ FIX: null = innum check panra, true = admin, false = admin illa
     const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+
+    /* ---------- 🎞️ ANIMATION VALUES ---------- */
+    const loop = useRef(new Animated.Value(0)).current;       // linear 0→1 (halo, particles)
+    const pulse = useRef(new Animated.Value(0)).current;      // yoyo pulse (dots, arrows, buttons)
+    const shine = useRef(new Animated.Value(0)).current;      // button shine sweep
+    const orbA = useRef(new Animated.Value(0)).current;       // floating orb A
+    const orbB = useRef(new Animated.Value(0)).current;       // floating orb B
+
+    useEffect(() => {
+        const yoyo = (val: Animated.Value, duration: number, delay = 0) =>
+            Animated.loop(
+                Animated.sequence([
+                    Animated.timing(val, { toValue: 1, duration, delay, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                    Animated.timing(val, { toValue: 0, duration, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                ])
+            );
+
+        const l1 = Animated.loop(Animated.timing(loop, { toValue: 1, duration: 2200, easing: Easing.out(Easing.quad), useNativeDriver: true }));
+        const l2 = yoyo(pulse, 1100);
+        const l3 = Animated.loop(
+            Animated.sequence([
+                Animated.delay(1800),
+                Animated.timing(shine, { toValue: 1, duration: 1200, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+                Animated.timing(shine, { toValue: 0, duration: 0, useNativeDriver: true }),
+            ])
+        );
+        const l4 = yoyo(orbA, 6000);
+        const l5 = yoyo(orbB, 7500, 800);
+
+        [l1, l2, l3, l4, l5].forEach(l => l.start());
+        return () => [l1, l2, l3, l4, l5].forEach(l => l.stop());
+    }, []);
 
     // ✅ FIX: auth load aagura varaikkum wait pannum, appuram UID / Email / role check pannum
     useEffect(() => {
@@ -301,7 +469,9 @@ export default function AdminReportsScreen() {
     if (!isAdmin) {
         return (
             <View style={styles.center}>
-                <MaterialCommunityIcons name="shield-lock" size={50} color="#F43F5E" />
+                <Animated.View style={{ transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.15] }) }] }}>
+                    <MaterialCommunityIcons name="shield-lock" size={50} color="#F43F5E" />
+                </Animated.View>
                 <Text style={styles.denied}>ADMIN ACCESS ONLY</Text>
             </View>
         );
@@ -310,25 +480,61 @@ export default function AdminReportsScreen() {
     const list = reports.filter((r) => (r.status || 'unread') === filter);
     const count = (s: string) => reports.filter((r) => (r.status || 'unread') === s).length;
 
+    const orbAY = orbA.interpolate({ inputRange: [0, 1], outputRange: [0, 50] });
+    const orbAX = orbA.interpolate({ inputRange: [0, 1], outputRange: [0, 30] });
+    const orbBY = orbB.interpolate({ inputRange: [0, 1], outputRange: [0, -60] });
+    const orbBX = orbB.interpolate({ inputRange: [0, 1], outputRange: [0, -35] });
+    const liveOpacity = pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 0.25] });
+    const shieldHaloScale = loop.interpolate({ inputRange: [0, 1], outputRange: [1, 1.7] });
+    const shieldHaloOpacity = loop.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] });
+
     return (
         <View style={styles.container}>
             <StatusBar barStyle="light-content" />
             <LinearGradient colors={['#020617', '#0B0A24', '#020617']} style={StyleSheet.absoluteFill} />
+
+            {/* 🌌 BACKGROUND DEPTH: aurora orbs + particles */}
+            <Animated.View pointerEvents="none" style={[styles.orb, styles.orbA, { transform: [{ translateX: orbAX }, { translateY: orbAY }] }]} />
+            <Animated.View pointerEvents="none" style={[styles.orb, styles.orbB, { transform: [{ translateX: orbBX }, { translateY: orbBY }] }]} />
+            {particles.map((p, i) => (
+                <Animated.View
+                    key={i}
+                    pointerEvents="none"
+                    style={[
+                        styles.particle,
+                        {
+                            left: p.left as any,
+                            top: p.top as any,
+                            width: p.size,
+                            height: p.size,
+                            borderRadius: p.size,
+                            opacity: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.2, 0.8] }),
+                            transform: [{ translateY: pulse.interpolate({ inputRange: [0, 1], outputRange: [0, p.range / 6] }) }],
+                        },
+                    ]}
+                />
+            ))}
+
             <SafeAreaView edges={['top']}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={() => router.back()} style={styles.back}>
                         <Ionicons name="chevron-back" size={22} color="#FFF" />
                     </TouchableOpacity>
-                    <View>
-                        <Text style={styles.hLabel}>TRUST & SAFETY</Text>
+                    <View style={{ flex: 1 }}>
+                        <View style={styles.hLabelRow}>
+                            <Animated.View style={[styles.liveDot, { opacity: liveOpacity }]} />
+                            <Text style={styles.hLabel}>TRUST & SAFETY</Text>
+                        </View>
                         <Text style={styles.hTitle}>REPORT QUEUE</Text>
+                    </View>
+                    <View style={styles.shieldWrap}>
+                        <Animated.View style={[styles.shieldHalo, { opacity: shieldHaloOpacity, transform: [{ scale: shieldHaloScale }] }]} />
+                        <MaterialCommunityIcons name="shield-alert" size={24} color="#F43F5E" />
                     </View>
                 </View>
                 <View style={styles.tabs}>
                     {FILTERS.map((f) => (
-                        <TouchableOpacity key={f} onPress={() => setFilter(f)} style={[styles.tab, filter === f && { backgroundColor: STATUS_COLOR[f] + '33', borderColor: STATUS_COLOR[f] }]}>
-                            <Text style={[styles.tabText, filter === f && { color: '#FFF' }]}>{f.toUpperCase()} ({count(f)})</Text>
-                        </TouchableOpacity>
+                        <FilterTile key={f} f={f} active={filter === f} count={count(f)} onPress={() => setFilter(f)} />
                     ))}
                 </View>
             </SafeAreaView>
@@ -340,10 +546,21 @@ export default function AdminReportsScreen() {
                     data={list}
                     keyExtractor={(i) => i.id}
                     contentContainerStyle={{ padding: 16, paddingBottom: 80 }}
-                    ListEmptyComponent={<Text style={styles.empty}>No reports in this list.</Text>}
-                    renderItem={({ item }) => (
+                    ListEmptyComponent={
+                        <View style={styles.emptyWrap}>
+                            <Animated.View style={{ transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [1, 1.12] }) }] }}>
+                                <MaterialCommunityIcons name="shield-check-outline" size={48} color="#334155" />
+                            </Animated.View>
+                            <Text style={styles.empty}>No reports in this list.</Text>
+                        </View>
+                    }
+                    renderItem={({ item, index }) => (
                         <ReportCard
                             item={item}
+                            index={index}
+                            loop={loop}
+                            pulse={pulse}
+                            shine={shine}
                             onStatus={setStatus}
                             onRestrict={restrictUser}
                             onOpenLedger={openLedger}
@@ -360,31 +577,55 @@ const styles = StyleSheet.create({
     container: { flex: 1, backgroundColor: '#020617' },
     center: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#020617' },
     denied: { color: '#F43F5E', fontWeight: '900', letterSpacing: 3, marginTop: 12 },
+
+    /* background */
+    orb: { position: 'absolute', borderRadius: 999 },
+    orbA: { width: 280, height: 280, top: -60, right: -90, backgroundColor: 'rgba(244,63,94,0.15)' },
+    orbB: { width: 240, height: 240, top: 460, left: -110, backgroundColor: 'rgba(99,102,241,0.16)' },
+    particle: { position: 'absolute', backgroundColor: '#F43F5E' },
+
     header: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingHorizontal: 16, paddingVertical: 14 },
     back: { padding: 10, borderRadius: 14, backgroundColor: 'rgba(255,255,255,0.06)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
+    hLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#F43F5E' },
     hLabel: { color: '#F43F5E', fontSize: 10, fontWeight: '900', letterSpacing: 3 },
     hTitle: { color: '#FFF', fontSize: 22, fontWeight: '900' },
-    tabs: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, paddingBottom: 6 },
-    tab: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)' },
-    tabText: { color: '#94A3B8', fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-    empty: { color: '#64748B', textAlign: 'center', marginTop: 60, fontWeight: '700' },
-    card: { padding: 16, borderRadius: 22, borderWidth: 1, backgroundColor: 'rgba(10,6,28,0.95)', marginBottom: 14 },
+    shieldWrap: { width: 44, height: 44, borderRadius: 14, backgroundColor: 'rgba(244,63,94,0.1)', borderWidth: 1, borderColor: 'rgba(244,63,94,0.35)', alignItems: 'center', justifyContent: 'center' },
+    shieldHalo: { position: 'absolute', width: 44, height: 44, borderRadius: 14, borderWidth: 1.5, borderColor: '#F43F5E' },
+
+    tabs: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingBottom: 10, paddingTop: 6 },
+    tab: { alignItems: 'center', paddingHorizontal: 6, paddingVertical: 10, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(15,23,42,0.7)' },
+    tabCount: { fontSize: 20, fontWeight: '900' },
+    tabText: { color: '#94A3B8', fontSize: 9, fontWeight: '900', letterSpacing: 1, marginTop: 2 },
+    tabBar: { width: 20, height: 3, borderRadius: 2, marginTop: 8 },
+
+    empty: { color: '#64748B', textAlign: 'center', marginTop: 12, fontWeight: '700' },
+    emptyWrap: { alignItems: 'center', marginTop: 60 },
+
+    cardWrap: { marginBottom: 14 },
+    cardBorder: { borderRadius: 24, padding: 1.2 },
+    card: { padding: 16, borderRadius: 23, backgroundColor: 'rgba(10,6,28,0.97)', overflow: 'hidden' },
+    cardWatermark: { position: 'absolute', right: -16, top: 30 },
     rowBetween: { flexDirection: 'row', justifyContent: 'space-between' },
     chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9, borderWidth: 1 },
+    statusDot: { width: 6, height: 6, borderRadius: 3 },
     chipText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.2 },
     category: { color: '#FFF', fontSize: 17, fontWeight: '900', marginTop: 12 },
     time: { color: '#64748B', fontSize: 10.5, fontWeight: '700', marginTop: 4 },
     desc: { color: '#CBD5E1', fontSize: 13, lineHeight: 20, marginTop: 6, fontWeight: '600' },
-    peopleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 16, padding: 12, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.3)' },
+    peopleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-around', marginTop: 16, padding: 12, borderRadius: 18, backgroundColor: 'rgba(0,0,0,0.3)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.05)' },
     person: { alignItems: 'center', flex: 1 },
     pLabel: { color: '#64748B', fontSize: 8.5, fontWeight: '900', letterSpacing: 1.5, marginBottom: 6 },
+    avatarHaloWrap: { width: 52, height: 52, alignItems: 'center', justifyContent: 'center' },
+    avatarHalo: { position: 'absolute', width: 52, height: 52, borderRadius: 26, borderWidth: 1.5, borderColor: '#F43F5E' },
     avatar: { width: 52, height: 52, borderRadius: 26, borderWidth: 2, borderColor: '#6366F1', backgroundColor: '#0F172A' },
     pName: { color: '#FFF', fontSize: 12.5, fontWeight: '800', marginTop: 6, maxWidth: 120 },
     pId: { color: '#64748B', fontSize: 9.5, fontWeight: '700', marginTop: 2 },
     actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 14 },
     btn: { flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 11, paddingVertical: 8, borderRadius: 12, borderWidth: 1 },
     btnText: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
-    restrictBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 14, backgroundColor: '#B91C1C' },
+    restrictBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, paddingVertical: 12, borderRadius: 14, backgroundColor: '#B91C1C', overflow: 'hidden', shadowColor: '#EF4444', shadowOpacity: 0.5, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
+    btnShine: { position: 'absolute', top: -20, bottom: -20, width: 36 },
     restrictText: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
 
     // host report form details box
@@ -395,4 +636,3 @@ const styles = StyleSheet.create({
     formKey: { color: '#64748B', fontSize: 9, fontWeight: '900', letterSpacing: 1.3 },
     formVal: { color: '#E2E8F0', fontSize: 12, fontWeight: '800', flexShrink: 1, textAlign: 'right', marginLeft: 12 }
 });
- 

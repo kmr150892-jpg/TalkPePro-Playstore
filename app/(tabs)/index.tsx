@@ -1,17 +1,10 @@
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-
 import { useIsFocused } from '@react-navigation/native';
-
 import { BlurView } from 'expo-blur';
-
 import { LinearGradient } from 'expo-linear-gradient';
-
 import { useRouter } from 'expo-router';
-
 import { collection, doc, onSnapshot, query, where } from 'firebase/firestore';
-
 import React, { useEffect, useRef, useState } from 'react';
-
 import {
     ActivityIndicator,
     Alert,
@@ -30,26 +23,18 @@ import {
     TouchableOpacity,
     View
 } from 'react-native';
-
 import { SafeAreaView } from 'react-native-safe-area-context';
-
 import LevelAvatar from '../../components/LevelAvatar';
-
 import { LivePreview } from '../../components/LivePreview';
-
 import WelcomeRewardModal from '../../components/WelcomeRewardModal';
-
 import { auth, db } from '../../firebaseConfig';
 
-
-
 const { height, width } = Dimensions.get('window');
-
-
 
 // 🖼️ PREMIUM IMAGE ASSETS (replace with your own local images: require('../../assets/xxx.jpg') if you like)
 const IMG_WALLET_BG = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?w=900&q=80';
 const IMG_CONNECT_BG = 'https://images.unsplash.com/photo-1534796636912-3b95b3ab5986?w=900&q=80';
+const FALLBACK_HOST_IMG = 'https://i.pravatar.cc/150';
 
 // ✨ TWINKLING STAR FIELD POSITIONS
 const STARS = [
@@ -59,8 +44,6 @@ const STARS = [
     { top: 580, left: width * 0.55, size: 2 },
 ];
 
-
-
 // 🛡️ SAFE ALPHA HELPER: some tier colors are already 8-digit hex (e.g. '#f52b6092'),
 // so adding another alpha made an INVALID color -> LinearGradient native crash. This always normalizes first.
 const withAlpha = (hex: string, alpha: string = 'FF') => {
@@ -68,9 +51,19 @@ const withAlpha = (hex: string, alpha: string = 'FF') => {
     return base + alpha;
 };
 
-// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
+// 🧩 TYPED RANK (themeBg is a strict 2-color tuple -> fixes the LinearGradient TypeScript overload error)
+type UserRank = {
+    lvl: number;
+    label: string;
+    status: string;
+    color: string;
+    secondaryColor: string;
+    anim: string;
+    themeBg: readonly [string, string];
+};
 
-const calculateUserLevel = (totalSpent: number) => {
+// 🔥 THE ULTIMATE DYNAMIC TIER ENGINE (STRICT THEME SYNC V2)
+const calculateUserLevel = (totalSpent: number): UserRank => {
 
   if (totalSpent >= 500000001) return { 
       lvl: 8, label: 'TITAN OVERSEER', status: 'GOD PROTOCOL ACTIVE', color: '#ff0000', secondaryColor: '#660000', anim: 'titan', themeBg: ['#1A0000', '#000000']
@@ -99,10 +92,7 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
-
-
 // 🔥 EXPERT THEME LOGIC (SYNCED)
-
 const getLevelTheme = (totalBeans: number = 0) => {
 
     if (totalBeans >= 10000000) return { color: '#F59E0B', label: 'MASTER' };
@@ -111,8 +101,6 @@ const getLevelTheme = (totalBeans: number = 0) => {
     return { color: '#94A3B8', label: 'AGENT' };
 };
 
-
-
 const getExpertThemeColor = (earned: number) => {
 
     if (earned >= 10000000) return '#F59E0B';
@@ -120,8 +108,6 @@ const getExpertThemeColor = (earned: number) => {
     if (earned >= 1000000) return '#10B981';
     return '#94A3B8';
 };
-
-
 
 // 🆕 PRESS-SCALE 3D CARD WRAPPER (spring squish + optional perspective tilt)
 const PressCard = ({ children, style, onPress, tilt = 0, activeOpacity = 0.9 }: any) => {
@@ -141,14 +127,18 @@ const PressCard = ({ children, style, onPress, tilt = 0, activeOpacity = 0.9 }: 
     );
 };
 
-
-
 // 🆕 CARD SIZES
 const LIVE_W = 176;
 const FRAME_H = 240;
 const LIVE_H = 288;
 const FORUM_W = 276;
 const FORUM_H = 150;
+
+// 🚪 LOUNGE SIZES (portal cards on home + cards inside the lounge)
+const PORTAL_W = (width - 40 - 16) / 2;
+const PORTAL_H = 272;
+const ROOM_W = width - 40;
+const ROOM_LIVE_H = 230;
 
 // 🆕 ROTATING NEON BORDER FRAME (light beam circles the card edge) - rt/rb = top/bottom radius (arch support)
 const NeonFrame = ({ w, h, rt, rb, c1, c2, rotate, children }: any) => {
@@ -184,7 +174,92 @@ const EqBars = ({ loop, color }: any) => {
     );
 };
 
+// 🌐 HOST ORB (outside portal design)
+// Center avatar cycles through the CURRENT host images (fade swap every few seconds),
+// tiny host avatars orbit around it, and the blurred backdrop follows the current host.
+// Because `pics` always comes from the live host profile, a changed host image shows up here instantly.
+const ORB_SIZE = 124;
+const ORB_R = 52;
+const ORB_MINI = 24;
 
+const PortalHostOrb = ({ pics, c1, c2, rotate, rotateRev, pulseOpacity, pulseScale, icon }: any) => {
+    const [idx, setIdx] = useState(0);
+    const fade = useRef(new Animated.Value(1)).current;
+    const picsKey = pics.join('|');
+
+    useEffect(() => {
+        setIdx(0);
+        fade.setValue(1);
+    }, [picsKey]);
+
+    useEffect(() => {
+        if (pics.length < 2) return;
+        const t = setInterval(() => {
+            Animated.timing(fade, { toValue: 0, duration: 260, useNativeDriver: true }).start(() => {
+                setIdx(p => (p + 1) % pics.length);
+                Animated.timing(fade, { toValue: 1, duration: 320, useNativeDriver: true }).start();
+            });
+        }, 3200);
+        return () => clearInterval(t);
+    }, [picsKey]);
+
+    const hasPics = pics.length > 0;
+    const current = hasPics ? pics[idx % pics.length] : null;
+    const orbitPics = pics.slice(0, 4);
+
+    return (
+        <>
+            {/* blurred backdrop follows the current host */}
+            {current ? (
+                <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { opacity: fade }]}>
+                    <Image source={{ uri: current }} blurRadius={26} style={[StyleSheet.absoluteFill, { opacity: 0.4 }]} />
+                </Animated.View>
+            ) : (
+                <ImageBackground source={{ uri: IMG_WALLET_BG }} style={StyleSheet.absoluteFill} imageStyle={{ opacity: 0.28 }} />
+            )}
+            <LinearGradient pointerEvents="none" colors={[withAlpha(c1, '55'), 'rgba(2,6,23,0.75)', 'rgba(0,0,0,0.95)']} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} />
+
+            <View style={styles.hostOrbBox} pointerEvents="none">
+                {/* soft pulse */}
+                <Animated.View style={[styles.hostOrbPulse, { backgroundColor: withAlpha(c1, '44'), opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                {/* big dashed ring */}
+                <Animated.View style={[styles.hostOrbDash, { borderColor: withAlpha(c2, 'CC'), transform: [{ rotate }] }]} />
+                {/* inner dotted ring */}
+                <Animated.View style={[styles.hostOrbDot, { borderColor: withAlpha(c1, 'CC'), transform: [{ rotate: rotateRev }] }]} />
+
+                {/* orbiting mini host avatars */}
+                {orbitPics.length > 1 && (
+                    <Animated.View style={[styles.hostOrbitWrap, { transform: [{ rotate }] }]}>
+                        {orbitPics.map((p: string, i: number) => {
+                            const ang = (i * 2 * Math.PI) / orbitPics.length - Math.PI / 2;
+                            const left = ORB_SIZE / 2 + ORB_R * Math.cos(ang) - ORB_MINI / 2;
+                            const top = ORB_SIZE / 2 + ORB_R * Math.sin(ang) - ORB_MINI / 2;
+                            return (
+                                <Animated.View key={`om-${i}-${p}`} style={[styles.hostOrbMini, { left, top, borderColor: withAlpha(c2, 'FF'), transform: [{ rotate: rotateRev }] }]}>
+                                    <Image source={{ uri: p }} style={styles.hostOrbMiniImg} />
+                                </Animated.View>
+                            );
+                        })}
+                    </Animated.View>
+                )}
+
+                {/* center cycling avatar */}
+                <View style={[styles.hostOrbCore, { borderColor: withAlpha(c1, 'FF'), shadowColor: c1 }]}>
+                    {current ? (
+                        <Animated.Image source={{ uri: current }} style={[styles.hostOrbCoreImg, { opacity: fade }]} />
+                    ) : (
+                        <MaterialCommunityIcons name="door-closed-lock" size={26} color="#64748B" />
+                    )}
+                </View>
+
+                {/* tiny type badge */}
+                <View style={[styles.hostOrbBadge, { backgroundColor: withAlpha(c1, 'FF') }]}>
+                    <MaterialCommunityIcons name={icon} size={11} color="#FFF" />
+                </View>
+            </View>
+        </>
+    );
+};
 
 export default function UserHome() {
 
@@ -207,6 +282,8 @@ export default function UserHome() {
     // 🔥 NEW STATE FOR DYNAMIC ONLINE COUNT FLUCTUATION 🔥
     const [dynamicOffset, setDynamicOffset] = useState(42);
 
+    // 🚪 LOUNGE STATE: which lounge is currently open ('live' = Live Lounge, 'forum' = Forum Lounge)
+    const [roomType, setRoomType] = useState<'live' | 'forum' | null>(null);
 
     // 🌀 MASTER ANIMATION ENGINE
     const scrollY = useRef(new Animated.Value(0)).current;
@@ -225,7 +302,9 @@ export default function UserHome() {
     const pulseAnim = useRef(new Animated.Value(0)).current;    // glow pulse (live dot / connect button)
     const holoAnim = useRef(new Animated.Value(0)).current;     // wallet holographic sweep
 
-
+    // 🚪 LOUNGE OPEN ANIMATION VALUES
+    const roomAnim = useRef(new Animated.Value(0)).current;     // content reveal (0 closed -> 1 open)
+    const burstAnim = useRef(new Animated.Value(0)).current;    // warp rings + scanner beam
 
     // 🆕 WALLET CARD DRAG-TO-TILT (3D)
     const panResponder = useRef(
@@ -246,15 +325,11 @@ export default function UserHome() {
         })
     ).current;
 
-
-
     const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 60 }).current;
 
     const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
         if (viewableItems && viewableItems.length > 0) setActiveLiveId(viewableItems[0].item.id);
     }).current;
-
-
 
     // 🔥 DYNAMIC ONLINE COUNT EFFECT
     useEffect(() => {
@@ -264,8 +339,6 @@ export default function UserHome() {
         }, 3500); 
         return () => clearInterval(interval);
     }, []);
-
-
 
     useEffect(() => {
 
@@ -288,8 +361,6 @@ export default function UserHome() {
             Animated.delay(2000)
         ])).start();
 
-
-
         // 🔥 Start Ambient Shimmer (SMOOTH FLOATING SEQUENCE)
         Animated.loop(
             Animated.sequence([
@@ -307,8 +378,6 @@ export default function UserHome() {
                 })
             ])
         ).start();
-
-
 
         // 🆕 ENTRANCE (one orchestrated reveal on load)
         Animated.timing(enter, { toValue: 1, duration: 1400, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
@@ -333,19 +402,13 @@ export default function UserHome() {
             Animated.timing(holoAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
         ])).start();
 
-
-
         const runTrail = () => {
             trailX.setValue(-width);
             Animated.timing(trailX, { toValue: width, duration: 3500, useNativeDriver: true }).start(() => runTrail());
         };
         runTrail();
 
-
-
         if (!user) { setLoading(false); return; }
-
-
 
         const q = query(collection(db, 'users'), where('role', '==', 'expert'));
 
@@ -354,25 +417,18 @@ export default function UserHome() {
             setLoading(false);
         });
 
-
-
         const liveQuery = query(collection(db, 'lives'), where('status', '==', 'live'));
 
         const unsubLives = onSnapshot(liveQuery, (snap) => {
             setActiveLives(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
 
-
-
         // 🔥 FIX: FETCH ACTIVE FORUMS FROM 'forum_rooms' COLLECTION 🔥
-
         const partyQuery = query(collection(db, 'forum_rooms'), where('status', '==', 'active'));
 
         const unsubParties = onSnapshot(partyQuery, (snap) => {
             setActiveParties(snap.docs.map(doc => ({ id: doc.id, ...doc.data() })));
         });
-
-
 
         const userRef = doc(db, 'users', user.uid);
 
@@ -380,13 +436,9 @@ export default function UserHome() {
             if (docSnap.exists()) setUserData(docSnap.data());
         });
 
-
-
         return () => { unsubExperts(); unsubLives(); unsubUser(); unsubParties(); };
 
     }, [user]);
-
-
 
     // 🔥 SATTI FIX: Fetching the Maximum of DIAMOND/RECHARGE fields only for accurate Home Screen Level
     const userDiamonds = userData?.totalSpentDiamonds || 0;
@@ -395,12 +447,8 @@ export default function UserHome() {
 
     const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=020617&color=fff&bold=true`;
 
-
-
     const parallaxAura = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -50], extrapolate: 'clamp' });
     const cardScale = scrollY.interpolate({ inputRange: [-100, 0, 100], outputRange: [1.05, 1, 0.98], extrapolate: 'clamp' });
-
-
 
     // ==========================================
     // 🔥 CORE GHOST FILTER APPLICATION (DIRECT SYNC) 🔥
@@ -416,8 +464,6 @@ export default function UserHome() {
         return notBlockedByMe && notBlockedByHost;
     });
 
-
-
     // 2. Filter Lives (Two-Way Block Check)
     const safeLives = activeLives.filter(live => {
         const hostProfile = experts.find(e => e.id === live.hostId);
@@ -426,8 +472,6 @@ export default function UserHome() {
         const notBlockedByHost = !hostBlockedUsers.includes(user?.uid);
         return notBlockedByMe && notBlockedByHost;
     });
-
-
 
     // 3. Filter Parties/Forums (Two-Way Block Check)
     const safeParties = activeParties.filter(party => {
@@ -438,12 +482,24 @@ export default function UserHome() {
         return notBlockedByMe && notBlockedByHost;
     });
 
-
-
     // 4. Spotlight (Featured) inherits from already filtered safeExperts
     const spotlightExperts = safeExperts.filter(e => (e.rating || 5.0) >= 4.0);
 
+    // ==========================================
+    // 🔄 LIVE HOST IMAGE / NAME SYNC
+    // The `lives` / `forum_rooms` docs hold an OLD snapshot of hostImage.
+    // We always read the CURRENT host profile (users collection, real-time) first,
+    // and only fall back to the old snapshot if the profile has no picture.
+    // ==========================================
+    const getHostPic = (item: any): string => {
+        const hostProfile = experts.find(e => e.id === item?.hostId);
+        return hostProfile?.profilePic || hostProfile?.photoURL || item?.hostImage || FALLBACK_HOST_IMG;
+    };
 
+    const getHostName = (item: any): string => {
+        const hostProfile = experts.find(e => e.id === item?.hostId);
+        return hostProfile?.name || item?.hostName || 'Host';
+    };
 
     const getWalletStyle = () => {
         switch(userRank.anim) {
@@ -456,14 +512,10 @@ export default function UserHome() {
         }
     };
 
-
-
     const orbTranslateY = shimmerAnim.interpolate({
         inputRange: [0, 1],
         outputRange: [0, -40]
     });
-
-
 
     // 🆕 STAGGERED REVEAL HELPER
     const reveal = (i: number) => {
@@ -490,8 +542,6 @@ export default function UserHome() {
     const orbitRotate = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
     const orbitRotateRev = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
 
-
-
     // 🔥 ALTERNATING BORDER STYLES (FLUID, 2px)
     const borderType1 = {
         borderLeftWidth: 2,
@@ -505,8 +555,6 @@ export default function UserHome() {
         backgroundColor: 'rgba(15, 23, 42, 0.45)',
     };
 
-
-
     const borderType2 = {
         borderLeftWidth: 2,
         borderRightWidth: 2,
@@ -518,8 +566,6 @@ export default function UserHome() {
         borderBottomColor: withAlpha(userRank.color, '80'),
         backgroundColor: 'rgba(15, 23, 42, 0.65)',
     };
-
-
 
     // 🔥 NEW DIRECT CALL ROUTING LOGIC 🔥
     const handleExpertCallClick = (expert: any, liveSession: any) => {
@@ -538,7 +584,202 @@ export default function UserHome() {
         }
     };
 
+    // ==========================================
+    // 🚪 LOUNGES: OPEN / CLOSE
+    // ==========================================
+    const openRoom = (type: 'live' | 'forum') => {
+        const list = type === 'live' ? safeLives : safeParties;
+        if (list.length === 0) {
+            Alert.alert(
+                type === 'live' ? "Live Lounge is Quiet" : "Forum Lounge is Quiet",
+                type === 'live' ? "No host is broadcasting right now. Please check back soon!" : "No forum room is open right now. Please check back soon!"
+            );
+            return;
+        }
+        roomAnim.setValue(0);
+        burstAnim.setValue(0);
+        setActiveLiveId(null);
+        setRoomType(type);
+        Animated.parallel([
+            Animated.timing(roomAnim, { toValue: 1, duration: 1100, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+            Animated.timing(burstAnim, { toValue: 1, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        ]).start();
+    };
 
+    const closeRoom = () => {
+        Animated.timing(roomAnim, { toValue: 0, duration: 380, easing: Easing.in(Easing.cubic), useNativeDriver: true }).start(() => {
+            setRoomType(null);
+        });
+    };
+
+    // instant close (used before navigating to a live / forum room so the modal doesn't stay on top)
+    const leaveRoomTo = (target: any) => {
+        roomAnim.setValue(0);
+        setRoomType(null);
+        router.push(target);
+    };
+
+    const roomC1 = roomType === 'forum' ? '#6366F1' : '#EF4444';
+    const roomC2 = userRank.color;
+    const roomList = roomType === 'live' ? safeLives : safeParties;
+
+    const roomContentOpacity = roomAnim.interpolate({ inputRange: [0, 0.2, 0.6, 1], outputRange: [0, 0, 1, 1], extrapolate: 'clamp' });
+    const roomContentScale = roomAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1], extrapolate: 'clamp' });
+    const burstScale = burstAnim.interpolate({ inputRange: [0, 1], outputRange: [0.05, 1], extrapolate: 'clamp' });
+    const burstOpacity = burstAnim.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.8, 0], extrapolate: 'clamp' });
+    // 🌀 scanner beam sweeps top -> bottom once while the lounge opens
+    const beamY = burstAnim.interpolate({ inputRange: [0, 1], outputRange: [0, height], extrapolate: 'clamp' });
+    const beamOpacity = burstAnim.interpolate({ inputRange: [0, 0.1, 0.9, 1], outputRange: [0, 1, 1, 0], extrapolate: 'clamp' });
+
+    // 🌀 WARP RINGS (3 expanding rings, each different speed)
+    const warpRingStyle = (i: number) => ({
+        borderColor: i % 2 === 0 ? withAlpha(roomC1, 'CC') : withAlpha(roomC2, 'CC'),
+        opacity: burstAnim.interpolate({ inputRange: [0, 0.15, 1], outputRange: [0, 0.9 - i * 0.2, 0], extrapolate: 'clamp' as const }),
+        transform: [{ scale: burstAnim.interpolate({ inputRange: [0, 1], outputRange: [0.05, 0.55 + i * 0.45], extrapolate: 'clamp' as const }) }],
+    });
+
+    // 🃏 CARDS RISE IN WITH 3D FLIP, ONE BY ONE
+    const roomItemReveal = (index: number) => {
+        const start = Math.min(0.15 + index * 0.08, 0.55);
+        const end = Math.min(start + 0.4, 1);
+        return {
+            opacity: roomAnim.interpolate({ inputRange: [start, end], outputRange: [0, 1], extrapolate: 'clamp' }),
+            transform: [
+                { perspective: 900 },
+                { translateY: roomAnim.interpolate({ inputRange: [start, end], outputRange: [90, 0], extrapolate: 'clamp' }) },
+                { rotateX: roomAnim.interpolate({ inputRange: [start, end], outputRange: ['35deg', '0deg'], extrapolate: 'clamp' }) },
+            ],
+        };
+    };
+
+    // 🚪 PORTAL (home screen entry to a lounge) - host image orb design
+    const renderPortal = (type: 'live' | 'forum') => {
+        const isLive = type === 'live';
+        const list = isLive ? safeLives : safeParties;
+        const p1 = isLive ? '#EF4444' : '#6366F1';
+        const p2 = userRank.color;
+        const empty = list.length === 0;
+        // always the CURRENT host pictures (synced with host profile), duplicates removed
+        const pics: string[] = Array.from(new Set(list.map((it: any) => getHostPic(it)))).slice(0, 6) as string[];
+        return (
+            <PressCard
+                tilt={isLive ? 4 : -4}
+                style={{ width: PORTAL_W, height: PORTAL_H, opacity: empty ? 0.6 : 1 }}
+                onPress={() => openRoom(type)}
+            >
+                <View style={[styles.portalShadow, { shadowColor: p1 }]}>
+                    <NeonFrame w={PORTAL_W} h={PORTAL_H} rt={PORTAL_W / 2} rb={26} c1={p1} c2={p2} rotate={isLive ? orbitRotate : orbitRotateRev}>
+                        <PortalHostOrb
+                            pics={pics}
+                            c1={p1}
+                            c2={p2}
+                            rotate={isLive ? orbitRotate : orbitRotateRev}
+                            rotateRev={isLive ? orbitRotateRev : orbitRotate}
+                            pulseOpacity={pulseOpacity}
+                            pulseScale={pulseScale}
+                            icon={isLive ? 'broadcast' : 'forum'}
+                        />
+
+                        <View pointerEvents="none" style={styles.portalInner}>
+                            <Text style={styles.portalTitle}>{isLive ? 'BROADCAST' : 'FORUM'}</Text>
+                            <Text style={[styles.portalSub, { color: p2 }]}>{isLive ? 'LIVE VIDEO' : 'LIVE AUDIO'}</Text>
+
+                            {/* count chip */}
+                            <View style={[styles.portalCountChip, { backgroundColor: withAlpha(p1, '33'), borderColor: withAlpha(p1, '99') }]}>
+                                <View style={[styles.portalCountDot, { backgroundColor: empty ? '#64748B' : '#10B981' }]} />
+                                <Text style={styles.portalCountText}>{list.length} {isLive ? 'LIVE' : 'OPEN'}</Text>
+                            </View>
+
+                            <View style={[styles.portalEnterChip, { backgroundColor: withAlpha(p1, 'FF') }]}>
+                                <Text style={styles.portalEnterText}>ENTER</Text>
+                                <Ionicons name="arrow-forward" size={10} color="#FFF" />
+                            </View>
+                        </View>
+                    </NeonFrame>
+                </View>
+            </PressCard>
+        );
+    };
+
+    // 🎥 CARD INSIDE LIVE LOUNGE (live host)
+    const renderRoomLiveCard = (item: any, index: number) => {
+        const isActive = item.id === activeLiveId && isFocused && roomType === 'live';
+        const c1 = index % 2 === 0 ? userRank.color : userRank.secondaryColor;
+        const c2 = index % 2 === 0 ? userRank.secondaryColor : userRank.color;
+        const k1 = withAlpha(c1, 'FF');
+        return (
+            // 🔥 LIVE GOES TO LIVE 🔥
+            <PressCard tilt={index % 2 === 0 ? 2 : -2} style={styles.roomCardWrap} onPress={() => leaveRoomTo({ pathname: "/(tabs)/live/[liveId]", params: { liveId: item.id } })}>
+                <View style={[styles.roomLiveShadow, { shadowColor: k1 }]}>
+                    <NeonFrame w={ROOM_W} h={ROOM_LIVE_H} rt={30} rb={30} c1={c1} c2={c2} rotate={index % 2 === 0 ? orbitRotate : orbitRotateRev}>
+                        {isActive ? <LivePreview liveId={item.id} /> : <Image source={{ uri: getHostPic(item) }} style={styles.massLiveThumb} />}
+                        <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']} style={styles.liveSoftShade} />
+
+                        {/* 🎥 VIEWFINDER CORNER BRACKETS */}
+                        <View pointerEvents="none" style={[styles.vfCorner, { top: 12, left: 12, borderTopWidth: 2, borderLeftWidth: 2, borderTopLeftRadius: 8, borderColor: k1 }]} />
+                        <View pointerEvents="none" style={[styles.vfCorner, { top: 12, right: 12, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 8, borderColor: k1 }]} />
+                        <View pointerEvents="none" style={[styles.vfCorner, { bottom: 12, left: 12, borderBottomWidth: 2, borderLeftWidth: 2, borderBottomLeftRadius: 8, borderColor: k1 }]} />
+                        <View pointerEvents="none" style={[styles.vfCorner, { bottom: 12, right: 12, borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 8, borderColor: k1 }]} />
+
+                        <View pointerEvents="none" style={styles.archBadgeWrap}>
+                            <View style={styles.liveBadgeNew}>
+                                <Animated.View style={[styles.liveBadgeDot, { opacity: pulseOpacity }]} />
+                                <Text style={styles.liveBadgeText}>LIVE</Text>
+                            </View>
+                        </View>
+                    </NeonFrame>
+                </View>
+
+                <View style={styles.liveNameRow}>
+                    <View style={{ flex: 1 }}>
+                        <Text style={styles.liveHostNameMass} numberOfLines={1}>{getHostName(item)}</Text>
+                        <View style={[styles.liveNameLine, { backgroundColor: k1 }]} />
+                    </View>
+                    <EqBars loop={mainLoop} color={k1} />
+                </View>
+            </PressCard>
+        );
+    };
+
+    // 💬 CARD INSIDE FORUM LOUNGE (forum host)
+    const renderRoomForumCard = (item: any, index: number) => {
+        const fc1 = index % 2 === 0 ? '#6366F1' : userRank.color;
+        const fc2 = index % 2 === 0 ? userRank.color : '#6366F1';
+        const hostPic = getHostPic(item);
+        return (
+            // 🔥 THE ULTIMATE ROOT FOLDER PATH FIX (/forum/[roomId]) 🔥
+            <PressCard tilt={index % 2 === 0 ? 2 : -2} style={[styles.roomForumWrap, { shadowColor: '#6366F1' }]} onPress={() => leaveRoomTo({ pathname: "/forum/[roomId]", params: { roomId: item.roomId || item.id } })}>
+                <NeonFrame w={ROOM_W} h={FORUM_H} rt={30} rb={30} c1={fc1} c2={fc2} rotate={index % 2 === 0 ? orbitRotateRev : orbitRotate}>
+                    <Image source={{ uri: hostPic }} blurRadius={22} style={styles.forumBackdrop} />
+                    <LinearGradient pointerEvents="none" colors={['rgba(49,46,129,0.80)', 'rgba(2,6,23,0.55)', 'rgba(2,6,23,0.92)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+
+                    <View pointerEvents="none" style={styles.forumRow}>
+                        <View style={[styles.forumThumbWrap, { borderColor: withAlpha(fc1, 'FF') }]}>
+                            <Image source={{ uri: hostPic }} style={styles.forumThumb} />
+                        </View>
+                        <View style={styles.forumInfo}>
+                            <View style={styles.forumBadge}>
+                                <Ionicons name="chatbubbles" size={10} color="#FFF" />
+                                <Text style={styles.liveBadgeText}>FORUM</Text>
+                            </View>
+                            <Text style={styles.forumRoomName} numberOfLines={2}>{item.roomName}</Text>
+                            <View style={styles.forumHostRow}>
+                                <Ionicons name="mic" size={11} color="#A5B4FC" />
+                                <Text style={styles.forumHostText} numberOfLines={1}>Host: {getHostName(item)}</Text>
+                            </View>
+                            <View style={styles.forumFooter}>
+                                <EqBars loop={mainLoop} color={withAlpha(fc2, 'FF')} />
+                                <View style={[styles.joinChip, { backgroundColor: withAlpha(fc1, 'FF') }]}>
+                                    <Text style={styles.joinChipText}>JOIN</Text>
+                                    <Ionicons name="arrow-forward" size={10} color="#000" />
+                                </View>
+                            </View>
+                        </View>
+                    </View>
+                </NeonFrame>
+            </PressCard>
+        );
+    };
 
     return (
         <View style={styles.mainContainer}>
@@ -584,9 +825,103 @@ export default function UserHome() {
                     </View>
                 </BlurView>
             </Modal>
+
+            {/* 🚪 LOUNGE (Live Lounge / Forum Lounge) */}
+            <Modal transparent visible={roomType !== null} animationType="none" onRequestClose={closeRoom} statusBarTranslucent>
+                <View style={styles.roomRoot}>
+                    <LinearGradient colors={['#05010f', userRank.themeBg[0], userRank.themeBg[1]]} style={StyleSheet.absoluteFill} />
+
+                    {/* room stars */}
+                    {STARS.map((st, i) => (
+                        <Animated.View
+                            key={`rstar-${i}`}
+                            pointerEvents="none"
+                            style={{
+                                position: 'absolute', top: st.top, left: st.left, width: st.size, height: st.size, borderRadius: st.size,
+                                backgroundColor: '#FFF',
+                                opacity: shimmerAnim.interpolate({ inputRange: [0, 1], outputRange: i % 2 === 0 ? [0.1, 0.9] : [0.9, 0.1] }),
+                            }}
+                        />
+                    ))}
+
+                    {/* room ambient orbs */}
+                    <Animated.View pointerEvents="none" style={[styles.roomOrb, { top: 80, left: -80, backgroundColor: roomC1, transform: [{ translateY: orbTranslateY }] }]} />
+                    <Animated.View pointerEvents="none" style={[styles.roomOrb, { bottom: 80, right: -80, backgroundColor: roomC2, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
+
+                    {/* ✨ ENERGY BURST */}
+                    <Animated.View
+                        pointerEvents="none"
+                        style={[styles.roomBurst, { backgroundColor: withAlpha(roomC1, '66'), borderColor: withAlpha(roomC2, 'CC'), opacity: burstOpacity, transform: [{ scale: burstScale }] }]}
+                    />
+
+                    {/* 🌀 WARP RINGS */}
+                    {[0, 1, 2].map(i => (
+                        <Animated.View key={`warp-${i}`} pointerEvents="none" style={[styles.roomWarpRing, warpRingStyle(i)]} />
+                    ))}
+
+                    {/* ROOM CONTENT */}
+                    <Animated.View style={[styles.roomContent, { opacity: roomContentOpacity, transform: [{ scale: roomContentScale }] }]}>
+                        <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+                            {/* lounge header */}
+                            <View style={styles.roomHeader}>
+                                <TouchableOpacity activeOpacity={0.8} onPress={closeRoom} style={[styles.roomCloseBtn, { borderColor: withAlpha(roomC1, '99') }]}>
+                                    <Ionicons name="chevron-down" size={22} color="#FFF" />
+                                </TouchableOpacity>
+
+                                <View style={styles.roomHeaderCenter}>
+                                    <View style={styles.roomCrownWrap}>
+                                        <Animated.View style={[styles.roomCrownRing, { borderColor: roomC1, transform: [{ rotate: orbitRotate }] }]} />
+                                        <Animated.View style={[styles.roomCrownRingInner, { borderColor: roomC2, transform: [{ rotate: orbitRotateRev }] }]} />
+                                        <MaterialCommunityIcons name={roomType === 'forum' ? 'forum' : 'broadcast'} size={20} color="#FFF" />
+                                    </View>
+                                    <Text style={styles.roomTitle}>{roomType === 'forum' ? 'FORUM LOUNGE' : 'LIVE LOUNGE'}</Text>
+                                    <Text style={[styles.roomSubtitle, { color: roomC2 }]}>{roomType === 'forum' ? 'OPEN DISCUSSIONS' : 'NOW STREAMING'}</Text>
+                                </View>
+
+                                <View style={[styles.roomCountPill, { borderColor: withAlpha(roomC1, '99') }]}>
+                                    <View style={styles.roomCountDot} />
+                                    <Text style={styles.roomCountText}>{roomList.length}</Text>
+                                </View>
+                            </View>
+
+                            <View style={[styles.roomDivider, { backgroundColor: withAlpha(roomC1, '88') }]} />
+
+                            <FlatList
+                                key={`room-${roomType}`}
+                                data={roomList}
+                                keyExtractor={(item: any) => item.id}
+                                showsVerticalScrollIndicator={false}
+                                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 20, paddingBottom: 60 }}
+                                onViewableItemsChanged={roomType === 'live' ? onViewableItemsChanged : undefined}
+                                viewabilityConfig={viewabilityConfig}
+                                ListEmptyComponent={
+                                    <View style={styles.roomEmpty}>
+                                        <MaterialCommunityIcons name="door-closed-lock" size={46} color="#475569" />
+                                        <Text style={styles.roomEmptyText}>This lounge is empty right now</Text>
+                                    </View>
+                                }
+                                renderItem={({ item, index }: any) => (
+                                    <Animated.View style={roomItemReveal(index)}>
+                                        {roomType === 'forum' ? renderRoomForumCard(item, index) : renderRoomLiveCard(item, index)}
+                                    </Animated.View>
+                                )}
+                            />
+                        </SafeAreaView>
+                    </Animated.View>
+
+                    {/* 🔦 SCANNER BEAM (sweeps once on open) */}
+                    <Animated.View pointerEvents="none" style={[styles.roomBeam, { opacity: beamOpacity, transform: [{ translateY: beamY }] }]}>
+                        <LinearGradient
+                            colors={['rgba(255,255,255,0)', withAlpha(roomC2, 'FF'), 'rgba(255,255,255,0)']}
+                            start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+                            style={{ flex: 1 }}
+                        />
+                    </Animated.View>
+                </View>
+            </Modal>
             
             {/* 🔥 DYNAMIC ANIMATED DESIGN BACKGROUND */}
-            <LinearGradient colors={userRank.themeBg as any} style={StyleSheet.absoluteFill} />
+            <LinearGradient colors={userRank.themeBg} style={StyleSheet.absoluteFill} />
 
             {/* 🆕 TWINKLING STAR FIELD */}
             {STARS.map((st, i) => (
@@ -606,8 +941,6 @@ export default function UserHome() {
                 <Animated.View style={[styles.shimmerOrb, { top: 100, left: -60, backgroundColor: userRank.color, transform: [{ translateY: orbTranslateY }] }]} />
                 <Animated.View style={[styles.shimmerOrb, { bottom: 200, right: -60, backgroundColor: userRank.color, transform: [{ translateY: Animated.multiply(orbTranslateY, -1) }] }]} />
             </Animated.View>
-
-
 
             {/* 🆕 COMPACT FIXED HEADER (glass) */}
             <SafeAreaView style={styles.topSection} edges={['top']}>
@@ -636,8 +969,6 @@ export default function UserHome() {
                     </TouchableOpacity>
                 </Animated.View>
             </SafeAreaView>
-
-
 
             <Animated.ScrollView 
                 showsVerticalScrollIndicator={false} 
@@ -689,8 +1020,6 @@ export default function UserHome() {
                         </Animated.View>
                     </Animated.View>
                 </Animated.View>
-
-
 
                 {/* 🔥 QUICK Discover BUTTON WITH LEVEL RESTRICTION & POLICY MODAL 🔥 */}
                 <Animated.View style={reveal(2)}>
@@ -752,8 +1081,6 @@ export default function UserHome() {
                     </TouchableOpacity>
                 </Animated.View>
 
-
-
                 <Animated.View style={[styles.searchSection, reveal(3)]}>
                     <BlurView intensity={10} tint="dark" style={[styles.searchBarMass, borderType2]}>
                         <Ionicons name="search" size={18} color={userRank.color} />
@@ -761,128 +1088,22 @@ export default function UserHome() {
                     </BlurView>
                 </Animated.View>
 
-
-
-                {safeLives.length > 0 && (
+                {/* 🚪 LIVE LOUNGES: BROADCAST + FORUM (tap a card -> lounge opens with the hosts inside) */}
+                {(safeLives.length > 0 || safeParties.length > 0) && (
                     <Animated.View style={[styles.sectionArea, reveal(4)]}>
                         <View style={styles.sectionHeaderMass}>
                             <View style={styles.rowCenter}>
-                                <View style={styles.pulseDotWrap}>
-                                    <Animated.View style={[styles.pulseDotHalo, { opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
-                                    <View style={styles.livePulseDot} />
-                                </View>
-                                <Text style={styles.sectionTitleMass}>ACTIVE BROADCASTS</Text>
+                                <MaterialCommunityIcons name="access-point" size={16} color={userRank.color} style={{ marginRight: 8 }} />
+                                <Text style={styles.sectionTitleMass}>LIVE LOUNGES</Text>
                             </View>
-                            <Text style={styles.onlineCountText}>{safeLives.length} NODES</Text>
+                            <Text style={styles.onlineCountText}>TAP A CARD TO ENTER</Text>
                         </View>
-                        <FlatList horizontal snapToInterval={LIVE_W + 16} decelerationRate="fast" showsHorizontalScrollIndicator={false}
-                            data={safeLives} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20, paddingVertical: 14, paddingRight: 10 }}
-                            style={{ overflow: 'visible' }}
-                            onViewableItemsChanged={onViewableItemsChanged} viewabilityConfig={viewabilityConfig}
-                            renderItem={({ item, index }) => {
-                                const isActive = item.id === activeLiveId && isFocused;
-                                const c1 = index % 2 === 0 ? userRank.color : userRank.secondaryColor;
-                                const c2 = index % 2 === 0 ? userRank.secondaryColor : userRank.color;
-                                const k1 = withAlpha(c1, 'FF');
-                                return (
-                                    // 🔥 FIX 1: LIVE GOES TO LIVE 🔥
-                                    <PressCard tilt={index % 2 === 0 ? 5 : -5} style={styles.liveCardWrap} onPress={() => router.push({ pathname: "/(tabs)/live/[liveId]", params: { liveId: item.id } } as any)}>
-                                        {/* 📸 FULL-VISIBLE PHOTO FRAME (nothing covers the picture) */}
-                                        <View style={[styles.liveFrameShadow, { shadowColor: k1 }]}>
-                                            <NeonFrame w={LIVE_W} h={FRAME_H} rt={26} rb={26} c1={c1} c2={c2} rotate={index % 2 === 0 ? orbitRotate : orbitRotateRev}>
-                                                {isActive ? <LivePreview liveId={item.id} /> : <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.massLiveThumb} />}
-                                                {/* only a whisper of shade at the very bottom */}
-                                                <LinearGradient pointerEvents="none" colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)']} style={styles.liveSoftShade} />
-
-                                                {/* 🎥 VIEWFINDER CORNER BRACKETS */}
-                                                <View pointerEvents="none" style={[styles.vfCorner, { top: 12, left: 12, borderTopWidth: 2, borderLeftWidth: 2, borderTopLeftRadius: 8, borderColor: k1 }]} />
-                                                <View pointerEvents="none" style={[styles.vfCorner, { top: 12, right: 12, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 8, borderColor: k1 }]} />
-                                                <View pointerEvents="none" style={[styles.vfCorner, { bottom: 12, left: 12, borderBottomWidth: 2, borderLeftWidth: 2, borderBottomLeftRadius: 8, borderColor: k1 }]} />
-                                                <View pointerEvents="none" style={[styles.vfCorner, { bottom: 12, right: 12, borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 8, borderColor: k1 }]} />
-
-                                                {/* REC-style LIVE pill (small, top center) */}
-                                                <View pointerEvents="none" style={styles.archBadgeWrap}>
-                                                    <View style={styles.liveBadgeNew}>
-                                                        <Animated.View style={[styles.liveBadgeDot, { opacity: pulseOpacity }]} />
-                                                        <Text style={styles.liveBadgeText}>LIVE</Text>
-                                                    </View>
-                                                </View>
-                                            </NeonFrame>
-                                        </View>
-
-                                        {/* 🏷️ NAME TAG HANGS BELOW THE PHOTO */}
-                                        <View style={styles.liveNameRow}>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.liveHostNameMass} numberOfLines={1}>{item.hostName || 'Host'}</Text>
-                                                <View style={[styles.liveNameLine, { backgroundColor: k1 }]} />
-                                            </View>
-                                            <EqBars loop={mainLoop} color={k1} />
-                                        </View>
-                                    </PressCard>
-                                );
-                            }}
-                        />
+                        <View style={styles.portalRow}>
+                            {renderPortal('live')}
+                            {renderPortal('forum')}
+                        </View>
                     </Animated.View>
                 )}
-
-
-
-                {/* 🔥 NEW: VIP Session ARENAS SECTION 🔥 */}
-                {safeParties.length > 0 && (
-                    <Animated.View style={[styles.sectionArea, reveal(5)]}>
-                        <View style={styles.sectionHeaderMass}>
-                            <View style={styles.rowCenter}>
-                                <MaterialCommunityIcons name="party-popper" size={16} color={userRank.color} style={{marginRight: 8}} />
-                                <Text style={styles.sectionTitleMass}>OPEN FORUMS</Text>
-                            </View>
-                            <Text style={styles.onlineCountText}>{safeParties.length} ROOMS</Text>
-                        </View>
-                        <FlatList horizontal showsHorizontalScrollIndicator={false} data={safeParties} keyExtractor={(item) => item.id} contentContainerStyle={{ paddingLeft: 20, paddingVertical: 14, paddingRight: 10 }}
-                            style={{ overflow: 'visible' }}
-                            renderItem={({ item, index }) => {
-                                const fc1 = index % 2 === 0 ? '#6366F1' : userRank.color;
-                                const fc2 = index % 2 === 0 ? userRank.color : '#6366F1';
-                                return (
-                                    // 🔥 FIX 2: THE ULTIMATE ROOT FOLDER PATH FIX (/forum/[roomId]) 🔥
-                                    <PressCard tilt={index % 2 === 0 ? 4 : -4} style={[styles.neonWrapForum, { shadowColor: '#6366F1' }]} onPress={() => router.push({ pathname: "/forum/[roomId]", params: { roomId: item.roomId || item.id } } as any)}>
-                                        <NeonFrame w={FORUM_W} h={FORUM_H} rt={30} rb={30} c1={fc1} c2={fc2} rotate={index % 2 === 0 ? orbitRotateRev : orbitRotate}>
-                                            {/* blurred backdrop (cropping is fine here) */}
-                                            <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} blurRadius={22} style={styles.forumBackdrop} />
-                                            <LinearGradient pointerEvents="none" colors={['rgba(49,46,129,0.80)', 'rgba(2,6,23,0.55)', 'rgba(2,6,23,0.92)']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-
-                                            <View pointerEvents="none" style={styles.forumRow}>
-                                                {/* full, uncropped square photo */}
-                                                <View style={[styles.forumThumbWrap, { borderColor: withAlpha(fc1, 'FF') }]}>
-                                                    <Image source={{ uri: item.hostImage || 'https://i.pravatar.cc/150' }} style={styles.forumThumb} />
-                                                </View>
-                                                <View style={styles.forumInfo}>
-                                                    <View style={styles.forumBadge}>
-                                                        <Ionicons name="chatbubbles" size={10} color="#FFF" />
-                                                        <Text style={styles.liveBadgeText}>FORUM</Text>
-                                                    </View>
-                                                    <Text style={styles.forumRoomName} numberOfLines={2}>{item.roomName}</Text>
-                                                    <View style={styles.forumHostRow}>
-                                                        <Ionicons name="mic" size={11} color="#A5B4FC" />
-                                                        <Text style={styles.forumHostText} numberOfLines={1}>Host: {item.hostName}</Text>
-                                                    </View>
-                                                    <View style={styles.forumFooter}>
-                                                        <EqBars loop={mainLoop} color={withAlpha(fc2, 'FF')} />
-                                                        <View style={[styles.joinChip, { backgroundColor: withAlpha(fc1, 'FF') }]}>
-                                                            <Text style={styles.joinChipText}>JOIN</Text>
-                                                            <Ionicons name="arrow-forward" size={10} color="#000" />
-                                                        </View>
-                                                    </View>
-                                                </View>
-                                            </View>
-                                        </NeonFrame>
-                                    </PressCard>
-                                );
-                            }}
-                        />
-                    </Animated.View>
-                )}
-
-
 
                 <View style={styles.sectionArea}>
                     <View style={styles.sectionHeaderMass}>
@@ -912,8 +1133,6 @@ export default function UserHome() {
                         }}
                     />
                 </View>
-
-
 
                 <View style={styles.listArea}>
                     <View style={[styles.rowCenter, { marginBottom: 18 }]}>
@@ -979,8 +1198,6 @@ export default function UserHome() {
         </View>
     );
 }
-
-
 
 const styles = StyleSheet.create({
 
@@ -1137,6 +1354,61 @@ const styles = StyleSheet.create({
     miniChip: { flexDirection: 'row', alignItems: 'center', gap: 3, backgroundColor: 'rgba(255,255,255,0.08)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8 },
     miniChipText: { color: '#E2E8F0', fontSize: 9, fontWeight: '900' },
     nodeCallBtn: { width: 48, height: 48, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 12, shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
+
+    // ==========================================
+    // 🚪 LOUNGES: PORTAL CARDS (home screen)
+    // ==========================================
+    portalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 6 },
+    portalShadow: { width: PORTAL_W, height: PORTAL_H, borderTopLeftRadius: PORTAL_W / 2, borderTopRightRadius: PORTAL_W / 2, borderBottomLeftRadius: 26, borderBottomRightRadius: 26, backgroundColor: '#020617', shadowOpacity: 0.65, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
+    portalInner: { ...StyleSheet.absoluteFillObject, alignItems: 'center', paddingTop: 14 + ORB_SIZE },
+    portalTitle: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 2, marginTop: 6, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 6 },
+    portalSub: { fontSize: 7.5, fontWeight: '900', letterSpacing: 2.5, marginTop: 2 },
+    portalCountChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 8 },
+    portalCountDot: { width: 6, height: 6, borderRadius: 3 },
+    portalCountText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+    portalAvatarRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 30, marginTop: 12 },
+    portalAvatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, backgroundColor: '#0F172A' },
+    portalEnterChip: { position: 'absolute', bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12 },
+    portalEnterText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 2 },
+
+    // 🌐 HOST ORB (cycling host image + orbiting mini hosts)
+    hostOrbBox: { position: 'absolute', top: 14, alignSelf: 'center', width: ORB_SIZE, height: ORB_SIZE, justifyContent: 'center', alignItems: 'center' },
+    hostOrbPulse: { position: 'absolute', width: 84, height: 84, borderRadius: 42 },
+    hostOrbDash: { position: 'absolute', width: ORB_SIZE, height: ORB_SIZE, borderRadius: ORB_SIZE / 2, borderWidth: 1.5, borderStyle: 'dashed' },
+    hostOrbDot: { position: 'absolute', width: 92, height: 92, borderRadius: 46, borderWidth: 1, borderStyle: 'dotted' },
+    hostOrbitWrap: { position: 'absolute', width: ORB_SIZE, height: ORB_SIZE },
+    hostOrbMini: { position: 'absolute', width: ORB_MINI, height: ORB_MINI, borderRadius: ORB_MINI / 2, borderWidth: 1.5, overflow: 'hidden', backgroundColor: '#0F172A' },
+    hostOrbMiniImg: { width: '100%', height: '100%' },
+    hostOrbCore: { width: 66, height: 66, borderRadius: 33, borderWidth: 2, overflow: 'hidden', backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center', shadowOpacity: 0.9, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 10 },
+    hostOrbCoreImg: { width: '100%', height: '100%' },
+    hostOrbBadge: { position: 'absolute', bottom: 22, right: 26, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#020617' },
+
+    // ==========================================
+    // 🚪 LOUNGES: INSIDE THE LOUNGE
+    // ==========================================
+    roomRoot: { flex: 1, backgroundColor: '#05010f' },
+    roomContent: { ...StyleSheet.absoluteFillObject },
+    roomOrb: { position: 'absolute', width: 380, height: 380, borderRadius: 190, opacity: 0.14 },
+    roomBurst: { position: 'absolute', width: width * 2.2, height: width * 2.2, borderRadius: width * 1.1, borderWidth: 3, left: width / 2 - width * 1.1, top: height / 2 - width * 1.1 },
+    roomWarpRing: { position: 'absolute', width: width * 2, height: width * 2, borderRadius: width, borderWidth: 2, left: width / 2 - width, top: height / 2 - width },
+    roomBeam: { position: 'absolute', top: 0, left: 0, right: 0, height: 3, zIndex: 50, elevation: 50 },
+    roomHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 12, paddingBottom: 14 },
+    roomCloseBtn: { width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center' },
+    roomHeaderCenter: { flex: 1, alignItems: 'center' },
+    roomCrownWrap: { width: 46, height: 46, justifyContent: 'center', alignItems: 'center' },
+    roomCrownRing: { position: 'absolute', width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, borderStyle: 'dashed', opacity: 0.9 },
+    roomCrownRingInner: { position: 'absolute', width: 36, height: 36, borderRadius: 18, borderWidth: 1, borderStyle: 'dotted', opacity: 0.8 },
+    roomTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 3, marginTop: 6, textShadowColor: 'rgba(255,255,255,0.35)', textShadowRadius: 10 },
+    roomSubtitle: { fontSize: 8, fontWeight: '900', letterSpacing: 3, marginTop: 3 },
+    roomCountPill: { minWidth: 42, height: 42, borderRadius: 21, borderWidth: 1.5, backgroundColor: 'rgba(255,255,255,0.06)', flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 5, paddingHorizontal: 8 },
+    roomCountDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#10B981' },
+    roomCountText: { color: '#FFF', fontSize: 13, fontWeight: '900' },
+    roomDivider: { height: 1.5, marginHorizontal: 40, borderRadius: 1 },
+    roomCardWrap: { width: ROOM_W, marginBottom: 22 },
+    roomLiveShadow: { width: ROOM_W, height: ROOM_LIVE_H, borderRadius: 30, backgroundColor: '#020617', shadowOpacity: 0.65, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
+    roomForumWrap: { width: ROOM_W, height: FORUM_H, marginBottom: 22, borderRadius: 30, shadowOpacity: 0.5, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 12 },
+    roomEmpty: { alignItems: 'center', justifyContent: 'center', marginTop: 80, gap: 12 },
+    roomEmptyText: { color: '#64748B', fontSize: 12, fontWeight: '800', letterSpacing: 1 },
 
     // ==========================================
     // 🔥 NEW HIGH-END PREMIUM POLICY MODAL STYLES 🔥
