@@ -188,6 +188,9 @@ const RING_STROKE = 10;
 const RING_R = (RING_SIZE - RING_STROKE) / 2;
 const RING_C = 2 * Math.PI * RING_R;
 
+// 🖼️ BANNER (cover) HEIGHT - Share / Banner buttons are pinned to the bottom edge of this height
+const COVER_H = 300;
+
 // ✨ PRESS-SCALE BUTTON (adds a springy premium feel to every tap)
 const ScaleBtn = ({ children, onPress, style, wrapStyle, disabled }: any) => {
   const s = useRef(new Animated.Value(1)).current;
@@ -1323,55 +1326,9 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
            <View style={styles.bannerOverlaySlot} pointerEvents="box-none">{bannerOverlay}</View>
          )}
 
-         <ScaleBtn wrapStyle={styles.shareCoverWrap} style={styles.shareCoverBtn} onPress={handleShareApp}>
-             <Ionicons name="share-social" size={14} color="#FFF" />
-             <Text style={styles.editCoverText}>Share</Text>
-         </ScaleBtn>
+         {/* 🔥 FIX: Share + Banner buttons (and the banner menu) moved to the "coverActionLayer" below,
+             so they sit exactly on the bottom edge of the banner and are never hidden / blocked by the profile section. */}
 
-         {/* 🆕 BANNER BUTTON: custom banner irundha click panna menu (Change / Remove), illana direct-a pick */}
-         <ScaleBtn wrapStyle={styles.editCoverWrap} style={styles.editCoverBtn} onPress={handleBannerPress} disabled={coverUploading}>
-            {coverUploading ? <ActivityIndicator size="small" color="#FFF" /> : (
-              <>
-                <Ionicons name="camera" size={14} color="#FFF" />
-                <Text style={styles.editCoverText}>Banner</Text>
-                {!!expertData?.coverPhoto && (
-                  <Ionicons name={bannerMenuOpen ? "chevron-down" : "chevron-up"} size={12} color="#FFF" style={{ marginLeft: 4 }} />
-                )}
-              </>
-            )}
-         </ScaleBtn>
-
-         {/* 🆕 BANNER MENU (Change Banner / Remove Banner) - veliya tap panna mooditum */}
-         {bannerMenuOpen && (
-           <>
-             <Pressable style={styles.bannerMenuBackdrop} onPress={closeBannerMenu} />
-             <Animated.View
-               style={[
-                 styles.bannerMenu,
-                 {
-                   borderColor: theme.primary + '90',
-                   opacity: bannerMenuAnim,
-                   transform: [
-                     { translateY: bannerMenuAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
-                     { scale: bannerMenuAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }
-                   ]
-                 }
-               ]}
-             >
-               <TouchableOpacity style={styles.bannerMenuItem} onPress={() => { closeBannerMenu(); pickCoverImage(); }} activeOpacity={0.7}>
-                 <Ionicons name="image-outline" size={17} color={theme.primary} />
-                 <Text style={styles.bannerMenuText}>Change Banner</Text>
-               </TouchableOpacity>
-               <View style={styles.bannerMenuDivider} />
-               <TouchableOpacity style={styles.bannerMenuItem} onPress={() => { closeBannerMenu(); deleteCoverImage(); }} activeOpacity={0.7}>
-                 <Ionicons name="trash-outline" size={17} color="#F87171" />
-                 <Text style={[styles.bannerMenuText, { color: '#F87171' }]}>Remove Banner</Text>
-               </TouchableOpacity>
-             </Animated.View>
-           </>
-         )}
-
-         
       </View>
 
       <View style={styles.contentContainer}>
@@ -1667,6 +1624,59 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
             </TouchableOpacity>
           </Animated.View>
 
+      </View>
+
+      {/* 🔥 FIX: COVER ACTION LAYER - Share (left) + Banner (right) pinned to the BOTTOM EDGE of the banner.
+          This layer is drawn on top of the profile section (which overlaps the banner by 90px),
+          so the buttons are always visible AND tappable. pointerEvents="box-none" = taps outside the buttons pass through. */}
+      <View style={styles.coverActionLayer} pointerEvents="box-none">
+         <ScaleBtn wrapStyle={styles.shareCoverWrap} style={styles.shareCoverBtn} onPress={handleShareApp}>
+             <Ionicons name="share-social" size={14} color="#FFF" />
+             <Text style={styles.editCoverText}>Share</Text>
+         </ScaleBtn>
+
+         {/* 🆕 BANNER BUTTON: custom banner irundha click panna menu (Change / Remove), illana direct-a pick */}
+         <ScaleBtn wrapStyle={styles.editCoverWrap} style={styles.editCoverBtn} onPress={handleBannerPress} disabled={coverUploading}>
+            {coverUploading ? <ActivityIndicator size="small" color="#FFF" /> : (
+              <>
+                <Ionicons name="camera" size={14} color="#FFF" />
+                <Text style={styles.editCoverText}>Banner</Text>
+                {!!expertData?.coverPhoto && (
+                  <Ionicons name={bannerMenuOpen ? "chevron-down" : "chevron-up"} size={12} color="#FFF" style={{ marginLeft: 4 }} />
+                )}
+              </>
+            )}
+         </ScaleBtn>
+
+         {/* 🆕 BANNER MENU (Change Banner / Remove Banner) - veliya tap panna mooditum */}
+         {bannerMenuOpen && (
+           <>
+             <Pressable style={styles.bannerMenuBackdrop} onPress={closeBannerMenu} />
+             <Animated.View
+               style={[
+                 styles.bannerMenu,
+                 {
+                   borderColor: theme.primary + '90',
+                   opacity: bannerMenuAnim,
+                   transform: [
+                     { translateY: bannerMenuAnim.interpolate({ inputRange: [0, 1], outputRange: [10, 0] }) },
+                     { scale: bannerMenuAnim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) }
+                   ]
+                 }
+               ]}
+             >
+               <TouchableOpacity style={styles.bannerMenuItem} onPress={() => { closeBannerMenu(); pickCoverImage(); }} activeOpacity={0.7}>
+                 <Ionicons name="image-outline" size={17} color={theme.primary} />
+                 <Text style={styles.bannerMenuText}>Change Banner</Text>
+               </TouchableOpacity>
+               <View style={styles.bannerMenuDivider} />
+               <TouchableOpacity style={styles.bannerMenuItem} onPress={() => { closeBannerMenu(); deleteCoverImage(); }} activeOpacity={0.7}>
+                 <Ionicons name="trash-outline" size={17} color="#F87171" />
+                 <Text style={[styles.bannerMenuText, { color: '#F87171' }]}>Remove Banner</Text>
+               </TouchableOpacity>
+             </Animated.View>
+           </>
+         )}
       </View>
 
       {/* ⚡ RATE MODAL (🆕 PREMIUM REDESIGN) */}
@@ -2001,7 +2011,7 @@ const styles = StyleSheet.create({
   rootContainer: { flex: 1, backgroundColor: '#020617' },
   mainContainer: { flex: 1, backgroundColor: 'transparent' },
   shimmerOrb: { position: 'absolute', width: 350, height: 350, borderRadius: 175, opacity: 0.15, filter: 'blur(80px)' },
-  coverContainer: { width: '100%', height: 300, position: 'relative', overflow: 'hidden' },
+  coverContainer: { width: '100%', height: COVER_H, position: 'relative', overflow: 'hidden' },
   coverTopScrim: { position: 'absolute', top: 0, left: 0, right: 0, height: 110 },
   bannerOverlaySlot: { position: 'absolute', top: 54, left: 12, right: 12, zIndex: 12 },
   coverImage: { width: '100%', height: '100%', resizeMode: 'cover' },
@@ -2009,16 +2019,19 @@ const styles = StyleSheet.create({
   logoText: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: 1 },
   subLogo: { color: '#94A3B8', fontSize: 8, fontWeight: '800', letterSpacing: 3 },
   leftHeader: { flex: 1 },
- 
-  shareCoverWrap: { position: 'absolute', bottom: 70, left: 10, zIndex: 10 },
-  editCoverWrap: { position: 'absolute', bottom: 70, right: 10, zIndex: 10 },
+
+  // 🔥 FIX: this transparent layer has EXACTLY the banner height and sits on top of everything in the scroll content.
+  // Children use bottom:12 => they stay on the banner's bottom edge (where the banner ends).
+  coverActionLayer: { position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H, zIndex: 30, elevation: 30 },
+  shareCoverWrap: { position: 'absolute', bottom: 12, left: 10, zIndex: 10 },
+  editCoverWrap: { position: 'absolute', bottom: 12, right: 10, zIndex: 10 },
   shareCoverBtn: { backgroundColor: 'rgba(243, 6, 156, 0.85)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', elevation: 5 },
   editCoverBtn: { backgroundColor: 'rgba(4, 4, 247, 0.65)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
  
   editCoverText: { color: '#FFF', fontSize: 11, fontWeight: '800', marginLeft: 6, letterSpacing: 0.5 },
-  // 🆕 BANNER MENU STYLES (Change / Remove)
+  // 🆕 BANNER MENU STYLES (Change / Remove) - menu now opens just above the Banner button (bottom edge of the banner)
   bannerMenuBackdrop: { ...StyleSheet.absoluteFillObject, zIndex: 14 },
-  bannerMenu: { position: 'absolute', bottom: 112, right: 10, zIndex: 20, minWidth: 176, backgroundColor: 'rgba(8, 15, 35, 0.96)', borderRadius: 18, padding: 6, borderWidth: 1, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
+  bannerMenu: { position: 'absolute', bottom: 58, right: 10, zIndex: 20, minWidth: 176, backgroundColor: 'rgba(8, 15, 35, 0.96)', borderRadius: 18, padding: 6, borderWidth: 1, elevation: 12, shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 12, shadowOffset: { width: 0, height: 6 } },
   bannerMenuItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 11, borderRadius: 12 },
   bannerMenuText: { color: '#FFF', fontSize: 12, fontWeight: '800', letterSpacing: 0.3 },
   bannerMenuDivider: { height: 1, backgroundColor: 'rgba(255,255,255,0.08)', marginHorizontal: 8 },
