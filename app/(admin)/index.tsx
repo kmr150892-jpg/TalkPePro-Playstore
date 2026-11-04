@@ -32,6 +32,29 @@ const TAB_WIDTH = (TAB_CONTAINER_WIDTH - 8) / TABS.length;
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
+// 🆕🆕 NEW: Onboarding queue - host register aagumbothu role / status eppadi save aanaalum queue-la varum
+// (pudhu status vera maadhiri irundha inga serthukko)
+const HOST_ROLES = ['expert', 'host'];
+const PENDING_STATUSES = [
+    'Pending', 'pending', 'PENDING',
+    'Under Review', 'under_review', 'UNDER_REVIEW',
+    'Submitted', 'submitted',
+    'Pending Review', 'pending_review',
+    'In Review', 'in_review'
+];
+
+// 🆕🆕 NEW: Firestore Timestamp / millis / Date - edhaa irundhalum millis-aa maathum (newest application mela kaata)
+const toMillis = (ts: any): number => {
+    try {
+        if (!ts) return 0;
+        if (typeof ts.toMillis === 'function') return ts.toMillis();
+        const t = new Date(ts).getTime();
+        return isNaN(t) ? 0 : t;
+    } catch (e) {
+        return 0;
+    }
+};
+
 const getGreeting = (d: Date) => {
     const h = d.getHours();
     if (h < 12) return 'Good morning';
@@ -264,8 +287,11 @@ const AdminPanel = () => {
     const [minVersion, setMinVersion] = useState("1.0.5");
     const [savingVersion, setSavingVersion] = useState(false);
 
-    // 🆕🆕 NEW: Support Hub-la irundhu vara review pannaadha (unread) reports count
+    // 🆕🆕 NEW: Support Hub-la irundhu vara review pannaadha (unread) HOST reports count
     const [supportReportCount, setSupportReportCount] = useState(0);
+
+    // 🆕🆕 NEW: Support Hub-la irundhu USER anuppina review pannaadha (unread) reports count (thaniya)
+    const [userReportCount, setUserReportCount] = useState(0);
 
     // 🆕 NEW: live clock for welcome banner
     const [now, setNow] = useState(new Date());
@@ -308,19 +334,53 @@ const AdminPanel = () => {
         });
         unsubs.push(unsubWithdrawals);
 
+        // 🔧 FIX: Onboarding queue - role (expert / host) + status (ella pending variants) rendum accept pannum
+        // 🆕🆕 NEW: Ippo rendu listener irukku -> (1) role+status match, (2) isApplying == true (pudhusa apply panra hosts)
+        // rendayum merge panni (duplicate illama) Pending Hosts-la kaattum
+        let roleList: any[] = [];
+        let applyingList: any[] = [];
+        const mergeExperts = () => {
+            const map = new Map<string, any>();
+            [...roleList, ...applyingList].forEach((e) => map.set(e.id, e));
+            const merged = Array.from(map.values()).sort(
+                (a, b) => toMillis(b.appliedAt || b.createdAt) - toMillis(a.appliedAt || a.createdAt)
+            );
+            setPendingExperts(merged);
+            setLoading(false);
+        };
+
         const qExperts = query(
             collection(db, "users"),
-            where("role", "==", "expert"),
-            where("status", "==", "Pending")
+            where("role", "in", HOST_ROLES),
+            where("status", "in", PENDING_STATUSES)
         );
         const unsubExperts = onSnapshot(qExperts, (snap) => {
-            setPendingExperts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-            setLoading(false);
+            console.log("Onboarding queue:", snap.size, snap.docs.map(d => ({ id: d.id, role: d.data().role, status: d.data().status })));
+            roleList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            mergeExperts();
         }, (error) => {
             if (error.code === 'permission-denied') console.log("Safe Ignore: Experts listener detached on logout");
+            // 🆕 vera error (index illa, etc.) varumbothu silent-aa vizhungaama log pannum
+            else console.log("Experts listener error:", error.code, error.message);
             setLoading(false);
         });
         unsubs.push(unsubExperts);
+
+        // 🆕🆕 NEW: Pudhusa onboarding apply panra hosts (isApplying == true) - role "user" ah irundhaalum queue-la varum
+        const qApplying = query(
+            collection(db, "users"),
+            where("isApplying", "==", true)
+        );
+        const unsubApplying = onSnapshot(qApplying, (snap) => {
+            console.log("New applications:", snap.size, snap.docs.map(d => ({ id: d.id, role: d.data().role, status: d.data().status })));
+            applyingList = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+            mergeExperts();
+        }, (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Applications listener detached on logout");
+            else console.log("Applications listener error:", error.code, error.message);
+            setLoading(false);
+        });
+        unsubs.push(unsubApplying);
 
         const qBank = query(
             collection(db, "adminNotifications"), 
@@ -334,14 +394,22 @@ const AdminPanel = () => {
         });
         unsubs.push(unsubBank);
 
-        // 🆕🆕 NEW: Support Hub reports (unread) live count - SUPPORT REPORTS button-la badge-ah kaattum
+        // 🆕🆕 NEW: Support Hub reports (unread) live count - ore listener-la HOST / USER rendum thaniya pirichu count pannum
+        // (reporterRole == 'user' na USER report, matha ellam (pazhaya host reports-um serthu) HOST report)
         const qSupport = query(
             collection(db, "admin_alerts"),
             where("type", "==", "TRUST_SAFETY_REPORT"),
             where("status", "==", "unread")
         );
         const unsubSupport = onSnapshot(qSupport, (snap) => {
-            setSupportReportCount(snap.size);
+            let hostCount = 0;
+            let userCount = 0;
+            snap.docs.forEach((d) => {
+                if (String(d.data().reporterRole || '').toLowerCase() === 'user') userCount++;
+                else hostCount++;
+            });
+            setSupportReportCount(hostCount);
+            setUserReportCount(userCount);
         }, (error) => {
             if (error.code === 'permission-denied') console.log("Safe Ignore: Support reports listener detached on logout");
         });
@@ -496,9 +564,18 @@ const AdminPanel = () => {
     if (supportReportCount > 0) {
         attentionItems.push({
             key: 'support', color: '#6366F1', icon: 'headset', priority: 'MEDIUM',
-            title: `${supportReportCount} unread support report${supportReportCount > 1 ? 's' : ''}`,
-            sub: 'Trust & safety reports from Support Hub',
+            title: `${supportReportCount} unread host support report${supportReportCount > 1 ? 's' : ''}`,
+            sub: 'Trust & safety reports from hosts (Support Hub)',
             onPress: () => router.push('/reports' as any)
+        });
+    }
+    // 🆕🆕 NEW: user anuppina support reports (thaniya)
+    if (userReportCount > 0) {
+        attentionItems.push({
+            key: 'usersupport', color: '#0EA5E9', icon: 'account-alert', priority: 'MEDIUM',
+            title: `${userReportCount} unread user support report${userReportCount > 1 ? 's' : ''}`,
+            sub: 'Trust & safety reports from users (Support Hub)',
+            onPress: () => router.push('/user-reports' as any)
         });
     }
     if (totalACTIVITY_REWARDPool > 0) {
@@ -518,7 +595,7 @@ const AdminPanel = () => {
         });
     }
 
-    const totalOpen = pendingExperts.length + bankRequests.length + supportReportCount;
+    const totalOpen = pendingExperts.length + bankRequests.length + supportReportCount + userReportCount;
 
     return (
         <View style={styles.container}>
@@ -607,7 +684,9 @@ const AdminPanel = () => {
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }} style={{ marginHorizontal: -20, paddingLeft: 20 }}>
                                     <KpiCard label="PENDING HOSTS" value={pendingExperts.length} color="#F59E0B" icon="account-clock" caption={pendingExperts.length > 0 ? 'ACTION' : 'CLEAR'} onPress={() => setActiveTab('HOSTS')} />
                                     <KpiCard label="KYC QUEUE" value={bankRequests.length} color="#10B981" icon="bank-check" caption={bankRequests.length > 0 ? 'ACTION' : 'CLEAR'} onPress={() => setActiveTab('HOSTS')} />
-                                    <KpiCard label="SUPPORT ALERTS" value={supportReportCount} color="#6366F1" icon="headset" caption={supportReportCount > 0 ? 'UNREAD' : 'CLEAR'} onPress={() => router.push('/reports' as any)} />
+                                    <KpiCard label="HOST REPORTS" value={supportReportCount} color="#6366F1" icon="headset" caption={supportReportCount > 0 ? 'UNREAD' : 'CLEAR'} onPress={() => router.push('/reports' as any)} />
+                                    {/* 🆕🆕 NEW: user reports KPI (thaniya) */}
+                                    <KpiCard label="USER REPORTS" value={userReportCount} color="#0EA5E9" icon="account-alert" caption={userReportCount > 0 ? 'UNREAD' : 'CLEAR'} onPress={() => router.push('/user-reports' as any)} />
                                     <KpiCard label="REWARD GRANTS" value={`₹${totalACTIVITY_REWARDPool.toLocaleString()}`} color="#A855F7" icon="cash-multiple" caption={totalACTIVITY_REWARDPOOL_CAPTION(totalACTIVITY_REWARDPool)} onPress={() => setActiveTab('SETTLEMENTS')} />
                                 </ScrollView>
                             </Reveal>
@@ -616,7 +695,8 @@ const AdminPanel = () => {
                             <SectionHeader title="WORKLOAD OVERVIEW" />
                             <Reveal index={2}>
                                 <Panel style={{ padding: 20 }}>
-                                    <WorkloadBar hosts={pendingExperts.length} kyc={bankRequests.length} support={supportReportCount} />
+                                    {/* 🆕 support = host reports + user reports (rendum serthu) */}
+                                    <WorkloadBar hosts={pendingExperts.length} kyc={bankRequests.length} support={supportReportCount + userReportCount} />
                                 </Panel>
                             </Reveal>
 
@@ -763,7 +843,9 @@ const AdminPanel = () => {
                                 <Panel>
                                     <ModuleRow router={router} title="REPORTS & FLAGS" sub="Community moderation alerts" icon="alert-octagon" route="/management/reports" color="#F43F5E" />
                                     {/* 🆕🆕 NEW: Support Hub-la irundhu host anuppura reports (thaniya) */}
-                                    <ModuleRow router={router} title="SUPPORT REPORTS" sub="Host trust & safety reports from Support Hub" icon="headset" route="/reports" color="#6366F1" badge={supportReportCount} />
+                                    <ModuleRow router={router} title="HOST SUPPORT REPORTS" sub="Host trust & safety reports from Support Hub" icon="headset" route="/reports" color="#6366F1" badge={supportReportCount} />
+                                    {/* 🆕🆕 NEW: Support Hub-la irundhu user anuppura reports (thaniya) */}
+                                    <ModuleRow router={router} title="USER SUPPORT REPORTS" sub="User trust & safety reports from Support Hub" icon="account-alert-outline" route="/user-reports" color="#0EA5E9" badge={userReportCount} />
                                     <ModuleRow router={router} title="SESSION LOGS" sub="Interaction monitoring logs" icon="shield-search" route="/logs/call-logs" color="#F59E0B" />
                                     <ModuleRow router={router} last title="ENGINE DIAGNOSTICS" sub="Connectivity performance audit" icon="speedometer" route="/logs/system-latency" color="#10B981" />
                                 </Panel>
@@ -841,8 +923,9 @@ const AdminPanel = () => {
                                                 <Text style={styles.expCat}>{exp.category || 'Professional'}</Text>
                                             </View>
                                         </View>
+                                        {/* 🆕🆕 NEW: pudhusa apply panna host-ku "NEW APPLICATION" badge */}
                                         <View style={[styles.badge, { backgroundColor: '#F59E0B20', borderColor: '#F59E0B55' }]}>
-                                            <Text style={[styles.badgeText, { color: '#F59E0B' }]}>AUDIT PROFILE</Text>
+                                            <Text style={[styles.badgeText, { color: '#F59E0B' }]}>{exp.isApplying ? 'NEW APPLICATION' : 'AUDIT PROFILE'}</Text>
                                         </View>
                                     </Press3D>
                                 </Reveal>

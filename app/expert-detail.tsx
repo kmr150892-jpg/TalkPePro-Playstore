@@ -26,6 +26,7 @@ import Svg, { Circle } from 'react-native-svg';
 import { auth, db } from '../firebaseConfig';
 import { BlockContext } from '../utils/context/BlockContext'; // 🔥 SATTI UPDATE: BlockContext Imported Here
 import { checkAndRequestCallPermissions } from '../utils/permissions';
+import { useCallOutcomeNotifier } from '../utils/useCallOutcomeNotifier'; // 🔔 NEW: host reject / miss aanaa user bell-ku notification
 
 const { height, width } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -384,6 +385,11 @@ export default function ExpertDetail() {
     const [userBalance, setUserBalance] = useState(0);
     const [loading, setLoading] = useState(true);
     const [activeCallId, setActiveCallId] = useState<string | null>(null);
+
+    // 🔔 NEW: last call id-ah vechukkum. activeCallId reject aanathum null aagidum,
+    // so hook-ku separate state venum, illana listener cleanup aagidum.
+    const [lastCallId, setLastCallId] = useState<string | undefined>(undefined);
+    useCallOutcomeNotifier(lastCallId);
     
     // 🔥 SATTI FIX: Added a Ref to strictly track call ID in case user presses BACK button abruptly.
     const activeCallIdRef = useRef<string | null>(null); 
@@ -791,6 +797,7 @@ export default function ExpertDetail() {
             // 🔥 SATTI FIX: Save to both state and ref
             setActiveCallId(callRef.id);
             activeCallIdRef.current = callRef.id;
+            setLastCallId(callRef.id); // 🔔 NEW: reject / missed aanaa notification varum
 
             ringTimerAnim.setValue(1);
             Animated.timing(ringTimerAnim, {

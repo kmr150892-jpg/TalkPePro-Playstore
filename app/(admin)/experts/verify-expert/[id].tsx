@@ -262,6 +262,9 @@ export default function VerifyExpertDetail() {
     const expertPhoto = expert?.profilePic || expert?.photoURL || expert?.image;
     const statusColor = isPending ? '#F59E0B' : (isBlocked ? '#EF4444' : '#10B981');
 
+    /* ---------- 🆕 HOST EMAIL ID (reads from common field names) ---------- */
+    const expertEmail = expert?.email || expert?.emailId || expert?.emailID || expert?.mail || '';
+
     /* ---------- 🆕 REDEEM DATA (total + history from notifications) ---------- */
     const totalRedeemedRs = Number(expert?.totalWithdrawnRs || 0);
     const totalRedeemedRewards = totalRedeemedRs * 100; // 100 rewards = ₹1 (same as BALANCE (RS) logic)
@@ -523,6 +526,20 @@ export default function VerifyExpertDetail() {
                             <Text style={styles.infoValue}>{expert?.name || 'ARUVI MULTIVERSE'}</Text>
                         </View>
                         <View style={styles.divider} />
+                        {/* 🆕 HOST EMAIL ID */}
+                        <View style={styles.infoRow}>
+                            <View style={styles.labelWrap}>
+                                <Feather name="mail" size={12} color="#6366F1" />
+                                <Text style={styles.infoLabel}>EMAIL ID:</Text>
+                            </View>
+                            <Text
+                                selectable
+                                style={[styles.infoValue, styles.emailValue, !expertEmail && { color: '#EF4444' }]}
+                            >
+                                {expertEmail || 'N/A'}
+                            </Text>
+                        </View>
+                        <View style={styles.divider} />
                         <View style={styles.infoRow}>
                             <View style={styles.labelWrap}>
                                 <Ionicons name="male-female" size={12} color="#6366F1" />
@@ -751,6 +768,7 @@ const styles = StyleSheet.create({
     valRow: { flexDirection: 'row', alignItems: 'center' },
     infoLabel: { color: '#475569', fontSize: 10, fontWeight: '900' },
     infoValue: { color: '#fff', fontSize: 13, fontWeight: '800' },
+    emailValue: { flexShrink: 1, textAlign: 'right', marginLeft: 12 },
     divider: { height: 1, backgroundColor: '#1E293B', marginVertical: 15 },
 
     /* stats */

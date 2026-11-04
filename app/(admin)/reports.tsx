@@ -16,7 +16,7 @@ const ADMIN_EMAILS = ["kmr150892@gmail.com"];
 const FILTERS = ['unread', 'reviewing', 'resolved', 'dismissed'] as const;
 const STATUS_COLOR: any = { unread: '#F43F5E', reviewing: '#F59E0B', resolved: '#10B981', dismissed: '#64748B' };
 
-// admin status maathina host-ku pogum notification messages (neutral wording - reported user pathi sollala)
+// admin status maathina reporter-ku (host / user) pogum notification messages (neutral wording - reported user pathi sollala)
 const STATUS_MESSAGES: any = {
     reviewing: { title: "Report Under Review 🔍", body: "Your Trust & Safety report is now being reviewed by our team." },
     resolved:  { title: "Report Reviewed ✅", body: "Our team has reviewed your report and taken the appropriate action. Thank you for helping keep TalkPe Pro safe." },
@@ -98,6 +98,11 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
     const [reporter, setReporter] = useState<any>(null);
     const press = useRef(new Animated.Value(1)).current;
 
+    // 🆕 reporter = host (pazhaya reports: expertId) illa user (pudhu reports: reporterId + reporterRole 'user')
+    const reporterId: string = item.reporterId || item.expertId || '';
+    const reporterIsUser = String(item.reporterRole || 'expert').toLowerCase() === 'user';
+    const reporterName = item.reporterName || item.expertName;
+
     useEffect(() => {
         const load = async () => {
             try {
@@ -105,14 +110,14 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
                     const s = await getDoc(doc(db, "users", item.reportedUserId));
                     if (s.exists()) setReported(s.data());
                 }
-                if (item.expertId) {
-                    const s = await getDoc(doc(db, "users", item.expertId));
+                if (reporterId) {
+                    const s = await getDoc(doc(db, "users", reporterId));
                     if (s.exists()) setReporter(s.data());
                 }
             } catch (e) { console.log(e); }
         };
         load();
-    }, [item.reportedUserId, item.expertId]);
+    }, [item.reportedUserId, reporterId]);
 
     const color = STATUS_COLOR[item.status] || '#F43F5E';
     // timestamp pending-ah irundha createdAt (number) use pannum
@@ -124,6 +129,8 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
     // reported user details (ledger routing + flags + typed name)
     const typedName = String(item.reportedUser || '').trim();
     const reportedRole = reported?.role ? String(reported.role).toLowerCase() : 'user';
+    // 🆕 user, host-a report pannina reported side "HOST" nu kaattum
+    const reportedIsHost = reportedRole === 'expert' || reportedRole === 'host';
     const blockCount = reported?.expertBlockCount || 0;
     const done = item.status === 'resolved' || item.status === 'dismissed';
 
@@ -133,8 +140,8 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
             Alert.alert(
                 "No user selected",
                 typedName
-                    ? `The host did not pick a user from the list. Typed name: "${typedName}".`
-                    : "The host did not mention any specific user in this report."
+                    ? `The reporter did not pick a ${reporterIsUser ? 'host' : 'user'} from the list. Typed name: "${typedName}".`
+                    : `The ${reporterIsUser ? 'user' : 'host'} did not mention any specific person in this report.`
             );
             return;
         }
@@ -175,9 +182,26 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
                             <MaterialCommunityIcons name="shield-alert" size={120} color={color + '0D'} style={styles.cardWatermark} />
 
                             <View style={styles.rowBetween}>
-                                <View style={[styles.chip, { backgroundColor: color + '22', borderColor: color + '88', flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                                    <Animated.View style={[styles.statusDot, { backgroundColor: color, opacity: item.status === 'unread' || !item.status ? dotOpacity : 1 }]} />
-                                    <Text style={[styles.chipText, { color }]}>{String(item.status || 'unread').toUpperCase()}</Text>
+                                <View style={styles.chipGroup}>
+                                    <View style={[styles.chip, { backgroundColor: color + '22', borderColor: color + '88', flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
+                                        <Animated.View style={[styles.statusDot, { backgroundColor: color, opacity: item.status === 'unread' || !item.status ? dotOpacity : 1 }]} />
+                                        <Text style={[styles.chipText, { color }]}>{String(item.status || 'unread').toUpperCase()}</Text>
+                                    </View>
+                                    {/* 🆕 evaru report pannaanga - HOST / USER */}
+                                    <View style={[
+                                        styles.chip,
+                                        { flexDirection: 'row', alignItems: 'center', gap: 5 },
+                                        reporterIsUser
+                                            ? { backgroundColor: 'rgba(14,165,233,0.15)', borderColor: '#0EA5E9' }
+                                            : { backgroundColor: 'rgba(99,102,241,0.15)', borderColor: '#6366F1' }
+                                    ]}>
+                                        <MaterialCommunityIcons
+                                            name={reporterIsUser ? 'account-outline' : 'headset'}
+                                            size={11}
+                                            color={reporterIsUser ? '#38BDF8' : '#A5B4FC'}
+                                        />
+                                        <Text style={[styles.chipText, { color: reporterIsUser ? '#38BDF8' : '#A5B4FC' }]}>{reporterIsUser ? 'FROM USER' : 'FROM HOST'}</Text>
+                                    </View>
                                 </View>
                                 {item.priority === 'high' && (
                                     <Animated.View style={[styles.chip, { backgroundColor: '#EF444422', borderColor: '#EF4444', transform: [{ scale: restrictScale }] }]}>
@@ -189,11 +213,11 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
                             <Text style={styles.category}>{item.categoryLabel || item.category}</Text>
                             <Text style={styles.time}>{when}  •  Ref {String(item.id).slice(0, 8).toUpperCase()}</Text>
 
-                            {/* FORM DETAILS - host form-la enna problem solli report pannaanga */}
+                            {/* FORM DETAILS - reporter form-la enna problem solli report pannaanga */}
                             <View style={styles.formBox}>
                                 <View style={styles.formHead}>
                                     <MaterialCommunityIcons name="text-box-outline" size={14} color="#A5B4FC" />
-                                    <Text style={styles.formLabel}>HOST'S REPORT FORM</Text>
+                                    <Text style={styles.formLabel}>{reporterIsUser ? "USER'S REPORT FORM" : "HOST'S REPORT FORM"}</Text>
                                 </View>
                                 <View style={styles.formRow}>
                                     <Text style={styles.formKey}>CATEGORY</Text>
@@ -216,14 +240,14 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
                             <View style={styles.peopleRow}>
                                 <View style={styles.person}>
                                     <Text style={styles.pLabel}>REPORTED BY</Text>
-                                    <Image source={{ uri: pic(reporter, item.expertName) }} style={styles.avatar} />
-                                    <Text style={styles.pName} numberOfLines={1}>{reporter?.name || item.expertName || 'Host'}</Text>
+                                    <Image source={{ uri: pic(reporter, reporterName) }} style={styles.avatar} />
+                                    <Text style={styles.pName} numberOfLines={1}>{reporter?.name || reporterName || (reporterIsUser ? 'User' : 'Host')}</Text>
                                 </View>
                                 <Animated.View style={{ transform: [{ translateX: arrowX }] }}>
                                     <MaterialCommunityIcons name="arrow-right-bold" size={20} color="#475569" />
                                 </Animated.View>
                                 <View style={styles.person}>
-                                    <Text style={styles.pLabel}>REPORTED USER</Text>
+                                    <Text style={styles.pLabel}>{reportedIsHost ? 'REPORTED HOST' : 'REPORTED USER'}</Text>
                                     <View style={styles.avatarHaloWrap}>
                                         <Animated.View style={[styles.avatarHalo, { opacity: haloOpacity, transform: [{ scale: haloScale }] }]} />
                                         <Image source={{ uri: pic(reported, item.reportedUserName) }} style={[styles.avatar, { borderColor: '#F43F5E' }]} />
@@ -240,7 +264,7 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
                                 </View>
                             </View>
 
-                            {/* ledger buttons (reported user + host) */}
+                            {/* ledger buttons (reported user + reporter) */}
                             <View style={styles.actions}>
                                 {!!item.reportedUserId && (
                                     <TouchableOpacity style={[styles.btn, { borderColor: '#F43F5E', backgroundColor: 'rgba(244,63,94,0.1)' }]} onPress={() => onOpenLedger(item.reportedUserId, reportedRole)}>
@@ -248,10 +272,10 @@ const ReportCard = ({ item, index, loop, pulse, shine, onStatus, onOpenUser, onR
                                         <Text style={[styles.btnText, { color: '#F87171' }]}>REPORTED LEDGER</Text>
                                     </TouchableOpacity>
                                 )}
-                                {!!item.expertId && (
-                                    <TouchableOpacity style={[styles.btn, { borderColor: '#6366F1', backgroundColor: 'rgba(99,102,241,0.1)' }]} onPress={() => onOpenLedger(item.expertId, 'expert')}>
+                                {!!reporterId && (
+                                    <TouchableOpacity style={[styles.btn, { borderColor: '#6366F1', backgroundColor: 'rgba(99,102,241,0.1)' }]} onPress={() => onOpenLedger(reporterId, reporterIsUser ? 'user' : 'expert')}>
                                         <MaterialCommunityIcons name="book-account-outline" size={14} color="#A5B4FC" />
-                                        <Text style={[styles.btnText, { color: '#A5B4FC' }]}>HOST LEDGER</Text>
+                                        <Text style={[styles.btnText, { color: '#A5B4FC' }]}>{reporterIsUser ? 'USER LEDGER' : 'HOST LEDGER'}</Text>
                                     </TouchableOpacity>
                                 )}
                             </View>
@@ -386,7 +410,8 @@ export default function AdminReportsScreen() {
         const unsub = onSnapshot(q, (snap) => {
             const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() })) as any[];
             rows.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-            setReports(rows);
+            // 🆕 HOST queue: user reports inga theriyaadhu (pazhaya host reports-la reporterRole illa, adhunaala !== 'user')
+            setReports(rows.filter((r) => String(r.reporterRole || 'expert').toLowerCase() !== 'user'));
             setLoading(false);
         }, (error) => {
             console.log("Reports listener error:", error?.code);
@@ -395,7 +420,7 @@ export default function AdminReportsScreen() {
         return () => unsub();
     }, [isAdmin]);
 
-    // status update + host-ku notification (same status thirumba thottaa duplicate notification pogaadhu)
+    // status update + reporter-ku (host / user) notification (same status thirumba thottaa duplicate notification pogaadhu)
     const setStatus = async (item: any, status: string) => {
         try {
             await updateDoc(doc(db, "admin_alerts", item.id), {
@@ -403,11 +428,12 @@ export default function AdminReportsScreen() {
                 reviewedBy: auth.currentUser?.uid,
                 reviewedAt: serverTimestamp()
             });
-            // host-ku notification
+            // 🆕 reporter-ku notification (user report-na reporterId, host report-na expertId)
+            const notifyId = item.reporterId || item.expertId;
             const msg = STATUS_MESSAGES[status];
-            if (msg && item.expertId && item.status !== status) {
+            if (msg && notifyId && item.status !== status) {
                 await sendNotificationToUser(
-                    item.expertId,
+                    notifyId,
                     msg.title,
                     `${msg.body}\n\nRef: ${String(item.id).slice(0, 8).toUpperCase()}`,
                     "system"
@@ -525,7 +551,7 @@ export default function AdminReportsScreen() {
                             <Animated.View style={[styles.liveDot, { opacity: liveOpacity }]} />
                             <Text style={styles.hLabel}>TRUST & SAFETY</Text>
                         </View>
-                        <Text style={styles.hTitle}>REPORT QUEUE</Text>
+                        <Text style={styles.hTitle}>HOST REPORT QUEUE</Text>
                     </View>
                     <View style={styles.shieldWrap}>
                         <Animated.View style={[styles.shieldHalo, { opacity: shieldHaloOpacity, transform: [{ scale: shieldHaloScale }] }]} />
@@ -607,6 +633,7 @@ const styles = StyleSheet.create({
     card: { padding: 16, borderRadius: 23, backgroundColor: 'rgba(10,6,28,0.97)', overflow: 'hidden' },
     cardWatermark: { position: 'absolute', right: -16, top: 30 },
     rowBetween: { flexDirection: 'row', justifyContent: 'space-between' },
+    chipGroup: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1, flexWrap: 'wrap' },
     chip: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 9, borderWidth: 1 },
     statusDot: { width: 6, height: 6, borderRadius: 3 },
     chipText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 1.2 },
@@ -628,7 +655,7 @@ const styles = StyleSheet.create({
     btnShine: { position: 'absolute', top: -20, bottom: -20, width: 36 },
     restrictText: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
 
-    // host report form details box
+    // reporter report form details box
     formBox: { marginTop: 14, padding: 14, borderRadius: 16, backgroundColor: 'rgba(99,102,241,0.1)', borderWidth: 1, borderColor: 'rgba(99,102,241,0.35)' },
     formHead: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 10 },
     formLabel: { color: '#A5B4FC', fontSize: 9.5, fontWeight: '900', letterSpacing: 1.5 },

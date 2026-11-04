@@ -7,6 +7,7 @@ import {
     doc,
     onSnapshot,
     query,
+    runTransaction,
     where
 } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
@@ -610,6 +611,9 @@ import { auth, db } from '../../firebaseConfig';
         }))
     ).current;
 
+    // 🆕 LEVEL-UP NOTIFICATION SYNC (remembers which level was already synced in this session)
+    const levelSyncedRef = useRef<number>(0);
+
     useEffect(() => {
         Animated.loop(Animated.timing(mainLoop, { toValue: 1, duration: 4500, easing: Easing.linear, useNativeDriver: true })).start();
         Animated.loop(Animated.timing(secondaryLoop, { toValue: 1, duration: 2500, easing: Easing.inOut(Easing.ease), useNativeDriver: true })).start();
@@ -839,6 +843,73 @@ import { auth, db } from '../../firebaseConfig';
     
     const rank = calculateUserLevel(userDiamonds);
     const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=1E293B&color=fff&bold=true`;
+
+    // ==========================================
+    // 🏆 LEVEL-UP NOTIFICATION (Profile screen - same rule as the Home screen)
+    // - Home screen already sends it; this makes sure it is sent even if the user opens Profile first.
+    // - Same notification id (level_up_<lvl>) + lastNotifiedLevel check inside a transaction,
+    //   so the Level Up notification is added only ONCE no matter which screen triggers it.
+    // - First time (no lastNotifiedLevel saved yet): only saves the current level silently (no old-user spam).
+    // - Notification has createdAt + read:false -> home bell badge counts it, notifications screen shows it as NEW.
+    // - route '/(tabs)/two' -> tapping the level notification opens this profile screen.
+    // ==========================================
+    useEffect(() => {
+        if (!user || !userData) return;
+        const lvl = rank.lvl;
+        if (levelSyncedRef.current === lvl) return;
+        levelSyncedRef.current = lvl;
+
+        const syncLevelNotification = async () => {
+            try {
+                const userRef = doc(db, 'users', user.uid);
+                await runTransaction(db, async (tx) => {
+                    const snap = await tx.get(userRef);
+                    if (!snap.exists()) return;
+                    const data: any = snap.data();
+
+                    // always trust the latest value stored in Firestore
+                    const latestRank = calculateUserLevel(Number(data.totalSpentDiamonds) || 0);
+                    const stored = data.lastNotifiedLevel;
+
+                    // first run for this user -> just remember the level, no notification
+                    if (typeof stored !== 'number') {
+                        tx.update(userRef, { lastNotifiedLevel: latestRank.lvl });
+                        return;
+                    }
+
+                    // no level increase -> nothing to send
+                    if (latestRank.lvl <= stored) return;
+
+                    const existing: any[] = Array.isArray(data.notifications) ? data.notifications : [];
+                    const notifId = `level_up_${latestRank.lvl}`;
+                    const alreadyThere = existing.some((n: any) => n?.id === notifId);
+
+                    const extra = latestRank.lvl === 2 ? ' Quick Connect is now UNLOCKED!' : '';
+                    const newNotif = {
+                        id: notifId,
+                        type: 'level',
+                        title: 'Level Up! 🎉',
+                        message: `Congratulations! You reached Level ${latestRank.lvl} - ${latestRank.label} (${latestRank.status}).${extra}`,
+                        time: new Date().toLocaleString(),
+                        createdAt: Date.now(),
+                        read: false,
+                        route: '/(tabs)/two',
+                    };
+
+                    tx.update(userRef, {
+                        lastNotifiedLevel: latestRank.lvl,
+                        ...(alreadyThere ? {} : { notifications: [...existing, newNotif] }),
+                    });
+                });
+            } catch (err) {
+                // allow a retry next time the level value changes / screen re-mounts
+                levelSyncedRef.current = 0;
+                console.log('Level notification sync error:', err);
+            }
+        };
+
+        syncLevelNotification();
+    }, [user, userData, rank.lvl]);
 
     // 🆕 RANK DUOTONE (rank.color + visible secondary) - dark secondary-a konjam lighten pannidum
     const c1 = norm(rank.color);
@@ -1704,4 +1775,3 @@ import { auth, db } from '../../firebaseConfig';
     rmMarkerTag: { marginTop: 4, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 8, borderWidth: 1, backgroundColor: 'rgba(5,3,15,0.92)' },
     rmMarkerTagText: { fontSize: 9, fontWeight: '900', letterSpacing: 0.6 }
     });
-

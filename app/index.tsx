@@ -476,7 +476,7 @@ export default function LoginScreen() {
                 </LinearGradient>
               </TouchableOpacity>
 
-              <Text style={styles.footerTextFloating}>🛡️ END-TO-END ENCRYPTED ACCESS</Text>
+              <Text style={styles.footerTextFloating}>🛡️ JOIN OUR COMMUNITY</Text>
             </View>
 
           ) : (

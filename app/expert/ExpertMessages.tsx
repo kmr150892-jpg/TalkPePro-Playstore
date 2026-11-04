@@ -393,7 +393,7 @@ const StatTile = ({ icon, label, color, glow, frameA, frameB, children, enter }:
 );
 
 // 🆕 User card "HOLO PASS" (stagger entrance + scroll-driven 3D wheel + press tilt + holo shine)
-const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, onOpenProfile, onChat, onDeleteChat, onDisconnect, onAccept }: any) => {
+const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, onOpenProfile, onChat, onDeleteChat, onDisconnect, onAccept, onReject }: any) => {
     const anim = useRef(new Animated.Value(0)).current;
     const press = useRef(new Animated.Value(0)).current; // 🆕 3D press tilt
     const shine = useRef(new Animated.Value(0)).current; // 🆕 holographic shine sweep
@@ -552,6 +552,11 @@ const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, o
                                             <Ionicons name="link" size={14} color="#FFF" style={{ marginRight: 5 }} />
                                             <Text style={styles.miniPillText}>LINK</Text>
                                         </LinearGradient>
+                                    </TouchableOpacity>
+                                    {/* 🔥 NEW: REJECT button (request-a decline pannum + user-ku notification pogum) */}
+                                    <TouchableOpacity onPress={onReject} activeOpacity={0.85} style={styles.rejectMiniBtn}>
+                                        <Ionicons name="close" size={14} color="#FB7185" style={{ marginRight: 4 }} />
+                                        <Text style={styles.rejectPillText}>REJECT</Text>
                                     </TouchableOpacity>
                                 </View>
                             )}
@@ -826,6 +831,42 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
             await updateDoc(doc(db, "users", senderId), { friendsCount: increment(1) });
             await updateDoc(doc(db, "users", expert.uid), { friendsCount: increment(1) });
         } catch (e) { Alert.alert("Error", "Transmission failed."); }
+    };
+
+    // 🔥 NEW: REJECT a pending connection request + send "Connection Declined" notification to that user
+    // (user app notifications screen: title la "Declined" irukkradhala violet CONNECTION card-a kaattum, tap -> host profile)
+    const handleRejectRequest = (item: any) => {
+        if (!expert?.uid) return;
+        const targetUserId = item?.senderId || item?.userId;
+        if (!item?.id || !targetUserId) return;
+
+        Alert.alert("Decline Request", `Decline ${item.userName || 'this user'}'s connection request?`, [
+            { text: "CANCEL", style: "cancel" },
+            {
+                text: "REJECT",
+                style: "destructive",
+                onPress: async () => {
+                    try {
+                        // 1. request-a list-la irundhu remove pannum
+                        await deleteDoc(doc(db, "connections", item.id));
+
+                        // 2. user-ku notification (host name + photo oda, tap pannaa host profile open aagum)
+                        const hostName = expertProfile?.name || expertProfile?.displayName || expert?.displayName || 'A host';
+                        const hostPic = expertProfile?.profilePic || expertProfile?.photoURL || undefined;
+                        await sendNotificationToUser(
+                            targetUserId,
+                            "Connection Declined",
+                            `${hostName} declined your connection request.`,
+                            "system",
+                            { callerId: expert.uid, callerImage: hostPic }
+                        );
+                    } catch (e) {
+                        console.log("Reject request error:", e);
+                        Alert.alert("Error", "Could not decline the request. Please try again.");
+                    }
+                }
+            }
+        ]);
     };
 
     const handleRejectOrUnfollow = async (id: string, type: string, otherUserId?: string) => {
@@ -1234,6 +1275,7 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                             }}
                             onDisconnect={() => handleRejectOrUnfollow(item.id, 'Disconnect', item.userId)}
                             onAccept={() => handleAccept(item.id, item.senderId)}
+                            onReject={() => handleRejectRequest(item)}
                         />
                     );
                 }}
@@ -1421,9 +1463,13 @@ const styles = StyleSheet.create({
     glowBadge: { position: 'absolute', top: -5, right: -5, backgroundColor: '#EF4444', minWidth: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#010309' },
     badgeVal: { color: '#FFF', fontSize: 10, fontWeight: '900' },
 
-    requestNode: { flexDirection: 'row', alignItems: 'center' },
-    acceptMiniBtn: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 20, elevation: 10, shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, overflow: 'hidden' },
+    // 🔥 UPDATED: requestNode now a COLUMN (LINK on top, REJECT below) so the card never gets squeezed
+    requestNode: { flexDirection: 'column', alignItems: 'stretch', gap: 8 },
+    acceptMiniBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 18, paddingVertical: 12, borderRadius: 20, elevation: 10, shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, overflow: 'hidden' },
     miniPillText: { color: '#FFF', fontSize: 12, fontWeight: '900', letterSpacing: 1, textShadowColor: 'rgba(0,0,0,0.55)', textShadowRadius: 2, textShadowOffset: { width: 0, height: 1 } },
+    // 🔥 NEW: REJECT button styles
+    rejectMiniBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 14, paddingVertical: 9, borderRadius: 18, backgroundColor: 'rgba(244, 63, 94, 0.15)', borderWidth: 1, borderColor: 'rgba(244, 63, 94, 0.35)' },
+    rejectPillText: { color: '#FB7185', fontSize: 11, fontWeight: '900', letterSpacing: 1 },
 
     // 🆕 mini bar (appears on scroll) (🆕 darker bg 0.7 -> 0.86)
     miniBarWrap: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 50 },

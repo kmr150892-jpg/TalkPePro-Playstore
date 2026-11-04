@@ -134,9 +134,10 @@ const LIVE_H = 288;
 const FORUM_W = 276;
 const FORUM_H = 150;
 
-// 🚪 LOUNGE SIZES (portal cards on home + cards inside the lounge)
-const PORTAL_W = (width - 40 - 16) / 2;
-const PORTAL_H = 272;
+// 🚪 LOUNGE SIZES (HORIZONTAL portal cards on home + cards inside the lounge)
+// 🔥 UPDATED: portal is now a full-width HORIZONTAL rectangle (was a vertical arch)
+const PORTAL_W = width - 40;
+const PORTAL_H = 138;
 const ROOM_W = width - 40;
 const ROOM_LIVE_H = 230;
 
@@ -178,8 +179,9 @@ const EqBars = ({ loop, color }: any) => {
 // Center avatar cycles through the CURRENT host images (fade swap every few seconds),
 // tiny host avatars orbit around it, and the blurred backdrop follows the current host.
 // Because `pics` always comes from the live host profile, a changed host image shows up here instantly.
-const ORB_SIZE = 124;
-const ORB_R = 52;
+// 🔥 UPDATED: orb now sits on the LEFT side of the horizontal portal card.
+const ORB_SIZE = 104;
+const ORB_R = 42;
 const ORB_MINI = 24;
 
 const PortalHostOrb = ({ pics, c1, c2, rotate, rotateRev, pulseOpacity, pulseScale, icon }: any) => {
@@ -217,7 +219,7 @@ const PortalHostOrb = ({ pics, c1, c2, rotate, rotateRev, pulseOpacity, pulseSca
             ) : (
                 <ImageBackground source={{ uri: IMG_WALLET_BG }} style={StyleSheet.absoluteFill} imageStyle={{ opacity: 0.28 }} />
             )}
-            <LinearGradient pointerEvents="none" colors={[withAlpha(c1, '55'), 'rgba(2,6,23,0.75)', 'rgba(0,0,0,0.95)']} start={{ x: 0.5, y: 0 }} end={{ x: 0.5, y: 1 }} style={StyleSheet.absoluteFill} />
+            <LinearGradient pointerEvents="none" colors={[withAlpha(c1, '55'), 'rgba(2,6,23,0.75)', 'rgba(0,0,0,0.95)']} start={{ x: 0, y: 0.5 }} end={{ x: 1, y: 0.5 }} style={StyleSheet.absoluteFill} />
 
             <View style={styles.hostOrbBox} pointerEvents="none">
                 {/* soft pulse */}
@@ -445,6 +447,22 @@ export default function UserHome() {
 
     const userRank = calculateUserLevel(userDiamonds);
 
+    // 🔔 BELL BADGE COUNT (same rule as the notifications screen: unread OR newer than last seen time)
+    const notifSeenAt = userData?.notifSeenAt === undefined ? null : (Number(userData?.notifSeenAt) || 0);
+    const seenLevelKeys = new Set<string>();
+    const unreadCount = (Array.isArray(userData?.notifications) ? userData.notifications : []).filter((n: any) => {
+        // same level-up duplicate is hidden in the list, so it is not counted here either
+        const title = String(n?.title || '');
+        if (n?.type !== 'call' && /level/i.test(title)) {
+            const k = `${title}|${n?.message || ''}`;
+            if (seenLevelKeys.has(k)) return false;
+            seenLevelKeys.add(k);
+        }
+        const unread = !(n?.read === true || n?.isRead === true);
+        const newer = notifSeenAt !== null && typeof n?.createdAt === 'number' && n.createdAt > notifSeenAt;
+        return unread || newer;
+    }).length;
+
     const uPic = userData?.profilePic || `https://ui-avatars.com/api/?name=${userData?.name || 'User'}&background=020617&color=fff&bold=true`;
 
     const parallaxAura = scrollY.interpolate({ inputRange: [0, 300], outputRange: [0, -50], extrapolate: 'clamp' });
@@ -652,7 +670,9 @@ export default function UserHome() {
         };
     };
 
-    // 🚪 PORTAL (home screen entry to a lounge) - host image orb design
+    // 🚪 PORTAL (home screen entry to a lounge) - HORIZONTAL rectangle "gate" design
+    // 🔥 UPDATED: wide landscape card. LEFT = cycling host orb, MIDDLE = title + hint + count chip,
+    // RIGHT = live equalizer + glowing ENTER gate button. Corner brackets + scan line give a "gateway" feel.
     const renderPortal = (type: 'live' | 'forum') => {
         const isLive = type === 'live';
         const list = isLive ? safeLives : safeParties;
@@ -663,12 +683,12 @@ export default function UserHome() {
         const pics: string[] = Array.from(new Set(list.map((it: any) => getHostPic(it)))).slice(0, 6) as string[];
         return (
             <PressCard
-                tilt={isLive ? 4 : -4}
+                tilt={isLive ? 2 : -2}
                 style={{ width: PORTAL_W, height: PORTAL_H, opacity: empty ? 0.6 : 1 }}
                 onPress={() => openRoom(type)}
             >
                 <View style={[styles.portalShadow, { shadowColor: p1 }]}>
-                    <NeonFrame w={PORTAL_W} h={PORTAL_H} rt={PORTAL_W / 2} rb={26} c1={p1} c2={p2} rotate={isLive ? orbitRotate : orbitRotateRev}>
+                    <NeonFrame w={PORTAL_W} h={PORTAL_H} rt={28} rb={28} c1={p1} c2={p2} rotate={isLive ? orbitRotate : orbitRotateRev}>
                         <PortalHostOrb
                             pics={pics}
                             c1={p1}
@@ -680,19 +700,38 @@ export default function UserHome() {
                             icon={isLive ? 'broadcast' : 'forum'}
                         />
 
-                        <View pointerEvents="none" style={styles.portalInner}>
-                            <Text style={styles.portalTitle}>{isLive ? 'BROADCAST' : 'FORUM'}</Text>
-                            <Text style={[styles.portalSub, { color: p2 }]}>{isLive ? 'LIVE VIDEO' : 'LIVE AUDIO'}</Text>
+                        {/* 🆕 GATE CORNER BRACKETS */}
+                        <View pointerEvents="none" style={[styles.vfCorner, { top: 7, right: 7, width: 12, height: 12, borderTopWidth: 2, borderRightWidth: 2, borderTopRightRadius: 6, borderColor: withAlpha(p2, 'FF') }]} />
+                        <View pointerEvents="none" style={[styles.vfCorner, { bottom: 7, right: 7, width: 12, height: 12, borderBottomWidth: 2, borderRightWidth: 2, borderBottomRightRadius: 6, borderColor: withAlpha(p2, 'FF') }]} />
 
-                            {/* count chip */}
-                            <View style={[styles.portalCountChip, { backgroundColor: withAlpha(p1, '33'), borderColor: withAlpha(p1, '99') }]}>
-                                <View style={[styles.portalCountDot, { backgroundColor: empty ? '#64748B' : '#10B981' }]} />
-                                <Text style={styles.portalCountText}>{list.length} {isLive ? 'LIVE' : 'OPEN'}</Text>
+                        {/* 🆕 VERTICAL ENERGY DIVIDER (orb | info) */}
+                        <View pointerEvents="none" style={[styles.portalDivider, { backgroundColor: withAlpha(p1, '88'), left: ORB_SIZE + 14 }]} />
+
+                        {/* 🆕 SCAN LINE SWEEPING ACROSS THE CARD */}
+                        <Animated.View pointerEvents="none" style={[styles.portalScan, { backgroundColor: withAlpha(p2, '33'), transform: [{ translateX: shineX }, { rotate: '18deg' }] }]} />
+
+                        <View pointerEvents="none" style={styles.portalInner}>
+                            <View style={styles.portalTextCol}>
+                                <View style={styles.portalTagRow}>
+                                    <View style={[styles.portalTagLine, { backgroundColor: p2 }]} />
+                                    <Text style={[styles.portalSub, { color: p2 }]}>{isLive ? 'HOST' : 'HOST'}</Text>
+                                </View>
+                                <Text style={styles.portalTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{isLive ? 'BROADCAST' : 'FORUM'}</Text>
+                                <Text style={styles.portalHint} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.8}>{isLive ? 'Watch hosts streaming right now' : 'Join open host discussions'}</Text>
+
+                                {/* count chip */}
+                                <View style={[styles.portalCountChip, { backgroundColor: withAlpha(p1, '33'), borderColor: withAlpha(p1, '99') }]}>
+                                    <View style={[styles.portalCountDot, { backgroundColor: empty ? '#64748B' : '#10B981' }]} />
+                                    <Text style={styles.portalCountText}>{list.length} {isLive ? 'LIVE' : 'OPEN'}</Text>
+                                </View>
                             </View>
 
-                            <View style={[styles.portalEnterChip, { backgroundColor: withAlpha(p1, 'FF') }]}>
+                            <View style={styles.portalRightCol}>
+                                <EqBars loop={mainLoop} color={withAlpha(p1, 'FF')} />
+                                <View style={[styles.portalEnterChip, { backgroundColor: withAlpha(p1, 'FF'), shadowColor: p1 }]}>
+                                    <Ionicons name="arrow-forward" size={18} color="#FFF" />
+                                </View>
                                 <Text style={styles.portalEnterText}>ENTER</Text>
-                                <Ionicons name="arrow-forward" size={10} color="#FFF" />
                             </View>
                         </View>
                     </NeonFrame>
@@ -953,20 +992,41 @@ export default function UserHome() {
                         </View>
                         <Text style={[styles.rankStatusText, { color: userRank.color }]}>{userRank.status}</Text>
                     </View>
-                    
-                    <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/two' as any)}>
-                        <View style={styles.avatarOrbitWrap}>
-                            {/* 🆕 ORBITING RINGS */}
-                            <Animated.View style={[styles.orbitRing, { borderColor: userRank.color, transform: [{ rotate: orbitRotate }] }]} />
-                            <Animated.View style={[styles.orbitRingInner, { borderColor: userRank.secondaryColor, transform: [{ rotate: orbitRotateRev }] }]} />
-                            <View style={[styles.syncedAvatarRing, { borderColor: userRank.color, shadowColor: userRank.color }]}>
-                                <Image source={{ uri: uPic }} style={styles.syncedAvatarImg} />
+
+                    {/* 🔔 BELL + PROFILE PHOTO (bell sits next to the profile photo) */}
+                    <View style={styles.headerRight}>
+
+                        {/* 🔔 NOTIFICATION BELL */}
+                        <TouchableOpacity activeOpacity={0.8} onPress={() => router.push('/notifications' as any)}>
+                            <View style={[styles.bellBtn, { borderColor: withAlpha(userRank.color, '80'), shadowColor: userRank.color }]}>
+                                {unreadCount > 0 && (
+                                    <Animated.View pointerEvents="none" style={[styles.bellPulse, { backgroundColor: withAlpha(userRank.color, '33'), opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                                )}
+                                <Animated.View style={unreadCount > 0 ? { transform: [{ rotate: shakeAnim.interpolate({ inputRange: [-2, 2], outputRange: ['-14deg', '14deg'] }) }] } : undefined}>
+                                    <Ionicons name={unreadCount > 0 ? 'notifications' : 'notifications-outline'} size={22} color="#FFF" />
+                                </Animated.View>
+                                {unreadCount > 0 && (
+                                    <View style={styles.bellBadge}>
+                                        <Text style={styles.bellBadgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                                    </View>
+                                )}
                             </View>
-                            <View style={[styles.levelBadgeMini, { backgroundColor: userRank.color }]}>
-                                <Text style={styles.levelBadgeMiniText}>L{userRank.lvl}</Text>
+                        </TouchableOpacity>
+
+                        <TouchableOpacity activeOpacity={0.7} onPress={() => router.push('/(tabs)/two' as any)}>
+                            <View style={styles.avatarOrbitWrap}>
+                                {/* 🆕 ORBITING RINGS */}
+                                <Animated.View style={[styles.orbitRing, { borderColor: userRank.color, transform: [{ rotate: orbitRotate }] }]} />
+                                <Animated.View style={[styles.orbitRingInner, { borderColor: userRank.secondaryColor, transform: [{ rotate: orbitRotateRev }] }]} />
+                                <View style={[styles.syncedAvatarRing, { borderColor: userRank.color, shadowColor: userRank.color }]}>
+                                    <Image source={{ uri: uPic }} style={styles.syncedAvatarImg} />
+                                </View>
+                                <View style={[styles.levelBadgeMini, { backgroundColor: userRank.color }]}>
+                                    <Text style={styles.levelBadgeMiniText}>L{userRank.lvl}</Text>
+                                </View>
                             </View>
-                        </View>
-                    </TouchableOpacity>
+                        </TouchableOpacity>
+                    </View>
                 </Animated.View>
             </SafeAreaView>
 
@@ -1006,7 +1066,12 @@ export default function UserHome() {
                                                 </View>
                                             </View>
                                             <View style={styles.rightAction}>
-                                                <MaterialCommunityIcons name="integrated-circuit-chip" size={32} color="rgba(255,255,255,0.5)" />
+                                                {/* 🔥 UPDATED: card-chip symbol removed -> glowing SECURE SHIELD badge (safe) */}
+                                                <View style={[styles.safeShield, { borderColor: withAlpha(userRank.color, '80'), shadowColor: userRank.color }]}>
+                                                    <Animated.View style={[styles.safeShieldPulse, { backgroundColor: withAlpha(userRank.color, '33'), opacity: pulseOpacity, transform: [{ scale: pulseScale }] }]} />
+                                                    <MaterialCommunityIcons name="shield-check" size={24} color={userRank.color} />
+                                                </View>
+                                                <Text style={[styles.safeShieldLabel, { color: withAlpha(userRank.color, 'CC') }]}>SECURED</Text>
                                                 <TouchableOpacity style={[styles.glassAddBtn, {borderColor: withAlpha(userRank.color, '50')}]} onPress={() => router.push('/recharge' as any)}>
                                                     <BlurView intensity={20} style={styles.btnBlur}>
                                                         <Text style={[styles.btnTxt, {color: userRank.color}]}>TOPUP</Text>
@@ -1213,6 +1278,13 @@ const styles = StyleSheet.create({
     brandTitleWhite: { color: '#FFF', fontSize: 22, fontWeight: '900', letterSpacing: -1 },
     brandTitleIndigo: { fontSize: 22, fontWeight: '900', letterSpacing: -1, marginLeft: 6 },
     rankStatusText: { fontSize: 8, fontWeight: '900', letterSpacing: 2.5, marginTop: 3, opacity: 0.85 },
+
+    // 🔔 BELL (next to the profile photo)
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    bellBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, backgroundColor: 'rgba(255,255,255,0.07)', justifyContent: 'center', alignItems: 'center', shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+    bellPulse: { position: 'absolute', width: 44, height: 44, borderRadius: 22 },
+    bellBadge: { position: 'absolute', top: -5, right: -5, minWidth: 19, height: 19, borderRadius: 10, paddingHorizontal: 4, backgroundColor: '#F43F5E', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#020617' },
+    bellBadgeText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
     
     // 🆕 AVATAR ORBIT
     avatarOrbitWrap: { width: 78, height: 78, justifyContent: 'center', alignItems: 'center' },
@@ -1242,6 +1314,11 @@ const styles = StyleSheet.create({
     glassAddBtn: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, marginTop: 8 },
     btnBlur: { paddingHorizontal: 15, paddingVertical: 10 },
     btnTxt: { fontWeight: '900', fontSize: 9, letterSpacing: 1 },
+
+    // 🛡️ SECURE SHIELD BADGE (replaces the old chip icon on the wallet card)
+    safeShield: { width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, backgroundColor: 'rgba(255,255,255,0.06)', justifyContent: 'center', alignItems: 'center', shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
+    safeShieldPulse: { position: 'absolute', width: 42, height: 42, borderRadius: 21 },
+    safeShieldLabel: { fontSize: 7, fontWeight: '900', letterSpacing: 2, marginTop: 4 },
 
     // 🔥 QUICK Discover BUTTON STYLES
     DiscoverTriggerMass: { marginHorizontal: 20, marginTop: 25, borderRadius: 30, elevation: 15, shadowOpacity: 0.6, shadowRadius: 12, shadowOffset: { width: 0, height: 8 } },
@@ -1356,32 +1433,39 @@ const styles = StyleSheet.create({
     nodeCallBtn: { width: 48, height: 48, borderRadius: 18, justifyContent: 'center', alignItems: 'center', elevation: 12, shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 4 } },
 
     // ==========================================
-    // 🚪 LOUNGES: PORTAL CARDS (home screen)
+    // 🚪 LOUNGES: PORTAL CARDS (home screen) - HORIZONTAL RECTANGLE GATES
     // ==========================================
-    portalRow: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 6 },
-    portalShadow: { width: PORTAL_W, height: PORTAL_H, borderTopLeftRadius: PORTAL_W / 2, borderTopRightRadius: PORTAL_W / 2, borderBottomLeftRadius: 26, borderBottomRightRadius: 26, backgroundColor: '#020617', shadowOpacity: 0.65, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
-    portalInner: { ...StyleSheet.absoluteFillObject, alignItems: 'center', paddingTop: 14 + ORB_SIZE },
-    portalTitle: { color: '#FFF', fontSize: 15, fontWeight: '900', letterSpacing: 2, marginTop: 6, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 6 },
-    portalSub: { fontSize: 7.5, fontWeight: '900', letterSpacing: 2.5, marginTop: 2 },
-    portalCountChip: { flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 8 },
+    portalRow: { flexDirection: 'column', alignItems: 'center', gap: 16, paddingHorizontal: 20, paddingVertical: 6 },
+    portalShadow: { width: PORTAL_W, height: PORTAL_H, borderRadius: 28, backgroundColor: '#020617', shadowOpacity: 0.65, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 14 },
+    portalInner: { ...StyleSheet.absoluteFillObject, flexDirection: 'row', alignItems: 'center', paddingLeft: ORB_SIZE + 22, paddingRight: 14 },
+    portalTextCol: { flex: 1, justifyContent: 'center' },
+    portalTagRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    portalTagLine: { width: 14, height: 2, borderRadius: 1 },
+    portalRightCol: { width: 44, alignItems: 'center', justifyContent: 'center', gap: 6, marginLeft: 6 },
+    portalHint: { color: '#94A3B8', fontSize: 9, fontWeight: '700', marginTop: 3, lineHeight: 12 },
+    portalDivider: { position: 'absolute', top: 22, bottom: 22, width: 1.5, borderRadius: 1 },
+    portalScan: { position: 'absolute', top: -30, bottom: -30, width: 36 },
+    portalTitle: { color: '#FFF', fontSize: 16, fontWeight: '900', letterSpacing: 1, marginTop: 4, textShadowColor: 'rgba(0,0,0,0.8)', textShadowRadius: 6 },
+    portalSub: { fontSize: 7.5, fontWeight: '900', letterSpacing: 2.5 },
+    portalCountChip: { alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12, marginTop: 8 },
     portalCountDot: { width: 6, height: 6, borderRadius: 3 },
     portalCountText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
     portalAvatarRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', height: 30, marginTop: 12 },
     portalAvatar: { width: 28, height: 28, borderRadius: 14, borderWidth: 1.5, backgroundColor: '#0F172A' },
-    portalEnterChip: { position: 'absolute', bottom: 12, flexDirection: 'row', alignItems: 'center', gap: 5, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 12 },
-    portalEnterText: { color: '#FFF', fontSize: 9, fontWeight: '900', letterSpacing: 2 },
+    portalEnterChip: { width: 38, height: 38, borderRadius: 19, justifyContent: 'center', alignItems: 'center', shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 8 },
+    portalEnterText: { color: '#FFF', fontSize: 7, fontWeight: '900', letterSpacing: 1.5 },
 
-    // 🌐 HOST ORB (cycling host image + orbiting mini hosts)
-    hostOrbBox: { position: 'absolute', top: 14, alignSelf: 'center', width: ORB_SIZE, height: ORB_SIZE, justifyContent: 'center', alignItems: 'center' },
-    hostOrbPulse: { position: 'absolute', width: 84, height: 84, borderRadius: 42 },
+    // 🌐 HOST ORB (cycling host image + orbiting mini hosts) - now anchored LEFT, vertically centered
+    hostOrbBox: { position: 'absolute', top: (PORTAL_H - 5 - ORB_SIZE) / 2, left: 8, width: ORB_SIZE, height: ORB_SIZE, justifyContent: 'center', alignItems: 'center' },
+    hostOrbPulse: { position: 'absolute', width: 70, height: 70, borderRadius: 35 },
     hostOrbDash: { position: 'absolute', width: ORB_SIZE, height: ORB_SIZE, borderRadius: ORB_SIZE / 2, borderWidth: 1.5, borderStyle: 'dashed' },
-    hostOrbDot: { position: 'absolute', width: 92, height: 92, borderRadius: 46, borderWidth: 1, borderStyle: 'dotted' },
+    hostOrbDot: { position: 'absolute', width: 78, height: 78, borderRadius: 39, borderWidth: 1, borderStyle: 'dotted' },
     hostOrbitWrap: { position: 'absolute', width: ORB_SIZE, height: ORB_SIZE },
     hostOrbMini: { position: 'absolute', width: ORB_MINI, height: ORB_MINI, borderRadius: ORB_MINI / 2, borderWidth: 1.5, overflow: 'hidden', backgroundColor: '#0F172A' },
     hostOrbMiniImg: { width: '100%', height: '100%' },
-    hostOrbCore: { width: 66, height: 66, borderRadius: 33, borderWidth: 2, overflow: 'hidden', backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center', shadowOpacity: 0.9, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 10 },
+    hostOrbCore: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, overflow: 'hidden', backgroundColor: '#0F172A', justifyContent: 'center', alignItems: 'center', shadowOpacity: 0.9, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 10 },
     hostOrbCoreImg: { width: '100%', height: '100%' },
-    hostOrbBadge: { position: 'absolute', bottom: 22, right: 26, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#020617' },
+    hostOrbBadge: { position: 'absolute', bottom: 12, right: 16, width: 20, height: 20, borderRadius: 10, justifyContent: 'center', alignItems: 'center', borderWidth: 1.5, borderColor: '#020617' },
 
     // ==========================================
     // 🚪 LOUNGES: INSIDE THE LOUNGE

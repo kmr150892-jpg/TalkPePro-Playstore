@@ -975,7 +975,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
 
     const getWinnerText = () => {
         if (!matchResults) return "UNKNOWN";
-        if (matchResults.winnerIds?.length === 0) return "NOBODY SCORED ☠️";
+        if (matchResults.winnerIds?.length === 0) return "NOBODY SCORED 😔";
         if (matchResults.isTie) return "TIE - MULTIPLE WINNERS!";
         const w = (matchResults.rankedPlayers || players).find((p: any) => p.id === matchResults.winnerIds?.[0]) || players.find(p => p.id === matchResults.winnerIds?.[0]);
         return w ? `${w.name.toUpperCase()} WON! 🏆` : "UNKNOWN";
@@ -1444,7 +1444,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                         {heroWinners.length === 0 ? (
                                             <LinearGradient colors={['#EF4444', '#7E22CE', '#00F2FE']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.heroAvatarFrame, { width: 138, height: 138, borderRadius: 69 }]}>
                                                 <View style={[styles.heroAvatarInner, { width: 132, height: 132, borderRadius: 66 }]}>
-                                                    <Text style={{ fontSize: 64 }}>☠️</Text>
+                                                    <Text style={{ fontSize: 64 }}>😔</Text>
                                                 </View>
                                             </LinearGradient>
                                         ) : heroWinners.map((w: any, i: number) => (
@@ -1479,7 +1479,7 @@ export default function GlassPathSheet({ visible, onClose, liveId, isHost, userW
                                 </View>
 
                                 <LinearGradient colors={noWinner ? ['#EF4444', '#7E22CE'] : ['#FFD700', '#F97316', '#FF2A5F']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.championChip}>
-                                    <Text style={styles.championChipText}>{noWinner ? '☠️ NO CHAMPION' : matchResults.isTie ? '🤝 CO-CHAMPIONS' : iAmWinner ? '🏆 YOU ARE THE CHAMPION!' : '👑 ARENA CHAMPION'}</Text>
+                                    <Text style={styles.championChipText}>{noWinner ? '😔 NO CHAMPION' : matchResults.isTie ? '🤝 CO-CHAMPIONS' : iAmWinner ? '🏆 YOU ARE THE CHAMPION!' : '👑 ARENA CHAMPION'}</Text>
                                 </LinearGradient>
 
                                 <Text style={styles.terminalTitle} numberOfLines={1} adjustsFontSizeToFit>{getWinnerText()}</Text>
