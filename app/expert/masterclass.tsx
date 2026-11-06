@@ -947,18 +947,18 @@ export default function MasterClassScreen() {
                             />
                         </View>
 
-                        {/* 🔥 THE EXTRA "MASS" FEATURE: ALGORITHM BOOST INFO 🔥 */}
+                        {/* 🔥 PLAY STORE SAFE: PROFILE HIGHLIGHT INFO (no algorithm / visibility-percentage claims) 🔥 */}
                         <View style={[styles.lockedRevenueCard, { backgroundColor: theme.primary + '15', borderColor: theme.primary + '40' }]}>
                             <View style={styles.revenueHeader}>
                                 <MaterialCommunityIcons name="rocket-launch" size={18} color={theme.accent} />
-                                <Text style={[styles.revenueTitle, { color: theme.accent }]}> ALGORITHM BOOST</Text>
+                                <Text style={[styles.revenueTitle, { color: theme.accent }]}> PROFILE HIGHLIGHT</Text>
                             </View>
-                            <Text style={styles.revenueDesc}>Activate Profile Spotlight for priority discovery. Experience new daily updates that bring more traffic and opportunities your way!</Text>
+                            <Text style={styles.revenueDesc}>Add your skill and a showcase video to build a complete Profile Spotlight, so users can easily discover you and learn what you offer.</Text>
                             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10, gap: 8 }}>
                                 <Animated.View style={{ transform: [{ scale: pulseAnim.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, 1.18, 1] }) }] }}>
                                     <MaterialCommunityIcons name="trending-up" size={28} color="#FFF" />
                                 </Animated.View>
-                                <Text style={styles.revenueAmount}>300% MORE VISIBILITY</Text>
+                                <Text style={styles.revenueAmount} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>SHOWCASE YOUR TALENT</Text>
                             </View>
                         </View>
 
@@ -1229,7 +1229,7 @@ const styles = StyleSheet.create({
     revenueHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
     revenueTitle: { fontSize: 10, fontWeight: '900', letterSpacing: 1 },
     revenueDesc: { color: '#94A3B8', fontSize: 11, fontWeight: '600' },
-    revenueAmount: { color: '#FFF', fontSize: 24, fontWeight: '900', letterSpacing: 1 },
+    revenueAmount: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: 0.5, flex: 1, flexShrink: 1 },
 
     mainBtn: { marginTop: 30, borderRadius: 20, overflow: 'hidden', elevation: 10, shadowOpacity: 0.3, shadowRadius: 15 },
     btnGradient: { paddingVertical: 22, alignItems: 'center', overflow: 'hidden' },

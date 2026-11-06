@@ -2,6 +2,7 @@ import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenCapture from 'expo-screen-capture'; // 🔒 NEW: screenshot / screen record block
 import { addDoc, arrayUnion, collection, doc, increment, onSnapshot, serverTimestamp, updateDoc } from 'firebase/firestore';
 import React, { useEffect, useRef, useState } from 'react';
 import {
@@ -404,6 +405,17 @@ export default function UserDetail() {
             delay: i * 500,
         }))
     ).current;
+
+    // 🔒 NEW: SCREENSHOT / SCREEN RECORD BLOCK (User Profile screen)
+    // Screen open aagumbodhu capture lock pōdum, screen close aagumbodhu mattum release pannum.
+    // Thani key use panradhunaala video call screen-oda lock-ku onnum aagaadhu.
+    useEffect(() => {
+        const SECURE_KEY = 'USER_DETAIL_SECURE';
+        ScreenCapture.preventScreenCaptureAsync(SECURE_KEY).catch((e) => console.log('Screen capture block error:', e));
+        return () => {
+            ScreenCapture.allowScreenCaptureAsync(SECURE_KEY).catch((e) => console.log('Screen capture release error:', e));
+        };
+    }, []);
 
     useEffect(() => {
         Animated.loop(

@@ -1050,11 +1050,11 @@ export default function PartyRoomScreen() {
             await updateDoc(doc(db, "forum_rooms", roomId), { seats: updatedSeats });
         } catch (e) { console.log(e); }
     };
-
+0
     const toggleMic = () => {
         // 🔇 Host mute pannirundha user unmute panna mudiyathu
         if (myHostMuted) {
-            Alert.alert("Muted by Host 🔇", "Host unga mic-ah mute pannirukkaanga. Host unmute pannaa mattum thaan pesa mudiyum.");
+            Alert.alert("Muted by Host 🔇", "The host has muted your mic. You can speak once they unmute you.");
             return;
         }
         const newMutedState = !isMuted;

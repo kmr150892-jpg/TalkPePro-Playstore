@@ -1076,7 +1076,7 @@ export default function ExpertForumRoomScreen() {
 
     const toggleMic = () => {
         if (myHostMuted) {
-            Alert.alert("Muted by Host", "Host unga mic-ah mute pannirukkaanga. Host unmute pannaa mattum thaan pesa mudiyum.");
+            Alert.alert("Muted by Host", "The host has muted your mic. You can speak once they unmute you.");
             return;
         }
         if (agoraEngine.current && roomData) {

@@ -3,12 +3,14 @@ import * as Application from 'expo-application';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ScreenCapture from 'expo-screen-capture'; // 🔒 NEW: screenshot / screen record block
 import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increment, onSnapshot, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import React, { useContext, useEffect, useRef, useState } from 'react'; // 🔥 SATTI UPDATE: Added useContext here
 import {
     ActivityIndicator,
     Alert,
     Animated,
+    AppState,
     Dimensions,
     Easing,
     Image,
@@ -30,6 +32,34 @@ import { useCallOutcomeNotifier } from '../utils/useCallOutcomeNotifier'; // �
 
 const { height, width } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+// 🔥 BUG FIX (FIRST CALL CUT): camera/mic permission dialog moodina udane app konja neram 'inactive' state-la irukkum.
+// Andha time-la call start panna first call cut aagum. So dialog close aagi app 'active' aagura varaikkum wait panni,
+// pinnaadi konjam settle time (500ms) kuduthu thaan call-a continue pannuvom. (max 3s wait - hang aagaadhu)
+const waitForAppActive = (timeoutMs: number = 3000): Promise<void> =>
+    new Promise((resolve) => {
+        const settle = () => setTimeout(resolve, 500);
+        if (AppState.currentState === 'active') {
+            settle();
+            return;
+        }
+        let done = false;
+        const sub = AppState.addEventListener('change', (state) => {
+            if (state === 'active' && !done) {
+                done = true;
+                sub.remove();
+                clearTimeout(timer);
+                settle();
+            }
+        });
+        const timer = setTimeout(() => {
+            if (!done) {
+                done = true;
+                sub.remove();
+                resolve();
+            }
+        }, timeoutMs);
+    });
 
 // 🔥 MASS UPDATE: ACCURATE THEME ENGINE (LOCKED DEEP-GLOW COLORS)
 const getLevelTheme = (beans: number = 0) => {
@@ -393,6 +423,13 @@ export default function ExpertDetail() {
     
     // 🔥 SATTI FIX: Added a Ref to strictly track call ID in case user presses BACK button abruptly.
     const activeCallIdRef = useRef<string | null>(null); 
+
+    // 🔥 BUG FIX (FIRST CALL CUT): permission dialog open-a irukkum bodhu (10-20s aagalaam) host status maaralaam,
+    // so dialog-ku pinnaadi LATEST expert data-va check panna ref use pannrom.
+    const expertRef = useRef<any>(null);
+    expertRef.current = expert;
+    // 🔥 BUG FIX: permission flow nadakkum bodhu thirumba call button tap panna (double-start) block pannum
+    const permBusyRef = useRef(false);
     
     const [userData, setUserData] = useState<any>(null);
     const [connectionStatus, setConnectionStatus] = useState<string | null>(null); 
@@ -435,6 +472,17 @@ export default function ExpertDetail() {
         }))
     ).current;
 
+    // 🔒 NEW: SCREENSHOT / SCREEN RECORD BLOCK (Host Profile screen)
+    // Screen open aagumbodhu capture lock pōdum, screen close aagumbodhu mattum release pannum.
+    // Thani key use panradhunaala video call screen-oda lock-ku onnum aagaadhu.
+    useEffect(() => {
+        const SECURE_KEY = 'EXPERT_DETAIL_SECURE';
+        ScreenCapture.preventScreenCaptureAsync(SECURE_KEY).catch((e) => console.log('Screen capture block error:', e));
+        return () => {
+            ScreenCapture.allowScreenCaptureAsync(SECURE_KEY).catch((e) => console.log('Screen capture release error:', e));
+        };
+    }, []);
+
     const getJoinedDuration = (createdAt: any) => {
         if (!createdAt) return '1 Day';
         const joinedDate = createdAt.toDate ? createdAt.toDate() : new Date(createdAt);
@@ -459,6 +507,12 @@ export default function ExpertDetail() {
     // 🔥 SATTI FIX: UNMOUNT SAFETY. Stops the call if user leaves the screen without pressing Cancel.
     useEffect(() => {
         return () => {
+            // 🔥 BUG FIX: call listener-a screen unmount aagumbodhu mattum thaan close pannanum
+            // (munnaadi idhu mela irukkura main effect cleanup-la irundhuchu - adhu re-run aanaa call listener kollapadum)
+            if (unsubCallRef.current) {
+                unsubCallRef.current();
+                unsubCallRef.current = null;
+            }
             if (activeCallIdRef.current) {
                 // Keep local reference to avoid closure issues
                 const cid = activeCallIdRef.current;
@@ -523,9 +577,11 @@ export default function ExpertDetail() {
             unsubExpert(); 
             if (unsubUser) unsubUser(); 
             if (unsubFollow) unsubFollow();
-            if (unsubCallRef.current) unsubCallRef.current();
+            // 🔥 BUG FIX: ingaye irundha call listener close panna code remove pannitten.
+            // Ippo idhu 'user' object maarina re-run aagum bodhu call listener-a kollum -> accept aanaalum screen maaraama call 'missed' aagi cut aagum.
+            // Call listener cleanup ippo mela irukkura unmount-only effect-la irukku.
         };
-    }, [expertId, user]);
+    }, [expertId, user?.uid]); // 🔥 BUG FIX: 'user' object-ku badhila 'user?.uid' (object reference maaraadhu)
 
     // 🆕 PREMIUM AMBIENT LOOPS (avatar ring spin, glow pulse, hero entrance, floating particles)
     useEffect(() => {
@@ -675,6 +731,9 @@ export default function ExpertDetail() {
     };
 
     const handleStartCall = async () => {
+        // 🔥 BUG FIX: permission flow already nadakkudhu-na thirumba start aagaadhu
+        if (permBusyRef.current) return;
+
         if (!expert?.isOnline) return Alert.alert("Host Offline 💤", "This host is currently offline.");
         
         if (expert?.status === 'live' || expert?.isLive === true || expert?.isLive === "true") {
@@ -685,9 +744,29 @@ export default function ExpertDetail() {
             return Alert.alert("Host is Busy ⏳", `${expert.name} is currently assisting another user. Please try again shortly.`);
         }
 
-        const hasPermission = await checkAndRequestCallPermissions();
+        // 🔥 BUG FIX (FIRST CALL CUT): permission dialog moodina piragu app 'active' aagi settle aagura varaikkum wait pannuvom
+        permBusyRef.current = true;
+        let hasPermission = false;
+        try {
+            hasPermission = await checkAndRequestCallPermissions();
+            if (hasPermission) {
+                await waitForAppActive();
+            }
+        } finally {
+            permBusyRef.current = false;
+        }
         if (!hasPermission) {
             return; 
+        }
+
+        // 🔥 BUG FIX: dialog open-a irundha neram host offline / live / busy aagiruntha LATEST data-vaiye thirumba check pannrom
+        const latestExpert = expertRef.current || expert;
+        if (!latestExpert?.isOnline) return Alert.alert("Host Offline 💤", "This host is currently offline.");
+        if (latestExpert?.status === 'live' || latestExpert?.isLive === true || latestExpert?.isLive === "true") {
+            return Alert.alert("Host is Live 🔴", "This host is currently hosting a live broadcast. Please join the session instead.");
+        }
+        if (latestExpert?.isBusy === true || latestExpert?.isBusy === "true") {
+            return Alert.alert("Host is Busy ⏳", `${latestExpert.name} is currently assisting another user. Please try again shortly.`);
         }
 
         if (!userData || (!userData.name && !userData.userName)) return Alert.alert("Syncing Profile...", "Please wait a moment.");

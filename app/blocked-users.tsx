@@ -294,7 +294,7 @@ const BlockedCard = ({ item, index, onUnblock }: any) => {
                                         ]}
                                     />
                                     <Text style={[styles.statusLabel, isHighRisk && { color: '#EF4444' }]} numberOfLines={1}>
-                                        {isHighRisk ? 'HIGH RISK TARGET' : 'UPLINK SEVERED'}
+                                        {isHighRisk ? 'HIGH RISK TARGET' : 'BLOCKED'}
                                     </Text>
                                 </View>
                                 {(item.expertBlockCount || 0) > 0 && (

@@ -3,9 +3,10 @@ import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { usePreventScreenCapture } from 'expo-screen-capture'; // 🆕 SCREENSHOT / SCREEN RECORD BLOCK
-import { addDoc, collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'; // 🔥 SATTI FIX: Added getDocs for Wipeout
-import React, { useEffect, useRef, useState } from 'react';
+import { addDoc, arrayUnion, collection, deleteDoc, doc, getDocs, increment, onSnapshot, orderBy, query, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore'; // 🔥 SATTI FIX: Added getDocs for Wipeout | 🆕 arrayUnion for Block
+import React, { useContext, useEffect, useRef, useState } from 'react'; // 🆕 useContext (BlockContext)
 import {
+  ActivityIndicator, // 🆕 Block loader
   Alert,
   Animated,
   Dimensions,
@@ -14,6 +15,7 @@ import {
   Image,
   Keyboard,
   KeyboardAvoidingView,
+  Modal, // 🆕 Block popup
   Platform,
   StatusBar,
   StyleSheet,
@@ -24,6 +26,7 @@ import {
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; // 🆕 useSafeAreaInsets (nav buttons overlap fix)
 import { auth, db } from '../../firebaseConfig';
+import { BlockContext } from '../../utils/context/BlockContext'; // 🆕 Same BlockContext as Expert screen (user -> host block)
 
 const { width, height } = Dimensions.get('window');
 
@@ -70,6 +73,17 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
+// 🆕 HOST / USER ROLE DETECTOR (host screen-la irundhu user ah block, user screen-la irundhu host ah block - rendu flow-kum idhu thaan base)
+// ⚠️ Unga DB-la host-ah identify panra field vera irundha, inge mattum maathunga.
+const isHostRole = (d: any) => {
+  if (!d) return false;
+  const r = String(d.role || d.userType || d.accountType || '').toLowerCase();
+  if (r === 'expert' || r === 'host') return true;
+  if (d.isExpert === true || d.isHost === true) return true;
+  if (d.beansPerMin !== undefined || (Array.isArray(d.expertiseTags) && d.expertiseTags.length > 0) || Number(d.totalBeansEarned || 0) > 0) return true;
+  return false;
+};
+
 // 🆕 Floating star-dust particles (fixed positions, shimmer driver-la drift + twinkle aagum)
 const PARTICLES = [
   { x: 0.06, y: 0.16, s: 3 }, { x: 0.22, y: 0.30, s: 2 }, { x: 0.38, y: 0.12, s: 4 }, { x: 0.55, y: 0.26, s: 2 },
@@ -99,6 +113,15 @@ const dayLabel = (m: any) => {
 
 // 🆕 Quick starter chips (empty chat-la) - tap pannina input-la mattum varum, auto-send aagaadhu
 const STARTERS = ['👋 Hi!', 'How are you?', "Let's connect"];
+
+// 🆕 BLOCK REASONS (Expert / User detail screens-la irukkura same reasons)
+const BLOCK_REASONS = [
+  "Abusive Language / Harassment",
+  "Inappropriate Behavior / Nudity",
+  "Scam / Spam / Phishing",
+  "Threatening / Aggressive",
+  "Other Unwanted Contact"
+];
 
 // 🆕 3D EXTRUDED MESSAGE BUBBLE - depth layer, glass sheen, avatar, date chip, entrance flip + press tilt
 const MessageBubble = ({ item, isMine, tier, onLongPress, showAvatar, avatarUri, showDate, dateLabel, tight }: any) => {
@@ -215,6 +238,8 @@ export default function ChatScreen() {
   const actualReceiverId = (receiverId || userId) as string;
   const actualReceiverName = (receiverName || userName) as string;
 
+  const { blockUser } = useContext(BlockContext); // 🆕 Context initialized (user -> host block flow-ku)
+
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<any[]>([]);
   const [receiverImage, setReceiverImage] = useState<string | null>(null);
@@ -225,6 +250,10 @@ export default function ChatScreen() {
   const [msgsLoaded, setMsgsLoaded] = useState(false); // 🆕 empty-state flash aagaama irukka
   const [showJump, setShowJump] = useState(false); // 🆕 scroll-to-latest button
   const [kbOpen, setKbOpen] = useState(false); // 🆕 keyboard open/close track (input dock spacing)
+
+  // 🆕 BLOCK & REPORT MODAL STATES (Expert / User detail screens-la irukkura same flow)
+  const [blockModalVisible, setBlockModalVisible] = useState(false);
+  const [isBlocking, setIsBlocking] = useState(false);
 
   const user = auth.currentUser;
   const router = useRouter();
@@ -461,6 +490,97 @@ export default function ChatScreen() {
   const isBlockedByThem = Array.isArray(receiverData?.blockedUsers) && receiverData.blockedUsers.includes(user?.uid);
   const isChatBlocked = isBlockedByMe || isBlockedByThem;
 
+  // 🆕 ROLE: naan host-ah (host -> user block) illa user-ah (user -> host block)
+  const iAmHost = isHostRole(userData);
+  const receiverLabel = iAmHost ? 'USER' : 'HOST';
+
+  // 🆕 BLOCK & REPORT (header shield button) - Expert / User detail screens-la irukkura same flow
+  const openBlockModal = () => {
+      if (!user?.uid || !actualReceiverId) return;
+      setBlockModalVisible(true);
+  };
+
+  const handleBlockReasonSelect = (reason: string) => {
+      if (!user?.uid || !actualReceiverId) return;
+
+      if (isBlockedByMe) {
+          Alert.alert(
+              "ACTION RESTRICTED",
+              `This ${receiverLabel.toLowerCase()} is already in your blacklist. Please manage them via Security Settings if you wish to restore access.`
+          );
+          setBlockModalVisible(false);
+          return;
+      }
+
+      Alert.alert(
+          "CONFIRM BLOCK",
+          `Are you sure you want to block ${actualReceiverName || receiverLabel.toLowerCase()}?\n\nReason: ${reason}`,
+          [
+              { text: "CANCEL", style: "cancel" },
+              {
+                  text: "BLOCK & REPORT",
+                  style: "destructive",
+                  onPress: () => executeBlockUser(reason)
+              }
+          ]
+      );
+  };
+
+  const executeBlockUser = async (reason: string) => {
+      if (!user?.uid || !actualReceiverId) return;
+      setIsBlocking(true);
+      const myUid = user.uid;
+      const myName = userData?.name || user.displayName || (iAmHost ? "Expert" : "TalkPe User");
+      const theirName = actualReceiverName || receiverData?.name || (iAmHost ? "User" : "Unknown Expert");
+
+      try {
+          // Update my doc
+          await updateDoc(doc(db, "users", myUid), { blockedUsers: arrayUnion(actualReceiverId) });
+          // Update blocked person's block count
+          await updateDoc(doc(db, "users", actualReceiverId), { expertBlockCount: increment(1) });
+
+          // Push alert to admin (same types as Expert / User detail screens)
+          if (iAmHost) {
+              await addDoc(collection(db, "admin_alerts"), {
+                  type: 'EXPERT_BLOCKED_USER',
+                  expertId: myUid,
+                  expertName: myName,
+                  userId: actualReceiverId,
+                  userName: theirName,
+                  reason: reason,
+                  timestamp: serverTimestamp(),
+                  status: 'unread'
+              });
+          } else {
+              await addDoc(collection(db, "admin_alerts"), {
+                  type: 'USER_BLOCKED_EXPERT',
+                  expertId: actualReceiverId,
+                  expertName: theirName,
+                  userId: myUid,
+                  userName: myName,
+                  reason: reason,
+                  timestamp: serverTimestamp(),
+                  status: 'unread'
+              });
+          }
+
+          if (iAmHost) {
+              Alert.alert("USER BLOCKED", `${theirName} has been successfully restricted and reported to safety moderation.`);
+          } else {
+              // Trigger local context block to clear app feeds
+              blockUser(actualReceiverId);
+              Alert.alert("HOST BLOCKED", `${theirName} has been successfully restricted and reported to safety moderation.`, [
+                  { text: "OK", onPress: () => router.back() }
+              ]);
+          }
+      } catch (error) {
+          Alert.alert("SYSTEM ERROR", "Unable to complete blocking protocol. Please check your connection.");
+      } finally {
+          setIsBlocking(false);
+          setBlockModalVisible(false);
+      }
+  };
+
   const avatarUri = receiverImage || `https://ui-avatars.com/api/?name=${actualReceiverName || 'Host'}&background=1E293B&color=fff`;
 
   // 🆕 interpolations
@@ -587,7 +707,8 @@ export default function ChatScreen() {
                     </Animated.View>
                     <Image source={{ uri: avatarUri }} style={styles.headerAvatar} />
                 </Animated.View>
-                <View style={{ marginLeft: 12, flex: 1 }}>
+                {/* 🆕 minWidth: 0 -> text neelama irundhaalum trash button mela overlap aagaadhu */}
+                <View style={{ marginLeft: 12, flex: 1, minWidth: 0 }}>
                     <Text style={styles.headerName} numberOfLines={1}>{actualReceiverName || "Host Node"}</Text>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <View style={[styles.statusPill, { borderColor: alpha(isChatBlocked ? '#FF6B6B' : uiTier.color, '88'), backgroundColor: alpha(isChatBlocked ? '#FF6B6B' : uiTier.color, '28') }]}>
@@ -595,14 +716,17 @@ export default function ChatScreen() {
                             <Animated.View style={[styles.pulseRing, { backgroundColor: isChatBlocked ? '#FF6B6B' : uiTier.color, opacity: dotOpacity, transform: [{ scale: dotScale }] }]} />
                             <View style={[styles.pulseDot, { backgroundColor: isChatBlocked ? '#FF6B6B' : uiTier.color }]} />
                          </View>
+                         {/* 🆕 "UPLINK SEVERED" romba neelam -> "BLOCKED" (delete button-ku edikkaadhu) */}
                          <Text style={[styles.statusText, { color: isChatBlocked ? '#FF8A8A' : '#FFFFFF' }]}>
-                             {isChatBlocked ? "UPLINK SEVERED" : "CHAT"}
+                             {isChatBlocked ? "BLOCKED" : "CHAT"}
                          </Text>
                       </View>
-                      {/* 🆕 protected (screenshot blocked) badge */}
-                      <View style={[styles.secureBadge, { borderColor: alpha(uiTier.color, '88') }]}>
-                        <Ionicons name="lock-closed" size={10} color="#FFF" />
-                      </View>
+                      {/* 🆕 protected (screenshot blocked) badge - chat blocked-ah irukkumbodhu hide (pill-ku space kidaikka) */}
+                      {!isChatBlocked && (
+                        <View style={[styles.secureBadge, { borderColor: alpha(uiTier.color, '88') }]}>
+                          <Ionicons name="lock-closed" size={10} color="#FFF" />
+                        </View>
+                      )}
                     </View>
                 </View>
              </View>
@@ -611,8 +735,12 @@ export default function ChatScreen() {
                  <TouchableOpacity onPress={handleWipeoutChat} style={[styles.headerAction, { borderColor: 'rgba(255,107,107,0.65)' }]}>
                     <Ionicons name="trash-outline" size={19} color="#FF6B6B" />
                  </TouchableOpacity>
-                 <TouchableOpacity style={[styles.headerAction, { borderColor: isChatBlocked ? 'rgba(255,107,107,0.65)' : alpha(uiTier.color, '99') }]}>
-                    <MaterialCommunityIcons name={isChatBlocked ? "shield-off-outline" : "shield-lock-outline"} size={19} color={isChatBlocked ? "#FF6B6B" : uiTier.color} />
+                 {/* 🆕 BLOCK & REPORT BUTTON (shield irundha idathula) - Expert / User detail screens-la irukkura same shield-off icon + flow */}
+                 <TouchableOpacity
+                    onPress={openBlockModal}
+                    style={[styles.headerAction, { borderColor: 'rgba(239,68,68,0.70)' }]}
+                 >
+                    <MaterialCommunityIcons name="shield-off" size={20} color="#EF4444" />
                  </TouchableOpacity>
              </View>
           </BlurView>
@@ -757,6 +885,73 @@ export default function ChatScreen() {
             </View>
         </Animated.View>
       </KeyboardAvoidingView>
+
+      {/* 🆕 BLOCK & REPORT MODAL (Expert / User detail screens-la irukkura same bottom-sheet UI) */}
+      <Modal
+        visible={blockModalVisible}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setBlockModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View
+            style={[
+              styles.modalContainer,
+              {
+                borderColor: uiTier.color,
+                borderTopColor: alpha(uiTier.color, 'EE'),
+                borderLeftColor: alpha(uiTier.color, 'EE'),
+                borderBottomColor: alpha(uiTier.secondaryColor, 'EE'),
+                borderRightColor: alpha(uiTier.secondaryColor, 'EE'),
+              }
+            ]}
+          >
+            <View style={{ alignItems: 'center', marginBottom: 15 }}>
+              <View style={[styles.modalIconRing, { backgroundColor: 'rgba(239, 68, 68, 0.1)' }]}>
+                <MaterialCommunityIcons name="shield-off-outline" size={32} color="#EF4444" />
+              </View>
+              <Text style={styles.modalTitle}>BLOCK {receiverLabel}</Text>
+              <Text style={styles.modalSubText}>
+                Restrict {actualReceiverName || receiverLabel.toLowerCase()} from contacting you{iAmHost ? '' : ' or showing in your feed'}. This action will be reported for safety moderation.
+              </Text>
+            </View>
+
+            <Text style={styles.modalLabel}>REASON FOR REPORTING:</Text>
+            {BLOCK_REASONS.map((reason, idx) => (
+              <TouchableOpacity
+                key={idx}
+                style={[
+                  styles.blockReasonBtn,
+                  {
+                    borderColor: alpha(uiTier.color, '40'),
+                    borderTopColor: alpha(uiTier.color, 'AA'),
+                    borderLeftColor: alpha(uiTier.color, 'AA'),
+                    borderBottomColor: alpha(uiTier.secondaryColor, 'AA'),
+                    borderRightColor: alpha(uiTier.secondaryColor, 'AA'),
+                  }
+                ]}
+                onPress={() => handleBlockReasonSelect(reason)}
+                disabled={isBlocking}
+              >
+                <Text style={styles.blockReasonText}>{reason}</Text>
+                <Ionicons name="chevron-forward" size={16} color={uiTier.color} />
+              </TouchableOpacity>
+            ))}
+
+            {isBlocking && (
+              <ActivityIndicator size="small" color="#EF4444" style={{ marginTop: 10 }} />
+            )}
+
+            <TouchableOpacity
+              style={styles.cancelActionBtn}
+              onPress={() => setBlockModalVisible(false)}
+              disabled={isBlocking}
+            >
+              <Text style={styles.cancelBtnText}>CANCEL</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -836,4 +1031,16 @@ const styles = StyleSheet.create({
 
   blockedMsgContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 10, gap: 8, width: '100%' },
   blockedMsgText: { color: '#D3DBF5', fontSize: 13, fontWeight: '700', letterSpacing: 0.5 },
+
+  // 🆕 BLOCK & REPORT MODAL STYLES (Expert / User detail screens-la irukkura same)
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.85)', justifyContent: 'flex-end' },
+  modalContainer: { backgroundColor: '#0A0F22', borderTopLeftRadius: 30, borderTopRightRadius: 30, padding: 25, paddingBottom: 40, borderWidth: 1.3, borderBottomWidth: 0 },
+  modalIconRing: { width: 64, height: 64, borderRadius: 32, justifyContent: 'center', alignItems: 'center', marginBottom: 15 },
+  modalTitle: { color: '#EF4444', fontSize: 20, fontWeight: '900', letterSpacing: 1, marginBottom: 5 },
+  modalSubText: { color: '#94A3B8', fontSize: 12, fontWeight: '600', textAlign: 'center', marginBottom: 20, paddingHorizontal: 10 },
+  modalLabel: { color: '#64748B', fontSize: 10, fontWeight: '900', letterSpacing: 2, marginBottom: 15 },
+  blockReasonBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: 'rgba(255,255,255,0.03)', padding: 16, borderRadius: 16, marginBottom: 10, borderWidth: 1.2 },
+  blockReasonText: { color: '#FFF', fontSize: 13, fontWeight: '700' },
+  cancelActionBtn: { marginTop: 15, padding: 16, alignItems: 'center', borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.05)' },
+  cancelBtnText: { color: '#94A3B8', fontSize: 13, fontWeight: '900', letterSpacing: 1 },
 });
