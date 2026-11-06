@@ -54,13 +54,13 @@ const TERMS_SECTIONS = [
         icon: 'shield-account',
         color: '#6366F1',
         title: '1. Community Guidelines (18+ ONLY)',
-        text: 'TalkPe Pro is a premium live interaction platform strictly restricted to users aged 18 and above. All participants must engage with respect. Any form of harassment or policy violation will lead to immediate account suspension under our zero-tolerance policy.'
+        text: 'TalkPe Pro is a live interaction platform strictly restricted to adults aged 18 and above. By using the app you confirm that you are 18 or older, and we may terminate any account that we suspect belongs to a minor. All participants must engage with respect. Harassment, abuse or any other policy violation may lead to a warning, restriction, suspension or permanent ban under our zero-tolerance policy.'
     },
     {
         icon: 'diamond-stone',
         color: '#0EA5E9',
         title: '2. Digital Assets (Diamonds)',
-        text: 'Diamonds are virtual in-app items used to connect with hosts and to send virtual gifts. Diamonds have NO real-world monetary value, are not a currency, and cannot be exchanged, transferred or cashed out. All purchases of virtual items are final and non-refundable, except where required by applicable law or Google Play policies.'
+        text: 'Diamonds are virtual in-app items used to connect with hosts and to send virtual gifts. Users cannot withdraw Diamonds or exchange them for money, and Diamonds are not a currency. Gifts you send are credited to hosts as earnings under these Terms. Levels are based on in-app Diamond activity, unlock features and have no cash value. When Diamond purchases are available, they are processed only through Google Play Billing and are final and non-refundable, except where required by applicable law or Google Play policies.'
     },
     {
         icon: 'gamepad-variant',
@@ -71,32 +71,50 @@ const TERMS_SECTIONS = [
     {
         icon: 'gift-open',
         color: '#EAB308',
-        title: '4. Host Rewards & Redemption',
-        text: 'Verified hosts may earn in-app reward points for genuine interactions and entertainment services provided to users. Eligible rewards can be redeemed through our Redemption process after identity and payment-detail verification (KYC), and are subject to review, applicable limits and compliance with these Terms. Rewards are never earned from games. Redemption requests found to involve fraud, misuse or policy violations may be rejected, delayed or reversed, and the related account may be suspended.'
+        title: '4. Host Earnings & Payouts',
+        text: 'Verified hosts earn from genuine interactions: video calls and gifts received from users. Earnings are shown in INR in the host wallet at rates set by TalkPe, which may change from time to time. Once the wallet balance reaches the ₹500 minimum, a host can submit a payout request in the app with bank details. A transaction charge of ₹100 applies per payout, and a valid ID proof is required for payout requests above ₹5,000. Every request is manually reviewed by our admin team (5-7 working days). After verification, our admin team transfers the approved amount outside the app and the host is notified in the app. Games are never a source of earnings. Hosts must not share personal contact details to bypass the app. Payout requests found to involve fraud, misuse or policy violations may be rejected, delayed or reversed, and the related account may be suspended. Hosts are responsible for any taxes that apply to their earnings.'
     },
     {
         icon: 'alert-octagon',
         color: '#F43F5E',
         title: '5. Interaction Safety & Reporting',
-        text: "Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, Live Broadcasts, Forum rooms, and on profiles. In Live and Forum chats, if someone sends an abusive, inappropriate or harmful message, simply tap that message to open the 'Block' and 'Report' options for the sender. Hosts can also fill and submit a Trust & Safety report form through the Support Hub. Our admin team reviews every submitted report and works to resolve it within 24 hours, and the host is notified in-app when the report status changes (under review, resolved or dismissed). All user reports are reviewed by our moderation team within 24 hours to ensure platform integrity."
+        text: "Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, Live Broadcasts, Forum rooms, and on profiles and Spotlight videos. In Live and Forum chats, if someone sends an abusive, inappropriate or harmful message, simply tap that message to open the 'Block' and 'Report' options for the sender. Users and Hosts can also fill and submit a confidential Trust & Safety report through the Support Hub and track its status in the app. Our admin team reviews every submitted report and we aim to resolve it within 24 hours. The person who submitted the report is notified in the app when its status changes."
     },
     {
         icon: 'security',
         color: '#10B981',
         title: '6. User Responsibility',
-        text: 'You are responsible for maintaining the confidentiality of your account credentials. TalkPe Pro is not liable for unauthorized access resulting from user negligence or shared sensitive information. Capturing, recording or sharing other users\' video calls or live sessions without their consent (including by using another device) is strictly prohibited and may lead to account termination.'
+        text: 'You are responsible for keeping your Google account and device secure. TalkPe Pro is not liable for unauthorized access resulting from user negligence or shared sensitive information. Never share OTPs, passwords or banking details with anyone; our team will never ask for them. Capturing, recording or sharing other users\' video calls or live sessions without their consent (including by using another device) is strictly prohibited and may lead to account termination.'
     },
     {
         icon: 'gavel',
         color: '#F59E0B',
         title: '7. Content Moderation & Spotlight',
-        text: 'We maintain strict User-Generated Content (UGC) policies. Spotlight videos and chat messages in Live and Forum rooms can be reported. Reported Spotlight videos will be hidden pending a 24-hour administrator review. Users who send violating content may be blocked, restricted or permanently terminated without refunds.'
+        text: 'We maintain strict User-Generated Content (UGC) policies. We prohibit nudity, sexual content, harassment, hate speech, threats, violence, illegal content, scams, fake profiles, and asking users to pay or share contact details outside the app. Spotlight videos and chat messages in Live and Forum rooms can be reported. Every report is sent to our admin team, who verify it and take action if the content really violates our rules. Violating content may be removed, and users who send violating content may be warned, blocked, restricted or permanently terminated without refunds, except where required by law.'
     },
     {
         icon: 'wifi-off',
         color: '#8B5CF6',
-        title: '8. Game Disconnect Policy',
-        text: 'In the event of a network disconnection during a free game, the match may end or restart automatically. Since games are free to play and carry no rewards, no Diamonds or rewards are charged, lost or owed because of a disconnection.'
+        title: '8. Disconnections (Games & Calls)',
+        text: 'In the event of a network disconnection during a free game, the match may end or restart automatically. Since games are free to play and carry no rewards, no Diamonds or rewards are charged, lost or owed because of a disconnection. Live calls depend on the internet connection of both the user and the host, and may disconnect because of network problems on either side. If you believe you were charged incorrectly, contact support@talkpepro.com and our team will review your request.'
+    },
+    {
+        icon: 'account-check',
+        color: '#14B8A6',
+        title: '9. Verified Hosts',
+        text: 'Every host submits a profile photo and a short selfie video, which are reviewed and verified by our admin team before the host can receive calls. Hosts must be 18 years or older and must follow our community guidelines. Accounts that violate our policies may be warned, suspended or permanently removed.'
+    },
+    {
+        icon: 'delete-sweep',
+        color: '#FB923C',
+        title: '10. Account Termination & Deletion',
+        text: 'You may stop using TalkPe Pro and delete your account at any time from inside the app (see the Privacy Policy for the exact steps). We may suspend or terminate accounts that violate these Terms. Pending payout requests of accounts terminated for fraud or policy violations may be rejected.'
+    },
+    {
+        icon: 'email',
+        color: '#38BDF8',
+        title: '11. Contact & Updates',
+        text: 'We may update these Terms from time to time to reflect changes in our services or legal requirements. Continued use of the app after an update means you accept the revised Terms. For any questions, contact us at support@talkpepro.com.'
     }
 ];
 
@@ -106,43 +124,73 @@ const PRIVACY_SECTIONS = [
         icon: 'microphone-off',
         color: '#A855F7',
         title: '1. Communication Privacy & No Recording',
-        text: 'All live interactions (Quick Connect, Live Rooms) utilize industry-standard encryption. We operate under a strict zero-knowledge framework; your private video and audio calls are NEVER recorded, stored, or monitored by TalkPe Pro. To further protect your privacy, screenshots and screen recording are blocked inside Video Calls and Live sessions on supported devices.'
+        text: 'Live interactions (Quick Connect, Live Rooms and Video Calls) are protected with encryption in transit. Your private video and audio calls are NEVER recorded, stored, or monitored by TalkPe Pro. To further protect your privacy, screenshots and screen recording are blocked inside Video Calls and Live sessions on supported devices.'
+    },
+    {
+        icon: 'account-details',
+        color: '#6366F1',
+        title: '2. Information We Collect',
+        text: 'We collect the details you give us or that come from Google Sign-In (name, email and profile photo), the profile information you add, your wallet and transaction history, call and gift history, chat messages in Live and Forum rooms, Spotlight videos and photos you upload, your device notification token and the reports you submit. For hosts we also collect the verification photo and selfie video, and the bank details and ID proof submitted with a payout request.'
+    },
+    {
+        icon: 'cog',
+        color: '#22C55E',
+        title: '3. How We Use Your Information',
+        text: 'We use your information to run calls, live rooms, forums and your wallet, show your level, send notifications, keep the community safe (including reviewing reports), verify hosts, process payout requests and provide support. We do not sell your personal data and we do not share it with third-party advertisers for marketing purposes.'
     },
     {
         icon: 'database-lock',
         color: '#EC4899',
-        title: '2. Information Security',
-        text: 'Your profile and identity data are secured within Firebase encrypted clusters. We maintain a strict policy against selling or sharing your personal data with third-party advertisers for marketing purposes.'
+        title: '4. Information Security & Service Providers',
+        text: 'Your data is stored with trusted service providers: Google (Firebase and Google Sign-In) and Cloudinary for media storage and delivery, plus our real-time video and audio provider for calls. Data is encrypted in transit, and Firebase also encrypts stored data. We use reasonable technical and organisational measures to protect your information, but no method of storage or transmission is completely secure.'
     },
     {
         icon: 'credit-card-chip',
         color: '#F59E0B',
-        title: '3. Transaction Protection',
-        text: 'Financial details are processed exclusively via secure Google Play Billing and verified payment vaults. Sensitive information like CVV or banking passwords never pass through or get stored within the TalkPe Pro local system.'
+        title: '5. Transaction Protection',
+        text: 'Diamond purchases, when available, are processed only through Google Play Billing, which handles your payment details. Sensitive information like card numbers, CVV or banking passwords is never stored within the TalkPe Pro app.'
     },
     {
         icon: 'eye-off',
         color: '#06B6D4',
-        title: '4. Data Permissions',
-        text: 'Camera and Microphone access is strictly requested for live call durations only. Any media access is limited to profile personalization. You can manage or revoke these permissions via your device settings at any time.'
-    },
-    {
-        icon: 'delete-sweep',
-        color: '#14B8A6',
-        title: '5. Data Deletion Rights',
-        text: 'In strict compliance with Google Play Developer Policies, users retain full rights over their data. You can request complete deletion of your account and associated data through the app settings at any time, which will permanently wipe your identity from our servers.'
+        title: '6. Data Permissions',
+        text: 'Camera and microphone are used only when you use features that need them: video calls, voice rooms and live sessions, host selfie verification, and recording or uploading Spotlight videos. Photos and videos are accessed only when you choose to upload them. Notification permission is used to alert you about calls and updates. You can manage or revoke these permissions in your device settings at any time.'
     },
     {
         icon: 'bank-check',
         color: '#84CC16',
-        title: '6. Host Redemption Verification',
-        text: 'Hosts who choose to use the Redemption process provide identity and payment details only for verification and to complete their redemption. This information is used for no other purpose, is protected with encryption, and is shared only with the payment partners needed to process the redemption.'
+        title: '7. Host Payout & Verification Data',
+        text: 'Hosts who submit a payout request provide bank details, and an ID proof where required, only to verify the request and to send the approved payout. The verification photo and selfie video are used only to confirm that a host is a real adult. This information is reviewed manually by our admin team, is used for no other purpose and is never sold. Where the law requires, or to prevent fraud, we may retain limited payout and transaction records.'
     },
     {
         icon: 'gamepad-round',
         color: '#38BDF8',
-        title: '7. Games & Your Data',
+        title: '8. Games & Your Data',
         text: 'Games are free, for fun and entertainment only. Playing a game does not charge you, does not award rewards to users or hosts, and does not require any additional sensitive personal information.'
+    },
+    {
+        icon: 'delete-sweep',
+        color: '#14B8A6',
+        title: '9. Data Retention & Deletion Rights',
+        text: 'You can delete your account and associated personal data from our servers at any time inside the app. Hosts: tap the Delete Account button at the bottom of the Home screen. Users: go to Profile > Edit Profile > Delete Account. Where the law requires, or to prevent fraud, we may retain limited payout and transaction records after deletion. You can also request deletion by writing to support@talkpepro.com or through www.talkpepro.com/deletion.'
+    },
+    {
+        icon: 'account-lock',
+        color: '#8B5CF6',
+        title: '10. Your Choices & Rights',
+        text: 'You can edit your profile information in the app, and manage camera, microphone, photo and notification permissions in your device settings. To access or correct your data, or to ask any question about it, contact support@talkpepro.com.'
+    },
+    {
+        icon: 'account-check',
+        color: '#F43F5E',
+        title: '11. Age Restriction (18+)',
+        text: 'TalkPe Pro is strictly for adults aged 18 and above. We do not knowingly collect personal data from anyone under 18, and accounts found to belong to minors are removed along with their data.'
+    },
+    {
+        icon: 'email',
+        color: '#0EA5E9',
+        title: '12. Contact & Policy Updates',
+        text: 'For privacy questions or data requests, contact support@talkpepro.com. We may update this Privacy Policy from time to time, and the date at the top of this screen shows the latest update.'
     }
 ];
 
@@ -492,7 +540,6 @@ export default function LegalScreen() {
                                 </View>
                             </LinearGradient>
                         </View>
-                        <Text style={styles.footerText}>SECURE PROTOCOL v1.0.5</Text>
                         <View style={styles.brandRow}>
                             <Text style={styles.footerSub}>MANAGED BY </Text>
                             <Text style={[styles.brandHighlight, { color: userTier.color }]}>TALKPE TECHNOLOGIES✨</Text>
