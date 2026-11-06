@@ -73,6 +73,9 @@ const REPORT_CATEGORIES = [
 ];
 const MIN_DESC = 20;
 const MAX_DESC = 500;
+// 🆕 recent users count (munnaadi 8 mattum) - inga maathikalam
+const MAX_RECENT_USERS = 30;   // list-la max evlo unique users kaattanum
+const CALLS_FETCH_LIMIT = 100; // evlo pazhaya calls-a scan panni unique users edukkanum
 const REPORT_COOLDOWN_MS = 60000;
 const REPORT_STATUS_META: Record<string, any> = {
     unread:    { label: 'SUBMITTED',    color: '#F59E0B', icon: 'send-check-outline',   note: 'Waiting for the team to pick it up.' },
@@ -123,44 +126,64 @@ const FAQS = [
        {
         id: 1,
         question: "When will my reward redemption be processed?",
-        answer: "Redemption requests are reviewed manually by our team and are usually processed within 5-7 working days. During review, we may verify your account activity and the details you submitted to keep the platform safe and fair. Please make sure your redemption details and ID document are accurate, as incorrect details can delay or prevent processing."
+        answer: "Redemption requests are reviewed manually by our team and are usually processed within 5-7 working days. During review, we may verify your account activity and the details you submitted to keep the platform safe and fair. After verification, our admin team transfers the approved amount to your bank account outside the app, and you are notified in the app. Please make sure your redemption details and ID document are accurate, as incorrect details can delay or prevent processing."
     },
     {
         id: 2,
-        question: "How does the Profile Spotlight (Algorithm Boost) work?",
-        answer: "Profile Spotlight pushes your profile up to get more genuine call requests. Note: All Spotlight videos are subject to strict UGC (User Generated Content) guidelines. Users can report videos, which triggers a mandatory 24-hour admin review to ensure platform safety."
+        question: "How does Profile Spotlight work?",
+        answer: "Spotlight lets you showcase short videos on your profile so more users can discover you. Videos must follow our content rules (no nudity, sexual content, harassment, hate speech, threats or contact details). Users can report videos. Reports are sent to our admin team, who verify them and take action if a video violates the rules."
     },
     {
         id: 3,
         question: "What is the minimum Redeem limit & Rules?",
-        answer: "The minimum redemption limit is ₹500. Additionally, for any redemption request above ₹5,000, submission of a valid ID proof (Aadhaar or PAN) is mandatory for KYC compliance. Note: A standard transaction charge of ₹100 applies per redemption."
+        answer: "The minimum redemption limit is ₹500. Additionally, for any redemption request above ₹5,000, submission of a valid ID proof is required. Note: A standard transaction charge of ₹100 applies per redemption."
     },
     {
         id: 4,
         question: "Why am I not receiving any incoming call requests?",
-        answer: "1. Check your 'ONLINE' status in the command center.\n2. Ensure your profile picture is highly professional and strictly 18+ compliant (no explicit content).\n3. Maintain a positive interaction rating with users.\n4. Keep your app updated to the latest Play Store version."
+        answer: "1. Check your 'ONLINE' status in the command center.\n2. Ensure your profile picture is highly professional and strictly 18+ compliant (no explicit content).\n3. Keep your app updated to the latest Play Store version."
     },
     {
         id: 5,
-        question: "How do Broadcast & Audio/Video Calls work?",
-        answer: "You earn rewards directly based on your Tier's 'Rewards per Minute' rate during active audio or video sessions. If a user disconnects due to poor network, our system automatically calculates your earnings up to the exact second of disconnection to protect your legitimate time spent."
+        question: "How do calls and gift rewards work?",
+        answer: "You earn rewards based on your Tier's 'Rewards per Minute' rate during active video calls (if a user turns the camera off, the call continues as an audio call). You also earn rewards from gifts you receive. Rewards from calls and gifts are converted to INR and shown in your wallet. If you think a call was calculated incorrectly, contact support@talkpepro.com."
     },
     {
         id: 6,
         question: "My account is showing as restricted. What do I do?",
-        answer: "Accounts are restricted automatically for strict policy violations (e.g., sharing personal numbers, inappropriate behavior). Contact support to appeal. Additionally, as per data safety rules, you retain full rights to use the 'Delete Account' option to permanently wipe your data at any time."
+        answer: "Accounts may be restricted for policy violations (for example sharing personal numbers or inappropriate behavior). Contact support to appeal. You can also delete your account anytime: tap the Delete Account button at the bottom of the Home screen. This deletes your account and personal data; limited redemption and transaction records may be kept where the law requires."
     },
     {
         id: 7,
         question: "How to handle abusive or misbehaving users?",
-        answer: "Your safety is our absolute priority. Disconnect immediately and use the in-call 'Block & Report' feature. Our Trust & Safety team reviews all reports within 24 hours to enforce permanent platform bans on violators."
+        answer: "Your safety is our absolute priority. Disconnect immediately and use the in-call 'Block & Report' feature. Our team verifies reports and takes action if a violation is found. We aim to review within 24 hours."
     },
     {
         id: 8,
         question: "Can I change my Per-Minute Call Reward?",
-        answer: "Yes! Based on your Tier (e.g., Bronze, Silver, Gold), you can adjust your 'Rewards per Minute' rate every 30 minutes. Rest assured, for your absolute privacy, TalkPe Pro operates under a Zero Recording Policy—private calls are NEVER recorded."
+        answer: "Yes! Based on your Tier (e.g., Bronze, Silver, Gold), you can adjust your 'Rewards per Minute' rate."
     }
 ];
+
+// 🆕 EXTRA HOST FAQS (rewards to INR clarity + Play UGC rules)
+const HOST_FAQS_EXTRA = [
+    {
+        id: 9,
+        question: "How do rewards become INR?",
+        answer: "Rewards you receive from video calls and gifts are converted to INR (100 rewards = ₹1) and shown in your wallet. When your balance reaches ₹500, you can submit a redemption request from the wallet. Our admin team verifies it and transfers the approved amount to your bank account outside the app."
+    },
+    {
+        id: 10,
+        question: "How do I report a user?",
+        answer: "Open Support Hub and tap Trust & Safety Desk to fill the in-app report form. Choose what happened, then tap the user you want to report from your Recent Users list (only users you have recently spoken with are shown, so the report reaches the right account). During calls you can also use Block & Report. Our team verifies reports and takes action if a violation is found. You can track your report under MY REPORTS in the Support Hub."
+    },
+    {
+        id: 11,
+        question: "What content is not allowed on my profile and Spotlight?",
+        answer: "Nudity, sexual content, harassment, hate speech, threats, violence, illegal content, scams, fake profiles, sharing personal contact details, and asking users to pay outside the app are not allowed. Violating content may be removed, and accounts may be warned, restricted or banned."
+    }
+];
+const ALL_FAQS = [...FAQS, ...HOST_FAQS_EXTRA];
 
 // ✨ PRESS-SCALE BUTTON (ovvoru tap-kum springy premium feel)
 const ScaleBtn = ({ children, onPress, style, wrapStyle, disabled }: any) => {
@@ -636,16 +659,17 @@ export default function SupportHubScreen() {
     // 🆕 REPORT FORM STATE
     const [reportVisible, setReportVisible] = useState(false);
     const [reportCategory, setReportCategory] = useState<string>('');
-    const [reportedUser, setReportedUser] = useState('');
     const [reportDesc, setReportDesc] = useState('');
     const [reportConfirm, setReportConfirm] = useState(false);
     const [reportSubmitting, setReportSubmitting] = useState(false);
     const [reportDoneId, setReportDoneId] = useState<string | null>(null);
     const lastReportRef = useRef(0);
 
-    // 🆕🆕 NEW: recent callers picker (reportedUserId correct-a save aaga)
+    // 🆕🆕 recent callers picker (reportedUserId correct-a save aaga) - ippo name type panna mudiyaadhu, pick mattum thaan
     const [recentUsers, setRecentUsers] = useState<any[]>([]);
+    const [recentLoading, setRecentLoading] = useState(false);
     const [pickedUser, setPickedUser] = useState<{ id: string; name: string } | null>(null);
+    const [userError, setUserError] = useState(false);
 
     // 🆕🆕 NEW: host anuppina reports-oda live status (MY REPORTS)
     const [myReports, setMyReports] = useState<any[]>([]);
@@ -797,22 +821,24 @@ export default function SupportHubScreen() {
     };
 
     const handleEmailSupport = () => {
-        openMail('mailto:support@talkpepro.com?subject=TalkPe%20Pro%20Consultant%20General%20Support');
+        openMail('mailto:support@talkpepro.com?subject=TalkPe%20Pro%20Host%20Support');
     };
 
     // 🆕 TRUST & SAFETY: ippo mail illa, in-app secure report form thirakkum
     const handleTrustSafetyReport = () => {
         setReportDoneId(null);
+        setUserError(false);
         setReportVisible(true);
         loadRecentUsers();
     };
 
-    // 🆕🆕 NEW: recent callers (yaar kooda pesunaangalo avanga list)
+    // 🆕🆕 recent callers (yaar kooda pesunaangalo avanga list)
     const loadRecentUsers = async () => {
         const uid = auth.currentUser?.uid;
         if (!uid) return;
+        setRecentLoading(true);
         try {
-            const snap = await getDocs(query(collection(db, "calls"), where("expertId", "==", uid), limit(40)));
+            const snap = await getDocs(query(collection(db, "calls"), where("expertId", "==", uid), limit(CALLS_FETCH_LIMIT)));
             const rows = snap.docs.map((d) => {
                 const c: any = d.data();
                 const t = c.endedAt || c.createdAt;
@@ -824,11 +850,13 @@ export default function SupportHubScreen() {
             const unique: any[] = [];
             for (const r of rows) {
                 if (!seen.has(r.id)) { seen.add(r.id); unique.push(r); }
-                if (unique.length >= 8) break;
+                if (unique.length >= MAX_RECENT_USERS) break;
             }
             setRecentUsers(unique);
         } catch (e) {
             console.log("Recent users error:", e);
+        } finally {
+            setRecentLoading(false);
         }
     };
 
@@ -838,12 +866,13 @@ export default function SupportHubScreen() {
         // reset form (success screen-la irundhu moodina piragu fresh-a irukkum)
         setTimeout(() => {
             setReportCategory('');
-            setReportedUser('');
             setReportDesc('');
             setReportConfirm(false);
             setReportDoneId(null);
             setPickedUser(null);
+            setUserError(false);
             setRecentUsers([]);
+            setRecentLoading(false);
         }, 250);
     };
 
@@ -857,6 +886,17 @@ export default function SupportHubScreen() {
         }
         if (!reportCategory) {
             Alert.alert("Select a Category", "Please choose what your report is about.");
+            return;
+        }
+        // 🆕 USER PICK KAATAYAM - recent users list-la irundhu select pannanum (type panna mudiyaadhu)
+        if (!pickedUser) {
+            setUserError(true);
+            Alert.alert(
+                "Select a User",
+                recentUsers.length > 0
+                    ? "Please tap the user you want to report from the Recent Users list."
+                    : `No recent users found. You can only report users you have recently spoken with. For other concerns, write to ${SUPPORT_EMAIL}.`
+            );
             return;
         }
         const desc = reportDesc.trim();
@@ -884,9 +924,9 @@ export default function SupportHubScreen() {
                 expertName: userData?.name || "Host",
                 category: reportCategory,
                 categoryLabel: catLabel,
-                reportedUser: reportedUser.trim(),
-                reportedUserId: pickedUser?.id || null,
-                reportedUserName: pickedUser?.name || reportedUser.trim() || null,
+                reportedUser: pickedUser.name,
+                reportedUserId: pickedUser.id,
+                reportedUserName: pickedUser.name,
                 description: desc,
                 status: 'unread',
                 priority: reportCategory === 'threat' ? 'high' : 'normal',
@@ -979,9 +1019,9 @@ export default function SupportHubScreen() {
 
                             <View style={styles.heroRow}>
                                 <View style={{ flex: 1, paddingRight: 8 }}>
-                                    <Text style={[styles.sectionTitle, { color: '#FFF' }]}>24/7 COMMAND RESOLUTION</Text>
+                                    <Text style={[styles.sectionTitle, { color: '#FFF' }]}>SUPPORT & SAFETY</Text>
                                     <Text style={styles.heroTitle}>How can we help you today?</Text>
-                                    <Text style={styles.sectionDesc}>Our dedicated administrator team is strictly monitoring platform integrity and is ready to assist you.</Text>
+                                    <Text style={styles.sectionDesc}>Our team reviews your questions and reports and will get back to you.</Text>
                                 </View>
                                 <Orb3D c1={primaryColor} c2={tertiaryColor}>
                                     <MaterialCommunityIcons name="headset" size={34} color="#FFF" />
@@ -1006,7 +1046,7 @@ export default function SupportHubScreen() {
                     <View style={[styles.ruleTile, borderType2]}>
                         <Ionicons name="shield-checkmark-outline" size={18} color={primaryColor} />
                         <Text style={styles.ruleValue}>24 HR</Text>
-                        <Text style={styles.ruleLabel}>SAFETY REVIEW</Text>
+                        <Text style={styles.ruleLabel}>REVIEW TARGET</Text>
                     </View>
                 </Animated.View>
 
@@ -1048,7 +1088,7 @@ export default function SupportHubScreen() {
                                 <View style={styles.actionTextContent}>
                                     <Text style={[styles.actionTitleBig, { color: '#FFF' }]}>Trust & Safety Desk</Text>
                                     <Text style={styles.actionSubBig}>Report a user or safety concern securely</Text>
-                                    <Text style={[styles.actionEmailHighlight, { color: REPORT_COLOR }]}>In-App Report • Reviewed in 24 Hrs</Text>
+                                    <Text style={[styles.actionEmailHighlight, { color: REPORT_COLOR }]}>In-App Report • Reviewed by our team</Text>
                                 </View>
                                 <Animated.View style={{ transform: [{ translateX: chevronBob }] }}>
                                     <Ionicons name="chevron-forward" size={24} color={REPORT_COLOR} style={styles.forwardIcon} />
@@ -1095,11 +1135,11 @@ export default function SupportHubScreen() {
                         <MaterialCommunityIcons name="frequently-asked-questions" size={26} color={primaryColor} />
                         <Text style={[styles.sectionTitle, { color: primaryColor, marginBottom: 0, fontSize: 14, flex: 1 }]}>KNOWLEDGE BASE</Text>
                         <View style={[styles.faqCountPill, { borderColor: primaryColor + '55', backgroundColor: primaryColor + '15' }]}>
-                            <Text style={[styles.faqCountText, { color: primaryColor }]}>{FAQS.length} ANSWERS</Text>
+                            <Text style={[styles.faqCountText, { color: primaryColor }]}>{ALL_FAQS.length} ANSWERS</Text>
                         </View>
                     </View>
 
-                    {FAQS.map((faq, index) => (
+                    {ALL_FAQS.map((faq, index) => (
                         <FaqItem
                             key={faq.id}
                             faq={faq}
@@ -1150,7 +1190,7 @@ export default function SupportHubScreen() {
                                         <View style={{ alignItems: 'center', paddingVertical: 10 }}>
                                             <SuccessTick color="#10B981" />
                                             <Text style={styles.doneTitle}>Report Submitted</Text>
-                                            <Text style={styles.doneSub}>Thank you for helping keep TalkPe Pro safe. Our Trust & Safety team will review your report within 24 hours.</Text>
+                                            <Text style={styles.doneSub}>Thank you for helping keep TalkPe Pro safe. Our Trust & Safety team aims to review your report within 24 hours.</Text>
                                             <View style={styles.refChip}>
                                                 <MaterialCommunityIcons name="pound" size={14} color="#10B981" />
                                                 <Text style={styles.refChipText}>REFERENCE: {reportDoneId}</Text>
@@ -1173,7 +1213,7 @@ export default function SupportHubScreen() {
                                                 </View>
                                                 <View style={{ flex: 1, marginLeft: 12 }}>
                                                     <Text style={styles.reportTitle}>Report a Concern</Text>
-                                                    <Text style={styles.reportSub}>Confidential • Reviewed within 24 hours</Text>
+                                                    <Text style={styles.reportSub}>Trust & Safety • We aim to review within 24 hours</Text>
                                                 </View>
                                                 <TouchableOpacity onPress={closeReport} style={styles.reportCloseBtn} activeOpacity={0.8}>
                                                     <Ionicons name="close" size={20} color="#FFF" />
@@ -1183,7 +1223,7 @@ export default function SupportHubScreen() {
                                             {/* safety info */}
                                             <View style={styles.infoBox}>
                                                 <Ionicons name="lock-closed" size={14} color="#10B981" />
-                                                <Text style={styles.infoBoxText}>Your report goes directly to our Trust & Safety team and is handled confidentially. Please do not include passwords, OTPs or banking details.</Text>
+                                                <Text style={styles.infoBoxText}>Your report goes to our Trust & Safety team. Please do not include passwords, OTPs or banking details.</Text>
                                             </View>
 
                                             {/* 1. category */}
@@ -1207,20 +1247,33 @@ export default function SupportHubScreen() {
                                                 ))}
                                             </View>
 
-                                            {/* 2. reported user */}
+                                            {/* 2. reported user - 🆕 PICK ONLY (name type panna mudiyaadhu) */}
                                             <View style={styles.rSectionRow}>
                                                 <LinearGradient colors={[primaryColor, primaryColor + '66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rSectionIcon}>
                                                     <MaterialCommunityIcons name="account-search-outline" size={14} color="#0B1026" />
                                                 </LinearGradient>
-                                                <Text style={[styles.rSectionText, { color: lighten(primaryColor, 0.55) }]}>USER DETAILS</Text>
+                                                <Text style={[styles.rSectionText, { color: lighten(primaryColor, 0.55) }]}>SELECT THE USER</Text>
                                                 <LinearGradient colors={[primaryColor + '88', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.rSectionLine} />
                                             </View>
 
-                                            {/* 🆕🆕 NEW: recent contacts picker */}
-                                            {recentUsers.length > 0 && (
+                                            {/* 🆕 GUIDE BOX */}
+                                            <View style={[styles.pickGuide, { borderColor: primaryColor + '55', backgroundColor: primaryColor + '12' }]}>
+                                                <MaterialCommunityIcons name="gesture-tap" size={20} color={primaryColor} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.pickGuideTitle}>HOW TO SELECT</Text>
+                                                    <Text style={styles.pickGuideText}>Tap the user you want to report from the list below. Only users you have recently spoken with are shown, so your report reaches the correct account. You cannot type a name.</Text>
+                                                </View>
+                                            </View>
+
+                                            {recentLoading ? (
+                                                <View style={styles.pickEmptyBox}>
+                                                    <ActivityIndicator color={primaryColor} />
+                                                    <Text style={styles.pickEmptyText}>Loading your recent users...</Text>
+                                                </View>
+                                            ) : recentUsers.length > 0 ? (
                                                 <>
-                                                    <Text style={styles.pickLabel}>RECENT CONTACTS (TAP TO SELECT)</Text>
-                                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
+                                                    <Text style={styles.pickLabel}>RECENT USERS (TAP TO SELECT)</Text>
+                                                    <View style={[styles.userPickWrap, userError && !pickedUser && styles.userPickWrapError]}>
                                                         {recentUsers.map((u) => {
                                                             const sel = pickedUser?.id === u.id;
                                                             return (
@@ -1228,8 +1281,9 @@ export default function SupportHubScreen() {
                                                                     key={u.id}
                                                                     activeOpacity={0.8}
                                                                     onPress={() => {
+                                                                        setUserError(false);
                                                                         if (sel) { setPickedUser(null); }
-                                                                        else { setPickedUser({ id: u.id, name: u.name }); setReportedUser(u.name); }
+                                                                        else { setPickedUser({ id: u.id, name: u.name }); }
                                                                     }}
                                                                     style={[styles.userPick, sel && { borderColor: primaryColor, backgroundColor: primaryColor + '30' }]}
                                                                 >
@@ -1238,23 +1292,29 @@ export default function SupportHubScreen() {
                                                                 </TouchableOpacity>
                                                             );
                                                         })}
-                                                    </ScrollView>
-                                                </>
-                                            )}
+                                                    </View>
 
-                                            <GlowField
-                                                icon="person-outline"
-                                                color={primaryColor}
-                                                value={reportedUser}
-                                                onChangeText={(t: string) => {
-                                                    setReportedUser(t);
-                                                    // picked user-oda name-a maathi type pannina, thappana ID save aagaama pick-a clear pannidum
-                                                    if (pickedUser && t.trim() !== pickedUser.name) setPickedUser(null);
-                                                }}
-                                                maxLength={60}
-                                                placeholder="User name or ID (if known)"
-                                                placeholderTextColor="#64748B"
-                                            />
+                                                    {pickedUser ? (
+                                                        <View style={[styles.selectedRow, { borderColor: '#10B98188', backgroundColor: '#10B98112' }]}>
+                                                            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                                                            <Text style={styles.selectedText} numberOfLines={1}>Reporting: {pickedUser.name}</Text>
+                                                            <TouchableOpacity onPress={() => setPickedUser(null)} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    ) : userError ? (
+                                                        <View style={styles.pickErrorRow}>
+                                                            <Ionicons name="alert-circle" size={14} color={REPORT_COLOR} />
+                                                            <Text style={styles.pickErrorText}>Please tap a user from the list above to continue.</Text>
+                                                        </View>
+                                                    ) : null}
+                                                </>
+                                            ) : (
+                                                <View style={[styles.pickEmptyBox, userError && { borderColor: REPORT_COLOR + '88' }]}>
+                                                    <MaterialCommunityIcons name="account-off-outline" size={26} color="#64748B" />
+                                                    <Text style={styles.pickEmptyText}>No recent users found. You can only report users you have recently spoken with. For any other concern, write to {SUPPORT_EMAIL}.</Text>
+                                                </View>
+                                            )}
 
                                             {/* 3. description */}
                                             <View style={styles.rSectionRow}>
@@ -1433,10 +1493,23 @@ const styles = StyleSheet.create({
     catChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 9, borderRadius: 18, borderWidth: 1, overflow: 'hidden', backgroundColor: 'rgba(30,41,59,0.7)' },
     catChipText: { color: '#94A3B8', fontSize: 11, fontWeight: '800' },
 
-    // 🆕🆕 NEW: recent contacts picker styles
+    // 🆕🆕 recent contacts picker styles
     pickLabel: { color: '#64748B', fontSize: 9.5, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
     userPick: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', backgroundColor: 'rgba(255,255,255,0.05)', maxWidth: 160 },
     userPickText: { color: '#94A3B8', fontSize: 11.5, fontWeight: '800', flexShrink: 1 },
+
+    // 🆕 GUIDE BOX + PICK-ONLY styles
+    pickGuide: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, marginBottom: 14 },
+    pickGuideTitle: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 4 },
+    pickGuideText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600', lineHeight: 17 },
+    userPickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 4, borderRadius: 18, borderWidth: 1, borderColor: 'transparent' },
+    userPickWrapError: { borderColor: REPORT_COLOR + '88', backgroundColor: REPORT_COLOR + '10', padding: 8 },
+    selectedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+    selectedText: { flex: 1, color: '#FFF', fontSize: 12, fontWeight: '800' },
+    pickErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+    pickErrorText: { flex: 1, color: REPORT_COLOR, fontSize: 11, fontWeight: '800' },
+    pickEmptyBox: { alignItems: 'center', gap: 8, padding: 16, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.04)' },
+    pickEmptyText: { color: '#94A3B8', fontSize: 11.5, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
 
     fieldWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, paddingHorizontal: 12, height: 56, marginBottom: 12, borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0.35)' },
     fieldIcon: { width: 30, height: 30, borderRadius: 11, justifyContent: 'center', alignItems: 'center', marginRight: 10 },

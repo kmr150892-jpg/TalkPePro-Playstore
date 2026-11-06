@@ -1370,11 +1370,11 @@ export default function WalletSystem({ expertData }: any) {
                     </View>
                     <View style={styles.infoRow}>
                         <MaterialCommunityIcons name="star-circle-outline" size={16} color="#94A3B8" />
-                        <Text style={styles.infoText}>Rewards are earned through your creator activity on TalkPe Pro.</Text>
+                        <Text style={styles.infoText}>Rewards are earned from video calls and gifts you receive. They are converted to INR in this wallet (100 rewards = ₹1), and you can redeem the INR once your balance reaches ₹500.</Text>
                     </View>
                     <View style={styles.infoRow}>
                         <MaterialCommunityIcons name="file-search-outline" size={16} color="#94A3B8" />
-                        <Text style={styles.infoText}>Every redemption request is reviewed and verified before it is processed.</Text>
+                        <Text style={styles.infoText}>Every redemption request is reviewed and verified before it is processed. Once approved, the amount is transferred to your bank account outside the app.</Text>
                     </View>
                     <View style={styles.infoRow}>
                         <MaterialCommunityIcons name="lock-outline" size={16} color="#94A3B8" />

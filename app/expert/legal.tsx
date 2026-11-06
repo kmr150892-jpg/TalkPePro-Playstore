@@ -60,7 +60,7 @@ const TERMS_SECTIONS = [
         icon: 'diamond-stone',
         color: '#0EA5E9',
         title: '2. Digital Assets (Diamonds)',
-        text: 'Diamonds are virtual in-app items used to connect with hosts and to send virtual gifts. Users cannot withdraw Diamonds or exchange them for money, and Diamonds are not a currency. Gifts you send are credited to hosts as earnings under these Terms. Levels are based on in-app Diamond activity, unlock features and have no cash value. When Diamond purchases are available, they are processed only through Google Play Billing and are final and non-refundable, except where required by applicable law or Google Play policies.'
+        text: 'Diamonds are virtual in-app items used to connect with hosts and to send virtual gifts. Users cannot withdraw Diamonds or exchange them for money, and Diamonds are not a currency. Gifts you send are credited to hosts as rewards under these Terms. Levels are based on in-app Diamond activity, unlock features and have no cash value. When Diamond purchases are available, they are processed only through Google Play Billing and are final and non-refundable, except where required by applicable law or Google Play policies.'
     },
     {
         icon: 'gamepad-variant',
@@ -71,14 +71,14 @@ const TERMS_SECTIONS = [
     {
         icon: 'gift-open',
         color: '#EAB308',
-        title: '4. Host Earnings & Payouts',
-        text: 'Verified hosts earn from genuine interactions: video calls and gifts received from users. Earnings are shown in INR in the host wallet at rates set by TalkPe, which may change from time to time. Once the wallet balance reaches the ₹500 minimum, a host can submit a payout request in the app with bank details. A transaction charge of ₹100 applies per payout, and a valid ID proof is required for payout requests above ₹5,000. Every request is manually reviewed by our admin team (5-7 working days). After verification, our admin team transfers the approved amount outside the app and the host is notified in the app. Games are never a source of earnings. Hosts must not share personal contact details to bypass the app. Payout requests found to involve fraud, misuse or policy violations may be rejected, delayed or reversed, and the related account may be suspended. Hosts are responsible for any taxes that apply to their earnings.'
+        title: '4. Host Rewards & Redemption',
+        text: 'Verified hosts earn from genuine interactions: video calls and gifts received from users. Hosts receive rewards for these interactions. Rewards are converted to INR (100 rewards = ₹1) and shown in the host wallet at rates set by TalkPe Pro. When the wallet balance reaches the ₹500 minimum, a host can submit a redemption request in the app with bank details. A transaction charge of ₹100 applies per redemption, and a valid ID proof is required for redemption requests above ₹5,000. Every request is manually reviewed by our admin team (5-7 working days). After verification, our admin team transfers the approved amount outside the app and the host is notified in the app. Games are never a source of rewards. Hosts must not share personal contact details to bypass the app. Redemption requests found to involve fraud, misuse or policy violations may be rejected, delayed or reversed, and the related account may be suspended. Hosts are responsible for any taxes that apply to the amounts they redeem.'
     },
     {
         icon: 'alert-octagon',
         color: '#F43F5E',
         title: '5. Interaction Safety & Reporting',
-        text: "Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, Live Broadcasts, Forum rooms, and on profiles and Spotlight videos. In Live and Forum chats, if someone sends an abusive, inappropriate or harmful message, simply tap that message to open the 'Block' and 'Report' options for the sender. Users and Hosts can also fill and submit a confidential Trust & Safety report through the Support Hub and track its status in the app. Our admin team reviews every submitted report and we aim to resolve it within 24 hours. The person who submitted the report is notified in the app when its status changes."
+        text: "Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, Live Broadcasts, Forum rooms, and on profiles and Spotlight videos. In Live and Forum chats, if someone sends an abusive, inappropriate or harmful message, simply tap that message to open the 'Block' and 'Report' options for the sender. Users and Hosts can also fill and submit a confidential Trust & Safety report through the Support Hub and track its status in the app. Our admin team reviews every submitted report and we aim to resolve it within 24 hours. You can see the status of your report in the Support Hub in the app."
     },
     {
         icon: 'security',
@@ -108,7 +108,7 @@ const TERMS_SECTIONS = [
         icon: 'delete-sweep',
         color: '#FB923C',
         title: '10. Account Termination & Deletion',
-        text: 'You may stop using TalkPe Pro and delete your account at any time from inside the app (see the Privacy Policy for the exact steps). We may suspend or terminate accounts that violate these Terms. Pending payout requests of accounts terminated for fraud or policy violations may be rejected.'
+        text: 'You may stop using TalkPe Pro and delete your account at any time from inside the app by tapping the DELETE ACCOUNT button at the bottom of your home screen. You may also request deletion by emailing support@talkpepro.com. We may suspend or terminate accounts that violate these Terms. Pending redemption requests of accounts terminated for fraud or policy violations may be rejected.'
     },
     {
         icon: 'email',
@@ -130,13 +130,13 @@ const PRIVACY_SECTIONS = [
         icon: 'account-details',
         color: '#6366F1',
         title: '2. Information We Collect',
-        text: 'We collect the details you give us or that come from Google Sign-In (name, email and profile photo), the profile information you add, your wallet and transaction history, call and gift history, chat messages in Live and Forum rooms, Spotlight videos and photos you upload, your device notification token and the reports you submit. For hosts we also collect the verification photo and selfie video, and the bank details and ID proof submitted with a payout request.'
+        text: 'We collect the details you give us or that come from Google Sign-In (name, email and profile photo), the profile information you add, your wallet and transaction history, call and gift history, chat messages in Live and Forum rooms, Spotlight videos and photos you upload, your device notification token and the reports you submit. For hosts we also collect the verification photo and selfie video, and the bank details and ID proof submitted with a redemption request.'
     },
     {
         icon: 'cog',
         color: '#22C55E',
         title: '3. How We Use Your Information',
-        text: 'We use your information to run calls, live rooms, forums and your wallet, show your level, send notifications, keep the community safe (including reviewing reports), verify hosts, process payout requests and provide support. We do not sell your personal data and we do not share it with third-party advertisers for marketing purposes.'
+        text: 'We use your information to run calls, live rooms, forums and your wallet, show your level, send notifications, keep the community safe (including reviewing reports), verify hosts, process redemption requests and provide support. We do not sell your personal data and we do not share it with third-party advertisers for marketing purposes.'
     },
     {
         icon: 'database-lock',
@@ -159,8 +159,8 @@ const PRIVACY_SECTIONS = [
     {
         icon: 'bank-check',
         color: '#84CC16',
-        title: '7. Host Payout & Verification Data',
-        text: 'Hosts who submit a payout request provide bank details, and an ID proof where required, only to verify the request and to send the approved payout. The verification photo and selfie video are used only to confirm that a host is a real adult. This information is reviewed manually by our admin team, is used for no other purpose and is never sold. Where the law requires, or to prevent fraud, we may retain limited payout and transaction records.'
+        title: '7. Host Redemption & Verification Data',
+        text: 'Hosts who submit a redemption request provide bank details, and an ID proof where required, only to verify the request and to send the approved amount. The verification photo and selfie video are used only to confirm that a host is a real adult. This information is reviewed manually by our admin team, is used for no other purpose and is never sold. Where the law requires, or to prevent fraud, we may retain limited redemption and transaction records.'
     },
     {
         icon: 'gamepad-round',
@@ -172,7 +172,7 @@ const PRIVACY_SECTIONS = [
         icon: 'delete-sweep',
         color: '#14B8A6',
         title: '9. Data Retention & Deletion Rights',
-        text: 'You can delete your account and associated personal data from our servers at any time inside the app. Hosts: tap the Delete Account button at the bottom of the Home screen. Users: go to Profile > Edit Profile > Delete Account. Where the law requires, or to prevent fraud, we may retain limited payout and transaction records after deletion. You can also request deletion by writing to support@talkpepro.com or through www.talkpepro.com/deletion.'
+        text: 'You can delete your account and associated personal data from our servers at any time inside the app. Hosts: tap the Delete Account button at the bottom of the Home screen. Users: go to Profile > Edit Profile > Delete Account. Where the law requires, or to prevent fraud, we may retain limited redemption and transaction records after deletion. You can also request deletion by writing to support@talkpepro.com or through www.talkpepro.com/deletion.'
     },
     {
         icon: 'account-lock',

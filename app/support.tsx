@@ -92,6 +92,9 @@ const REPORT_CATEGORIES = [
 ];
 const MIN_DESC = 20;
 const MAX_DESC = 500;
+// 🆕 recent hosts count - inga maathikalam
+const MAX_RECENT_USERS = 30;   // list-la max evlo unique hosts kaattanum
+const CALLS_FETCH_LIMIT = 100; // evlo pazhaya calls-a scan panni unique hosts edukkanum
 const REPORT_COOLDOWN_MS = 60000;
 const REPORT_STATUS_META: Record<string, any> = {
     unread:    { label: 'SUBMITTED',    color: '#F59E0B', icon: 'send-check-outline',   note: 'Waiting for the team to pick it up.' },
@@ -466,16 +469,17 @@ export default function SupportScreen() {
     // 🆕 REPORT FORM STATE
     const [reportVisible, setReportVisible] = useState(false);
     const [reportCategory, setReportCategory] = useState<string>('');
-    const [reportedUser, setReportedUser] = useState('');
     const [reportDesc, setReportDesc] = useState('');
     const [reportConfirm, setReportConfirm] = useState(false);
     const [reportSubmitting, setReportSubmitting] = useState(false);
     const [reportDoneId, setReportDoneId] = useState<string | null>(null);
     const lastReportRef = useRef(0);
 
-    // 🆕 recent hosts picker (reportedUserId correct-a save aaga)
+    // 🆕 recent hosts picker (reportedUserId correct-a save aaga) - ippo name type panna mudiyaadhu, pick mattum thaan
     const [recentUsers, setRecentUsers] = useState<any[]>([]);
+    const [recentLoading, setRecentLoading] = useState(false);
     const [pickedUser, setPickedUser] = useState<{ id: string; name: string } | null>(null);
+    const [userError, setUserError] = useState(false);
 
     // 🆕 user anuppina reports-oda live status (MY REPORTS)
     const [myReports, setMyReports] = useState<any[]>([]);
@@ -588,6 +592,7 @@ export default function SupportScreen() {
     // 🆕 TRUST & SAFETY: ippo mail illa, in-app secure report form thirakkum
     const handleTrustSafetyReport = () => {
         setReportDoneId(null);
+        setUserError(false);
         setReportVisible(true);
         loadRecentUsers();
     };
@@ -596,8 +601,9 @@ export default function SupportScreen() {
     const loadRecentUsers = async () => {
         const uid = auth.currentUser?.uid;
         if (!uid) return;
+        setRecentLoading(true);
         try {
-            const snap = await getDocs(query(collection(db, "calls"), where("callerId", "==", uid), limit(40)));
+            const snap = await getDocs(query(collection(db, "calls"), where("callerId", "==", uid), limit(CALLS_FETCH_LIMIT)));
             const rows = snap.docs.map((d) => {
                 const c: any = d.data();
                 const t = c.endedAt || c.createdAt;
@@ -609,7 +615,7 @@ export default function SupportScreen() {
             const unique: any[] = [];
             for (const r of rows) {
                 if (!seen.has(r.id)) { seen.add(r.id); unique.push(r); }
-                if (unique.length >= 8) break;
+                if (unique.length >= MAX_RECENT_USERS) break;
             }
             // host name call doc-la illa-na users collection-la irundhu edukkum
             const withNames = await Promise.all(unique.map(async (r) => {
@@ -625,6 +631,8 @@ export default function SupportScreen() {
             setRecentUsers(withNames);
         } catch (e) {
             console.log("Recent hosts error:", e);
+        } finally {
+            setRecentLoading(false);
         }
     };
 
@@ -634,12 +642,13 @@ export default function SupportScreen() {
         // reset form (success screen-la irundhu moodina piragu fresh-a irukkum)
         setTimeout(() => {
             setReportCategory('');
-            setReportedUser('');
             setReportDesc('');
             setReportConfirm(false);
             setReportDoneId(null);
             setPickedUser(null);
+            setUserError(false);
             setRecentUsers([]);
+            setRecentLoading(false);
         }, 250);
     };
 
@@ -653,6 +662,17 @@ export default function SupportScreen() {
         }
         if (!reportCategory) {
             Alert.alert("Select a Category", "Please choose what your report is about.");
+            return;
+        }
+        // 🆕 HOST PICK KAATAYAM - recent hosts list-la irundhu select pannanum (type panna mudiyaadhu)
+        if (!pickedUser) {
+            setUserError(true);
+            Alert.alert(
+                "Select a Host",
+                recentUsers.length > 0
+                    ? "Please tap the host you want to report from the Recent Hosts list."
+                    : `No recent hosts found. You can only report hosts you have recently spoken with. For other concerns, write to ${SUPPORT_EMAIL}.`
+            );
             return;
         }
         const desc = reportDesc.trim();
@@ -681,9 +701,9 @@ export default function SupportScreen() {
                 reporterName: userData?.name || userData?.userName || userData?.displayName || "User",
                 category: reportCategory,
                 categoryLabel: catLabel,
-                reportedUser: reportedUser.trim(),
-                reportedUserId: pickedUser?.id || null,
-                reportedUserName: pickedUser?.name || reportedUser.trim() || null,
+                reportedUser: pickedUser.name,
+                reportedUserId: pickedUser.id,
+                reportedUserName: pickedUser.name,
                 description: desc,
                 status: 'unread',
                 priority: reportCategory === 'threat' ? 'high' : 'normal',
@@ -700,27 +720,27 @@ export default function SupportScreen() {
         }
     };
 
-    // 🆕 UPDATED FAQ WORDING (Play Store review friendly: diamonds = calls & gifts only, hosts admin-verified, screenshots blocked, in-app report system)
+    // 🆕 UPDATED FAQ WORDING (aligned with host wording + real app flow: soft claims, no over-promises)
     const faqs = [
         { 
             id: 1, 
             q: "Diamond recharge not reflected?", 
-            a: "Recharge status usually synchronizes within 2-5 minutes. If your diamonds haven't updated, please contact our support team with your Google Play order details. Note: Diamonds are virtual in-app credits with no real-world monetary value." 
+            a: "When Diamond purchases are available, they are processed only through Google Play Billing and usually reflect within a few minutes. If your Diamonds haven't updated, please contact our support team with your Google Play order details. Note: Diamonds are virtual in-app credits with no real-world monetary value." 
         },
         { 
             id: 2, 
             q: "Experiencing call disconnections?", 
-            a: "If a network disconnect occurs during a live audio or video call, our system automatically evaluates the session state to ensure fair usage and protect your diamond balance from unfair deduction. If you still notice an issue, please contact support." 
+            a: "Call quality and connection depend on the internet connection of both you and the host. If either network drops or becomes weak, the call may disconnect. If you feel you were charged incorrectly for a call, please write to our support team with the date and time of the call and we will look into it." 
         },
         { 
             id: 3, 
             q: "How to locate specific hosts?", 
-            a: "You can find verified, strictly 18+ compliant hosts by using the search feature. Every host is reviewed and verified by our admin team before going live. Filter by expertise tags to find the professional best suited for your conversation." 
+            a: "You can find hosts using the search feature. Every host is reviewed by our admin team before going live, and hosts must be 18+. Filter by expertise tags to find the professional best suited for your conversation." 
         },
         { 
             id: 4, 
             q: "Is my privacy protected?", 
-            a: "TalkPe Pro strictly enforces a Zero Recording Policy. Your private audio and video calls are secured in transit and are NEVER recorded, monitored, or stored by us. Screenshots and screen recording are also blocked inside live audio and video calls for your safety." 
+            a: "Your calls are secured in transit, and TalkPe Pro does not record your private calls. Screenshots and screen recording are blocked on selected screens (such as live host and profile screens) on supported devices." 
         },
         { 
             id: 5, 
@@ -730,40 +750,45 @@ export default function SupportScreen() {
         { 
             id: 6, 
             q: "How to report abusive behavior?", 
-            a: "Safety is our priority. Use the 'Block & Report' button immediately during any active session or profile visit. Our team reviews all reports and takes definitive admin action within 24 hours." 
+            a: "Safety is our priority. Use the report option on a profile, call or chat, or use the Trust & Safety Desk on this screen. Our team verifies every report and takes action where a violation is found. We aim to resolve reports within 24 hours." 
         },
         { 
             id: 7, 
             q: "How can I delete my account & data?", 
-            a: "In strict compliance with Data Safety policies, you have full control. To permanently wipe your identity and delete your account from our servers, navigate to Profile > Edit Profile > Delete Account." 
+            a: "You can delete your account and data in two ways. 1) In the app: go to Profile > Edit Profile, scroll to the very bottom and tap the Delete Account button. 2) By email: write to us at support@talkpepro.com and request deletion. Limited transaction records may be kept where required by law."
         },
         { 
             id: 8, 
             q: "How can I use my Diamonds?", 
-            a: "Diamonds are used only for live 1-on-1 audio and video calls with hosts, and for sending gifts to hosts within the app. Nothing in the app involves gambling or real-money rewards." 
+            a: "Diamonds are used only for live 1-on-1 calls with hosts and for sending gifts to hosts within the app. Gifts you send are credited to hosts as rewards. Nothing in the app involves gambling or real-money rewards." 
         },
         { 
             id: 9, 
             q: "Can I report a problem inside the app?", 
-            a: "Yes. Use the Trust & Safety Desk on this screen to send a confidential report directly to our team. Choose a category, add the details, and you can track the status of your report under MY REPORTS. Our team reviews every report within 24 hours." 
+            a: "Yes. Use the Trust & Safety Desk on this screen to send a confidential report directly to our team. Choose a category, tap the host you want to report from your Recent Hosts list (only hosts you have recently spoken with are shown, so the report reaches the right account), and add the details. You can track the status of your report under MY REPORTS. We aim to review every report within 24 hours." 
         },
         { 
             id: 10, 
             q: "Are all hosts verified?", 
-            a: "Yes. Every host is manually reviewed and verified by our admin team before they can receive calls. Hosts must meet our 18+ age requirement and community guidelines, and accounts that violate them are removed." 
+            a: "Every host is reviewed by our admin team before they can receive calls. Hosts must meet our 18+ age requirement and community guidelines, and accounts that violate them may be warned, restricted or removed." 
         },
         { 
             id: 11, 
             q: "Can screenshots be taken during calls?", 
-            a: "No. For your privacy and safety, screenshots and screen recording are blocked during live audio and video calls. This protects both users and hosts from unauthorized capture of private conversations." 
+            a: "For your privacy, screenshots and screen recording are blocked on selected screens (such as live host and profile screens) on supported devices. Recording other people's calls or screens by any other means is prohibited." 
+        },
+        { 
+            id: 12, 
+            q: "How does the Welcome Bonus work?", 
+            a: "New users get a welcome bonus of up to 3 minutes of free calling. The bonus can be claimed only once per device. All calls are video calls; if you turn your camera off, the call continues as an audio call." 
         }
     ];
 
     // 🆕 TRUST HIGHLIGHTS (FREE GAMES -> IN-APP REPORTING)
     const trustTiles = [
-        { icon: 'shield-checkmark', title: 'VERIFIED HOSTS', sub: 'Every host is verified by our admin team' },
-        { icon: 'eye-off', title: 'SCREENSHOT BLOCK', sub: 'Disabled in live audio & video calls' },
-        { icon: 'mic-off', title: 'ZERO RECORDING', sub: 'Calls are never recorded or stored' },
+        { icon: 'shield-checkmark', title: 'VERIFIED HOSTS', sub: 'Every host is reviewed by our admin team' },
+        { icon: 'eye-off', title: 'SCREENSHOT BLOCK', sub: 'Blocked on selected screens' },
+        { icon: 'mic-off', title: 'NO RECORDING', sub: 'We do not record your private calls' },
         { icon: 'flag', title: 'IN-APP REPORTING', sub: 'Report any concern securely inside the app' },
     ];
 
@@ -1045,7 +1070,7 @@ export default function SupportScreen() {
                                 <Text style={[styles.complianceTitle, { color: userTier.color }]}>OUR COMMITMENT</Text>
                             </View>
                             <Text style={styles.complianceText}>
-                                TalkPe Pro is an 18+ app for friendly one-to-one audio and video conversations with verified hosts. We expect respectful behavior from everyone and have zero tolerance for abuse or harassment. All hosts are verified by our admin team, calls are never recorded, and screenshots are blocked in live audio and video calls. Diamonds are virtual in-app credits used only for calls and gifts, and nothing in the app involves gambling or real-money rewards. If something feels wrong, you can report it securely inside the app and our team will review it.
+                                TalkPe Pro is an 18+ app for friendly one-to-one video conversations with hosts. We expect respectful behavior from everyone and have zero tolerance for abuse or harassment. All hosts are reviewed by our admin team, we do not record private calls, and screenshots are blocked on selected screens. Diamonds are virtual in-app credits used only for calls and gifts, and nothing in the app involves gambling or real-money rewards. If something feels wrong, you can report it securely inside the app and our team will review it.
                             </Text>
                         </BlurView>
                     </FadeInItem>
@@ -1082,7 +1107,7 @@ export default function SupportScreen() {
                                         <View style={{ alignItems: 'center', paddingVertical: 10 }}>
                                             <SuccessTick color="#10B981" />
                                             <Text style={styles.doneTitle}>Report Submitted</Text>
-                                            <Text style={styles.doneSub}>Thank you for helping keep TalkPe Pro safe. Our Trust & Safety team will review your report within 24 hours.</Text>
+                                            <Text style={styles.doneSub}>Thank you for helping keep TalkPe Pro safe. We aim to review your report within 24 hours.</Text>
                                             <View style={styles.refChip}>
                                                 <MaterialCommunityIcons name="pound" size={14} color="#10B981" />
                                                 <Text style={styles.refChipText}>REFERENCE: {reportDoneId}</Text>
@@ -1105,7 +1130,7 @@ export default function SupportScreen() {
                                                 </View>
                                                 <View style={{ flex: 1, marginLeft: 12 }}>
                                                     <Text style={styles.reportTitle}>Report a Concern</Text>
-                                                    <Text style={styles.reportSub}>Confidential • Reviewed within 24 hours</Text>
+                                                    <Text style={styles.reportSub}>Confidential • We aim to review within 24 hours</Text>
                                                 </View>
                                                 <TouchableOpacity onPress={closeReport} style={styles.reportCloseBtn} activeOpacity={0.8}>
                                                     <Ionicons name="close" size={20} color="#FFF" />
@@ -1139,20 +1164,33 @@ export default function SupportScreen() {
                                                 ))}
                                             </View>
 
-                                            {/* 2. reported host */}
+                                            {/* 2. reported host - 🆕 PICK ONLY (name type panna mudiyaadhu) */}
                                             <View style={styles.rSectionRow}>
                                                 <LinearGradient colors={[primaryColor, primaryColor + '66']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.rSectionIcon}>
                                                     <MaterialCommunityIcons name="account-search-outline" size={14} color="#0B1026" />
                                                 </LinearGradient>
-                                                <Text style={[styles.rSectionText, { color: lighten(primaryColor, 0.55) }]}>HOST DETAILS</Text>
+                                                <Text style={[styles.rSectionText, { color: lighten(primaryColor, 0.55) }]}>SELECT THE HOST</Text>
                                                 <LinearGradient colors={[primaryColor + '88', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.rSectionLine} />
                                             </View>
 
-                                            {/* 🆕 recent hosts picker */}
-                                            {recentUsers.length > 0 && (
+                                            {/* 🆕 GUIDE BOX */}
+                                            <View style={[styles.pickGuide, { borderColor: primaryColor + '55', backgroundColor: primaryColor + '12' }]}>
+                                                <MaterialCommunityIcons name="gesture-tap" size={20} color={primaryColor} />
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.pickGuideTitle}>HOW TO SELECT</Text>
+                                                    <Text style={styles.pickGuideText}>Tap the host you want to report from the list below. Only hosts you have recently spoken with are shown, so your report reaches the correct account. You cannot type a name.</Text>
+                                                </View>
+                                            </View>
+
+                                            {recentLoading ? (
+                                                <View style={styles.pickEmptyBox}>
+                                                    <ActivityIndicator color={primaryColor} />
+                                                    <Text style={styles.pickEmptyText}>Loading your recent hosts...</Text>
+                                                </View>
+                                            ) : recentUsers.length > 0 ? (
                                                 <>
                                                     <Text style={styles.pickLabel}>RECENT HOSTS (TAP TO SELECT)</Text>
-                                                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8, paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
+                                                    <View style={[styles.userPickWrap, userError && !pickedUser && styles.userPickWrapError]}>
                                                         {recentUsers.map((u) => {
                                                             const sel = pickedUser?.id === u.id;
                                                             return (
@@ -1160,8 +1198,9 @@ export default function SupportScreen() {
                                                                     key={u.id}
                                                                     activeOpacity={0.8}
                                                                     onPress={() => {
+                                                                        setUserError(false);
                                                                         if (sel) { setPickedUser(null); }
-                                                                        else { setPickedUser({ id: u.id, name: u.name }); setReportedUser(u.name); }
+                                                                        else { setPickedUser({ id: u.id, name: u.name }); }
                                                                     }}
                                                                     style={[styles.userPick, sel && { borderColor: primaryColor, backgroundColor: primaryColor + '30' }]}
                                                                 >
@@ -1170,23 +1209,29 @@ export default function SupportScreen() {
                                                                 </TouchableOpacity>
                                                             );
                                                         })}
-                                                    </ScrollView>
-                                                </>
-                                            )}
+                                                    </View>
 
-                                            <GlowField
-                                                icon="person-outline"
-                                                color={primaryColor}
-                                                value={reportedUser}
-                                                onChangeText={(t: string) => {
-                                                    setReportedUser(t);
-                                                    // picked host-oda name-a maathi type pannina, thappana ID save aagaama pick-a clear pannidum
-                                                    if (pickedUser && t.trim() !== pickedUser.name) setPickedUser(null);
-                                                }}
-                                                maxLength={60}
-                                                placeholder="Host name or ID (if known)"
-                                                placeholderTextColor="#64748B"
-                                            />
+                                                    {pickedUser ? (
+                                                        <View style={[styles.selectedRow, { borderColor: '#10B98188', backgroundColor: '#10B98112' }]}>
+                                                            <Ionicons name="checkmark-circle" size={16} color="#10B981" />
+                                                            <Text style={styles.selectedText} numberOfLines={1}>Reporting: {pickedUser.name}</Text>
+                                                            <TouchableOpacity onPress={() => setPickedUser(null)} activeOpacity={0.7} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                                                <Ionicons name="close-circle" size={18} color="#94A3B8" />
+                                                            </TouchableOpacity>
+                                                        </View>
+                                                    ) : userError ? (
+                                                        <View style={styles.pickErrorRow}>
+                                                            <Ionicons name="alert-circle" size={14} color={REPORT_COLOR} />
+                                                            <Text style={styles.pickErrorText}>Please tap a host from the list above to continue.</Text>
+                                                        </View>
+                                                    ) : null}
+                                                </>
+                                            ) : (
+                                                <View style={[styles.pickEmptyBox, userError && { borderColor: REPORT_COLOR + '88' }]}>
+                                                    <MaterialCommunityIcons name="account-off-outline" size={26} color="#64748B" />
+                                                    <Text style={styles.pickEmptyText}>No recent hosts found. You can only report hosts you have recently spoken with. For any other concern, write to {SUPPORT_EMAIL}.</Text>
+                                                </View>
+                                            )}
 
                                             {/* 3. description */}
                                             <View style={styles.rSectionRow}>
@@ -1383,6 +1428,19 @@ const styles = StyleSheet.create({
     pickLabel: { color: '#64748B', fontSize: 9.5, fontWeight: '900', letterSpacing: 1.5, marginBottom: 8 },
     userPick: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.14)', backgroundColor: 'rgba(255,255,255,0.05)', maxWidth: 160 },
     userPickText: { color: '#94A3B8', fontSize: 11.5, fontWeight: '800', flexShrink: 1 },
+
+    // 🆕 GUIDE BOX + PICK-ONLY styles
+    pickGuide: { flexDirection: 'row', alignItems: 'flex-start', gap: 10, padding: 12, borderRadius: 16, borderWidth: 1, marginBottom: 14 },
+    pickGuideTitle: { color: '#FFF', fontSize: 10, fontWeight: '900', letterSpacing: 1.5, marginBottom: 4 },
+    pickGuideText: { color: '#CBD5E1', fontSize: 11, fontWeight: '600', lineHeight: 17 },
+    userPickWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, padding: 4, borderRadius: 18, borderWidth: 1, borderColor: 'transparent' },
+    userPickWrapError: { borderColor: REPORT_COLOR + '88', backgroundColor: REPORT_COLOR + '10', padding: 8 },
+    selectedRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 12, paddingHorizontal: 12, paddingVertical: 10, borderRadius: 14, borderWidth: 1 },
+    selectedText: { flex: 1, color: '#FFF', fontSize: 12, fontWeight: '800' },
+    pickErrorRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 },
+    pickErrorText: { flex: 1, color: REPORT_COLOR, fontSize: 11, fontWeight: '800' },
+    pickEmptyBox: { alignItems: 'center', gap: 8, padding: 16, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', backgroundColor: 'rgba(255,255,255,0.04)' },
+    pickEmptyText: { color: '#94A3B8', fontSize: 11.5, fontWeight: '700', textAlign: 'center', lineHeight: 18 },
 
     fieldWrap: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, paddingHorizontal: 12, height: 56, marginBottom: 12, borderWidth: 1.5, backgroundColor: 'rgba(0,0,0,0.35)' },
     fieldIcon: { width: 30, height: 30, borderRadius: 11, justifyContent: 'center', alignItems: 'center', marginRight: 10 },

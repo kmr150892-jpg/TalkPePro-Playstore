@@ -69,20 +69,26 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
-// 🆕 UPDATED LEGAL CONTENT (Play Store review friendly)
-// Diamonds = calls & gifts only | Games = free, entertainment only | Hosts = admin verified | Screenshots = blocked in live calls
+// 🆕 UPDATED LEGAL CONTENT (aligned with host Terms + support.tsx + real app flow)
+// Diamonds = calls & gifts only | Games = free, entertainment only | Hosts = admin reviewed | Screenshots = selected screens
 const TERMS_SECTIONS = [
     {
         icon: 'shield-account',
         color: '#6366F1',
         title: 'Eligibility & Community Guidelines (18+ Only)',
-        text: 'TalkPe Pro is a premium live interaction platform strictly restricted to users aged 18 and above. By using the app you confirm that you meet this age requirement. All participants must engage with respect. Any form of harassment, abuse, hate speech or policy violation will lead to immediate account suspension under our zero-tolerance policy.',
+        text: 'TalkPe Pro is a live interaction platform restricted to users aged 18 and above. By using the app you confirm that you meet this age requirement. We may terminate any account that we suspect belongs to a minor. All participants must engage with respect. Harassment, abuse, hate speech or any policy violation may lead to a warning, restriction, suspension or permanent ban, depending on the seriousness of the violation.',
     },
     {
         icon: 'diamond-stone',
         color: '#0EA5E9',
         title: 'Digital Assets (Diamonds) & Purchases',
-        text: 'Diamonds are virtual in-app credits used only to connect with hosts through live audio and video calls and to send virtual gifts to hosts. Diamonds have NO real-world monetary value and cannot be cashed out, transferred or exchanged for real money. Purchases are processed through Google Play Billing and are non-refundable once delivered, except where required by applicable law or Google Play policies. We strictly prohibit gambling of any kind.',
+        text: 'Diamonds are virtual in-app credits used only for calls with hosts and for sending virtual gifts to hosts. Gifts you send are credited to hosts as rewards. Diamonds have NO real-world monetary value and cannot be cashed out, transferred or exchanged for real money. When Diamond purchases are available, they are processed only through Google Play Billing and are non-refundable once delivered, except where required by applicable law or Google Play policies. We strictly prohibit gambling of any kind.',
+    },
+    {
+        icon: 'gift',
+        color: '#F97316',
+        title: 'Welcome Bonus',
+        text: 'New users may receive a welcome bonus of up to 3 minutes of free calling. The bonus can be claimed only once per device and may be changed or withdrawn at any time. Calls are video calls; if you turn your camera off, the call continues as an audio call.',
     },
     {
         icon: 'gamepad-variant',
@@ -93,20 +99,20 @@ const TERMS_SECTIONS = [
     {
         icon: 'account-check',
         color: '#EC4899',
-        title: 'Verified Hosts',
-        text: 'Every host on TalkPe Pro is reviewed and verified by our admin team before they can receive calls. Hosts must be 18 years or older and must follow our community guidelines. Accounts that violate our policies are warned, suspended or permanently removed.',
+        title: 'Hosts',
+        text: 'Every host on TalkPe Pro is reviewed by our admin team before they can receive calls. Hosts must be 18 years or older and must follow our community guidelines. Accounts that violate our policies may be warned, restricted, suspended or permanently removed.',
     },
     {
         icon: 'alert-octagon',
         color: '#F43F5E',
         title: 'Interaction Safety & Reporting',
-        text: "Users and Hosts have access to immediate 'Block' and 'Report' functions during Video Calls, Quick Connect sessions, and on profiles. All user reports are reviewed by our moderation team within 24 hours to ensure platform integrity.",
+        text: 'You can block and report profiles, calls, Live and Forum chat messages and Spotlight videos. Our team verifies each report and, where a violation is found, may remove content or warn, restrict, suspend or terminate the account. We aim to resolve reports within 24 hours, but resolution time may vary.',
     },
     {
         icon: 'camera-off',
         color: '#A855F7',
-        title: 'Screenshot & Screen Recording Protection',
-        text: 'To protect the privacy of both users and hosts, screenshots and screen recording are blocked during live audio and video calls. Attempting to bypass this protection, or capturing or sharing call content by any other means, is a serious violation and may result in permanent account termination.',
+        title: 'Screenshot & Recording Protection',
+        text: 'To protect the privacy of users and hosts, screenshots and screen recording are blocked on selected screens (such as live host and videocall) on supported devices. Recording or capturing other people\'s calls, screens or content by any means is prohibited and may result in account suspension or termination.',
     },
     {
         icon: 'security',
@@ -118,13 +124,19 @@ const TERMS_SECTIONS = [
         icon: 'gavel',
         color: '#F59E0B',
         title: 'Content Moderation & Spotlight',
-        text: 'We maintain strict User-Generated Content (UGC) policies. Spotlight videos can be reported and will be hidden pending a 24-hour administrator review. Violating content will result in permanent account termination without refunds.',
+        text: 'We maintain User-Generated Content (UGC) policies for Spotlight videos, chats and profiles. Reported content is verified by our admin team. If a violation is found, the content may be removed and the account may be warned, restricted, suspended or terminated.',
     },
     {
         icon: 'wifi-off',
         color: '#8B5CF6',
-        title: 'Network Disconnection Policy',
-        text: 'If a network disconnection occurs during a live call, our system evaluates the session state to ensure fair usage and protect your Diamond balance from unfair deduction. In the event of a disconnection during a free game, the match may end or restart automatically, and since games are free no Diamonds are charged or lost.',
+        title: 'Network Disconnection',
+        text: 'Call quality and connection depend on the internet connection of both you and the host. TalkPe Pro does not control network conditions, and a call may disconnect if either connection is weak or lost. If you believe you were charged incorrectly, please contact support@talkpepro.com with the date and time of the call. In the event of a disconnection during a free game, the match may end or restart, and no Diamonds are charged or lost.',
+    },
+    {
+         icon: 'account-remove',
+        color: '#EF4444',
+        title: 'Account Termination & Deletion',
+        text: 'We may warn, restrict, suspend or terminate accounts that violate these Terms. You may delete your account and data at any time in the app by going to Profile > Edit Profile and tapping the Delete Account button at the very bottom. You may also request deletion by emailing support@talkpepro.com. Limited transaction records may be kept where required by law.',
     },
     {
         icon: 'email-outline',
@@ -138,44 +150,44 @@ const PRIVACY_SECTIONS = [
     {
         icon: 'microphone-off',
         color: '#A855F7',
-        title: 'Communication Privacy & No Recording',
-        text: 'Live interactions (Quick Connect, Live Rooms) are secured in transit using industry-standard protection. Your private audio and video calls are NEVER recorded, stored, or monitored by TalkPe Pro. Screenshots and screen recording are blocked during live audio and video calls for your safety.',
+        title: 'Calls & Recording',
+        text: 'Calls and live interactions are secured in transit using industry-standard protection. TalkPe Pro does not record your private calls. Screenshots and screen recording are blocked on selected screens (such as live host and profile screens) on supported devices.',
     },
     {
         icon: 'account-details',
         color: '#6366F1',
         title: 'Information We Collect',
-        text: 'We collect only the information needed to run the service: profile details you choose to provide (such as your name and photo), account and wallet balance information, and basic device and usage information used for security, fraud prevention and app performance. We do not record the content of your calls.',
+        text: 'We collect the information needed to run the service: your Google Sign-In details (name, email address and profile photo), profile details you choose to add, chat messages you send in Live rooms and Forum, photos and videos you upload to Spotlight, your notification token, reports you submit, call and gift history, wallet and Diamond balance information, and basic device and usage information used for security, fraud prevention and app performance. We do not record the content of your private calls.',
     },
     {
         icon: 'database-lock',
         color: '#EC4899',
-        title: 'Information Security',
-        text: 'Your profile and identity data are stored on secure, encrypted cloud infrastructure provided by Google Firebase. We maintain a strict policy against selling or sharing your personal data with third-party advertisers for marketing purposes.',
+        title: 'Information Security & Service Providers',
+        text: 'Your account data is stored on secure cloud infrastructure provided by Google Firebase. Photos and videos are stored and delivered through Cloudinary, and live audio and video are delivered through a third-party real-time video provider. These providers process data only to run the service. We do not sell your personal data and do not share it with third-party advertisers for marketing purposes.',
     },
     {
         icon: 'wallet',
         color: '#F59E0B',
         title: 'Transaction Protection',
-        text: 'Payments are processed exclusively through Google Play Billing. Sensitive payment information such as card numbers, CVV or banking passwords is handled by Google and never passes through or gets stored within the TalkPe Pro system.',
+        text: 'When Diamond purchases are available, they are processed only through Google Play Billing. Sensitive payment information such as card numbers, CVV or banking passwords is handled by Google and never passes through or gets stored within the TalkPe Pro system.',
     },
     {
         icon: 'eye-off',
         color: '#06B6D4',
         title: 'Data Permissions',
-        text: 'Camera and Microphone access is requested only for the duration of live calls. Any media access is limited to profile personalization. You can manage or revoke these permissions via your device settings at any time.',
+        text: 'Camera and Microphone access is used for calls, voice rooms, Live and Spotlight recording. Photo and media access is used to upload your profile picture and Spotlight content. Notification permission is used to send you call, gift and account alerts. You can manage or revoke these permissions via your device settings at any time.',
     },
     {
         icon: 'shield-check',
         color: '#22C55E',
         title: 'Age Restriction',
-        text: 'TalkPe Pro is intended only for users aged 18 and above. We do not knowingly collect personal information from anyone under 18. If we learn that an underage user has registered, the account and its data will be removed.',
+        text: 'TalkPe Pro is intended only for users aged 18 and above. We do not knowingly collect personal information from anyone under 18. We may terminate any account suspected to belong to a minor, and if we learn that an underage user has registered, the account and its data will be removed.',
     },
     {
         icon: 'delete-sweep',
         color: '#14B8A6',
         title: 'Data Deletion Rights',
-        text: 'In strict compliance with Google Play Developer Policies, users retain full rights over their data. You can request complete deletion of your account and associated data through the app (Profile > Edit Profile > Delete Account) at any time, which will permanently wipe your identity from our servers.',
+        text: 'You can delete your account and associated data at any time in the app by going to Profile > Edit Profile and tapping the Delete Account button at the very bottom. You may also request deletion by emailing support@talkpepro.com. Once processed, your profile and personal data are removed from our systems. Limited transaction records may be kept where required by law.',
     },
     {
         icon: 'email-outline',
@@ -380,7 +392,7 @@ export default function LegalScreen() {
     // 🆕 KEY HIGHLIGHTS (quick trust summary shown at the top of the policy)
     const highlights = [
         { icon: 'person', label: '18+ ONLY' },
-        { icon: 'shield-checkmark', label: 'VERIFIED HOSTS' },
+        { icon: 'shield-checkmark', label: 'REVIEWED HOSTS' },
         { icon: 'mic-off', label: 'NO RECORDING' },
         { icon: 'game-controller', label: 'FREE GAMES' },
     ];
@@ -599,7 +611,7 @@ export default function LegalScreen() {
                                 </View>
                             </LinearGradient>
                         </View>
-                        <Text style={styles.footerText}>SECURE PROTOCOL v1.0.5</Text>
+                        <Text style={styles.footerText}>SECURE PROTOCOL</Text>
                         <View style={styles.brandRow}>
                             <Text style={styles.footerSub}>MANAGED BY </Text>
                             <Text style={[styles.brandHighlight, { color: userTier.color }]}>TALKPE TECHNOLOGIES✨</Text>

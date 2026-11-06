@@ -2023,9 +2023,10 @@ const styles = StyleSheet.create({
   // 🔥 FIX: this transparent layer has EXACTLY the banner height and sits on top of everything in the scroll content.
   // Children use bottom:12 => they stay on the banner's bottom edge (where the banner ends).
   coverActionLayer: { position: 'absolute', top: 0, left: 0, right: 0, height: COVER_H, zIndex: 30, elevation: 30 },
-  shareCoverWrap: { position: 'absolute', bottom: 12, left: 10, zIndex: 10 },
-  editCoverWrap: { position: 'absolute', bottom: 12, right: 10, zIndex: 10 },
-  shareCoverBtn: { backgroundColor: 'rgba(243, 6, 156, 0.85)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', elevation: 5 },
+  shareCoverWrap: { position: 'absolute', bottom: 1, left:2, zIndex: 10 },
+  editCoverWrap: { position: 'absolute', bottom: 1, right: 1, zIndex: 10 },
+
+  shareCoverBtn: { backgroundColor: 'rgba(243, 6, 156, 0.85)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 25, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.25)', elevation: 5 },
   editCoverBtn: { backgroundColor: 'rgba(4, 4, 247, 0.65)', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 15, paddingVertical: 8, borderRadius: 18, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' },
  
   editCoverText: { color: '#FFF', fontSize: 11, fontWeight: '800', marginLeft: 6, letterSpacing: 0.5 },
