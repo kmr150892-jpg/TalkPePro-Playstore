@@ -600,7 +600,7 @@ export default function WelcomeRewardModal() {
                             {/* 🆕 footer */}
                             <View style={styles.footerRow}>
                                 <MaterialCommunityIcons name="shield-lock" size={13} color="#64748B" />
-                                <Text style={styles.footerText}>ONE-TIME WELCOME BONUS  •  FOR NEW MEMBERS</Text>
+                                <Text style={styles.footerText}>ONE-TIME WELCOME BONUS•FOR NEW USERS</Text>
                             </View>
                         </View>
                     </DoubleFrame>

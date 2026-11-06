@@ -43,7 +43,24 @@ const PENDING_STATUSES = [
     'In Review', 'in_review'
 ];
 
-// 🆕🆕 NEW: Firestore Timestamp / millis / Date - edhaa irundhalum millis-aa maathum (newest application mela kaata)
+// 🆕🆕 NEW: BLOCK + REPORT (user / host block panni report panradhu) - Support Hub reports-ku thaniya
+// ⚠️ Un block-report data endha collection-la save aagudho adhai inga maathikko (default: "reports")
+const BLOCK_REPORT_COLLECTION = 'reports';
+const BLOCK_PENDING_STATUSES = [
+    'pending', 'Pending', 'PENDING',
+    'unread', 'Unread', 'UNREAD',
+    'open', 'Open', 'OPEN',
+    'new', 'New', 'NEW'
+];
+
+// 🆕🆕 NEW: report-a yaaru anuppinaanga (user ah / host ah) nu kandupidikka
+// reporterRole / reporterType / fromRole - edhula irundhaalum edukkum. 'user' na USER, matha ellam HOST
+const isUserReporter = (data: any): boolean => {
+    const r = String(data?.reporterRole || data?.reporterType || data?.fromRole || '').toLowerCase();
+    return r === 'user';
+};
+
+// 🆕🆕 NEW: Firestore Timestamp / millis / Date - edhaa irundhaalum millis-aa maathum (newest application mela kaata)
 const toMillis = (ts: any): number => {
     try {
         if (!ts) return 0;
@@ -196,13 +213,14 @@ const KpiCard = ({ label, value, color, icon, caption, onPress }: any) => (
 );
 
 // Animated workload distribution bar (uses REAL pending counts)
-const WorkloadBar = ({ hosts, kyc, support }: { hosts: number; kyc: number; support: number }) => {
+// 🆕🆕 NEW: redemption + blocks (optional) - default 0, so old usage still works
+const WorkloadBar = ({ hosts, kyc, support, redemption = 0, blocks = 0 }: { hosts: number; kyc: number; support: number; redemption?: number; blocks?: number }) => {
     const grow = useRef(new Animated.Value(0)).current;
-    const total = hosts + kyc + support;
+    const total = hosts + kyc + support + redemption + blocks;
     useEffect(() => {
         grow.setValue(0);
         Animated.timing(grow, { toValue: 1, duration: 900, easing: Easing.out(Easing.cubic), useNativeDriver: false }).start();
-    }, [hosts, kyc, support]);
+    }, [hosts, kyc, support, redemption, blocks]);
 
     const seg = (count: number) => grow.interpolate({
         inputRange: [0, 1],
@@ -212,7 +230,10 @@ const WorkloadBar = ({ hosts, kyc, support }: { hosts: number; kyc: number; supp
     const legend = [
         { label: 'Host audits', count: hosts, color: '#F59E0B' },
         { label: 'KYC reviews', count: kyc, color: '#10B981' },
-        { label: 'Support reports', count: support, color: '#6366F1' }
+        { label: 'Support reports', count: support, color: '#6366F1' },
+        // 🆕🆕 NEW
+        { label: 'Redemptions', count: redemption, color: '#EC4899' },
+        { label: 'Block reports', count: blocks, color: '#F43F5E' }
     ];
 
     return (
@@ -225,6 +246,9 @@ const WorkloadBar = ({ hosts, kyc, support }: { hosts: number; kyc: number; supp
                         <Animated.View style={{ width: seg(hosts) as any, height: '100%', backgroundColor: '#F59E0B' }} />
                         <Animated.View style={{ width: seg(kyc) as any, height: '100%', backgroundColor: '#10B981' }} />
                         <Animated.View style={{ width: seg(support) as any, height: '100%', backgroundColor: '#6366F1' }} />
+                        {/* 🆕🆕 NEW */}
+                        <Animated.View style={{ width: seg(redemption) as any, height: '100%', backgroundColor: '#EC4899' }} />
+                        <Animated.View style={{ width: seg(blocks) as any, height: '100%', backgroundColor: '#F43F5E' }} />
                     </>
                 )}
             </View>
@@ -293,6 +317,14 @@ const AdminPanel = () => {
     // 🆕🆕 NEW: Support Hub-la irundhu USER anuppina review pannaadha (unread) reports count (thaniya)
     const [userReportCount, setUserReportCount] = useState(0);
 
+    // 🆕🆕 NEW: Host redemption (withdrawal) pending request COUNT (amount-ku thaniya)
+    const [redemptionCount, setRedemptionCount] = useState(0);
+
+    // 🆕🆕 NEW: BLOCK + REPORT counts - host anuppinadhu / user anuppinadhu thaniya thaniya
+    // (Support Hub reports-oda serkka koodadhu - adhu mela irukku)
+    const [hostBlockReportCount, setHostBlockReportCount] = useState(0);
+    const [userBlockReportCount, setUserBlockReportCount] = useState(0);
+
     // 🆕 NEW: live clock for welcome banner
     const [now, setNow] = useState(new Date());
 
@@ -329,6 +361,8 @@ const AdminPanel = () => {
                 pendingSum += Number(amt); 
             });
             setTotalACTIVITY_REWARDPool(pendingSum);
+            // 🆕🆕 NEW: pending redemption request count (host redemption panna request ellam)
+            setRedemptionCount(snap.size);
         }, (error) => {
             if (error.code === 'permission-denied') console.log("Safe Ignore: Withdrawals listener detached on logout");
         });
@@ -414,6 +448,27 @@ const AdminPanel = () => {
             if (error.code === 'permission-denied') console.log("Safe Ignore: Support reports listener detached on logout");
         });
         unsubs.push(unsubSupport);
+
+        // 🆕🆕 NEW: BLOCK + REPORT listener - user / host yaaravadhu block panni report pannina (Support Hub-la illaama thaniya)
+        // ore listener-la HOST / USER rendayum thaniya pirichu count pannum
+        const qBlockReports = query(
+            collection(db, BLOCK_REPORT_COLLECTION),
+            where("status", "in", BLOCK_PENDING_STATUSES)
+        );
+        const unsubBlockReports = onSnapshot(qBlockReports, (snap) => {
+            let hostCount = 0;
+            let userCount = 0;
+            snap.docs.forEach((d) => {
+                if (isUserReporter(d.data())) userCount++;
+                else hostCount++;
+            });
+            setHostBlockReportCount(hostCount);
+            setUserBlockReportCount(userCount);
+        }, (error) => {
+            if (error.code === 'permission-denied') console.log("Safe Ignore: Block reports listener detached on logout");
+            else console.log("Block reports listener error:", error.code, error.message);
+        });
+        unsubs.push(unsubBlockReports);
 
         return () => unsubs.forEach(unsub => unsub());
     }, []);
@@ -561,6 +616,15 @@ const AdminPanel = () => {
             onPress: () => setActiveTab('HOSTS')
         });
     }
+    // 🆕🆕 NEW: Host redemption (withdrawal) requests - count-oda
+    if (redemptionCount > 0) {
+        attentionItems.push({
+            key: 'redemption', color: '#EC4899', icon: 'cash-clock', priority: 'HIGH',
+            title: `${redemptionCount} host redemption request${redemptionCount > 1 ? 's' : ''} pending`,
+            sub: 'Hosts requested a payout - open withdrawals',
+            onPress: () => router.push('/finance/withdrawals' as any)
+        });
+    }
     if (supportReportCount > 0) {
         attentionItems.push({
             key: 'support', color: '#6366F1', icon: 'headset', priority: 'MEDIUM',
@@ -576,6 +640,24 @@ const AdminPanel = () => {
             title: `${userReportCount} unread user support report${userReportCount > 1 ? 's' : ''}`,
             sub: 'Trust & safety reports from users (Support Hub)',
             onPress: () => router.push('/user-reports' as any)
+        });
+    }
+    // 🆕🆕 NEW: HOST block + report (host yaaraiyavadhu block panni report pannina) - Support Hub-ku thaniya
+    if (hostBlockReportCount > 0) {
+        attentionItems.push({
+            key: 'hostblock', color: '#F43F5E', icon: 'account-cancel', priority: 'HIGH',
+            title: `${hostBlockReportCount} host block report${hostBlockReportCount > 1 ? 's' : ''} pending`,
+            sub: 'Hosts blocked & reported someone',
+            onPress: () => router.push('/management/reports?role=host' as any)
+        });
+    }
+    // 🆕🆕 NEW: USER block + report (user yaaraiyavadhu block panni report pannina) - Support Hub-ku thaniya
+    if (userBlockReportCount > 0) {
+        attentionItems.push({
+            key: 'userblock', color: '#FB7185', icon: 'account-remove', priority: 'HIGH',
+            title: `${userBlockReportCount} user block report${userBlockReportCount > 1 ? 's' : ''} pending`,
+            sub: 'Users blocked & reported someone',
+            onPress: () => router.push('/management/reports?role=user' as any)
         });
     }
     if (totalACTIVITY_REWARDPool > 0) {
@@ -595,7 +677,9 @@ const AdminPanel = () => {
         });
     }
 
-    const totalOpen = pendingExperts.length + bankRequests.length + supportReportCount + userReportCount;
+    // 🆕 redemption + block reports-um serthu
+    const totalBlockReports = hostBlockReportCount + userBlockReportCount;
+    const totalOpen = pendingExperts.length + bankRequests.length + supportReportCount + userReportCount + redemptionCount + totalBlockReports;
 
     return (
         <View style={styles.container}>
@@ -684,9 +768,15 @@ const AdminPanel = () => {
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingRight: 20 }} style={{ marginHorizontal: -20, paddingLeft: 20 }}>
                                     <KpiCard label="PENDING HOSTS" value={pendingExperts.length} color="#F59E0B" icon="account-clock" caption={pendingExperts.length > 0 ? 'ACTION' : 'CLEAR'} onPress={() => setActiveTab('HOSTS')} />
                                     <KpiCard label="KYC QUEUE" value={bankRequests.length} color="#10B981" icon="bank-check" caption={bankRequests.length > 0 ? 'ACTION' : 'CLEAR'} onPress={() => setActiveTab('HOSTS')} />
+                                    {/* 🆕🆕 NEW: host redemption requests KPI */}
+                                    <KpiCard label="REDEMPTION REQUESTS" value={redemptionCount} color="#EC4899" icon="cash-clock" caption={redemptionCount > 0 ? 'PENDING' : 'CLEAR'} onPress={() => router.push('/finance/withdrawals' as any)} />
                                     <KpiCard label="HOST REPORTS" value={supportReportCount} color="#6366F1" icon="headset" caption={supportReportCount > 0 ? 'UNREAD' : 'CLEAR'} onPress={() => router.push('/reports' as any)} />
                                     {/* 🆕🆕 NEW: user reports KPI (thaniya) */}
                                     <KpiCard label="USER REPORTS" value={userReportCount} color="#0EA5E9" icon="account-alert" caption={userReportCount > 0 ? 'UNREAD' : 'CLEAR'} onPress={() => router.push('/user-reports' as any)} />
+                                    {/* 🆕🆕 NEW: HOST block reports KPI (thaniya) */}
+                                    <KpiCard label="HOST BLOCK REPORTS" value={hostBlockReportCount} color="#F43F5E" icon="account-cancel" caption={hostBlockReportCount > 0 ? 'ACTION' : 'CLEAR'} onPress={() => router.push('/management/reports?role=host' as any)} />
+                                    {/* 🆕🆕 NEW: USER block reports KPI (thaniya) */}
+                                    <KpiCard label="USER BLOCK REPORTS" value={userBlockReportCount} color="#FB7185" icon="account-remove" caption={userBlockReportCount > 0 ? 'ACTION' : 'CLEAR'} onPress={() => router.push('/management/reports?role=user' as any)} />
                                     <KpiCard label="REWARD GRANTS" value={`₹${totalACTIVITY_REWARDPool.toLocaleString()}`} color="#A855F7" icon="cash-multiple" caption={totalACTIVITY_REWARDPOOL_CAPTION(totalACTIVITY_REWARDPool)} onPress={() => setActiveTab('SETTLEMENTS')} />
                                 </ScrollView>
                             </Reveal>
@@ -696,7 +786,8 @@ const AdminPanel = () => {
                             <Reveal index={2}>
                                 <Panel style={{ padding: 20 }}>
                                     {/* 🆕 support = host reports + user reports (rendum serthu) */}
-                                    <WorkloadBar hosts={pendingExperts.length} kyc={bankRequests.length} support={supportReportCount + userReportCount} />
+                                    {/* 🆕🆕 redemption + block reports-um bar-la serthachu */}
+                                    <WorkloadBar hosts={pendingExperts.length} kyc={bankRequests.length} support={supportReportCount + userReportCount} redemption={redemptionCount} blocks={totalBlockReports} />
                                 </Panel>
                             </Reveal>
 
@@ -834,6 +925,8 @@ const AdminPanel = () => {
                             <Reveal index={8}>
                                 <Panel>
                                     <ModuleRow router={router} title="LEDGER VAULT" sub="Account-level history logs" icon="card-account-details-outline" route="/passbook" color="#A855F7" />
+                                    {/* 🆕🆕 NEW: Host redemption requests - pending count badge-oda */}
+                                    <ModuleRow router={router} title="HOST REDEMPTION REQUESTS" sub="Pending host payout requests" icon="cash-clock" route="/finance/withdrawals" color="#EC4899" badge={redemptionCount} />
                                     <ModuleRow router={router} last title="SYSTEM LEDGER" sub="Financial traceability audit" icon="database-sync" route="/finance/transactions" color="#818CF8" />
                                 </Panel>
                             </Reveal>
@@ -846,6 +939,10 @@ const AdminPanel = () => {
                                     <ModuleRow router={router} title="HOST SUPPORT REPORTS" sub="Host trust & safety reports from Support Hub" icon="headset" route="/reports" color="#6366F1" badge={supportReportCount} />
                                     {/* 🆕🆕 NEW: Support Hub-la irundhu user anuppura reports (thaniya) */}
                                     <ModuleRow router={router} title="USER SUPPORT REPORTS" sub="User trust & safety reports from Support Hub" icon="account-alert-outline" route="/user-reports" color="#0EA5E9" badge={userReportCount} />
+                                    {/* 🆕🆕 NEW: HOST block + report (Support Hub-ku thaniya) */}
+                                    <ModuleRow router={router} title="HOST BLOCK REPORTS" sub="Hosts who blocked & reported someone" icon="account-cancel" route="/management/reports?role=host" color="#F43F5E" badge={hostBlockReportCount} />
+                                    {/* 🆕🆕 NEW: USER block + report (Support Hub-ku thaniya) */}
+                                    <ModuleRow router={router} title="USER BLOCK REPORTS" sub="Users who blocked & reported someone" icon="account-remove" route="/management/reports?role=user" color="#FB7185" badge={userBlockReportCount} />
                                     <ModuleRow router={router} title="SESSION LOGS" sub="Interaction monitoring logs" icon="shield-search" route="/logs/call-logs" color="#F59E0B" />
                                     <ModuleRow router={router} last title="ENGINE DIAGNOSTICS" sub="Connectivity performance audit" icon="speedometer" route="/logs/system-latency" color="#10B981" />
                                 </Panel>
@@ -885,6 +982,10 @@ const AdminPanel = () => {
                                     </View>
                                     <Text style={styles.ACTIVITY_REWARDTitle}>TOTAL REWARD GRANTS</Text>
                                     <Text style={styles.ACTIVITY_REWARDAmt}>₹{totalACTIVITY_REWARDPool.toLocaleString()}</Text>
+                                    {/* 🆕🆕 NEW: pending host redemption requests count */}
+                                    <Text style={styles.redemptionCountText}>
+                                        {redemptionCount > 0 ? `${redemptionCount} host redemption request${redemptionCount > 1 ? 's' : ''} pending` : 'No pending redemption requests'}
+                                    </Text>
                                     <Press3D style={styles.withdrawBtn} onPress={() => router.push('/finance/withdrawals' as any)}>
                                         <Text style={styles.withdrawText}>AUDIT PROCESSED</Text>
                                         <Feather name="arrow-right" size={16} color="#312E81" />
@@ -981,12 +1082,16 @@ const AdminPanel = () => {
                 <TouchableOpacity onPress={() => router.push('/management/reports' as any)} style={styles.barIcon}>
                     <View style={styles.barIconBubble}>
                         <Ionicons name="warning-outline" size={22} color="#F43F5E" />
+                        {/* 🆕🆕 NEW: block reports pending-na red dot */}
+                        {totalBlockReports > 0 && <View style={[styles.notifDot, { backgroundColor: '#F43F5E' }]} />}
                     </View>
                     <Text style={styles.barLabel}>Safety</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => router.push('/finance/transactions' as any)} style={styles.barIcon}>
                     <View style={styles.barIconBubble}>
                         <MaterialCommunityIcons name="script-text-outline" size={22} color="#94A3B8" />
+                        {/* 🆕🆕 NEW: pending redemption requests-na pink dot */}
+                        {redemptionCount > 0 && <View style={[styles.notifDot, { backgroundColor: '#EC4899' }]} />}
                     </View>
                     <Text style={styles.barLabel}>Ledger</Text>
                 </TouchableOpacity>
@@ -1062,7 +1167,8 @@ const styles = StyleSheet.create({
     /* workload */
     workloadTrack: { height: 14, borderRadius: 7, backgroundColor: '#111B33', overflow: 'hidden', flexDirection: 'row' },
     workloadEmpty: { flex: 1, backgroundColor: '#10B98133' },
-    legendRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 18 },
+    // 🆕🆕 NEW: 5 legend items irukkarathunaala wrap pannum (flexWrap + rowGap)
+    legendRow: { flexDirection: 'row', justifyContent: 'space-between', flexWrap: 'wrap', rowGap: 14, columnGap: 14, marginTop: 18 },
     legendItem: { flexDirection: 'row', alignItems: 'center' },
     legendDot: { width: 8, height: 8, borderRadius: 4, marginRight: 8 },
     legendCount: { color: '#fff', fontSize: 16, fontWeight: '900' },
@@ -1107,6 +1213,8 @@ const styles = StyleSheet.create({
     rewardIconRing: { width: 54, height: 54, borderRadius: 27, borderWidth: 1, borderColor: '#4F46E5', backgroundColor: '#312E8180', alignItems: 'center', justifyContent: 'center', marginBottom: 18 },
     ACTIVITY_REWARDTitle: { color: '#818CF8', fontSize: 11, fontWeight: '900', letterSpacing: 1.5 },
     ACTIVITY_REWARDAmt: { color: '#fff', fontSize: 42, fontWeight: '900', marginVertical: 15, textShadowColor: '#818CF8', textShadowOffset: { width: 0, height: 0 }, textShadowRadius: 14 },
+    // 🆕🆕 NEW: settlements card-la redemption count text
+    redemptionCountText: { color: '#F9A8D4', fontSize: 12, fontWeight: '800', letterSpacing: 0.5, marginBottom: 18 },
     withdrawBtn: { backgroundColor: '#fff', padding: 18, borderRadius: 22, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', borderBottomWidth: 4, borderBottomColor: '#C7D2FE' },
     withdrawText: { color: '#1E1B4B', fontWeight: '900', marginRight: 10, fontSize: 14 },
 

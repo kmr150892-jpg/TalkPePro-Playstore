@@ -66,7 +66,9 @@ export default function RootLayout() {
   const [isExpertLive, setIsExpertLive] = useState<boolean>(false); 
   
   const [registrationInProgress, setRegistrationInProgress] = useState<boolean>(false);
-  const [isClientMode, setIsClientMode] = useState<boolean>(false); 
+  const [isClientMode, setIsClientMode] = useState<boolean>(false);
+  // 🔥 NEW: holds routing while an email-signup account is waiting for email verification
+  const [unverifiedHold, setUnverifiedHold] = useState<boolean>(false); 
   
   const router = useRouter();
   const segments = useSegments() as string[];
@@ -132,6 +134,11 @@ export default function RootLayout() {
 
       setUser(u);
 
+      // 🔥 NEW: Email/password accounts that are NOT verified yet are held (no routing into the app)
+      // until the profile tells us whether verification is actually required (emailVerifyRequired flag).
+      const needsVerifyCheck = !!u && !u.emailVerified && u.providerData.some((p) => p.providerId === 'password');
+      setUnverifiedHold(needsVerifyCheck);
+
       if (u) {
         unsubUser = onSnapshot(doc(db, "users", u.uid), { includeMetadataChanges: true }, async (docSnap) => {
           if (docSnap.exists()) {
@@ -164,6 +171,10 @@ export default function RootLayout() {
                 return; 
             }
 
+            if (needsVerifyCheck) {
+                setUnverifiedHold(data.emailVerifyRequired === true);
+            }
+
             setUserRole(data.role || 'user');
             setUserStatus(data.status || '');
             setUserName(data.name || 'Expert');
@@ -182,7 +193,8 @@ export default function RootLayout() {
         setRegistrationInProgress(false);
         setIsClientMode(false);
         setInitializing(false);
-        setIsEjecting(false); 
+        setIsEjecting(false);
+        setUnverifiedHold(false); 
         
         // 🔥 SATTI UPDATE 1: Removed manual router.replace() here.
         // It was causing a "Navigation Deadlock". We now let <Redirect /> handle it flawlessly below.
@@ -475,6 +487,9 @@ export default function RootLayout() {
           return;
         }
 
+        // 🔥 NEW: unverified email-signup account -> do NOT send into the app
+        if (unverifiedHold) return;
+
         if (userRole === 'admin') {
           if (isRealAdmin) {
             if (firstSegment !== '(admin)') router.replace('/(admin)' as any);
@@ -541,7 +556,7 @@ export default function RootLayout() {
     };
 
     gateKeeper();
-  }, [user, userRole, userStatus, registrationInProgress, isClientMode, initializing, segments.join('/'), isMaintenance, needsUpdate, rootNavigationState?.key]);
+  }, [user, userRole, userStatus, registrationInProgress, isClientMode, unverifiedHold, initializing, segments.join('/'), isMaintenance, needsUpdate, rootNavigationState?.key]);
 
   const isGlobalAdmin = userRole === 'admin' && user?.email === 'kmr150892@gmail.com';
   if (isMaintenance && !isGlobalAdmin) return <MaintenanceScreen />;
