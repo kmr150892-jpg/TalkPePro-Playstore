@@ -296,14 +296,20 @@ export default function LoginScreen() {
 
         setTotalSpent(existingData.totalSpentDiamonds || 0);
 
-        // Simple Sync: Update only login info. DO NOT TOUCH status/role!
-        let updateData: any = {
-          name: resultUser.displayName,
-          photoURL: resultUser.photoURL,
-          lastLogin: serverTimestamp(),
-        };
+        // Simple Sync: Update only login info. DO NOT TOUCH name/photo/status/role!
+let updateData: any = {
+  lastLogin: serverTimestamp(),
+};
 
-        await setDoc(userRef, updateData, { merge: true });
+// Name / photo Firestore-la illaina mattum Gmail value fill pannu (existing custom value overwrite aagaadhu)
+if (!existingData.name && resultUser.displayName) {
+  updateData.name = resultUser.displayName;
+}
+if (!existingData.photoURL && resultUser.photoURL) {
+  updateData.photoURL = resultUser.photoURL;
+}
+
+await setDoc(userRef, updateData, { merge: true });
 
       } else {
         // 🆕 COMPLETELY NEW USER DB CREATION 🆕
