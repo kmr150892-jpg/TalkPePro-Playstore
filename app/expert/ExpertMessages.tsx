@@ -154,6 +154,27 @@ const FloatBox = ({ children, amp = 6, dur = 1800, style }: any) => {
     );
 };
 
+// 🆕✨ FloatY = pure vertical bob (no rotation) - stat tiles-ku (levitating crystal feel)
+const FloatY = ({ children, amp = 4, dur = 2200, delay = 0, style }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View style={[style, { transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, -amp] }) }] }]}>
+            {children}
+        </Animated.View>
+    );
+};
+
 // 🆕 ✨ Twinkling sparkle
 const Sparkle = ({ x, y, size = 12, color = '#F5C84C', delay = 0, dur = 1800 }: any) => {
     const v = useRef(new Animated.Value(0)).current;
@@ -284,6 +305,82 @@ const OrbitRing = ({ size, color, dur = 6000, reverse = false, dotSize = 6, styl
     );
 };
 
+// 🆕 3D HOLO PLATFORM RING (flat ellipse on the floor - expands & fades like a sonar pulse)
+const PlatformRing = ({ size, color, delay = 0, dur = 2600 }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(
+            Animated.sequence([
+                Animated.delay(delay),
+                Animated.timing(v, { toValue: 1, duration: dur, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+                Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true })
+            ])
+        );
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    return (
+        <Animated.View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                width: size,
+                height: size,
+                borderRadius: size / 2,
+                borderWidth: 1.5,
+                borderColor: color,
+                opacity: v.interpolate({ inputRange: [0, 0.2, 1], outputRange: [0, 0.85, 0] }),
+                transform: [
+                    { perspective: 600 },
+                    { rotateX: '72deg' },
+                    { scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.25] }) }
+                ]
+            }}
+        />
+    );
+};
+
+// 🆕 3D GRID FLOOR (neon perspective grid that slowly flows toward you - background depth)
+const GridFloor = ({ color, top, opacity = 0.55 }: any) => {
+    const v = useRef(new Animated.Value(0)).current;
+    useEffect(() => {
+        const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 2800, easing: Easing.linear, useNativeDriver: true }));
+        loop.start();
+        return () => loop.stop();
+    }, []);
+    const GAP = 36;
+    const W = width * 1.8;
+    const ROWS = 10;
+    const COLS = 16;
+    const rows = Array.from({ length: ROWS }, (_, i) => i);
+    const cols = Array.from({ length: COLS }, (_, i) => i);
+    return (
+        <View
+            pointerEvents="none"
+            style={{
+                position: 'absolute',
+                top,
+                left: -(W - width) / 2,
+                width: W,
+                height: GAP * (ROWS - 2),
+                overflow: 'hidden',
+                opacity,
+                transform: [{ perspective: 430 }, { rotateX: '64deg' }]
+            }}
+        >
+            <Animated.View style={{ width: W, height: GAP * ROWS, transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [0, GAP] }) }] }}>
+                {rows.map(i => (
+                    <View key={'r' + i} style={{ position: 'absolute', left: 0, right: 0, top: (i - 1) * GAP, height: 1, backgroundColor: color + '55' }} />
+                ))}
+            </Animated.View>
+            {cols.map(i => (
+                <View key={'c' + i} style={{ position: 'absolute', top: 0, bottom: 0, left: (W / (COLS - 1)) * i, width: 1, backgroundColor: color + '33' }} />
+            ))}
+            <LinearGradient colors={['#010309', 'transparent', '#010309']} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={StyleSheet.absoluteFill} />
+        </View>
+    );
+};
+
 // 🆕 GLOW PROGRESS BAR (animated fill)
 const GlowBar = ({ progress, color, height = 6, style }: any) => {
     const v = useRef(new Animated.Value(0)).current;
@@ -364,35 +461,38 @@ const GaugeRing = ({ progress, color, size = 232, ticks = 56 }: any) => {
     );
 };
 
-// 🆕 STAT TILE (glass tile with DOUBLE COLOUR gradient frame + round icon badge - NO divider lines)
-const StatTile = ({ icon, label, color, glow, frameA, frameB, children, enter }: any) => (
-    <Animated.View
-        style={{
-            flex: 1,
-            opacity: enter,
-            transform: [
-                { perspective: 700 },
-                { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [26, 0] }) },
-                { rotateX: enter.interpolate({ inputRange: [0, 1], outputRange: ['40deg', '0deg'] }) }
-            ]
-        }}
-    >
-        {/* 🆕 DOUBLE COLOUR frame (frameA + frameB = theme two colours, darker shade) */}
-        <LinearGradient colors={[frameA || (color + 'AA'), frameB || 'rgba(255,255,255,0.05)', frameA || (glow + '66')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.statTileFrame}>
-            <BlurView intensity={22} tint="dark" style={styles.statTile}>
-                {/* 🆕 DARKER: tile tint 22 -> 16 */}
-                <LinearGradient colors={[color + '16', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                <View style={[styles.statIconBadge, { backgroundColor: color + '2A', shadowColor: color }]}>
-                    <Ionicons name={icon} size={13} color={color} />
-                </View>
-                {children}
-                <Text style={styles.summaryLabel}>{label}</Text>
-            </BlurView>
-        </LinearGradient>
-    </Animated.View>
+// 🆕 STAT TILE = "LEVITATING CRYSTAL" (3D flip entrance + endless float + optional raised centre tile + DOUBLE COLOUR gradient frame)
+const StatTile = ({ icon, label, color, glow, frameA, frameB, children, enter, raise = 0, floatDur = 2200, floatDelay = 0 }: any) => (
+    <FloatY amp={4} dur={floatDur} delay={floatDelay} style={{ flex: 1 }}>
+        <Animated.View
+            style={{
+                flex: 1,
+                opacity: enter,
+                transform: [
+                    { perspective: 700 },
+                    { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [26, raise] }) },
+                    { rotateX: enter.interpolate({ inputRange: [0, 1], outputRange: ['40deg', '0deg'] }) },
+                    { rotateY: enter.interpolate({ inputRange: [0, 1], outputRange: ['-55deg', '0deg'] }) }
+                ]
+            }}
+        >
+            {/* 🆕 DOUBLE COLOUR frame (frameA + frameB = theme two colours, darker shade) */}
+            <LinearGradient colors={[frameA || (color + 'AA'), frameB || 'rgba(255,255,255,0.05)', frameA || (glow + '66')]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.statTileFrame, { shadowColor: glow }]}>
+                <BlurView intensity={22} tint="dark" style={styles.statTile}>
+                    {/* 🆕 DARKER: tile tint 22 -> 16 */}
+                    <LinearGradient colors={[color + '16', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
+                    <View style={[styles.statIconBadge, { backgroundColor: color + '2A', shadowColor: color }]}>
+                        <Ionicons name={icon} size={13} color={color} />
+                    </View>
+                    {children}
+                    <Text style={styles.summaryLabel}>{label}</Text>
+                </BlurView>
+            </LinearGradient>
+        </Animated.View>
+    </FloatY>
 );
 
-// 🆕 User card "HOLO PASS" (stagger entrance + scroll-driven 3D wheel + press tilt + holo shine)
+// 🆕 User card "HOLO PASS" (stagger 3D flip entrance + scroll-driven 3D wheel + press tilt + holo shine + stacked depth layer + ghost level)
 const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, onOpenProfile, onChat, onDeleteChat, onDisconnect, onAccept, onReject }: any) => {
     const anim = useRef(new Animated.Value(0)).current;
     const press = useRef(new Animated.Value(0)).current; // 🆕 3D press tilt
@@ -441,6 +541,7 @@ const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, o
                     transform: [
                         { perspective: 900 },
                         { translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [40, 0] }) },
+                        { rotateY: anim.interpolate({ inputRange: [0, 1], outputRange: [index % 2 === 0 ? '-38deg' : '38deg', '0deg'] }) },
                         { translateY: scrollTY },
                         { scale: anim.interpolate({ inputRange: [0, 1], outputRange: [0.94, 1] }) },
                         { rotateX: scrollRotX },
@@ -452,6 +553,10 @@ const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, o
                 }
             ]}
         >
+            {/* 🆕 STACKED DEPTH LAYERS (card-ku back-la 2 glass layers = 3D stack feel) */}
+            <View pointerEvents="none" style={[styles.cardStack2, { backgroundColor: userTier.color + '0C', borderColor: userTier.color + '22' }]} />
+            <View pointerEvents="none" style={[styles.cardStack1, { backgroundColor: userTier.color + '14', borderColor: userTier.color + '33' }]} />
+
             <TouchableOpacity activeOpacity={0.8} onLongPress={onDeleteChat} onPressIn={handlePressIn} onPressOut={handlePressOut}>
                 <View style={[styles.cardGlow, { shadowColor: userTier.color }]}>
                     <LinearGradient colors={borderColors as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.cardBorder}>
@@ -466,6 +571,8 @@ const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, o
                             <View style={styles.cardWatermark3D} pointerEvents="none">
                                 <Img3D uri={IMG.diamond} size={110} fallback="diamond" color={userTier.color + '22'} style={{ opacity: 0.12 }} />
                             </View>
+                            {/* 🆕 GHOST LEVEL NUMBER (big outlined-feel tier number top-right) */}
+                            <Text pointerEvents="none" style={[styles.cardRankGhost, { color: userTier.color + '16' }]}>L{userTier.lvl}</Text>
 
                             {/* 🆕 Holographic shine sweep */}
                             <Animated.View
@@ -485,14 +592,17 @@ const UserCard = ({ item, index, activeTab, theme, userTier, scrollY, headerH, o
 
                             <View style={styles.avatarNode}>
                                 {/* 🆕 Orbit rings around avatar */}
-                                <OrbitRing size={64} color={userTier.color} dur={5200 + (index % 4) * 600} dotSize={5} />
-                                <OrbitRing size={52} color={lighten(userTier.color, 0.45)} dur={7600} reverse dotSize={4} style={{ opacity: 0.7 }} />
                                 <TouchableOpacity onPress={onOpenProfile}>
                                     {/* ✅ RING COLOR DiscoverES USER'S OWN TIER */}
                                     <LinearGradient colors={[lighten(userTier.color, 0.5), userTier.color, darken(userTier.color, 0.35)]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.nodeAvatarRing, { shadowColor: userTier.color }]}>
                                         <Image source={{ uri: item.userImage || `https://ui-avatars.com/api/?name=${item.userName}&background=1E293B&color=fff&bold=true` }} style={styles.nodeAvatarImg} />
                                     </LinearGradient>
-                                    {activeTab === 'USERS' && <View style={styles.onlineStatus} />}
+                                    {/* 🆕 online status now has a live pulse */}
+                                    {activeTab === 'USERS' && (
+                                        <View style={styles.onlineWrap} pointerEvents="none">
+                                            <PulseDot color="#10B981" size={8} />
+                                        </View>
+                                    )}
                                 </TouchableOpacity>
                                 {/* 🆕 3D crown for high tier users */}
                                 {isVip && (
@@ -581,6 +691,11 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
     // 🔥 NEW STATES FOR REQUEST BADGE ALERTS 🔥
     const [newRequestCount, setNewRequestCount] = useState(0);
     const [lastKnownRequestIds, setLastKnownRequestIds] = useState<string[]>([]);
+
+    // 🔥 DUPLICATE NOTIFICATION FIX: refs (state-ku badhila) - listener re-subscribe aagaama stable-a irukka 🔥
+    const knownIdsRef = useRef<Set<string>>(new Set());      // already paartha request IDs
+    const isFirstSnapshot = useRef(true);                    // first load-la notification anuppakoodathu
+    const activeTabRef = useRef<'USERS' | 'REQUESTS'>('USERS'); // listener-ku latest tab theriyanum (stale closure illama)
     
     const expert = auth.currentUser;
     const router = useRouter();
@@ -689,6 +804,11 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
         });
     }, []);
 
+    // 🔥 DUPLICATE NOTIFICATION FIX: activeTab-a ref-la sync pannum (listener-a reset pannaama latest tab theriya) 🔥
+    useEffect(() => {
+        activeTabRef.current = activeTab;
+    }, [activeTab]);
+
     // 🆕 Tab pill slide + list content transition (+ 3D pop on the active tab)
     useEffect(() => {
         Animated.spring(tabSlide, { toValue: activeTab === 'USERS' ? 0 : 1, useNativeDriver: true, friction: 8, tension: 70 }).start();
@@ -698,47 +818,56 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
         Animated.timing(tabAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
     }, [activeTab]);
 
-    // 🔥 NEW EFFECT: INDEPENDENT BACKGROUND LISTENER FOR PENDING REQUESTS & NOTIFICATIONS 🔥
+    // 🔥 FIXED EFFECT: INDEPENDENT BACKGROUND LISTENER FOR PENDING REQUESTS & NOTIFICATIONS 🔥
+    // ✅ dependency = expert?.uid mattum -> listener oru thadavai mattum subscribe aagum (3 notification bug fix)
+    // ✅ docChanges() 'added' mattum -> ovvoru puthu request-kum exact-a 1 notification
+    // ✅ first snapshot skip -> app open pannumbodhu pazhaya requests-ku notification pogaathu (but first-ever request-um miss aagaathu)
     useEffect(() => {
         if (!expert?.uid) return;
 
+        knownIdsRef.current = new Set();
+        isFirstSnapshot.current = true;
+
         const requestQuery = query(collection(db, "connections"), where("receiverId", "==", expert.uid), where("status", "==", 'pending'));
 
-        const unsubRequests = onSnapshot(requestQuery, async (snapshot) => {
-            const currentIds = snapshot.docs.map(doc => doc.id);
-            
-            // Check if there are new requests that we haven't seen yet
-            const newIncomingIds = currentIds.filter(id => !lastKnownRequestIds.includes(id));
-            
-            if (newIncomingIds.length > 0 && lastKnownRequestIds.length > 0) {
-                // If there's a new request and it's not the initial load, send a Notification!
-                for (const docSnap of snapshot.docs) {
-                    if (newIncomingIds.includes(docSnap.id)) {
-                        const connData = docSnap.data();
-                        await sendNotificationToUser(
-                            expert.uid,
-                            "New Connection Request! 🤝",
-                            `${connData.senderName || 'A user'} wants to connect with you. Check your requests tab!`,
-                            "system"
-                        );
+        const unsubRequests = onSnapshot(requestQuery, (snapshot) => {
+            const currentIds = snapshot.docs.map(d => d.id);
+
+            if (!isFirstSnapshot.current) {
+                // Initial load illa -> puthusa vandha requests-ku mattum Notification!
+                snapshot.docChanges().forEach(async (change) => {
+                    if (change.type === 'added' && !knownIdsRef.current.has(change.doc.id)) {
+                        const connData = change.doc.data();
+                        try {
+                            await sendNotificationToUser(
+                                expert.uid,
+                                "New Connection Request! 🤝",
+                                `${connData.senderName || 'A user'} wants to connect with you. Check your requests tab!`,
+                                "system"
+                            );
+                        } catch (e) {
+                            console.log("New request notification error:", e);
+                        }
                     }
-                }
+                });
             }
 
+            isFirstSnapshot.current = false;
+            knownIdsRef.current = new Set(currentIds); // known IDs track pannum (future new ones detect panna)
+
+            setLastKnownRequestIds(currentIds); // PENDING count / tab chip-ku mattum
+
             // Only update the unread badge if we are NOT currently on the REQUESTS tab
-            if (activeTab !== 'REQUESTS') {
+            if (activeTabRef.current !== 'REQUESTS') {
                 setNewRequestCount(currentIds.length);
             } else {
                 // If we are already on the tab, clear it immediately
                 setNewRequestCount(0);
             }
-
-            // Keep track of known IDs to detect future new ones
-            setLastKnownRequestIds(currentIds);
         });
 
         return () => unsubRequests();
-    }, [expert?.uid, activeTab, lastKnownRequestIds]);
+    }, [expert?.uid]);
 
     useEffect(() => {
         if (!expert?.uid) return;
@@ -949,6 +1078,9 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
     const spin = rotAnim.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
     const sweepX = sweepAnim.interpolate({ inputRange: [0, 1], outputRange: [-width * 0.6, width * 1.1] });
     const tabSegW = tabW > 0 ? (tabW - 12) / 2 : 0; // container padding 6 + 6
+    const thumbTX = tabSlide.interpolate({ inputRange: [0, 1], outputRange: [0, tabSegW] }); // 🆕 liquid thumb slide
+    const thumbUsersOpacity = tabSlide.interpolate({ inputRange: [0, 1], outputRange: [1, 0] });
+    const thumbReqOpacity = tabSlide.interpolate({ inputRange: [0, 1], outputRange: [0, 1] });
 
     // 🆕 Scroll-driven interpolations (hero parallax / stretchy header / mini bar / background depth)
     const stageScale = scrollY.interpolate({ inputRange: [-160, 0, 320], outputRange: [1.14, 1, 0.9], extrapolate: 'clamp' });
@@ -958,6 +1090,9 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
     const miniTY = scrollY.interpolate({ inputRange: [MINI_SHOW_AT - 20, MINI_SHOW_AT + 40], outputRange: [-24, 0], extrapolate: 'clamp' });
     const bgShift = scrollY.interpolate({ inputRange: [0, 1500], outputRange: [0, -300], extrapolate: 'clamp' });
     const bgShiftSlow = scrollY.interpolate({ inputRange: [0, 1500], outputRange: [0, -140], extrapolate: 'clamp' });
+    // 🆕 hero 3D tilt on scroll (stage leans back as you scroll down)
+    const stageRotX = scrollY.interpolate({ inputRange: [0, 320], outputRange: ['0deg', '28deg'], extrapolate: 'clamp' });
+    const gridShift = scrollY.interpolate({ inputRange: [0, 600], outputRange: [0, -240], extrapolate: 'clamp' });
 
     // 🆕 Expert identity (header)
     const expertName = expertProfile?.name || expertProfile?.displayName || expert?.displayName || 'Pro Expert';
@@ -993,16 +1128,13 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                         {/* Uniform glass border pill header */}
                         <BlurView intensity={20} tint="dark" style={[styles.statusPillHeader, borderType1, { paddingHorizontal: 15, paddingVertical: 8, borderRadius: 20, overflow: 'hidden' }]}>
                             <PulseDot color={theme.accent} size={6} />
-                            <Text style={[styles.statusPillText, { color: theme.accentText }]}>SYSTEM {config.label}</Text>
+                            <Text style={[styles.statusPillText, { color: theme.accentText }]}>LIVE</Text>
                         </BlurView>
                         {/* 🔥 TEXT AUTO SHRINK ON SMALL SCREENS */}
                         <Text style={styles.mainTitle} numberOfLines={1} adjustsFontSizeToFit={true}>TALKPE PRO NETWORK</Text>
                         <View style={[styles.neonUnderline, { backgroundColor: theme.primary }]} />
                     </View>
                     <View style={styles.headerRight}>
-                        <FloatBox amp={5} dur={1600}>
-                            <Img3D uri={IMG.chat} size={54} fallback="chatbubbles" color={theme.accent} />
-                        </FloatBox>
                         <TouchableOpacity style={[styles.headerIcon, borderType2]}>
                             <Ionicons name="flash" size={20} color={theme.accentText} />
                         </TouchableOpacity>
@@ -1010,13 +1142,13 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                 </View>
             </Animated.View>
 
-            {/* 🆕 LEVEL CORE STAGE (radial tick gauge + spinning core + 3D objects) */}
+            {/* 🆕 LEVEL CORE STAGE (3D holo platform + radial tick gauge + spinning core + 3D objects, leans back on scroll) */}
             <Animated.View
                 style={[
                     styles.stageWrap,
                     {
                         opacity: Animated.multiply(heroIn, stageOpacity),
-                        transform: [{ translateY: stageTY }, { scale: stageScale }]
+                        transform: [{ perspective: 900 }, { translateY: stageTY }, { scale: stageScale }, { rotateX: stageRotX }]
                     }
                 ]}
             >
@@ -1029,9 +1161,6 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                 <Sparkle x={width * 0.12} y={190} size={11} color={theme.secondaryText} delay={1100} />
 
                 {/* floating 3D objects */}
-                <FloatBox amp={7} dur={2000} style={styles.stageTrophy}>
-                    <Img3D uri={IMG.trophy} size={58} fallback="trophy" color={theme.accentText} />
-                </FloatBox>
                 <FloatBox amp={9} dur={2400} style={styles.stageDiamond}>
                     <Img3D uri={IMG.diamond} size={50} fallback="diamond" color={theme.accentText} />
                 </FloatBox>
@@ -1039,101 +1168,79 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                     <Img3D uri={IMG.star} size={36} fallback="star" color={theme.secondaryText} />
                 </FloatBox>
 
-                {/* gauge ring */}
-                <GaugeRing progress={levelProgress.progress} color={theme.accent} size={232} ticks={56} />
-
                 {/* core: spinning gradient ring + avatar */}
                 <View style={styles.coreWrap}>
-                    <OrbitRing size={150} color={theme.accent} dur={5000} dotSize={6} />
-                    <OrbitRing size={130} color={theme.primaryText} dur={8000} reverse dotSize={4} style={{ opacity: 0.7 }} />
                     <View style={[styles.coreMask, { shadowColor: theme.accent }]}>
-                        <Animated.View style={[styles.coreSpin, { transform: [{ rotate: spin }] }]}>
+                        <View style={styles.coreSpin}>
                             <LinearGradient
                                 colors={[theme.accent, theme.primary, theme.secondary, lighten(theme.accent, 0.5), theme.accent] as any}
                                 start={{ x: 0, y: 0 }}
                                 end={{ x: 1, y: 1 }}
                                 style={StyleSheet.absoluteFill}
                             />
-                        </Animated.View>
+                        </View>
                         <Image source={{ uri: expertPic }} style={styles.coreAvatar} />
                     </View>
                     <FloatBox amp={4} dur={1500} style={styles.coreCrown}>
                         <Img3D uri={IMG.crown} size={38} fallback="ribbon" color={theme.accentText} />
                     </FloatBox>
-                    <View style={[styles.coreLevelBadge, { borderColor: theme.accent + 'AA', shadowColor: theme.accent }, sideMix]}>
-                        <Ionicons name="star" size={10} color={theme.accentText} style={{ marginRight: 4 }} />
-                        <Text style={[styles.coreLevelText, { color: theme.accentText }]}>L{config.lvl}</Text>
-                    </View>
                 </View>
             </Animated.View>
 
-            {/* 🆕 identity text under the core */}
+            {/* 🆕 identity text under the core (🔥 "REWARDS TO L" caption REMOVED as requested) */}
             <Animated.View style={[styles.identityBlock, { opacity: heroIn }]}>
                 <Text style={styles.identityName} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7}>{expertName}</Text>
-                <Text style={[styles.identityLevel, { color: theme.accentText }]} numberOfLines={1}>{config.label}</Text>
-                <Text style={styles.progressCaption} numberOfLines={1}>
-                    {levelProgress.maxed ? 'MAX LEVEL REACHED' : `${Math.round(levelProgress.progress * 100)}%  •  ${formatCompact(levelProgress.remaining)} REWARDS TO L${levelProgress.nextLvl}`}
-                </Text>
-                <GlowBar progress={levelProgress.progress} color={theme.accent} height={5} style={{ marginTop: 10, width: '70%' }} />
             </Animated.View>
 
-            {/* 🆕 STAT TILES (3 separate glass tiles - divider lines illa, 3D entrance, shine sweep, DOUBLE COLOUR frame) */}
+            {/* 🆕 STAT TILES = levitating crystals (3D flip entrance, endless float, raised centre tile, DOUBLE COLOUR frame, shine sweep) */}
             <View style={styles.statRow}>
-                <StatTile icon="people" label="LINKS" color={theme.primaryText} glow={theme.primary} frameA={theme.bA} frameB={theme.bB} enter={heroIn}>
+                <StatTile icon="people" label="LINKS" color={theme.primaryText} glow={theme.primary} frameA={theme.bA} frameB={theme.bB} enter={heroIn} floatDur={2100} floatDelay={0}>
                     <CountUp style={styles.summaryValue} value={expertProfile?.friendsCount || 0} />
                 </StatTile>
-                <StatTile icon="hourglass" label="PENDING" color={theme.accentText} glow={theme.accent} frameA={theme.bB} frameB={theme.bA} enter={heroIn}>
+                <StatTile icon="hourglass" label="PENDING" color={theme.accentText} glow={theme.accent} frameA={theme.bB} frameB={theme.bA} enter={heroIn} floatDur={2500} floatDelay={400}>
                     <CountUp style={styles.summaryValue} value={lastKnownRequestIds.length} />
                 </StatTile>
-                <StatTile icon="star" label="LEVEL" color={theme.secondaryText} glow={theme.secondary} frameA={theme.bA} frameB={theme.bB} enter={heroIn}>
-                    <Text style={styles.summaryValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>L{config.lvl}</Text>
-                </StatTile>
-                {/* shine sweep */}
-                <Animated.View pointerEvents="none" style={[styles.heroSweep, { transform: [{ translateX: sweepX }, { rotate: '20deg' }] }]}>
-                    <LinearGradient colors={['transparent', 'rgba(255,255,255,0.08)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
-                </Animated.View>
+                {/* shine sweep (clipped so it never leaks outside the tiles) */}
+                <View style={styles.statSweepClip} pointerEvents="none">
+                    <Animated.View pointerEvents="none" style={[styles.heroSweep, { transform: [{ translateX: sweepX }, { rotate: '20deg' }] }]}>
+                        <LinearGradient colors={['transparent', 'rgba(255,255,255,0.08)', 'transparent']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={StyleSheet.absoluteFill} />
+                    </Animated.View>
+                </View>
             </View>
 
-            {/* 👑 NEW TAB STYLE: 2 separate pill buttons (no single bar, no gloss strip, so horizontal line illa) with DOUBLE COLOUR border */}
+            {/* 👑 NEW TAB STYLE: LIQUID GLASS CAPSULE - one sliding 3D thumb (theme gradient) with DOUBLE COLOUR frame */}
             <View style={styles.tabWrapper} onLayout={(e) => setTabW(e.nativeEvent.layout.width)}>
-                <View style={styles.tabRow2}>
-                    {/* USERS */}
-                    <Animated.View style={{ flex: 1, transform: [{ scale: activeTab === 'USERS' ? tabPop : 1 }] }}>
-                        <TouchableOpacity activeOpacity={0.85} onPress={goUsersTab}>
-                            <LinearGradient colors={[theme.bA, theme.bB, theme.bA] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.tabBtnFrame, { shadowColor: theme.bA, shadowOpacity: activeTab === 'USERS' ? 0.6 : 0.15 }]}>
-                                <View style={styles.tabBtnInner}>
-                                    {activeTab === 'USERS' && (
-                                        <LinearGradient colors={[darken(theme.bA, 0.3), darken(theme.bB, 0.3)] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                                    )}
-                                    <View style={styles.tabBtnContent}>
-                                        <Ionicons name="people" size={15} color={activeTab === 'USERS' ? '#FFF' : '#E2E8F0'} style={{ marginRight: 6 }} />
-                                        <Text style={[styles.tabText, activeTab === 'USERS' && { color: '#FFF' }]}>USERS</Text>
-                                        <View style={[styles.tabCountChip, activeTab === 'USERS' && { backgroundColor: 'rgba(255,255,255,0.24)' }]}>
-                                            <Text style={styles.tabCountText}>{formatCompact(expertProfile?.friendsCount || 0)}</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            </LinearGradient>
-                        </TouchableOpacity>
-                    </Animated.View>
+                <LinearGradient colors={[theme.bA, theme.bB, theme.bA] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.tabFrame, { shadowColor: thumbColor, shadowOpacity: 0.55, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 8 }]}>
+                    <View style={styles.tabContainer}>
+                        {/* sliding thumb */}
+                        {tabSegW > 0 && (
+                            <Animated.View style={[styles.tabPill, { width: tabSegW, shadowColor: thumbColor, transform: [{ translateX: thumbTX }, { scale: tabPop }] }]}>
+                                <Animated.View style={[StyleSheet.absoluteFill, { opacity: thumbUsersOpacity }]}>
+                                    <LinearGradient colors={[lighten(theme.bA, 0.05), darken(theme.bA, 0.25), darken(theme.bB, 0.4)] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                                </Animated.View>
+                                <Animated.View style={[StyleSheet.absoluteFill, { opacity: thumbReqOpacity }]}>
+                                    <LinearGradient colors={['#EC4899', darken('#EC4899', 0.3), darken('#A855F7', 0.45)] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
+                                </Animated.View>
+                                <LinearGradient colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']} style={styles.tabPillGloss} pointerEvents="none" />
+                            </Animated.View>
+                        )}
 
-                    {/* REQUESTS */}
-                    <Animated.View style={{ flex: 1, transform: [{ scale: activeTab === 'REQUESTS' ? tabPop : 1 }] }}>
-                        <TouchableOpacity activeOpacity={0.85} onPress={goRequestsTab}>
-                            <LinearGradient colors={[theme.bB, theme.bA, theme.bB] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.tabBtnFrame, { shadowColor: theme.bB, shadowOpacity: activeTab === 'REQUESTS' ? 0.6 : 0.15 }]}>
-                                <View style={styles.tabBtnInner}>
-                                    {activeTab === 'REQUESTS' && (
-                                        <LinearGradient colors={[darken('#EC4899', 0.4), darken('#A855F7', 0.45)] as any} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} pointerEvents="none" />
-                                    )}
-                                    <View style={styles.tabBtnContent}>
-                                        <Ionicons name="person-add" size={15} color={activeTab === 'REQUESTS' ? '#FFF' : '#E2E8F0'} style={{ marginRight: 6 }} />
-                                        <Text style={[styles.tabText, activeTab === 'REQUESTS' && { color: '#FFF' }]}>REQUESTS</Text>
-                                        <View style={[styles.tabCountChip, activeTab === 'REQUESTS' && { backgroundColor: 'rgba(255,255,255,0.24)' }]}>
-                                            <Text style={styles.tabCountText}>{formatCompact(lastKnownRequestIds.length)}</Text>
-                                        </View>
-                                    </View>
-                                </View>
-                            </LinearGradient>
+                        {/* USERS */}
+                        <TouchableOpacity style={styles.massTab} activeOpacity={0.85} onPress={goUsersTab}>
+                            <Ionicons name="people" size={15} color={activeTab === 'USERS' ? '#FFF' : '#94A3B8'} style={{ marginRight: 6 }} />
+                            <Text style={[styles.tabText, activeTab === 'USERS' ? { color: '#FFF' } : { color: '#94A3B8' }]}>USERS</Text>
+                            <View style={[styles.tabCountChip, activeTab === 'USERS' && { backgroundColor: 'rgba(255,255,255,0.24)' }]}>
+                                <Text style={styles.tabCountText}>{formatCompact(expertProfile?.friendsCount || 0)}</Text>
+                            </View>
+                        </TouchableOpacity>
+
+                        {/* REQUESTS */}
+                        <TouchableOpacity style={styles.massTab} activeOpacity={0.85} onPress={goRequestsTab}>
+                            <Ionicons name="person-add" size={15} color={activeTab === 'REQUESTS' ? '#FFF' : '#94A3B8'} style={{ marginRight: 6 }} />
+                            <Text style={[styles.tabText, activeTab === 'REQUESTS' ? { color: '#FFF' } : { color: '#94A3B8' }]}>REQUESTS</Text>
+                            <View style={[styles.tabCountChip, activeTab === 'REQUESTS' && { backgroundColor: 'rgba(255,255,255,0.24)' }]}>
+                                <Text style={styles.tabCountText}>{formatCompact(lastKnownRequestIds.length)}</Text>
+                            </View>
 
                             {/* 🔥 REQUESTS TAB ALERT BADGE 🔥 */}
                             {newRequestCount > 0 && activeTab !== 'REQUESTS' && (
@@ -1142,8 +1249,8 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                                 </BounceBadge>
                             )}
                         </TouchableOpacity>
-                    </Animated.View>
-                </View>
+                    </View>
+                </LinearGradient>
             </View>
 
             {/* 🆕 Section label */}
@@ -1180,6 +1287,11 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
             <Animated.View style={[styles.shimmerOrb, { top: 50, right: -60, backgroundColor: theme.primary, transform: [{ translateY: Animated.add(orbTranslateY, bgShift) }] }]} />
             <Animated.View style={[styles.shimmerOrb, { top: 350, left: -90, backgroundColor: theme.secondary, transform: [{ translateY: Animated.add(Animated.multiply(orbTranslateY, -1), bgShift) }] }]} />
             <Animated.View style={[styles.shimmerOrb, { top: 650, right: -80, backgroundColor: theme.accent, transform: [{ translateY: Animated.add(orbTranslateY, bgShift) }] }]} />
+
+            {/* 🆕 3D NEON GRID FLOOR (perspective grid flowing toward the viewer, parallax on scroll) */}
+            <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, { transform: [{ translateY: gridShift }] }]}>
+                <GridFloor color={theme.accent} top={330} opacity={0.5} />
+            </Animated.View>
 
             {/* 🆕 Floating 3D background objects (diamond / coin / star) with scroll parallax (🆕 darker opacities) */}
             <Animated.View pointerEvents="none" style={[styles.bgFloat, { top: 430, right: 14, opacity: 0.14, transform: [{ translateY: bgShiftSlow }] }]}>
@@ -1241,8 +1353,6 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                         >
                             {/* 🆕 Orbit rings around empty-state 3D image */}
                             <View style={styles.emptyOrbitWrap}>
-                                <OrbitRing size={150} color={theme.accent} dur={7000} dotSize={7} />
-                                <OrbitRing size={116} color={theme.primaryText} dur={5000} reverse dotSize={5} />
                                 <FloatBox amp={8} dur={1800}>
                                     <Img3D uri={activeTab === 'USERS' ? IMG.handshake : IMG.star} size={90} fallback="people" color={theme.accent} />
                                 </FloatBox>
@@ -1297,7 +1407,6 @@ export default function ExpertMessages({ onBlockUser }: ExpertMessagesProps) {
                         </LinearGradient>
                         <View style={{ marginLeft: 10, flexShrink: 1 }}>
                             <Text style={styles.miniName} numberOfLines={1}>{expertName}</Text>
-                            <Text style={[styles.miniLevel, { color: theme.accentText }]} numberOfLines={1}>{config.label}</Text>
                         </View>
                     </TouchableOpacity>
                     <View style={styles.miniTabs}>
@@ -1360,8 +1469,8 @@ const styles = StyleSheet.create({
     // 🔥 Cleaned up Icon Style
     headerIcon: { width: 46, height: 46, borderRadius: 23, justifyContent: 'center', alignItems: 'center' }, 
 
-    // 🆕 LEVEL CORE STAGE
-    stageWrap: { height: 272, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
+    // 🆕 LEVEL CORE STAGE (🆕 height 272 -> 300 for the 3D platform)
+    stageWrap: { height: 200, alignItems: 'center', justifyContent: 'center', marginTop: 6 },
     stageGlowBig: { position: 'absolute', width: 300, height: 300, borderRadius: 150 },
     stageGlowSmall: { position: 'absolute', width: 190, height: 190, borderRadius: 95 },
     stageTrophy: { position: 'absolute', left: 0, top: 24 },
@@ -1374,6 +1483,10 @@ const styles = StyleSheet.create({
     coreCrown: { position: 'absolute', top: -30, alignSelf: 'center' },
     coreLevelBadge: { position: 'absolute', bottom: -12, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 14, borderWidth: 1.2, backgroundColor: '#06031A', shadowOpacity: 0.8, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 8 },
     coreLevelText: { fontSize: 12, fontWeight: '900', letterSpacing: 1.5 },
+
+    // 🆕 3D HOLO PLATFORM
+    platformWrap: { position: 'absolute', bottom: 6, alignSelf: 'center', width: 240, height: 100, justifyContent: 'center', alignItems: 'center' },
+    platformDisc: { position: 'absolute', width: 210, height: 210, borderRadius: 105, borderWidth: 1.4, shadowOpacity: 0.9, shadowRadius: 18, shadowOffset: { width: 0, height: 0 }, elevation: 6, transform: [{ perspective: 600 }, { rotateX: '72deg' }] },
 
     // 🆕 identity
     identityBlock: { alignItems: 'center', marginTop: 4, marginBottom: 16 },
@@ -1390,8 +1503,10 @@ const styles = StyleSheet.create({
     statDock: { flexDirection: 'row', alignItems: 'center', borderRadius: 24, overflow: 'hidden', paddingVertical: 4 },
     dockDivider: { width: 1, height: 30, backgroundColor: 'rgba(255,255,255,0.10)' },
     heroSummaryGrid: { flexDirection: 'row', gap: 10, marginTop: 14 },
-    statRow: { flexDirection: 'row', gap: 10, overflow: 'hidden', borderRadius: 22 },
-    statTileFrame: { borderRadius: 22, padding: 1.4 },
+    // 🆕 overflow visible so the raised centre tile + float animation never get clipped (sweep has its own clip)
+    statRow: { flexDirection: 'row', gap: 10, paddingTop: 12, paddingBottom: 4 },
+    statSweepClip: { ...StyleSheet.absoluteFillObject, overflow: 'hidden', borderRadius: 22 },
+    statTileFrame: { borderRadius: 22, padding: 1.4, shadowOpacity: 0.45, shadowRadius: 12, shadowOffset: { width: 0, height: 6 }, elevation: 8 },
     statTile: { borderRadius: 20.6, overflow: 'hidden', alignItems: 'center', paddingVertical: 12, paddingHorizontal: 6, backgroundColor: 'rgba(2, 4, 14, 0.88)' },
     statIconBadge: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center', marginBottom: 6, shadowOpacity: 0.7, shadowRadius: 8, shadowOffset: { width: 0, height: 0 }, elevation: 4 },
     summaryChip: { flex: 1, padding: 12, alignItems: 'center' },
@@ -1399,10 +1514,10 @@ const styles = StyleSheet.create({
     summaryLabel: { color: 'rgba(255,255,255,0.9)', fontSize: 9, fontWeight: '900', letterSpacing: 1.4, marginTop: 3 },
     summaryValue: { color: '#FFF', fontSize: 20, fontWeight: '900' },
     
-    // 🆕 TABS (old single-bar styles kept, new 2-pill styles added below)
+    // 🆕 TABS (liquid glass capsule: frame + container + sliding pill thumb)
     tabWrapper: { marginTop: 18, marginBottom: 6 },
     tabFrame: { borderRadius: 28, padding: 1.2 },
-    tabContainer: { flexDirection: 'row', padding: 6, borderRadius: 26.8, overflow: 'hidden', backgroundColor: 'rgba(3, 5, 18, 0.7)' },
+    tabContainer: { flexDirection: 'row', padding: 6, borderRadius: 26.8, backgroundColor: 'rgba(3, 5, 18, 0.9)' },
     tabPill: { position: 'absolute', top: 6, left: 6, bottom: 6, borderRadius: 21, overflow: 'hidden', shadowOpacity: 0.8, shadowRadius: 12, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
     tabPillGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 16 },
     massTab: { flex: 1, height: 44, borderRadius: 20, justifyContent: 'center', alignItems: 'center', flexDirection: 'row' },
@@ -1410,7 +1525,7 @@ const styles = StyleSheet.create({
     tabCountChip: { marginLeft: 6, minWidth: 20, height: 18, borderRadius: 9, paddingHorizontal: 5, backgroundColor: 'rgba(255,255,255,0.08)', justifyContent: 'center', alignItems: 'center' },
     tabCountText: { color: '#FFF', fontSize: 9, fontWeight: '900' },
 
-    // 🆕 NEW TAB STYLE: 2 separate pill buttons, double colour border, no gloss strip (🆕 darker inner 0.86 -> 0.93)
+    // 🆕 (legacy) 2 separate pill buttons styles kept
     tabRow2: { flexDirection: 'row', gap: 12 },
     tabBtnFrame: { borderRadius: 24, padding: 1.6, shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 6 },
     tabBtnInner: { height: 46, borderRadius: 22.4, overflow: 'hidden', justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(2, 4, 14, 0.93)' },
@@ -1430,6 +1545,11 @@ const styles = StyleSheet.create({
 
     // 🆕 cards (🆕 darker body: glow bg 0.6 -> 0.8, card bg 0.74 -> 0.88)
     cardWrapper: { marginBottom: 15 },
+    // 🆕 stacked depth layers behind each card
+    cardStack1: { position: 'absolute', left: 14, right: 14, bottom: -5, height: 40, borderRadius: 30, borderWidth: 1 },
+    cardStack2: { position: 'absolute', left: 28, right: 28, bottom: -10, height: 40, borderRadius: 26, borderWidth: 1 },
+    cardRankGhost: { position: 'absolute', right: 70, top: -4, fontSize: 56, fontWeight: '900', letterSpacing: -2 },
+    onlineWrap: { position: 'absolute', bottom: -4, right: -4, zIndex: 10 },
     cardGlow: { borderRadius: 35, backgroundColor: 'rgba(5,3,20,0.8)', shadowOpacity: 0.35, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 9 },
     cardBorder: { borderRadius: 35, padding: 1.5 },
     fluidUserCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 33.5, overflow: 'hidden', backgroundColor: 'rgba(4, 3, 16, 0.88)' }, 

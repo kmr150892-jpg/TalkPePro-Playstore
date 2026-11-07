@@ -5,18 +5,18 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { doc, onSnapshot, runTransaction, updateDoc } from 'firebase/firestore';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    Easing,
-    FlatList,
-    Image,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Animated,
+  Dimensions,
+  Easing,
+  FlatList,
+  Image,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { auth, db } from '../firebaseConfig'; // 👈 file app/ root-la irundha '../firebaseConfig' (app/(tabs) ulla vechaa '../../firebaseConfig')
@@ -710,7 +710,6 @@ export default function UserNotificationsScreen() {
             ]}
           >
             <LinearGradient colors={[PAL.cyan + '66', PAL.violet + '44']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={StyleSheet.absoluteFill} />
-            <LinearGradient colors={['rgba(255,255,255,0.22)', 'rgba(255,255,255,0)']} style={styles.filterGloss} pointerEvents="none" />
           </Animated.View>
         )}
         {FILTERS.map((f, idx) => {
@@ -876,8 +875,8 @@ const styles = StyleSheet.create({
 
   // filter tabs
   filterRow: { flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.4)', borderRadius: 22, padding: 5, borderWidth: 1, borderColor: 'rgba(0,242,254,0.18)', marginBottom: 16 },
-  filterPill: { position: 'absolute', top: 5, left: 5, bottom: 5, borderRadius: 17, borderWidth: 1.2, borderColor: '#00F2FE', overflow: 'hidden', shadowColor: '#00F2FE', shadowOpacity: 0.7, shadowRadius: 10, shadowOffset: { width: 0, height: 0 }, elevation: 6 },
-  filterGloss: { position: 'absolute', top: 0, left: 0, right: 0, height: 16 },
+  // 🔥 FIX: border / shadow / elevation / gloss line removed -> no line behind the tab buttons
+  filterPill: { position: 'absolute', top: 5, left: 5, bottom: 5, borderRadius: 17, overflow: 'hidden' },
   filterBtn: { flex: 1, paddingVertical: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 4 },
   filterText: { color: '#94A3B8', fontSize: 10, fontWeight: '900', letterSpacing: 0.8, flexShrink: 1 },
 

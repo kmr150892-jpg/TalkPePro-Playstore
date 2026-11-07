@@ -14,10 +14,12 @@ import {
     Easing,
     FlatList,
     Image,
+    Keyboard,
     Modal,
     StatusBar,
     StyleSheet,
     Text,
+    TextInput,
     TouchableOpacity,
     View,
     ViewToken
@@ -316,6 +318,11 @@ export default function CinematicExploreScreen() {
     const isScreenFocused = useIsFocused();
     const user = auth.currentUser;
 
+    // 🆕 SEARCH STATES (host name type panni filter panna)
+    const [searchOpen, setSearchOpen] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const flatListRef = useRef<FlatList<any>>(null);
+
     // 🔒 NEW: SCREENSHOT & SCREEN RECORDING PROTECTION (active only while this screen is focused)
     useEffect(() => {
         const key = 'explore-feed-protect';
@@ -364,6 +371,12 @@ export default function CinematicExploreScreen() {
             Animated.timing(shineAnim, { toValue: 0, duration: 0, useNativeDriver: true }),
         ])).start();
     }, []);
+
+    // 🆕 Search text maarina list-oda first video-ku pogum (active index reset)
+    useEffect(() => {
+        setActiveIndex(0);
+        flatListRef.current?.scrollToOffset({ offset: 0, animated: false });
+    }, [searchQuery]);
 
     // 🔥 Check User Trial Status & Ghost Data on Load (SATTI FIX: Realtime onSnapshot)
     useEffect(() => {
@@ -675,6 +688,26 @@ export default function CinematicExploreScreen() {
         return notBlockedByMe && notBlockedByHost;
     });
 
+    // 🆕 SEARCH FILTER: host name (name / userName) type panna match aagura hosts mattum varum
+    const trimmedQuery = searchQuery.trim().toLowerCase();
+    const displayExperts = trimmedQuery
+        ? safeExperts.filter((expert) => {
+            const nm = String(expert.name || expert.userName || '').toLowerCase();
+            return nm.includes(trimmedQuery);
+        })
+        : safeExperts;
+
+    // 🆕 Search icon toggle (open / close)
+    const toggleSearch = () => {
+        if (searchOpen) {
+            Keyboard.dismiss();
+            setSearchQuery('');
+            setSearchOpen(false);
+        } else {
+            setSearchOpen(true);
+        }
+    };
+
     // 🔥 REPORT & BLOCK ACTION HANDLER 🔥
     const openReportModal = (expert: any) => {
         if (!expert) return;
@@ -723,7 +756,8 @@ export default function CinematicExploreScreen() {
             <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
             
             <FlatList
-                data={safeExperts}
+                ref={flatListRef}
+                data={displayExperts}
                 keyExtractor={(item) => item.id}
                 renderItem={({ item, index }) => (
                     <ExpertVideoCard 
@@ -733,7 +767,7 @@ export default function CinematicExploreScreen() {
                         onConnect={() => handleConnect(item)}
                         onProfile={() => router.push({ pathname: '/expert-detail', params: { id: item.id } } as any)}
                         index={index}
-                        total={safeExperts.length}
+                        total={displayExperts.length}
                         loop={mainLoop}
                         glow={glowAnim}
                         shine={shineAnim}
@@ -749,14 +783,15 @@ export default function CinematicExploreScreen() {
                 initialNumToRender={1}
                 maxToRenderPerBatch={2}
                 getItemLayout={(_, index) => ({ length: height, offset: height * index, index })}
+                keyboardShouldPersistTaps="handled"
             />
 
             {/* 🆕 EMPTY FEED STATE */}
-            {safeExperts.length === 0 && (
+            {displayExperts.length === 0 && (
                 <View pointerEvents="none" style={styles.emptyFeed}>
                     <Animated.View style={[styles.emptyFeedRing, { transform: [{ rotate: orbitRotate }] }]} />
                     <MaterialCommunityIcons name="video-off-outline" size={46} color="#38BDF8" />
-                    <Text style={styles.emptyFeedText}>NO HOSTS AVAILABLE</Text>
+                    <Text style={styles.emptyFeedText}>{trimmedQuery ? 'NO HOSTS FOUND' : 'NO HOSTS AVAILABLE'}</Text>
                 </View>
             )}
 
@@ -764,15 +799,15 @@ export default function CinematicExploreScreen() {
                 {/* 🔥 SATTI FIX: Header Text Overflow Fix (numberOfLines & adjustsFontSizeToFit) 🔥 */}
                 <View style={styles.titlePill}>
                     <LinearGradient colors={['#38BDF8', '#6366F1']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.titleIcon}>
-                        <MaterialCommunityIcons name="lightning-bolt" size={14} color="#FFF" />
+                        <MaterialCommunityIcons name="lightning-bolt" size={12} color="#FFF" />
                     </LinearGradient>
                     <Text style={styles.headerTitle} numberOfLines={1} adjustsFontSizeToFit>FEATURED HOSTS</Text>
                 </View>
                 
                 {/* 🔥 NEW: Header Right Actions with Restrict & Search side-by-side 🔥 */}
                 <View style={styles.headerRightControls}>
-                    {safeExperts.length > 0 && safeExperts[activeIndex] && (
-                        <TouchableOpacity style={styles.reportBtnGlobal} onPress={() => openReportModal(safeExperts[activeIndex])} activeOpacity={0.8}>
+                    {displayExperts.length > 0 && displayExperts[activeIndex] && (
+                        <TouchableOpacity style={styles.reportBtnGlobal} onPress={() => openReportModal(displayExperts[activeIndex])} activeOpacity={0.8}>
                             <View style={styles.reportIconWrap}>
                                 <Animated.View style={[styles.reportHalo, { opacity: glowOpacity, transform: [{ scale: glowScale }] }]} />
                                 <Ionicons name="shield-checkmark" size={16} color="#EF4444" />
@@ -780,11 +815,37 @@ export default function CinematicExploreScreen() {
                             <Text style={styles.reportBtnText}>RESTRICT</Text>
                         </TouchableOpacity>
                     )}
-                    <TouchableOpacity style={styles.searchBtn}>
-                        <Ionicons name="search" size={24} color="#FFF" />
+                    <TouchableOpacity style={[styles.searchBtn, searchOpen && styles.searchBtnActive]} onPress={toggleSearch} activeOpacity={0.8}>
+                        <Ionicons name={searchOpen ? "close" : "search"} size={24} color={searchOpen ? "#38BDF8" : "#FFF"} />
                     </TouchableOpacity>
                 </View>
             </View>
+
+            {/* 🆕 SEARCH BAR (search icon click panna open aagum, host name type pannalam) */}
+            {searchOpen && (
+                <View style={styles.searchBarWrap}>
+                    <BlurView intensity={70} tint="dark" style={styles.searchBarInner}>
+                        <Ionicons name="search" size={18} color="#38BDF8" />
+                        <TextInput
+                            style={styles.searchInput}
+                            placeholder="Search host name..."
+                            placeholderTextColor="#94A3B8"
+                            value={searchQuery}
+                            onChangeText={setSearchQuery}
+                            autoFocus
+                            autoCorrect={false}
+                            autoCapitalize="none"
+                            returnKeyType="search"
+                            onSubmitEditing={() => Keyboard.dismiss()}
+                        />
+                        {searchQuery.length > 0 && (
+                            <TouchableOpacity onPress={() => setSearchQuery('')} style={styles.searchClearBtn} activeOpacity={0.7}>
+                                <Ionicons name="close-circle" size={20} color="#94A3B8" />
+                            </TouchableOpacity>
+                        )}
+                    </BlurView>
+                </View>
+            )}
 
             {/* 🔥 NEW: BLOCK & REPORT MODAL 🔥 */}
             <Modal visible={reportModalVisible} transparent animationType="fade">
@@ -955,27 +1016,27 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         zIndex: 10,
     },
-    // 🆕 glass title pill
+    // 🆕 glass title pill (🆕 chinna size)
     titlePill: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: 6,
         backgroundColor: 'rgba(0,0,0,0.4)',
-        paddingLeft: 6,
-        paddingRight: 14,
-        paddingVertical: 6,
-        borderRadius: 22,
+        paddingLeft: 5,
+        paddingRight: 10,
+        paddingVertical: 4,
+        borderRadius: 18,
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.12)',
         flexShrink: 1,
     },
-    titleIcon: { width: 26, height: 26, borderRadius: 13, justifyContent: 'center', alignItems: 'center' },
+    titleIcon: { width: 22, height: 22, borderRadius: 11, justifyContent: 'center', alignItems: 'center' },
     // 🔥 SATTI FIX: Reduced fontSize & letterSpacing to avoid overflow 🔥
     headerTitle: {
         color: '#FFF',
-        fontSize: 16, // Reduced from 22
+        fontSize: 12, // 🆕 Reduced from 16 (chinna title)
         fontWeight: '900',
-        letterSpacing: 1.5, // Reduced from 2
+        letterSpacing: 1, // 🆕 Reduced from 1.5
         textShadowColor: 'rgba(0,0,0,0.8)',
         textShadowRadius: 10,
         flexShrink: 1, // Ensure it shrinks if needed
@@ -1015,6 +1076,45 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)',
+    },
+    // 🆕 search open irukkum pothu icon button highlight
+    searchBtnActive: {
+        borderColor: 'rgba(56,189,248,0.7)',
+        backgroundColor: 'rgba(56,189,248,0.15)',
+    },
+    // 🆕 SEARCH BAR (header keela)
+    searchBarWrap: {
+        position: 'absolute',
+        top: 106,
+        left: 20,
+        right: 20,
+        zIndex: 11,
+    },
+    searchBarInner: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        height: 48,
+        paddingHorizontal: 16,
+        borderRadius: 24,
+        overflow: 'hidden',
+        backgroundColor: 'rgba(2,6,23,0.7)',
+        borderWidth: 1,
+        borderColor: 'rgba(56,189,248,0.5)',
+    },
+    searchInput: {
+        flex: 1,
+        color: '#FFF',
+        fontSize: 15,
+        fontWeight: '700',
+        height: 48,
+        paddingVertical: 0,
+    },
+    searchClearBtn: {
+        width: 28,
+        height: 28,
+        justifyContent: 'center',
+        alignItems: 'center',
     },
     cardContainer: {
         width: width,

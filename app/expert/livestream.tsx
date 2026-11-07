@@ -8,7 +8,7 @@ import { addDoc, arrayUnion, collection, deleteDoc, doc, getDoc, getDocs, increm
 import React, { useEffect, useRef, useState } from 'react';
 // 🔥 SATTI FIX: Added ScrollView to imports for the Disclaimer Modal
 // 🆕 PanResponder added for the Beauty Studio sliders
-import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, PanResponder, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Animated, AppState, Dimensions, Easing, FlatList, Image, KeyboardAvoidingView, Modal, PanResponder, PermissionsAndroid, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import createAgoraRtcEngine, {
     ChannelProfileType,
     ClientRoleType,
@@ -573,6 +573,19 @@ export default function LiveStreamScreen() {
     
     const isAppClosing = useRef(false);
     const isRequestingPermissions = useRef(true);
+    // 🔥 FIX: late "background" events right after the permission dialog closes are ignored for 2.5s
+    const permGraceUntil = useRef(0);
+    const bgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+    // 🔥 FIX: real OS check (Android) so a false return from the util on first accept never kicks the host out
+    const verifyCamMicGranted = async () => {
+        if (Platform.OS !== 'android') return false; // iOS: trust the util result
+        try {
+            const cam = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+            const mic = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+            return cam && mic;
+        } catch (e) { return false; }
+    };
 
     const [joined, setJoined] = useState(false);
     const [isMuted, setIsMuted] = useState(false);
@@ -683,54 +696,82 @@ export default function LiveStreamScreen() {
 
     useEffect(() => {
         if (!currentLiveId) return;
-        
-        const handleAppStateChange = async (nextAppState: string) => {
+
+        const inPermissionWindow = () => isRequestingPermissions.current || Date.now() < permGraceUntil.current;
+
+        // same cleanup as before (nothing removed), now in its own function
+        const endLiveBecauseAppLeft = () => {
+            isAppClosing.current = true;
+
+            setGameVisible(false);
+            setGlassVisible(false);
+
+            if (engine.current) {
+                engine.current.leaveChannel();
+            }
+
+            setJoined(false);
+            setShowSummary(true);
+
+            try {
+                const rtdb = getDatabase();
+                set(ref(rtdb, `presence_lives/${currentLiveId}`), "ended").catch(()=>{});
+                set(ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`), "CANCELLED").catch(()=>{});
+
+                updateDoc(doc(db, "lives", currentLiveId), {
+                    status: "ended",
+                    endTime: serverTimestamp()
+                }).catch(()=>{});
+
+                updateDoc(doc(db, "lives", currentLiveId, "games", "reflex_arena"), {
+                    status: "CANCELLED",
+                    refunded: true,
+                    players: []
+                }).catch(()=>{});
+
+                if (auth.currentUser) {
+                    updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false }).catch(()=>{});
+                }
+            } catch (error) {
+                console.log("Force close cleanup log:", error);
+            }
+        };
+
+        const handleAppStateChange = (nextAppState: string) => {
             if (nextAppState === 'active') {
+                if (bgTimerRef.current) { clearTimeout(bgTimerRef.current); bgTimerRef.current = null; }
                 setGameVisible(false);
                 setGlassVisible(false);
                 isAppClosing.current = false;
+                return;
             }
 
-            if ((nextAppState === 'inactive' || nextAppState === 'background') && !isAppClosing.current && !isRequestingPermissions.current) {
-                isAppClosing.current = true;
-                
-                setGameVisible(false);
-                setGlassVisible(false);
+            // 🔥 permission dialog (or its late events) never ends the live
+            if (isAppClosing.current || inPermissionWindow()) return;
 
-                if (engine.current) {
-                    engine.current.leaveChannel();
-                }
-                
-                setJoined(false);
-                setShowSummary(true);
+            if (nextAppState === 'background') {
+                if (bgTimerRef.current) { clearTimeout(bgTimerRef.current); bgTimerRef.current = null; }
+                endLiveBecauseAppLeft();
+                return;
+            }
 
-                try {
-                    const rtdb = getDatabase();
-                    set(ref(rtdb, `presence_lives/${currentLiveId}`), "ended").catch(()=>{});
-                    set(ref(rtdb, `lives/${currentLiveId}/games/reflex_arena/status`), "CANCELLED").catch(()=>{});
-
-                    updateDoc(doc(db, "lives", currentLiveId), {
-                        status: "ended",
-                        endTime: serverTimestamp()
-                    }).catch(()=>{});
-
-                    updateDoc(doc(db, "lives", currentLiveId, "games", "reflex_arena"), {
-                        status: "CANCELLED",
-                        refunded: true,
-                        players: []
-                    }).catch(()=>{});
-
-                    if (auth.currentUser) {
-                        updateDoc(doc(db, "users", auth.currentUser.uid), { isLive: false }).catch(()=>{});
-                    }
-                } catch (error) {
-                    console.log("Force close cleanup log:", error);
-                }
+            if (nextAppState === 'inactive') {
+                // short blips (system dialogs, shade, etc.) only end the live if the app really stays away
+                if (bgTimerRef.current) clearTimeout(bgTimerRef.current);
+                bgTimerRef.current = setTimeout(() => {
+                    bgTimerRef.current = null;
+                    if (AppState.currentState === 'active') return;
+                    if (isAppClosing.current || inPermissionWindow()) return;
+                    endLiveBecauseAppLeft();
+                }, 1500);
             }
         };
-        
+
         const subscription = AppState.addEventListener('change', handleAppStateChange);
-        return () => { subscription.remove(); };
+        return () => {
+            if (bgTimerRef.current) clearTimeout(bgTimerRef.current);
+            subscription.remove();
+        };
     }, [currentLiveId]);
 
     // 🆕 Rail flips in once + chat fades out while Beauty Studio is open (no more chat/panel touch conflict)
@@ -752,7 +793,13 @@ export default function LiveStreamScreen() {
             }
 
             isRequestingPermissions.current = true;
-            const hasPermission = await checkAndRequestCallPermissions();
+            let hasPermission = false;
+            try {
+                hasPermission = await checkAndRequestCallPermissions();
+            } catch (e) { hasPermission = false; }
+            if (!hasPermission) hasPermission = await verifyCamMicGranted(); // double-check real OS state
+            await new Promise(r => setTimeout(r, 800));                      // let the dialog close animation settle
+            permGraceUntil.current = Date.now() + 2500;
             isRequestingPermissions.current = false;
             
             if (!hasPermission) {

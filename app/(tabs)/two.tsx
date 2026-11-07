@@ -1014,6 +1014,15 @@ import { auth, db } from '../../firebaseConfig';
         const ringSz = av + 14;
         const idTail = (user?.uid || 'TALKPE00').slice(-8).toUpperCase().padStart(8, '0');
         const idFmt = `${idTail.slice(0, 4)}  ${idTail.slice(4)}`;
+
+        // 🔧 FIX (LONG NAME): perusa name card-a break pannaadha maathiri -
+        // romba neelamana name-a short panni "…" podum, font-um name length-ku etha maari automatic-a kuraiyum
+        // 🔧 FIX 2: name ippo ALWAYS oru line-la mattum ("Madhavan N" -> "N" thaniya keezha varaadhu)
+        const rawHeroName = String(userData?.name || '').trim().replace(/\s+/g, ' ');
+        const heroNameShown = rawHeroName.length > 22 ? rawHeroName.slice(0, 21).trim() + '…' : rawHeroName;
+        const heroNameLen = heroNameShown.length;
+        const heroNameSize = heroNameLen > 18 ? 10 : heroNameLen > 15 ? 12 : heroNameLen > 12 ? 14 : heroNameLen > 10 ? 17 : 20;
+
         return (
         <TiltCard sway={swayAnim} radius={32} style={[styles.heroCardWrap, { shadowColor: c1 }]}>
             <LinearGradient colors={[c1, c2, lighten(c1, 0.4), c2]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.heroBorder}>
@@ -1073,8 +1082,8 @@ import { auth, db } from '../../firebaseConfig';
                             </Animated.View>
                         </Animated.View>
 
-                        <View style={{ flex: 1, marginLeft: 10, marginRight: 6 }}>
-                            <Text style={styles.heroName} numberOfLines={2} adjustsFontSizeToFit minimumFontScale={0.5}>{userData?.name || 'SYNCING...'}</Text>
+                        <View style={{ flex: 1, minWidth: 0, marginLeft: 10, marginRight: 6 }}>
+                            <Text style={[styles.heroName, { fontSize: heroNameSize, lineHeight: heroNameSize + 5 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.7} ellipsizeMode="tail">{heroNameShown || 'SYNCING...'}</Text>
                             <Text style={[styles.heroStatus, { color: t2 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.5}>{rank.status}</Text>
                         </View>
 
@@ -1708,7 +1717,7 @@ import { auth, db } from '../../firebaseConfig';
     brandSmall: { color: '#FFF', fontSize: 11, fontWeight: '900', letterSpacing: 2.5 },
     brandTiny: { color: 'rgba(255,255,255,0.65)', fontSize: 7.5, fontWeight: '800', letterSpacing: 2.2, marginTop: 2 },
     heroMid: { flexDirection: 'row', alignItems: 'center', zIndex: 10 },
-    heroName: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: -0.2, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
+    heroName: { color: '#FFF', fontSize: 20, fontWeight: '900', letterSpacing: -0.2, flexShrink: 1, textShadowColor: 'rgba(0,0,0,0.7)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3 },
     heroStatus: { fontSize: 9, fontWeight: '800', marginTop: 4, letterSpacing: 1.6 },
     heroBottomRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end', zIndex: 10 },
     heroIdLabel: { color: 'rgba(255,255,255,0.55)', fontSize: 7.5, fontWeight: '900', letterSpacing: 2.5 },

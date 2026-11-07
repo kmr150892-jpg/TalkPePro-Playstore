@@ -457,6 +457,10 @@ export default function ExpertForumRoomScreen() {
     const agoraEngine = useRef<IRtcEngine | null>(null);
     const [isMuted, setIsMuted] = useState(false);
     const [isAgoraJoined, setIsAgoraJoined] = useState(false);
+    // 🔥 FIX: mic permission dialog must NOT end the forum
+    const isAskingPermission = useRef(false);
+    const permGraceUntil = useRef(0);
+    const bgTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const [waitingList, setWaitingList] = useState<any[]>([]);
     const [waitingModalVisible, setWaitingModalVisible] = useState(false);
@@ -613,15 +617,45 @@ export default function ExpertForumRoomScreen() {
 
     useEffect(() => {
         if (!roomId) return;
-        const handleAppStateChange = async (nextAppState: string) => {
-            if (nextAppState === 'background' || nextAppState === 'inactive') {
-                try {
-                    await updateDoc(doc(db, "forum_rooms", roomId), { status: "ended" });
-                } catch (error) { console.log(error); }
+
+        const inPermissionWindow = () => isAskingPermission.current || Date.now() < permGraceUntil.current;
+
+        const endForum = async () => {
+            try {
+                await updateDoc(doc(db, "forum_rooms", roomId), { status: "ended" });
+            } catch (error) { console.log(error); }
+        };
+
+        const handleAppStateChange = (nextAppState: string) => {
+            if (nextAppState === 'active') {
+                if (bgTimerRef.current) { clearTimeout(bgTimerRef.current); bgTimerRef.current = null; }
+                return;
+            }
+
+            // 🔥 permission dialog (or its late events) never ends the forum
+            if (inPermissionWindow()) return;
+
+            if (nextAppState === 'background') {
+                if (bgTimerRef.current) { clearTimeout(bgTimerRef.current); bgTimerRef.current = null; }
+                endForum();
+                return;
+            }
+
+            if (nextAppState === 'inactive') {
+                if (bgTimerRef.current) clearTimeout(bgTimerRef.current);
+                bgTimerRef.current = setTimeout(() => {
+                    bgTimerRef.current = null;
+                    if (AppState.currentState === 'active' || inPermissionWindow()) return;
+                    endForum();
+                }, 1500);
             }
         };
+
         const subscription = AppState.addEventListener('change', handleAppStateChange);
-        return () => { subscription.remove(); };
+        return () => {
+            if (bgTimerRef.current) clearTimeout(bgTimerRef.current);
+            subscription.remove();
+        };
     }, [roomId]);
 
     useEffect(() => {
@@ -1039,7 +1073,11 @@ export default function ExpertForumRoomScreen() {
 
     useEffect(() => {
         const setupAgoraEngine = async () => {
+            isAskingPermission.current = true;
             const hasPermission = await requestMicrophonePermission();
+            await new Promise(r => setTimeout(r, 800));   // let the dialog close animation settle
+            permGraceUntil.current = Date.now() + 2500;
+            isAskingPermission.current = false;
             if (!hasPermission) return;
             try {
                 agoraEngine.current = createAgoraRtcEngine();
