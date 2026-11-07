@@ -14,6 +14,7 @@ import { auth, db } from '../firebaseConfig';
 import { BlockProvider } from '../utils/context/BlockContext';
 import { CustomAlertHost, installCustomAlert } from '../utils/CustomAlert'; // 🔥 NEW: custom designed system messages
 import { sendNotificationToUser } from '../utils/notificationHelper'; // 🔥 NEW: missed call notification
+import { playMessageSound, playNotificationSound, startRingtone, stopRingtone } from '../utils/sounds';
 
 // 🔥 NEW: Replaces every native white Alert.alert box with the custom designed alert (runs once at app start)
 installCustomAlert();
@@ -84,6 +85,10 @@ function RootLayoutInner() {
   const isNavigatingToCall = useRef(false);
   const hasShownLogoutAlert = useRef(false);
   const notifiedCallsRef = useRef<Set<string>>(new Set()); // 🔥 NEW: prevents duplicate missed/cancelled call notification
+  const segmentsRef = useRef<string>(''); // 🔔 latest screen path (sound listeners ku)
+  segmentsRef.current = segments.join('/');
+  const chatUnreadRef = useRef<Record<string, number>>({}); // 🔔 chat wise unread count
+  const notifCountRef = useRef<number | null>(null); // 🔔 bell notification count (sound ku)
 
   const [incomingCallData, setIncomingCallData] = useState<any>(null);
   const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
@@ -141,6 +146,7 @@ function RootLayoutInner() {
       }
 
       setUser(u);
+      notifCountRef.current = null; // 🔔 account maarina baseline reset
 
       // 🔥 NEW: Email/password accounts that are NOT verified yet are held (no routing into the app)
       // until the profile tells us whether verification is actually required (emailVerifyRequired flag).
@@ -177,6 +183,15 @@ function RootLayoutInner() {
                     );
                 }
                 return; 
+            }
+
+            // 🔔 NEW: puthu bell notification vandha sound
+            const notifLen = Array.isArray(data.notifications) ? data.notifications.length : 0;
+            if (!docSnap.metadata.fromCache) {
+                if (notifCountRef.current !== null && notifLen > notifCountRef.current) {
+                    playNotificationSound();
+                }
+                notifCountRef.current = notifLen;
             }
 
             if (needsVerifyCheck) {
@@ -368,6 +383,102 @@ function RootLayoutInner() {
         if (interval) clearInterval(interval);
     };
   }, [incomingCallId, incomingCallData]);
+
+  // 🔔 Ring sound while host's incoming call popup is visible
+  const isIncomingRinging = !!(incomingCallId && incomingCallData);
+  useEffect(() => {
+    if (isIncomingRinging) startRingtone();
+    else stopRingtone();
+    return () => stopRingtone();
+  }, [isIncomingRinging]);
+
+  // 🔔 Host live / forum / party la irukkumbodhu vara call ku ring sound
+  useEffect(() => {
+    if (!user?.uid || userRole !== 'expert' || initializing) return;
+
+    const currentPath = segments.join('/');
+    const busyScreen =
+      currentPath.includes('forum') ||
+      currentPath.includes('live') ||
+      currentPath.includes('Session') ||
+      isExpertLive;
+    if (!busyScreen) return;
+
+       const q = query(
+      collection(db, 'calls'),
+      where('expertId', '==', user.uid),
+      where('status', 'in', ['calling', 'ringing', 'pending', 'Discover_dialing'])
+    );
+
+    let stopTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const unsub = onSnapshot(q, (snapshot) => {
+      const hasFreshCall = snapshot.docs.some((d) => {
+        const c: any = d.data();
+        const ts = c.createdAt?.toMillis ? c.createdAt.toMillis() : Date.now();
+        return Date.now() - ts < 15000;
+      });
+      if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
+      if (hasFreshCall) {
+        startRingtone();
+        stopTimer = setTimeout(() => stopRingtone(), 12000); // 12 sec ku mela ring venaam
+      } else {
+        stopRingtone();
+      }
+    }, (error) => {
+      if (error.code === 'permission-denied') console.log("Busy-mode ring listener detached.");
+    });
+
+    return () => {
+      unsub();
+      if (stopTimer) clearTimeout(stopTimer);
+      stopRingtone();
+    };
+  }, [user?.uid, userRole, initializing, isExpertLive, segments.join('/')]);
+
+  // 🔔 Chat screen ku veliya irukkumbodhu message sound (user + host rendu perukkum)
+  useEffect(() => {
+    if (!user?.uid || initializing) return;
+
+    chatUnreadRef.current = {};
+    let firstSnapshot = true;
+
+    const chatsQuery = query(
+      collection(db, 'chats'),
+      where('participants', 'array-contains', user.uid)
+    );
+
+    const unsubChats = onSnapshot(chatsQuery, (snapshot) => {
+      let shouldPlay = false;
+
+      snapshot.docChanges().forEach((change) => {
+        if (change.type === 'removed') {
+          delete chatUnreadRef.current[change.doc.id];
+          return;
+        }
+        const d: any = change.doc.data();
+        const unread = Number(d.unreadCount?.[user.uid] || 0);
+        const prev = chatUnreadRef.current[change.doc.id] ?? 0;
+        chatUnreadRef.current[change.doc.id] = unread;
+
+        if (firstSnapshot) return;                         // old history ku sound illa
+        if (change.doc.metadata.hasPendingWrites) return;  // naan anuppinadhu
+        if (unread > prev) shouldPlay = true;              // puthu message vandhirukku
+      });
+
+      firstSnapshot = false;
+
+      if (shouldPlay) {
+        const p = segmentsRef.current;
+        // Chat screen kulla irundha, ChatScreen thaane sound podum (double sound varaadhu)
+        if (!p.includes('chat') && !p.includes('videocall')) playMessageSound();
+      }
+    }, (error) => {
+      if (error.code === 'permission-denied') console.log("Chat sound listener detached.");
+    });
+
+    return () => unsubChats();
+  }, [user?.uid, initializing]);
 
   // 🔥 NEW: GLOBAL MISSED / CANCELLED CALL NOTIFIER
   // Runs on EVERY screen (live, forum, quick connect, videocall...). Whenever a call to this host

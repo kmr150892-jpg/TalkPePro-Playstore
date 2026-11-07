@@ -6,6 +6,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Circle, Defs, Stop, LinearGradient as SvgGradient } from 'react-native-svg';
 import { db } from '../../firebaseConfig';
+import { startRingtone, stopRingtone } from '../../utils/sounds'; // 🔔 NEW: ring sound
 
 const { width, height } = Dimensions.get('window');
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
@@ -68,6 +69,12 @@ export default function RingingOverlay({
         ripple.start();
         Animated.timing(enterAnim, { toValue: 1, duration: 420, easing: Easing.out(Easing.cubic), useNativeDriver: true }).start();
         return () => { pulse.stop(); ripple.stop(); };
+    }, []);
+
+    // 🔔 NEW: Ring while this overlay is visible; stops on accept / reject / timeout (unmount)
+    useEffect(() => {
+        startRingtone();
+        return () => { stopRingtone(); };
     }, []);
 
     useEffect(() => {

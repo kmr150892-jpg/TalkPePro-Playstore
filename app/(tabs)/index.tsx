@@ -26,6 +26,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import LevelAvatar from '../../components/LevelAvatar';
 import { LivePreview } from '../../components/LivePreview';
+import SettingsButton from '../../components/SettingsButton';
 import WelcomeRewardModal from '../../components/WelcomeRewardModal';
 import { auth, db } from '../../firebaseConfig';
 
@@ -987,6 +988,11 @@ export default function UserHome() {
 
                     {/* 🔔 BELL + PROFILE PHOTO (bell sits next to the profile photo) */}
                     <View style={styles.headerRight}>
+
+                        {/* ⚙️ SETTINGS (sound + notification toggles) */}
+                        <View style={[styles.bellBtn, { borderColor: withAlpha(userRank.color, '80'), shadowColor: userRank.color }]}>
+                            <SettingsButton size={22} color="#FFF" />
+                        </View>
 
                         {/* 🔔 NOTIFICATION BELL */}
                         <TouchableOpacity activeOpacity={0.8} onPress={() => router.push('/notifications' as any)}>

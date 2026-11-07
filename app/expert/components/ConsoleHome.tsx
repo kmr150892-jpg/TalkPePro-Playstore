@@ -25,6 +25,7 @@ import {
   View
 } from 'react-native';
 import Svg, { Circle, Defs, Stop, LinearGradient as SvgGradient } from 'react-native-svg';
+import SettingsButton from '../../../components/SettingsButton';
 import { auth, db } from '../../../firebaseConfig';
 import { sendNotificationToUser } from '../../../utils/notificationHelper';
 
@@ -1299,6 +1300,11 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
                   <MaterialCommunityIcons name="shield-crown" size={20} color="#10B981" />
                 </TouchableOpacity>
               )}
+
+              {/* ⚙️ SETTINGS (sound + notification toggles) */}
+              <View style={[styles.iconCircle, { marginRight: 8 }]}>
+                <SettingsButton size={18} color="#FFF" />
+              </View>
               
               {/* 🔥 NOTIFICATION BELL WITH BADGE */}
               <TouchableOpacity style={styles.iconCircle} onPress={() => router.push("/expert/notifications")}>

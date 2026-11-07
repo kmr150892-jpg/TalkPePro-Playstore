@@ -27,6 +27,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'; // 🆕 useSafeAreaInsets (nav buttons overlap fix)
 import { auth, db } from '../../firebaseConfig';
 import { BlockContext } from '../../utils/context/BlockContext'; // 🆕 Same BlockContext as Expert screen (user -> host block)
+import { playMessageSound } from '../../utils/sounds'; // 🔔 NEW: message sound
 
 const { width, height } = Dimensions.get('window');
 
@@ -337,10 +338,25 @@ export default function ChatScreen() {
         );
     }
 
+    // 🔔 NEW: first snapshot = old history (no sound). Only later 'added' messages from the other person ring.
+    let isFirstSnapshot = true;
+
     const q = query(collection(db, "chats", activeChatId, "messages"), orderBy("createdAt", "desc"));
     const unsubscribe = onSnapshot(
       q, 
       (snap) => {
+        // 🔔 NEW: message sound for new incoming message
+        if (!isFirstSnapshot) {
+          const hasNewIncoming = snap.docChanges().some((change) => {
+            if (change.type !== 'added') return false;
+            if (change.doc.metadata.hasPendingWrites) return false; // my own message still sending
+            const d: any = change.doc.data();
+            return d.senderId && d.senderId !== user.uid;
+          });
+          if (hasNewIncoming) playMessageSound();
+        }
+        isFirstSnapshot = false;
+
         const msgs = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
         setMessages(msgs);
         setMsgsLoaded(true);
