@@ -12,7 +12,11 @@ import MaintenanceScreen from '../components/.MaintenanceScreen';
 import UpdateAlert from '../components/UpdateAlert';
 import { auth, db } from '../firebaseConfig';
 import { BlockProvider } from '../utils/context/BlockContext';
+import { CustomAlertHost, installCustomAlert } from '../utils/CustomAlert'; // 🔥 NEW: custom designed system messages
 import { sendNotificationToUser } from '../utils/notificationHelper'; // 🔥 NEW: missed call notification
+
+// 🔥 NEW: Replaces every native white Alert.alert box with the custom designed alert (runs once at app start)
+installCustomAlert();
 
 LogBox.ignoreLogs([
   'BloomFilter error',
@@ -54,7 +58,10 @@ const calculateUserLevel = (totalSpent: number) => {
   };
 };
 
-export default function RootLayout() {
+// 🔥 NEW: Original RootLayout renamed to RootLayoutInner (body is 100% unchanged).
+// The default export below wraps it so the custom alert host is ALWAYS mounted
+// (even during maintenance / update / loading / ejecting screens).
+function RootLayoutInner() {
   const [initializing, setInitializing] = useState(true);
   const [isEjecting, setIsEjecting] = useState(false); 
   const [user, setUser] = useState<User | null>(null); 
@@ -86,6 +93,7 @@ export default function RootLayout() {
     const wipeSession = async () => {
        await AsyncStorage.removeItem('@intended_role');
        await AsyncStorage.removeItem('@expert_draft');
+       await AsyncStorage.removeItem('@is_logging_in'); // 🔥 NEW: clear stuck login flag from a killed app
     };
     wipeSession();
   }, []);
@@ -481,6 +489,11 @@ export default function RootLayout() {
 
         if (inVideoCall) return;
 
+        // 🔥 NEW: while index.tsx is handling a login (role lock + routing + alerts), GateKeeper stays silent.
+        // This stops the spinner/eject race that wiped the login screen before the Access Denied alert could show.
+        const loggingIn = await AsyncStorage.getItem('@is_logging_in');
+        if (loggingIn === 'true') return;
+
         if (!user) {
           // 🔥 SATTI UPDATE 2: Removed imperative logic here to prevent deadlock.
           // <Redirect /> below takes care of everything when user is null.
@@ -664,6 +677,16 @@ export default function RootLayout() {
         </Modal>
       )}
     </BlockProvider>
+  );
+}
+
+// 🔥 NEW: Default export (required by Expo Router). Keeps the custom alert host mounted on EVERY state.
+export default function RootLayout() {
+  return (
+    <>
+      <RootLayoutInner />
+      <CustomAlertHost />
+    </>
   );
 }
 

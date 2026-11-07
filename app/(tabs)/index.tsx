@@ -281,9 +281,6 @@ export default function UserHome() {
     const [showPolicyModal, setShowPolicyModal] = useState(false);
     const [dontShowToday, setDontShowToday] = useState(false);
 
-    // 🔥 NEW STATE FOR DYNAMIC ONLINE COUNT FLUCTUATION 🔥
-    const [dynamicOffset, setDynamicOffset] = useState(42);
-
     // 🚪 LOUNGE STATE: which lounge is currently open ('live' = Live Lounge, 'forum' = Forum Lounge)
     const [roomType, setRoomType] = useState<'live' | 'forum' | null>(null);
 
@@ -332,15 +329,6 @@ export default function UserHome() {
     const onViewableItemsChanged = useRef(({ viewableItems }: any) => {
         if (viewableItems && viewableItems.length > 0) setActiveLiveId(viewableItems[0].item.id);
     }).current;
-
-    // 🔥 DYNAMIC ONLINE COUNT EFFECT
-    useEffect(() => {
-        const interval = setInterval(() => {
-            // Generates a random number between 38 and 62 to make the online count look real and constantly updating
-            setDynamicOffset(Math.floor(Math.random() * 25) + 38);
-        }, 3500); 
-        return () => clearInterval(interval);
-    }, []);
 
     useEffect(() => {
 
@@ -502,6 +490,10 @@ export default function UserHome() {
 
     // 4. Spotlight (Featured) inherits from already filtered safeExperts
     const spotlightExperts = safeExperts.filter(e => (e.rating || 5.0) >= 4.0);
+
+    // ✅ REAL ONLINE COUNT (Quick Connect): only hosts whose isOnline flag is truly ON in Firestore
+    // (blocked hosts are already removed because this uses safeExperts). No fake numbers added.
+    const onlineHostsCount = safeExperts.filter(e => e.isOnline === true || e.isOnline === 'true').length;
 
     // ==========================================
     // 🔄 LIVE HOST IMAGE / NAME SYNC
@@ -1130,8 +1122,8 @@ export default function UserHome() {
                                     <Text style={styles.DiscoverBtnText} numberOfLines={1} adjustsFontSizeToFit>QUICK CONNECT</Text>
                                     <View style={styles.liveIndicatorDiscover}>
                                         <View style={styles.liveDotDiscover} />
-                                        {/* 🔥 NUMBER CHANGED TO USE DYNAMIC STATE 🔥 */}
-                                        <Text style={styles.liveCountDiscover} numberOfLines={1}>{safeLives.length + safeExperts.length + dynamicOffset} Online</Text>
+                                        {/* ✅ REAL ONLINE COUNT (hosts with isOnline == true) */}
+                                        <Text style={styles.liveCountDiscover} numberOfLines={1}>{onlineHostsCount} Online</Text>
                                     </View>
                                 </View>
 

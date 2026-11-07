@@ -172,7 +172,7 @@ const PRIVACY_SECTIONS = [
         icon: 'delete-sweep',
         color: '#14B8A6',
         title: '9. Data Retention & Deletion Rights',
-        text: 'You can delete your account and associated personal data from our servers at any time inside the app. Hosts: tap the Delete Account button at the bottom of the Home screen. Users: go to Profile > Edit Profile > Delete Account. Where the law requires, or to prevent fraud, we may retain limited redemption and transaction records after deletion. You can also request deletion by writing to support@talkpepro.com or through www.talkpepro.com/deletion.'
+        text: 'You can delete your account and associated personal data from our servers at any time inside the app. Hosts: tap the Delete Account button at the bottom of the Home screen. Users: go to Profile > Edit Profile > Delete Account. Where the law requires, or to prevent fraud, we may retain limited redemption and transaction records after deletion. You can also request deletion by writing to support@talkpepro.com.'
     },
     {
         icon: 'account-lock',

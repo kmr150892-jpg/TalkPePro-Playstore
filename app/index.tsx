@@ -264,6 +264,36 @@ export default function LoginScreen() {
           Alert.alert("Account Locked", "Your account has been restricted for security reasons. Please contact support.");
           return;
         }
+
+        // 🔥 NEW: 🔒 ROLE LOCK (Google login) - a HOST account can never enter as USER, and a USER account can never enter as HOST 🔒
+        // Alert fires directly from this screen (no GateKeeper race / spinner screen), and the intended role is cleared
+        // before sign-out so GateKeeper does not fire a duplicate "Access Denied" alert.
+        const lockRole = existingData.role;
+        const lockStatus = existingData.status;
+        const isAdminAccount = userEmail === MY_ADMIN_EMAIL || lockRole === 'admin';
+        if (!isAdminAccount) {
+          const isHostAccount =
+            lockRole === 'expert' ||
+            existingData.isApplying === true ||
+            existingData.registrationInProgress === true ||
+            (!!lockStatus && lockStatus !== 'User');
+
+          if (isHostAccount && selectedRole === 'user') {
+            await AsyncStorage.removeItem('@intended_role');
+            await signOut(auth);
+            setLoading(false);
+            Alert.alert("Access Denied", "This account is for Hosts only. You cannot login as a User.");
+            return;
+          }
+          if (!isHostAccount && selectedRole === 'expert') {
+            await AsyncStorage.removeItem('@intended_role');
+            await signOut(auth);
+            setLoading(false);
+            Alert.alert("Access Denied", "This account is for Users only. You cannot switch to Host.");
+            return;
+          }
+        }
+
         setTotalSpent(existingData.totalSpentDiamonds || 0);
 
         // Simple Sync: Update only login info. DO NOT TOUCH status/role!
