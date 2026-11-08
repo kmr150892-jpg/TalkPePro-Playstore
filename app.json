@@ -46,6 +46,8 @@
     },
     "plugins": [
       "@react-native-firebase/app",
+      "./plugins/withNotifeeRepo",
+      "./plugins/withFirebaseNotifColor",
       "expo-router",
       "@react-native-google-signin/google-signin",
       "expo-web-browser",

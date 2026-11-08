@@ -1,0 +1,394 @@
+diff --git a/node_modules/@react-native-firebase/app/android/build/generated/source/buildConfig/debug/io/invertase/firebase/BuildConfig.java b/node_modules/@react-native-firebase/app/android/build/generated/source/buildConfig/debug/io/invertase/firebase/BuildConfig.java
+new file mode 100644
+index 0000000..7998ed6
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/generated/source/buildConfig/debug/io/invertase/firebase/BuildConfig.java
+@@ -0,0 +1,12 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package io.invertase.firebase;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = Boolean.parseBoolean("true");
++  public static final String LIBRARY_PACKAGE_NAME = "io.invertase.firebase";
++  public static final String BUILD_TYPE = "debug";
++  // Field from default config.
++  public static final String FIREBASE_JSON_RAW = "{}";
++}
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml b/node_modules/@react-native-firebase/app/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..93b68de
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:tools="http://schemas.android.com/tools"
++    package="io.invertase.firebase" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <application>
++        <meta-data
++            android:name="app_data_collection_default_enabled"
++            android:value="true" />
++
++        <service
++            android:name="com.google.firebase.components.ComponentDiscoveryService"
++            android:directBootAware="true"
++            android:exported="false"
++            tools:targetApi="n" >
++            <meta-data
++                android:name="com.google.firebase.components:io.invertase.firebase.app.ReactNativeFirebaseAppRegistrar"
++                android:value="com.google.firebase.components.ComponentRegistrar" />
++        </service>
++
++        <provider
++            android:name="io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider"
++            android:authorities="dollar_openBracket_applicationId_closeBracket.reactnativefirebaseappinitprovider"
++            android:exported="false"
++            android:initOrder="99" /> <!-- Firebase = 100, using 99 to run after Firebase initialises (highest first) -->
++    </application>
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json b/node_modules/@react-native-firebase/app/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+new file mode 100644
+index 0000000..635500a
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "io.invertase.firebase",
++  "variantName": "debug",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties b/node_modules/@react-native-firebase/app/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+new file mode 100644
+index 0000000..1211b1e
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+@@ -0,0 +1,6 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
++coreLibraryDesugaringEnabled=false
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json b/node_modules/@react-native-firebase/app/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/@react-native-firebase/app/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
+new file mode 100644
+index 0000000..65b2fea
+Binary files /dev/null and b/node_modules/@react-native-firebase/app/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/@react-native-firebase/app/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+new file mode 100644
+index 0000000..39b438c
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Sun Nov 08 12:12:10 IST 2026
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+new file mode 100644
+index 0000000..75abe67
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\debug\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug" generated-set="debug$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\debug\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\build\generated\res\resValues\debug"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\build\generated\res\resValues\debug"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugAssets/merger.xml b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+new file mode 100644
+index 0000000..099597b
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\assets"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\debug\assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\build\intermediates\shader_assets\debug\compileDebugShaders\out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..60bf036
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\jniLibs"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\debug\jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugShaders/merger.xml b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+new file mode 100644
+index 0000000..a6e9bf5
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\shaders"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\debug\shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/@react-native-firebase/app/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt b/node_modules/@react-native-firebase/app/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+new file mode 100644
+index 0000000..a47cbfa
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+@@ -0,0 +1,46 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    xmlns:tools="http://schemas.android.com/tools"
++4    package="io.invertase.firebase" >
++5
++6    <uses-sdk android:minSdkVersion="24" />
++7
++8    <application>
++8-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:6:3-23:17
++9        <meta-data
++10            android:name="app_data_collection_default_enabled"
++10-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:7:16-66
++11            android:value="true" />
++11-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:7:67-126
++12
++13        <service
++13-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:8:5-17:15
++14            android:name="com.google.firebase.components.ComponentDiscoveryService"
++14-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:9:7-78
++15            android:directBootAware="true"
++15-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:10:7-37
++16            android:exported="false"
++16-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:11:7-31
++17            tools:targetApi="n" >
++17-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:12:7-26
++18            <meta-data
++18-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:14:7-16:77
++19                android:name="com.google.firebase.components:io.invertase.firebase.app.ReactNativeFirebaseAppRegistrar"
++19-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:15:9-112
++20                android:value="com.google.firebase.components.ComponentRegistrar" />
++20-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:16:9-74
++21        </service>
++22
++23        <provider
++23-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:18:5-22:32
++24            android:name="io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider"
++24-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:19:7-82
++25            android:authorities="${applicationId}.reactnativefirebaseappinitprovider"
++25-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:20:7-80
++26            android:exported="false"
++26-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:21:7-31
++27            android:initOrder="99" /> <!-- Firebase = 100, using 99 to run after Firebase initialises (highest first) -->
++27-->D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:22:7-29
++28    </application>
++29
++30</manifest>
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml b/node_modules/@react-native-firebase/app/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+new file mode 100644
+index 0000000..d6fbb89
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+@@ -0,0 +1,30 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    xmlns:tools="http://schemas.android.com/tools"
++    package="io.invertase.firebase" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <application>
++        <meta-data
++            android:name="app_data_collection_default_enabled"
++            android:value="true" />
++
++        <service
++            android:name="com.google.firebase.components.ComponentDiscoveryService"
++            android:directBootAware="true"
++            android:exported="false"
++            tools:targetApi="n" >
++            <meta-data
++                android:name="com.google.firebase.components:io.invertase.firebase.app.ReactNativeFirebaseAppRegistrar"
++                android:value="com.google.firebase.components.ComponentRegistrar" />
++        </service>
++
++        <provider
++            android:name="io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider"
++            android:authorities="${applicationId}.reactnativefirebaseappinitprovider"
++            android:exported="false"
++            android:initOrder="99" /> <!-- Firebase = 100, using 99 to run after Firebase initialises (highest first) -->
++    </application>
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json b/node_modules/@react-native-firebase/app/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt b/node_modules/@react-native-firebase/app/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+new file mode 100644
+index 0000000..08f4ebe
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+@@ -0,0 +1 @@
++0 Warning/Error
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/@react-native-firebase/app/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+new file mode 100644
+index 0000000..b22a75e
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+@@ -0,0 +1 @@
++io.invertase.firebase
+diff --git a/node_modules/@react-native-firebase/app/android/build/kotlin/compileDebugKotlin/cacheable/dirty-sources.txt b/node_modules/@react-native-firebase/app/android/build/kotlin/compileDebugKotlin/cacheable/dirty-sources.txt
+new file mode 100644
+index 0000000..668ebff
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/kotlin/compileDebugKotlin/cacheable/dirty-sources.txt
+@@ -0,0 +1,22 @@
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\app\NativeRNFBTurboApp.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\ReactNativeFirebaseJSON.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\utils\NativeRNFBTurboUtils.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\interfaces\ContextProvider.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\app\ReactNativeFirebaseAppInitProvider.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\java\io\invertase\firebase\common\RNFBHandleCollisionException.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\SharedUtils.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\app\ReactNativeFirebaseAppRegistrar.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\java\io\invertase\firebase\common\RNFBHandleMap.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\java\io\invertase\firebase\common\UniversalFirebasePreferences.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\app\ReactNativeFirebaseApp.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\ReactNativeFirebaseMeta.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\interfaces\NativeError.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\app\ReactNativeFirebaseAppPackage.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\ReactNativeFirebaseEventEmitter.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\ReactNativeFirebaseModule.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\interfaces\NativeEvent.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\java\io\invertase\firebase\common\UniversalFirebaseModule.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\ReactNativeFirebasePreferences.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\ReactNativeFirebaseEvent.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\reactnative\java\io\invertase\firebase\common\RCTConvertFirebase.kt
++D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\java\io\invertase\firebase\common\TaskExecutorService.kt
+\ No newline at end of file
+diff --git a/node_modules/@react-native-firebase/app/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin b/node_modules/@react-native-firebase/app/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin
+new file mode 100644
+index 0000000..a5addd2
+Binary files /dev/null and b/node_modules/@react-native-firebase/app/android/build/kotlin/compileDebugKotlin/local-state/build-history.bin differ
+diff --git a/node_modules/@react-native-firebase/app/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/@react-native-firebase/app/android/build/outputs/logs/manifest-merger-debug-report.txt
+new file mode 100644
+index 0000000..77acdfb
+--- /dev/null
++++ b/node_modules/@react-native-firebase/app/android/build/outputs/logs/manifest-merger-debug-report.txt
+@@ -0,0 +1,54 @@
++-- Merging decision tree log ---
++meta-data#app_data_collection_default_enabled
++INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:7:5-128
++	android:value
++		INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:7:67-126
++	android:name
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:7:16-66
++manifest
++ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:2:1-24:12
++INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:2:1-24:12
++	package
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:4:3-34
++		INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml
++	xmlns:tools
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:3:3-49
++	xmlns:android
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:2:11-69
++application
++ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:6:3-23:17
++service#com.google.firebase.components.ComponentDiscoveryService
++ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:8:5-17:15
++	android:exported
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:11:7-31
++	tools:targetApi
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:12:7-26
++	android:directBootAware
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:10:7-37
++	android:name
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:9:7-78
++meta-data#com.google.firebase.components:io.invertase.firebase.app.ReactNativeFirebaseAppRegistrar
++ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:14:7-16:77
++	android:value
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:16:9-74
++	android:name
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:15:9-112
++provider#io.invertase.firebase.app.ReactNativeFirebaseAppInitProvider
++ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:18:5-22:32
++	android:authorities
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:20:7-80
++	android:exported
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:21:7-31
++	android:initOrder
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:22:7-29
++	android:name
++		ADDED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml:19:7-82
++uses-sdk
++INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml
++INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from D:\TalkPe-Playstore\node_modules\@react-native-firebase\app\android\src\main\AndroidManifest.xml
+diff --git a/node_modules/@react-native-firebase/app/android/src/reactnative/java/io/invertase/firebase/common/ReactNativeFirebaseModule.kt b/node_modules/@react-native-firebase/app/android/src/reactnative/java/io/invertase/firebase/common/ReactNativeFirebaseModule.kt
+index 2134290..e099049 100644
+--- a/node_modules/@react-native-firebase/app/android/src/reactnative/java/io/invertase/firebase/common/ReactNativeFirebaseModule.kt
++++ b/node_modules/@react-native-firebase/app/android/src/reactnative/java/io/invertase/firebase/common/ReactNativeFirebaseModule.kt
+@@ -108,7 +108,7 @@ open class ReactNativeFirebaseModule(
+       if (resolver != null) {
+         userInfoMap.putMap("resolver", resolver)
+       }
+-      promise!!.reject(code, message, userInfoMap)
++      promise!!.reject(code ?: "", message, userInfoMap)
+     }
+ 
+     @JvmStatic
+@@ -120,7 +120,7 @@ open class ReactNativeFirebaseModule(
+       val userInfoMap = Arguments.createMap()
+       userInfoMap.putString("code", code)
+       userInfoMap.putString("message", message)
+-      promise!!.reject(code, message, userInfoMap)
++      promise!!.reject(code ?: "", message, userInfoMap)
+     }
+ 
+     @JvmStatic
+@@ -134,7 +134,7 @@ open class ReactNativeFirebaseModule(
+       userInfoMap.putString("code", code)
+       userInfoMap.putString("message", message)
+       userInfoMap.putString("nativeErrorMessage", nativeErrorMessage)
+-      promise!!.reject(code, message, userInfoMap)
++      promise!!.reject(code ?: "", message, userInfoMap)
+     }
+   }
+ }
