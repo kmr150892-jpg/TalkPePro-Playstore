@@ -1,4 +1,4 @@
-const { onDocumentWritten, onDocumentCreated } = require("firebase-functions/v2/firestore");
+const { onDocumentWritten, onDocumentCreated, onDocumentUpdated } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 
 if (!admin.apps.length) admin.initializeApp();
@@ -10,6 +10,12 @@ const REGION = "asia-south1";
 const CALL_CHANNEL = "incoming_call_v3";
 const MESSAGE_CHANNEL = "chat_messages_v2";
 const RINGING_STATUSES = ["dialing", "calling", "ringing", "pending", "Discover_dialing"];
+
+// 🟢 NEW: Host online notification cooldown (host flicker panna spam avoid panna)
+const HOST_ONLINE_COOLDOWN_MS = 10 * 60 * 1000;
+
+// 🟢 NEW: isOnline true / 'true' rendume handle panna
+const isTrue = (v) => v === true || v === "true";
 
 async function sendToUser(uid, { title, body, channelId, data, ttlMs, priority, dataOnly }) {
   const userRef = admin.firestore().collection("users").doc(uid);
@@ -164,5 +170,82 @@ exports.onChatMessage = onDocumentCreated(
         senderName: senderData.name || "",
       },
     });
+  }
+);
+
+// 🟢 NEW: Host offline -> online aanaa, avangaloda connected (friend) users ku mattum push
+exports.onHostOnline = onDocumentUpdated(
+  { document: "users/{hostId}", region: REGION },
+  async (event) => {
+    const before = event.data && event.data.before && event.data.before.data();
+    const after = event.data && event.data.after && event.data.after.data();
+    if (!before || !after) return;
+
+    // offline -> online maarina mattum
+    if (isTrue(before.isOnline) || !isTrue(after.isOnline)) return;
+
+    const hostId = event.params.hostId;
+    const db = admin.firestore();
+    const hostRef = event.data.after.ref;
+
+    // Cooldown + duplicate protection (oru thadavai mattum claim pannu)
+    const claimed = await db.runTransaction(async (tx) => {
+      const s = await tx.get(hostRef);
+      if (!s.exists) return false;
+      const last = s.data().lastOnlineNotifiedAt;
+      const lastMs = last && last.toMillis ? last.toMillis() : 0;
+      if (Date.now() - lastMs < HOST_ONLINE_COOLDOWN_MS) return false;
+      tx.update(hostRef, { lastOnlineNotifiedAt: admin.firestore.FieldValue.serverTimestamp() });
+      return true;
+    });
+    if (!claimed) return;
+
+    // Connected users = connections la receiverId == host, status == 'friend'
+    const connSnap = await db
+      .collection("connections")
+      .where("receiverId", "==", hostId)
+      .where("status", "==", "friend")
+      .get();
+
+    const userIds = [...new Set(connSnap.docs.map((d) => d.data().senderId).filter(Boolean))];
+    if (userIds.length === 0) return;
+
+    const hostBlocked = Array.isArray(after.blockedUsers) ? after.blockedUsers : [];
+    const hostName = after.name || after.userName || "Your host";
+
+    const sendOne = async (uid) => {
+      try {
+        if (hostBlocked.includes(uid)) return;
+
+        const uSnap = await db.collection("users").doc(uid).get();
+        if (!uSnap.exists) return;
+        const u = uSnap.data();
+
+        // User settings la notification off panniruntha skip
+        if (u.pushEnabled === false) return;
+        // User host a block panniruntha skip
+        if (Array.isArray(u.blockedUsers) && u.blockedUsers.includes(hostId)) return;
+
+        await sendToUser(uid, {
+          title: `${hostName} is online now 🟢`,
+          body: "Tap to connect with them.",
+          channelId: MESSAGE_CHANNEL,
+          priority: "high",
+          ttlMs: 60 * 60 * 1000,
+          data: {
+            type: "host_online",
+            hostId,
+            hostName,
+          },
+        });
+      } catch (e) {
+        console.log("Host online push error for", uid, e);
+      }
+    };
+
+    // 20 users oru batch ah anuppu
+    for (let i = 0; i < userIds.length; i += 20) {
+      await Promise.all(userIds.slice(i, i + 20).map(sendOne));
+    }
   }
 );

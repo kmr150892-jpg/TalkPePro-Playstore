@@ -256,6 +256,10 @@ function RootLayoutInner() {
           params: { chatId: d.chatId, receiverId: d.senderId, receiverName: d.senderName || '' }
         } as any);
       }
+      // 🟢 NEW: Host online notification tap panna host profile open aagum
+      if (d.type === 'host_online' && d.hostId) {
+        router.push({ pathname: '/expert-detail', params: { id: d.hostId } } as any);
+      }
     });
     return () => sub.remove();
   }, []);
