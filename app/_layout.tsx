@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { BlurView } from 'expo-blur';
 import * as KeepAwake from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as Notifications from 'expo-notifications'; // 🔔 NEW: notification tap listener
 import { Redirect, Stack, useRootNavigationState, useRouter, useSegments } from 'expo-router'; // 🔥 SATTI UPDATE: Imported Redirect
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { collection, doc, getDoc, limit, onSnapshot, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
@@ -14,6 +15,7 @@ import { auth, db } from '../firebaseConfig';
 import { BlockProvider } from '../utils/context/BlockContext';
 import { CustomAlertHost, installCustomAlert } from '../utils/CustomAlert'; // 🔥 NEW: custom designed system messages
 import { sendNotificationToUser } from '../utils/notificationHelper'; // 🔥 NEW: missed call notification
+import { registerForPushNotifications } from '../utils/pushNotifications'; // 🔔 NEW: push token register
 import { playMessageSound, playNotificationSound, startRingtone, stopRingtone } from '../utils/sounds';
 
 // 🔥 NEW: Replaces every native white Alert.alert box with the custom designed alert (runs once at app start)
@@ -228,6 +230,26 @@ function RootLayoutInner() {
       if (unsubUser) unsubUser();
       unsubscribeAuth();
     };
+  }, []);
+
+  // 🔔 Push token register (app close la irundhaalum notification varanum)
+  useEffect(() => {
+    if (!user?.uid || initializing) return;
+    registerForPushNotifications(user.uid);
+  }, [user?.uid, initializing]);
+
+  // 🔔 Message notification tap panna andha chat open aagum
+  useEffect(() => {
+    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+      const d: any = response.notification.request.content.data || {};
+      if (d.type === 'message' && d.chatId && d.senderId) {
+        router.push({
+          pathname: '/chat/ChatScreen',
+          params: { chatId: d.chatId, receiverId: d.senderId, receiverName: d.senderName || '' }
+        } as any);
+      }
+    });
+    return () => sub.remove();
   }, []);
 
   useEffect(() => {

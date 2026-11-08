@@ -6,6 +6,11 @@ if (!admin.apps.length) {
     admin.initializeApp();
 }
 
+// 🔔 NEW: Push notifications (app close la irundhaalum call / chat notification)
+const push = require("./pushNotifications");
+exports.onCallRinging = push.onCallRinging;
+exports.onChatMessage = push.onChatMessage;
+
 // 🏁 REFLEX BLITZ ARENA MANAGER - FREE-TO-PLAY (NO ENTRY FEE, NO REWARD, NO COMMISSION)
 // 🆕 FREE-TO-PLAY UPDATE: This function now ONLY decides the winner and closes the round.
 // Wallet balance, diamonds payout, admin/expert commission, passbook money logs are all removed.

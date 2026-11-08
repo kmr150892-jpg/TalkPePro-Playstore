@@ -64,6 +64,13 @@
         }
       ],
       "expo-build-properties",
+      [
+        "expo-notifications",
+        {
+          "sounds": ["./assets/sounds/ringtone.mp3", "./assets/sounds/message.mp3"],
+          "color": "#6366F1"
+        }
+      ],
       "expo-audio"
     ],
     "experiments": {
