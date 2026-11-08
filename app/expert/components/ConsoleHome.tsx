@@ -28,6 +28,8 @@ import Svg, { Circle, Defs, Stop, LinearGradient as SvgGradient } from 'react-na
 import SettingsButton from '../../../components/SettingsButton';
 import { auth, db } from '../../../firebaseConfig';
 import { sendNotificationToUser } from '../../../utils/notificationHelper';
+// 🆕 PERMISSION FIX: camera + mic permission host dashboard open aagumbodhe vaangidum (call Accept pannum bodhu dialog varaadhu)
+import { checkAndRequestCallPermissions } from '../../../utils/permissions';
 
 // --- COMPONENTS ---
 
@@ -629,6 +631,9 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
   const knownRequestsRef = useRef<string[]>([]);
   const seenInitRef = useRef(false); // one-time: set the 'notifications last seen' time
 
+  // 🆕 PERMISSION FIX: oru session-la oru dhaan camera/mic permission kekka (dashboard open aagumbodhu)
+  const permAskedRef = useRef(false);
+
   const shimmerAnim = useRef(new Animated.Value(0)).current;
 
   // ✨ NEW PREMIUM ANIMATION VALUES
@@ -713,6 +718,21 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
 
     return () => authUnsub();
   }, []);
+
+  // 🆕 PERMISSION FIX: host dashboard open aagumbodhu camera + mic permission munnaadiye vaangidum.
+  // Idhanaala incoming call Accept pannum bodhu permission dialog varaadhu -> call cut aagaadhu.
+  // (oru session-la oru dhaan kekkum; already granted-na dialog varaadhu; fail aanaalum app-ku ethuvum aagaadhu)
+  useEffect(() => {
+    if (!user?.uid || permAskedRef.current) return;
+    permAskedRef.current = true;
+    (async () => {
+      try {
+        await checkAndRequestCallPermissions();
+      } catch (e) {
+        console.log("Call permission pre-check failed", e);
+      }
+    })();
+  }, [user?.uid]);
 
   // ✨ NEW: wallet count-up animation
   useEffect(() => {

@@ -5,7 +5,8 @@ import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { db } from '../firebaseConfig';
-import { handleCallEvent, PENDING_ACCEPT_KEY } from './incomingCall';
+import { ensureCallPermissions } from './callPermissions';
+import { DECLINE_STATUS, handleCallEvent, PENDING_ACCEPT_KEY } from './incomingCall';
 
 const ACTIVE_CALL_STATUSES = ['dialing', 'calling', 'ringing', 'pending', 'Discover_dialing'];
 
@@ -34,6 +35,18 @@ export function useCallNotificationEvents({ uid, userName, enabled }: Opts) {
         const ref = doc(db, 'calls', String(callId));
         const snap = await getDoc(ref);
         if (!snap.exists() || !ACTIVE_CALL_STATUSES.includes(String(snap.data().status))) return; // call already mudinjiduchu
+
+        // Camera + mic permission MUNNADIYE vaangu. Dialog vandhaalum call accepted aagala,
+        // so /videocall la dialog vandhu call cut aagaadhu.
+        const granted = await ensureCallPermissions();
+        if (!granted) {
+          // Permission kudukala -> caller hang aagaama call decline pannidu
+          await updateDoc(ref, {
+            status: DECLINE_STATUS,
+            endedAt: serverTimestamp(),
+          });
+          return;
+        }
 
         await updateDoc(ref, {
           status: 'accepted',

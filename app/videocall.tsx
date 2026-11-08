@@ -218,6 +218,34 @@ export default function VideoCallScreen() {
     const callInitRef = useRef(false); 
     const isMounted = useRef(true);
 
+    // 🆕 PERMISSION FIX: permission dialog open irukkumbodhu AppState 'background' aagum -> call cut aagama irukka idhu guard
+    const permissionBusyRef = useRef(false);
+
+    // 🆕 PERMISSION FIX: camera + mic permission ellam ready-nu uruthi pannum (already granted-na dialog kekkaadhu)
+    // - dialog open irukkumbodhu AppState listener call-a end pannaama permissionBusyRef block pannum
+    // - dialog close aana aprom 1.5 sec grace (AppState event late-a varalaam)
+    const ensureCallPermissions = async () => {
+        if (Platform.OS !== 'android') return;
+        try {
+            const hasAudio = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+            const hasCamera = await PermissionsAndroid.check(PermissionsAndroid.PERMISSIONS.CAMERA);
+            if (hasAudio && hasCamera) return;
+
+            permissionBusyRef.current = true;
+            try {
+                await PermissionsAndroid.requestMultiple([
+                    PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
+                    PermissionsAndroid.PERMISSIONS.CAMERA,
+                ]);
+            } finally {
+                setTimeout(() => { permissionBusyRef.current = false; }, 1500);
+            }
+        } catch (err) {
+            console.log("Permission check error:", err);
+            setTimeout(() => { permissionBusyRef.current = false; }, 1500);
+        }
+    };
+
     const ringTimerAnim = useRef(new Animated.Value(1)).current; 
     
     const [callerDisplayName, setCallerDisplayName] = useState(params.callerName as string || "User User");
@@ -328,6 +356,8 @@ export default function VideoCallScreen() {
     useEffect(() => {
         if (!callId) return;
         const handleAppStateChange = async (nextAppState: string) => {
+            // 🆕 PERMISSION FIX: permission dialog nerathula vara background/inactive-ku call end pannaadhu
+            if (permissionBusyRef.current) return;
             if (nextAppState === 'background' || nextAppState === 'inactive') {
                 if (!isFinishing) {
                     handleCallEnd(true, 'completed');
@@ -773,14 +803,8 @@ export default function VideoCallScreen() {
             databaseUpdated.current = false; 
             setSecondsElapsed(0); 
 
-            if (Platform.OS === 'android') {
-                try {
-                    await PermissionsAndroid.requestMultiple([
-                        PermissionsAndroid.PERMISSIONS.RECORD_AUDIO,
-                        PermissionsAndroid.PERMISSIONS.CAMERA,
-                    ]);
-                } catch (err) {}
-            }
+            // 🆕 PERMISSION FIX: pazhaya requestMultiple block ku badhila - granted-na dialog varaadhu, illana AppState guard oda kekkum
+            await ensureCallPermissions();
 
             if (engine.current) {
                 await engine.current.leaveChannel();
@@ -839,6 +863,11 @@ export default function VideoCallScreen() {
     const setupVideoSDKEngine = async () => {
         try {
             if (engine.current) return;
+
+            // 🆕 PERMISSION FIX: joinChannel ku munnaadi permission safety check (granted-na dialog varaadhu, illana inga await panni kekkum)
+            await ensureCallPermissions();
+            if (engine.current) return;
+
             engine.current = createAgoraRtcEngine();
             const rtcEngine = engine.current;
             rtcEngine.initialize({ appId: AGORA_APP_ID, channelProfile: ChannelProfileType.ChannelProfileCommunication });
