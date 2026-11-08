@@ -881,7 +881,7 @@ export default function ExpertDetail() {
             ringTimerAnim.setValue(1);
             Animated.timing(ringTimerAnim, {
                 toValue: 0,
-                duration: 12000,
+                duration: 20000,
                 easing: Easing.linear,
                 useNativeDriver: false,
             }).start(({ finished }) => {

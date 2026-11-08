@@ -338,14 +338,14 @@ export default function CinematicExploreScreen() {
 
     // 🔥 SATTI FIX: RINGING PROTOCOL STATES (FOR USER OUTGOING) 🔥
     const [ringModalVisible, setRingModalVisible] = useState(false);
-    const [ringTimer, setRingTimer] = useState(12);
+    const [ringTimer, setRingTimer] = useState(20);
     const [currentExpert, setCurrentExpert] = useState<any>(null);
     const [currentCallId, setCurrentCallId] = useState<string | null>(null);
     const pulseAnim = useRef(new Animated.Value(1)).current;
 
     // 🔥 SATTI FIX: NEW STATES FOR EXPERT INCOMING CALL MODAL 🔥
     const [incomingCall, setIncomingCall] = useState<any>(null);
-    const [incomingTimer, setIncomingTimer] = useState(12);
+    const [incomingTimer, setIncomingTimer] = useState(20);
     const incomingPulse = useRef(new Animated.Value(1)).current;
 
     // 🔥 NEW STATES: REPORT MODAL 🔥
@@ -453,7 +453,7 @@ export default function CinematicExploreScreen() {
                     }
                     
                     setIncomingCall({ id: validDocSnap.id, ...data, callerImage: callerPic, userName: fetchedName });
-                    setIncomingTimer(12); // Reset to 12 secs when new call pops
+                    setIncomingTimer(20); // Reset to 20 secs when new call pops
                 } else {
                     setIncomingCall(null);
                 }
@@ -645,7 +645,7 @@ export default function CinematicExploreScreen() {
             
             setCurrentExpert(expert);
             setCurrentCallId(newCallId);
-            setRingTimer(12);
+            setRingTimer(20); // Reset to 20 seconds for each new call
             setRingModalVisible(true);
 
             // 🔥 SATTI FIX: Robust caller and expert fallbacks during setDoc 🔥
@@ -747,8 +747,8 @@ export default function CinematicExploreScreen() {
     const orbitRotateRev = mainLoop.interpolate({ inputRange: [0, 1], outputRange: ['360deg', '0deg'] });
     const glowScale = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 1.5] });
     const glowOpacity = glowAnim.interpolate({ inputRange: [0, 1], outputRange: [0.7, 0] });
-    const ringProgress = `${Math.max(0, Math.min(100, (ringTimer / 12) * 100))}%`;
-    const incomingProgress = `${Math.max(0, Math.min(100, (incomingTimer / 12) * 100))}%`;
+    const ringProgress = `${Math.max(0, Math.min(100, (ringTimer / 20) * 100))}%`;
+    const incomingProgress = `${Math.max(0, Math.min(100, (incomingTimer / 20) * 100))}%`;
     const reportIcons: any[] = ['eye-off', 'person-remove', 'alert-circle', 'document-text', 'flag'];
 
     return (

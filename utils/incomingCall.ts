@@ -1,9 +1,9 @@
 import notifee, {
-    AndroidCategory,
-    AndroidImportance,
-    AndroidVisibility,
-    Event,
-    EventType,
+  AndroidCategory,
+  AndroidImportance,
+  AndroidVisibility,
+  Event,
+  EventType,
 } from '@notifee/react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { doc, serverTimestamp, updateDoc } from 'firebase/firestore';
@@ -18,6 +18,10 @@ export const DECLINE_STATUS = 'rejected';
 export const PENDING_ACCEPT_KEY = '@pending_call_accept';
 
 const notifId = (callId: string) => `call_${callId}`;
+
+let acceptingCallId: string | null = null;
+export const setAcceptingCallId = (id: string | null) => { acceptingCallId = id; };
+export const getAcceptingCallId = () => acceptingCallId;
 
 export async function showIncomingCall(data: Record<string, any>) {
   const callId = String(data.callId || '');
@@ -83,6 +87,7 @@ export async function handleCallEvent({ type, detail }: Event) {
   }
 
   if (actionId === 'accept') {
+    setAcceptingCallId(callId);
     await cancelIncomingCall(callId);
     try {
       await AsyncStorage.setItem(

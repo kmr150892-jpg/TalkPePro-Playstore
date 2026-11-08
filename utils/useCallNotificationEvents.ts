@@ -6,7 +6,7 @@ import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { db } from '../firebaseConfig';
 import { ensureCallPermissions } from './callPermissions';
-import { DECLINE_STATUS, handleCallEvent, PENDING_ACCEPT_KEY } from './incomingCall';
+import { DECLINE_STATUS, handleCallEvent, PENDING_ACCEPT_KEY, setAcceptingCallId } from './incomingCall';
 
 const ACTIVE_CALL_STATUSES = ['dialing', 'calling', 'ringing', 'pending', 'Discover_dialing'];
 
@@ -24,6 +24,7 @@ export function useCallNotificationEvents({ uid, userName, enabled }: Opts) {
     const processPendingAccept = async () => {
       if (busy) return;
       busy = true;
+      let guarded = false;
       try {
         const raw = await AsyncStorage.getItem(PENDING_ACCEPT_KEY);
         if (!raw) return;
@@ -31,6 +32,9 @@ export function useCallNotificationEvents({ uid, userName, enabled }: Opts) {
 
         const { callId, ts } = JSON.parse(raw);
         if (!callId || Date.now() - Number(ts) > 60000) return; // pazhaya accept ignore
+
+        setAcceptingCallId(String(callId));
+        guarded = true;
 
         const ref = doc(db, 'calls', String(callId));
         const snap = await getDoc(ref);
@@ -62,6 +66,7 @@ export function useCallNotificationEvents({ uid, userName, enabled }: Opts) {
         console.log('Pending accept error:', e);
       } finally {
         busy = false;
+        if (guarded) setTimeout(() => setAcceptingCallId(null), 8000);
       }
     };
 
@@ -70,6 +75,7 @@ export function useCallNotificationEvents({ uid, userName, enabled }: Opts) {
       if (initial?.pressAction?.id === 'accept') {
         const callId = String(initial.notification?.data?.callId || '');
         if (callId) {
+          setAcceptingCallId(callId);
           await AsyncStorage.setItem(
             PENDING_ACCEPT_KEY,
             JSON.stringify({ callId, ts: Date.now() })

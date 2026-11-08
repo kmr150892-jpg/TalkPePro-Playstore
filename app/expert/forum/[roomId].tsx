@@ -539,7 +539,7 @@ export default function ExpertForumRoomScreen() {
     const [incomingCall, setIncomingCall] = useState<any>(null);
     const [callerProfile, setCallerProfile] = useState<any>(null);
     const [ringModalVisible, setRingModalVisible] = useState(false);
-    const [ringTimer, setRingTimer] = useState(12);
+    const [ringTimer, setRingTimer] = useState(20);
     const pulseAnim = useRef(new Animated.Value(1)).current;
     
     const hasJoinedFired = useRef(false);
@@ -882,10 +882,10 @@ export default function ExpertForumRoomScreen() {
                 const now = Date.now();
                 const callTime = callData.createdAt?.toMillis ? callData.createdAt.toMillis() : now;
                 
-                if (now - callTime < 15000) {
+                if (now - callTime < 20000) {
                     setIncomingCall(callData);
                     setRingModalVisible(true);
-                    setRingTimer((prev) => prev > 0 ? prev : 12); 
+                    setRingTimer((prev) => prev > 0 ? prev : 20); 
                 }
             } else {
                 setRingModalVisible(false);

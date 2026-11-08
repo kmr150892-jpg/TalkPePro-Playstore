@@ -374,7 +374,7 @@ export default function NotificationsScreen() {
   const [filter, setFilter] = useState<'ALL' | 'CALLS' | 'ALERTS'>('ALL');
   const [filterW, setFilterW] = useState(0);
   const [heroCount, setHeroCount] = useState(0);
-  const [ringSecs, setRingSecs] = useState(12);
+  const [ringSecs, setRingSecs] = useState(20); // Default to 20 seconds for ringing
 
   // 🆕 NEW (unread) notifications of this visit - these are what the header badge counts
   const [newKeys, setNewKeys] = useState<string[]>([]);
@@ -591,7 +591,7 @@ export default function NotificationsScreen() {
   // 🆕 Live ring seconds (12 -> 0)
   useEffect(() => {
     const id = ringTimerAnim.addListener(({ value }) => {
-      const s = Math.max(0, Math.ceil(value * 12));
+      const s = Math.max(0, Math.ceil(value * 20));
       setRingSecs(prev => (prev === s ? prev : s));
     });
     return () => ringTimerAnim.removeListener(id);
@@ -659,7 +659,7 @@ export default function NotificationsScreen() {
     ringTimerAnim.setValue(1);
     Animated.timing(ringTimerAnim, {
       toValue: 0,
-      duration: 12000, 
+      duration: 20000, // 20 seconds
       easing: Easing.linear,
       useNativeDriver: false,
     }).start(({ finished }) => {

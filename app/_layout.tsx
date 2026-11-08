@@ -14,6 +14,7 @@ import UpdateAlert from '../components/UpdateAlert';
 import { auth, db } from '../firebaseConfig';
 import { BlockProvider } from '../utils/context/BlockContext';
 import { CustomAlertHost, installCustomAlert } from '../utils/CustomAlert'; // 🔥 NEW: custom designed system messages
+import { getAcceptingCallId } from '../utils/incomingCall'; // 📞 NEW: Notifee Accept press aana call ah skip panna
 import { sendNotificationToUser } from '../utils/notificationHelper'; // 🔥 NEW: missed call notification
 import { registerForPushNotifications } from '../utils/pushNotifications'; // 🔔 NEW: push token register
 import { playMessageSound, playNotificationSound, startRingtone, stopRingtone } from '../utils/sounds';
@@ -95,7 +96,7 @@ function RootLayoutInner() {
 
   const [incomingCallData, setIncomingCallData] = useState<any>(null);
   const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
-  const [incomingTimer, setIncomingTimer] = useState(12); 
+  const [incomingTimer, setIncomingTimer] = useState(20); // Default to 20 seconds
 
   useEffect(() => {
     const wipeSession = async () => {
@@ -287,6 +288,7 @@ function RootLayoutInner() {
 
     if (!snap.empty && !inVideoCall && !inLiveMode && !inPartyMode && !inForum && !isNavigatingToCall.current) {
       const callDoc = snap.docs[0];
+      if (callDoc.id === getAcceptingCallId()) return;
       const callData = callDoc.data();
 
       if (callData.endedAt || callData.status !== 'ringing') return;
@@ -350,10 +352,11 @@ function RootLayoutInner() {
             if (change.type === 'added') {
                 const callData = change.doc.data();
                 const callId = change.doc.id;
+                if (callId === getAcceptingCallId()) return;
                 
                 setIncomingCallData(callData);
                 setIncomingCallId(callId);
-                setIncomingTimer(12); 
+                setIncomingTimer(20); // Reset to 20 seconds for each new incoming call
 
                 if (callData.callerId) {
                     getDoc(doc(db, 'users', callData.callerId)).then((uDoc) => {
@@ -455,7 +458,7 @@ function RootLayoutInner() {
       if (stopTimer) { clearTimeout(stopTimer); stopTimer = null; }
       if (hasFreshCall) {
         startRingtone();
-        stopTimer = setTimeout(() => stopRingtone(), 12000); // 12 sec ku mela ring venaam
+        stopTimer = setTimeout(() => stopRingtone(), 20000); // 20 sec ku mela ring venaam
       } else {
         stopRingtone();
       }
