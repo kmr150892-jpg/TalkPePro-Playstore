@@ -1141,13 +1141,26 @@ export default function ConsoleHome({ expertData: initialData, isOnline, setIsOn
     } catch (error) { Alert.alert("Error", "Save failed"); } finally { setSaving(false); }
   };
 
-  const handleLogout = async () => {
+  // 🔥 NEW: actual logout logic (confirm pannina aprom mattum run aagum) - old logic appadiye
+  const performLogout = async () => {
       if (user?.uid) {
           try {
               await updateDoc(doc(db, "users", user.uid), { isOnline: false });
           } catch (e) {}
       }
       auth.signOut().then(() => { router.replace('/'); });
+  };
+
+  // 🔥 NEW: logout button click pannina confirmation kekkum (direct logout aagaadhu)
+  const handleLogout = () => {
+      Alert.alert(
+          "Logout?",
+          "Are you sure you want to logout? You will go offline and stop receiving calls.",
+          [
+              { text: "Cancel", style: "cancel" },
+              { text: "Yes, Logout", style: "destructive", onPress: performLogout }
+          ]
+      );
   };
 
   const handleTerminateExpert = () => {

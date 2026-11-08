@@ -963,7 +963,7 @@ export default function ExpertForumRoomScreen() {
         setRingModalVisible(false);
         setIncomingCall(null);
         try {
-            await updateDoc(doc(db, "calls", callId), { status: 'declined' });
+            await updateDoc(doc(db, "calls", callId), { status: 'rejected' });
         } catch (e) {}
     };
 

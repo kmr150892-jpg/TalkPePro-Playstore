@@ -991,14 +991,17 @@ export default function UserLiveViewScreen() {
 
                     setIsCalling(false);
                     isCallingRef.current = false;
-                    
+
+                    // 🔥 FIX: Host Decline pannaalum, busy aanaalum user ku overlay kaattanum
+                    setShowBusyStatus(true);
+                    setTimeout(() => setShowBusyStatus(false), 4000);
+
                     if (hostFirestoreId) {
                         const expertRef = doc(db, "users", hostFirestoreId);
                         const expertSnap = await getDoc(expertRef);
-                        
+
+                        // Public live chat message: host nijama vera call la irundha mattum
                         if (expertSnap.exists() && expertSnap.data().isBusy === true) {
-                            setShowBusyStatus(true);
-                            
                             await addDoc(collection(db, "lives", liveId, "messages"), {
                                 text: `${hostName} is currently on another call. Please try later.`,
                                 senderName: "System",
@@ -1006,8 +1009,6 @@ export default function UserLiveViewScreen() {
                                 timestamp: serverTimestamp(),
                                 isSystem: true
                             });
-
-                            setTimeout(() => setShowBusyStatus(false), 4000);
                         }
                     }
                 }
@@ -1527,7 +1528,7 @@ export default function UserLiveViewScreen() {
                                     <Ionicons name="time" size={32} color={userTier.color} />
                                 </View>
                                 <Text style={styles.busyTitle}>Host is Engaged</Text>
-                                <Text style={styles.busySub}>The host is currently on another call or unable to pick up. Please try again in a few minutes.</Text>
+                                <Text style={styles.busySub}>The host is currently busy. Please try again in a few minutes.</Text>
                             </BlurView>
                         </View>
                     )}

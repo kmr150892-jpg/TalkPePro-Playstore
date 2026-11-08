@@ -78,9 +78,10 @@ exports.onCallRinging = onDocumentWritten(
     if (!expertSnap.exists) return;
     if (expertSnap.data().isBusy === true) return; // host vera call la irukkaanga
 
-    let callerName = after.callerName;
-    if (!callerName && after.callerId) {
-      const cSnap = await db.collection("users").doc(after.callerId).get();
+    const callerUid = after.callerId || after.userId;
+    let callerName = after.callerName || after.userName;
+    if (!callerName && callerUid) {
+      const cSnap = await db.collection("users").doc(callerUid).get();
       callerName = cSnap.exists ? (cSnap.data().name || "A user") : "A user";
     }
 
@@ -90,7 +91,7 @@ exports.onCallRinging = onDocumentWritten(
       channelId: CALL_CHANNEL,
       priority: "max",
       ttlMs: 30000,
-      data: { type: "call", callId: event.params.callId, callerId: after.callerId || "" },
+      data: { type: "call", callId: event.params.callId, callerId: callerUid || "" },
     });
   }
 );

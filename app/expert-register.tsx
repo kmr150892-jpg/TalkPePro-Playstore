@@ -6,7 +6,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import { doc, serverTimestamp, setDoc, updateDoc } from 'firebase/firestore';
 import { getDownloadURL, getStorage, ref, uploadBytesResumable } from 'firebase/storage'; // 🔥 SATTI UPDATE: Firebase Storage Added
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Alert,
@@ -27,6 +27,7 @@ import {
     UIManager,
     View
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context'; // 🔥 SATTI UPDATE (NEW): Safe-area insets for bottom button + floating box
 import { auth, db } from '../firebaseConfig';
 
 const { width, height } = Dimensions.get('window');
@@ -34,6 +35,10 @@ const { width, height } = Dimensions.get('window');
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
+
+// 🔥 SATTI UPDATE (NEW): Hard lock for intro video length (5 seconds). 500ms tolerance for camera rounding.
+const MAX_VIDEO_SECONDS = 5;
+const MAX_VIDEO_MS = MAX_VIDEO_SECONDS * 1000 + 500;
 
 const EXPERTISE_TAGS = [
     "🎤 Singing", "💃 Dancing", "🤝 Community Advice", "💼 Career Counseling", "🌱 Life Coaching", 
@@ -246,13 +251,15 @@ export default function RegisterExpert() {
 
     // 🔥 SATTI UPDATE: Floating keyboard input box states + consent
     const [activeField, setActiveField] = useState<string | null>(null);
-    const [kbHeight, setKbHeight] = useState(0);
     const [agreed, setAgreed] = useState(false);
 
-    // 🔥 SATTI UPDATE (NEW): Exact keyboard position tracking (fixes box / Continue hidden behind keyboard)
-    const [kbTop, setKbTop] = useState<number | null>(null);
-    const [sheetLift, setSheetLift] = useState(0);
-    const overlayRef = useRef<View>(null);
+    // 🔥 SATTI UPDATE (NEW): Safe-area insets (bottom button no longer hides behind phone nav buttons)
+    const insets = useSafeAreaInsets();
+
+    // 🔥 SATTI UPDATE (NEW): Background upload promises (upload starts right after capture, so SUBMIT is instant)
+    const profileUpRef = useRef<Promise<string | null> | null>(null);
+    const selfieUpRef = useRef<Promise<string | null> | null>(null);
+    const videoUpRef = useRef<Promise<string | null> | null>(null);
 
     const [uploading, setUploading] = useState(false);
     const router = useRouter();
@@ -355,45 +362,17 @@ export default function RegisterExpert() {
         }
     }, [activeField]);
 
-    // 🔥 SATTI UPDATE: Keyboard listeners -> floating input box sits right above keyboard
+    // 🔥 SATTI UPDATE (FIXED): Keyboard listener simplified. The floating box is now anchored at the TOP of the screen
+    // (never hidden behind the keyboard, on any phone / any Android mode), so no keyboard height / measuring is needed anymore.
     useEffect(() => {
-        const showEvt = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
         const hideEvt = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-        const showSub = Keyboard.addListener(showEvt, (e) => {
-            setKbHeight(e.endCoordinates?.height || 0);
-            setKbTop(typeof e.endCoordinates?.screenY === 'number' ? e.endCoordinates.screenY : null);
-        });
         const hideSub = Keyboard.addListener(hideEvt, () => {
-            setKbHeight(0);
-            setKbTop(null);
-            setSheetLift(0);
             setActiveField(null);
         });
         return () => {
-            showSub.remove();
             hideSub.remove();
         };
     }, []);
-
-    // 🔥 SATTI UPDATE (NEW): Measure how much of the screen the keyboard really covers.
-    // Works on iOS, Android resize mode AND Android edge-to-edge (where the window does not resize),
-    // so the floating box + DONE button are never hidden behind the keyboard.
-    const recalcLift = useCallback(() => {
-        if (!kbTop || !kbHeight || !overlayRef.current) {
-            setSheetLift(0);
-            return;
-        }
-        overlayRef.current.measureInWindow((_x: number, y: number, _w: number, h: number) => {
-            const overlap = Math.max(0, y + h - kbTop);
-            setSheetLift(Math.min(overlap, kbHeight));
-        });
-    }, [kbTop, kbHeight]);
-
-    useEffect(() => {
-        if (!activeField) return;
-        const t = setTimeout(recalcLift, 60);
-        return () => clearTimeout(t);
-    }, [activeField, kbTop, kbHeight, recalcLift]);
 
     const openField = (field: string) => setActiveField(field);
     const closeField = () => {
@@ -414,6 +393,37 @@ export default function RegisterExpert() {
         else if (field === 'bio') setBio(text);
     };
 
+    // 🔥 SATTI UPDATE (NEW): Cloudinary profile upload as a reusable function (same preset / cloud as before)
+    const uploadProfileToCloudinary = async (uri: string): Promise<string | null> => {
+        try {
+            const cloudName = 'dvwjxeexc'; 
+            const uploadPreset = 'TALKPE'; 
+
+            const data = new FormData();
+            data.append('file', {
+                uri: uri,
+                type: 'image/jpeg',
+                name: 'profile_upload.jpg',
+            } as any);
+            data.append('upload_preset', uploadPreset);
+
+            const cloudResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
+                method: 'POST',
+                body: data,
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'multipart/form-data',
+                },
+            });
+
+            const cloudResult = await cloudResponse.json();
+            return cloudResult.secure_url || null;
+        } catch (error) {
+            console.log("Cloudinary upload error:", error);
+            return null;
+        }
+    };
+
     const pickImage = async () => {
         const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
         if (status !== 'granted') {
@@ -430,6 +440,8 @@ export default function RegisterExpert() {
 
         if (!result.canceled) {
             setImage(result.assets[0].uri);
+            // 🔥 SATTI UPDATE (NEW): start uploading in background right away
+            profileUpRef.current = uploadProfileToCloudinary(result.assets[0].uri);
         }
     };
 
@@ -448,10 +460,14 @@ export default function RegisterExpert() {
         });
         if (!result.canceled) {
             setCapturedPhoto(result.assets[0].uri);
+            // 🔥 SATTI UPDATE (NEW): start uploading in background right away
+            selfieUpRef.current = uploadMediaToFirebase(result.assets[0].uri, 'image');
         }
     };
 
     // 🔥 SATTI UPDATE: RECORD 5s INTRO VIDEO FUNCTION 🔥
+    // 🔥 SATTI UPDATE (NEW): HARD 5-SECOND LOCK -> camera auto-stops at 5s (allowsEditing off so no trimmer / extension),
+    // and if any phone's camera still returns a longer clip, it is rejected and NOT accepted.
     const recordIntroVideo = async () => {
         const cameraStatus = await ImagePicker.requestCameraPermissionsAsync();
         if (cameraStatus.status !== 'granted') {
@@ -460,12 +476,20 @@ export default function RegisterExpert() {
         }
         const result = await ImagePicker.launchCameraAsync({
             mediaTypes: ImagePicker.MediaTypeOptions.Videos,
-            allowsEditing: true,
-            videoMaxDuration: 5, 
+            allowsEditing: false,
+            videoMaxDuration: MAX_VIDEO_SECONDS, 
             quality: 0.5,
         });
         if (!result.canceled) {
-            setCapturedVideo(result.assets[0].uri);
+            const asset: any = result.assets[0];
+            const durationMs = typeof asset.duration === 'number' ? asset.duration : null;
+            if (durationMs !== null && durationMs > MAX_VIDEO_MS) {
+                Alert.alert("Video Too Long", `Intro video must be ${MAX_VIDEO_SECONDS} seconds or less. Please record again.`);
+                return;
+            }
+            setCapturedVideo(asset.uri);
+            // 🔥 SATTI UPDATE (NEW): start uploading in background right away
+            videoUpRef.current = uploadMediaToFirebase(asset.uri, 'video');
         }
     };
 
@@ -568,37 +592,17 @@ export default function RegisterExpert() {
                 return;
             }
 
-            // 1. Upload Profile Picture to Cloudinary (Old feature kept intact)
-            const cloudName = 'dvwjxeexc'; 
-            const uploadPreset = 'TALKPE'; 
-
-            const data = new FormData();
-            data.append('file', {
-                uri: image,
-                type: 'image/jpeg',
-                name: 'profile_upload.jpg',
-            } as any);
-            data.append('upload_preset', uploadPreset);
-
-            const cloudResponse = await fetch(`https://api.cloudinary.com/v1_1/${cloudName}/image/upload`, {
-                method: 'POST',
-                body: data,
-                headers: {
-                    'Accept': 'application/json',
-                    'Content-Type': 'multipart/form-data',
-                },
-            });
-
-            const cloudResult = await cloudResponse.json();
-            const photoURL = cloudResult.secure_url;
+            // 🔥 SATTI UPDATE (NEW): FAST SUBMIT.
+            // Profile pic (Cloudinary), live selfie & intro video (Firebase Storage) were already uploading in the background
+            // from the moment they were captured. Here we just wait for them (all 3 in PARALLEL, not one-by-one).
+            // If a background upload failed or the draft was restored after an app restart, it is uploaded now as a fallback.
+            const [photoURL, liveSelfieUrl, introVideoUrl] = await Promise.all([
+                (async () => (await profileUpRef.current) || uploadProfileToCloudinary(image as string))(),
+                (async () => (await selfieUpRef.current) || uploadMediaToFirebase(capturedPhoto as string, 'image'))(),
+                (async () => (await videoUpRef.current) || uploadMediaToFirebase(capturedVideo as string, 'video'))(),
+            ]);
 
             if (!photoURL) throw new Error("Image upload failed.");
-
-            // 🔥 SATTI UPDATE: 2. Upload Live Selfie & Video to Firebase Storage 🔥
-            let liveSelfieUrl = "";
-            let introVideoUrl = "";
-            if (capturedPhoto) liveSelfieUrl = await uploadMediaToFirebase(capturedPhoto, 'image') || "";
-            if (capturedVideo) introVideoUrl = await uploadMediaToFirebase(capturedVideo, 'video') || "";
 
             await setDoc(doc(db, "users", user.uid), {
                 displayName: name,
@@ -610,8 +614,8 @@ export default function RegisterExpert() {
                 profilePic: photoURL, 
                 
                 // 🔥 SATTI UPDATE: Save Firebase URLs to Firestore
-                liveSelfie: liveSelfieUrl,
-                introVideo: introVideoUrl,
+                liveSelfie: liveSelfieUrl || "",
+                introVideo: introVideoUrl || "",
 
                 languages: selectedLanguages, 
                 personalityTraits: selectedPersonality,
@@ -701,14 +705,15 @@ export default function RegisterExpert() {
         );
     }
 
-    // 🔥 SATTI UPDATE: Floating keyboard input box (appears right above keyboard)
+    // 🔥 SATTI UPDATE: Floating keyboard input box
+    // 🔥 SATTI UPDATE (FIXED): Box is anchored at the TOP (below status bar), keyboard is at the bottom -> typing text + DONE button are always visible.
     const renderFloatingInput = () => {
         if (!activeField) return null;
         const cfg = FIELD_CONFIG[activeField];
         const value = getFieldValue(activeField);
 
         return (
-            <View ref={overlayRef} style={styles.sheetOverlay} pointerEvents="box-none" onLayout={recalcLift}>
+            <View style={styles.sheetOverlay} pointerEvents="box-none">
                 <TouchableWithoutFeedback onPress={closeField}>
                     <View style={styles.sheetBackdrop} />
                 </TouchableWithoutFeedback>
@@ -717,7 +722,7 @@ export default function RegisterExpert() {
                     style={[
                         styles.sheet,
                         {
-                            bottom: sheetLift,
+                            top: insets.top + 70,
                             opacity: sheetAnim,
                             transform: [
                                 { perspective: 900 },
@@ -824,7 +829,7 @@ export default function RegisterExpert() {
             </View>
 
             <ScrollView 
-                contentContainerStyle={styles.scrollPadding} 
+                contentContainerStyle={[styles.scrollPadding, { paddingBottom: 150 + insets.bottom }]} 
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
             >
@@ -1162,7 +1167,8 @@ export default function RegisterExpert() {
                 </Animated.View>
             </ScrollView>
 
-            <View style={styles.stickyFooter}>
+            {/* 🔥 SATTI UPDATE (FIXED): Footer lifts above phone navigation buttons using safe-area bottom inset */}
+            <View style={[styles.stickyFooter, { paddingBottom: insets.bottom + 16 }]}>
                 <BlurView intensity={90} tint="dark" style={StyleSheet.absoluteFill} />
                 
                 <View style={styles.footerRow}>
@@ -1303,7 +1309,8 @@ const styles = StyleSheet.create({
     // 🔥 SATTI UPDATE: FLOATING KEYBOARD INPUT BOX STYLES 🔥
     sheetOverlay: { ...StyleSheet.absoluteFillObject, zIndex: 100, elevation: 100 },
     sheetBackdrop: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.6)' },
-    sheet: { position: 'absolute', left: 0, right: 0, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18, borderTopLeftRadius: 30, borderTopRightRadius: 30, backgroundColor: 'rgba(10, 12, 30, 0.94)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
+    // 🔥 SATTI UPDATE (FIXED): sheet is now a floating card anchored from the top (top value is set inline using safe-area inset)
+    sheet: { position: 'absolute', left: 16, right: 16, paddingHorizontal: 20, paddingTop: 22, paddingBottom: 18, borderRadius: 30, backgroundColor: 'rgba(10, 12, 30, 0.94)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.12)', overflow: 'hidden' },
     sheetAccent: { position: 'absolute', top: 0, left: 0, right: 0, height: 3 },
     sheetHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     sheetLabel: { color: '#F8FAFC', fontSize: 14, fontWeight: '800', letterSpacing: 0.4 },
