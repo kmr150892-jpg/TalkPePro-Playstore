@@ -17,6 +17,7 @@ import { CustomAlertHost, installCustomAlert } from '../utils/CustomAlert'; // �
 import { sendNotificationToUser } from '../utils/notificationHelper'; // 🔥 NEW: missed call notification
 import { registerForPushNotifications } from '../utils/pushNotifications'; // 🔔 NEW: push token register
 import { playMessageSound, playNotificationSound, startRingtone, stopRingtone } from '../utils/sounds';
+import { useCallNotificationEvents } from '../utils/useCallNotificationEvents'; // 📞 NEW: Notifee Accept / Decline button handling
 
 // 🔥 NEW: Replaces every native white Alert.alert box with the custom designed alert (runs once at app start)
 installCustomAlert();
@@ -237,6 +238,13 @@ function RootLayoutInner() {
     if (!user?.uid || initializing) return;
     registerForPushNotifications(user.uid);
   }, [user?.uid, initializing]);
+
+  // 📞 NEW: Notifee call notification Accept / Decline buttons (app killed / background / foreground)
+  useCallNotificationEvents({
+    uid: user?.uid,
+    userName,
+    enabled: userRole === 'expert' && !initializing && !!rootNavigationState?.key,
+  });
 
   // 🔔 Message notification tap panna andha chat open aagum
   useEffect(() => {

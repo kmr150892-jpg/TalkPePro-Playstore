@@ -1,10 +1,11 @@
+import notifee from '@notifee/react-native';
 import * as Notifications from 'expo-notifications';
 import { arrayUnion, doc, updateDoc } from 'firebase/firestore';
 import { Platform } from 'react-native';
 import { db } from '../firebaseConfig';
 
-// Pudhu channel IDs (Android la channel create aana aprom sound maatha mudiyaadhu)
-export const CALL_CHANNEL_ID = 'incoming_call_v2';
+// Call channel ippo Notifee (incoming_call_v3) la create aagum - utils/incomingCall.ts
+// Message channel mattum expo-notifications la irukku
 export const MESSAGE_CHANNEL_ID = 'chat_messages_v2';
 
 // App open la irukkumbodhu in-app sound already irukku, so system banner / sound vendaam
@@ -19,15 +20,6 @@ Notifications.setNotificationHandler({
 
 async function setupChannels() {
   if (Platform.OS !== 'android') return;
-
-  await Notifications.setNotificationChannelAsync(CALL_CHANNEL_ID, {
-    name: 'Incoming calls',
-    importance: Notifications.AndroidImportance.MAX,
-    sound: 'ringtone.mp3',
-    vibrationPattern: [0, 500, 300, 500],
-    enableVibrate: true,
-    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
-  });
 
   await Notifications.setNotificationChannelAsync(MESSAGE_CHANNEL_ID, {
     name: 'Messages',
@@ -51,6 +43,9 @@ export async function registerForPushNotifications(uid: string) {
       status = req.status;
     }
     if (status !== 'granted') return;
+
+    // Notifee permission (Android 13+ ku)
+    await notifee.requestPermission();
 
     // Native FCM token (google-services.json already irukku)
     const tokenData = await Notifications.getDevicePushTokenAsync();
