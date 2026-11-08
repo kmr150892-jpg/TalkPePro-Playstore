@@ -64,6 +64,33 @@ export async function cancelIncomingCall(callId: string) {
   await notifee.cancelNotification(notifId(callId));
 }
 
+export const MISSED_CHANNEL = 'missed_calls_v1';
+
+export async function showMissedCall(data: Record<string, any>) {
+  const callId = String(data.callId || '');
+  if (!callId) return;
+
+  const channelId = await notifee.createChannel({
+    id: MISSED_CHANNEL,
+    name: 'Missed calls',
+    importance: AndroidImportance.HIGH,
+    visibility: AndroidVisibility.PUBLIC,
+  });
+
+  await notifee.displayNotification({
+    id: `missed_${callId}`,
+    title: 'Missed call 📞',
+    body: `${data.callerName || 'A user'} called you`,
+    data: { type: 'missed_call', callId },
+    android: {
+      channelId,
+      autoCancel: true,
+      showTimestamp: true,
+      pressAction: { id: 'default', launchActivity: 'default' },
+    },
+  });
+}
+
 // Foreground + background rendulayum idhaiye use pannalaam
 export async function handleCallEvent({ type, detail }: Event) {
   if (type !== EventType.ACTION_PRESS) return;

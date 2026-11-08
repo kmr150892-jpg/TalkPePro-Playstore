@@ -20,6 +20,9 @@ import { registerForPushNotifications } from '../utils/pushNotifications'; // �
 import { playMessageSound, playNotificationSound, startRingtone, stopRingtone } from '../utils/sounds';
 import { useCallNotificationEvents } from '../utils/useCallNotificationEvents'; // 📞 NEW: Notifee Accept / Decline button handling
 
+// 🔔 NEW: last handled notification tap key (module level - RootLayout remount aanaalum duplicate navigate aagaadhu)
+let lastHandledNotifKey: string | null = null;
+
 // 🔥 NEW: Replaces every native white Alert.alert box with the custom designed alert (runs once at app start)
 installCustomAlert();
 
@@ -247,9 +250,16 @@ function RootLayoutInner() {
     enabled: userRole === 'expert' && !initializing && !!rootNavigationState?.key,
   });
 
-  // 🔔 Message notification tap panna andha chat open aagum
   useEffect(() => {
-    const sub = Notifications.addNotificationResponseReceivedListener((response) => {
+    if (!rootNavigationState?.key) return;
+
+    const handle = (response: Notifications.NotificationResponse) => {
+      if (response.actionIdentifier !== Notifications.DEFAULT_ACTION_IDENTIFIER) return;
+
+      const key = `${response.notification.request.identifier}_${response.notification.date}`;
+      if (lastHandledNotifKey === key) return;
+      lastHandledNotifKey = key;
+
       const d: any = response.notification.request.content.data || {};
       if (d.type === 'message' && d.chatId && d.senderId) {
         router.push({
@@ -257,13 +267,19 @@ function RootLayoutInner() {
           params: { chatId: d.chatId, receiverId: d.senderId, receiverName: d.senderName || '' }
         } as any);
       }
-      // 🟢 NEW: Host online notification tap panna host profile open aagum
       if (d.type === 'host_online' && d.hostId) {
         router.push({ pathname: '/expert-detail', params: { id: d.hostId } } as any);
       }
-    });
+    };
+
+    const sub = Notifications.addNotificationResponseReceivedListener(handle);
+
+    Promise.resolve(Notifications.getLastNotificationResponse())
+      .then((r) => { if (r) handle(r); })
+      .catch(() => {});
+
     return () => sub.remove();
-  }, []);
+  }, [rootNavigationState?.key]);
 
   useEffect(() => {
   if (!user?.uid || userRole !== 'expert' || initializing || !rootNavigationState?.key) return;

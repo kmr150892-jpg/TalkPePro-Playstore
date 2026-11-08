@@ -76,7 +76,12 @@ exports.onCallRinging = onDocumentWritten(
         priority: "max",
         ttlMs: 30000,
         dataOnly: true,
-        data: { type: "call_cancel", callId: event.params.callId },
+        data: {
+          type: "call_cancel",
+          callId: event.params.callId,
+          status: after.status,
+          callerName: after.callerName || "",
+        },
       });
       return;
     }
