@@ -84,10 +84,29 @@ export default function LoginScreen() {
   const resizedBy = baseLayoutH.current > 0 ? Math.max(0, baseLayoutH.current - layoutH) : 0;
   const keyboardOffset = keyboardHeight > 0 ? Math.max(0, keyboardHeight - resizedBy) : 0;
 
+  // 🔥 UPDATED (EDIT 1): STEP-BY-STEP ANDROID BACK BUTTON (same behavior as the on-screen back arrows)
   useEffect(() => {
     const backAction = () => {
+      // Splash-la irundha exit
+      if (showSplash) {
+        BackHandler.exitApp();
+        return true;
+      }
+      // Email / Google screen-la irundha -> "Choose login method" ku back
+      if (showLoginUI && loginMethod !== null) {
+        Keyboard.dismiss();
+        setLoginMethod(null);
+        setPasswordInput('');
+        return true;
+      }
+      // "Choose login method" la irundha -> "Proceed to secure login" ku back
+      if (showLoginUI && loginMethod === null) {
+        setShowLoginUI(false);
+        return true;
+      }
+      // First screen-la irundha mattum exit
       BackHandler.exitApp();
-      return true; 
+      return true;
     };
 
     const backHandler = BackHandler.addEventListener(
@@ -96,7 +115,7 @@ export default function LoginScreen() {
     );
 
     return () => backHandler.remove();
-  }, []);
+  }, [showSplash, showLoginUI, loginMethod]);
 
   // 🔥 CORE ANIMATION REFS
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -397,7 +416,8 @@ await setDoc(userRef, updateData, { merge: true });
           console.log("⚠️ Safe Ignore: GateKeeper intentionally cancelled the login DB sync.");
       } else {
           console.log("❌ Login Error:", error);
-          Alert.alert("Authentication Error", "Unable to sign in at the moment. Please check your internet connection.");
+          // 🔥 UPDATED (EDIT 2): Google fail message now also points the reviewer to Email & Password
+          Alert.alert("Authentication Error", "Unable to sign in with Google at the moment. Please check your internet connection, or go back and use Email & Password.");
       }
     } finally {
       await AsyncStorage.removeItem('@is_logging_in');

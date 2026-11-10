@@ -34,6 +34,24 @@ LogBox.ignoreLogs([
 
 const CURRENT_APP_VERSION = "1.0.5";
 
+// 🔥 NEW: safe version compare. Update screen shows ONLY when the server's minVersion is HIGHER than this app's version.
+// (Old logic used "!==", so any different value - even a lower one - blocked the whole app with the Update screen.)
+const parseVersion = (v: string) =>
+  String(v).replace(/["']/g, '').trim().split('.').map((n) => parseInt(n, 10) || 0);
+
+const isLowerVersion = (current: string, required: string) => {
+  const a = parseVersion(current);
+  const b = parseVersion(required);
+  const len = Math.max(a.length, b.length, 3);
+  for (let i = 0; i < len; i++) {
+    const x = a[i] || 0;
+    const y = b[i] || 0;
+    if (x < y) return true;
+    if (x > y) return false;
+  }
+  return false;
+};
+
 if (Platform.OS === 'android' && (LayoutAnimation as any).configureNext) {
   (LayoutAnimation as any).configureNext = () => {}; 
 }
@@ -101,6 +119,12 @@ function RootLayoutInner() {
   const [incomingCallId, setIncomingCallId] = useState<string | null>(null);
   const [incomingTimer, setIncomingTimer] = useState(20); // Default to 20 seconds
 
+  // 🔥 NEW: SAFETY TIMER - if Firebase / network is slow, never stay on the loading spinner forever
+  useEffect(() => {
+    const safetyTimer = setTimeout(() => setInitializing(false), 8000);
+    return () => clearTimeout(safetyTimer);
+  }, []);
+
   useEffect(() => {
     const wipeSession = async () => {
        await AsyncStorage.removeItem('@intended_role');
@@ -119,7 +143,8 @@ function RootLayoutInner() {
         if (Array.isArray(serverVersion)) serverVersion = serverVersion[0];
         
         const cleanServerVer = String(serverVersion || "1.0.5").replace(/["']/g, "").trim();
-        setNeedsUpdate(cleanServerVer !== CURRENT_APP_VERSION.trim());
+        // 🔥 UPDATED: show the Update screen only when the server's minVersion is HIGHER than this app's version
+        setNeedsUpdate(isLowerVersion(CURRENT_APP_VERSION.trim(), cleanServerVer));
       }
     }, (error) => {
       if (error.code === 'permission-denied') console.log("System settings sync detached.");
@@ -215,6 +240,8 @@ function RootLayoutInner() {
           setInitializing(false);
         }, (error) => {
           if (error.code === 'permission-denied') console.log("User profile sync detached.");
+          // 🔥 NEW: even if the profile listener fails, never keep the app stuck on the loading spinner
+          setInitializing(false);
         });
       } else {
         setUserRole(null);
@@ -240,7 +267,12 @@ function RootLayoutInner() {
   // 🔔 Push token register (app close la irundhaalum notification varanum)
   useEffect(() => {
     if (!user?.uid || initializing) return;
-    registerForPushNotifications(user.uid);
+    // 🔥 UPDATED: a push-token failure (no Play Services, no permission, etc.) must never crash or block the app
+    try {
+      Promise.resolve(registerForPushNotifications(user.uid)).catch(() => {});
+    } catch (e) {
+      console.log("Push register skipped:", e);
+    }
   }, [user?.uid, initializing]);
 
   // 📞 NEW: Notifee call notification Accept / Decline buttons (app killed / background / foreground)
